@@ -442,7 +442,7 @@ goal Univ.thy "!!i. Ord(i) ==> rank(Vset(i)) = i";
 by (rtac (rank RS ssubst) 1);
 by (rtac equalityI 1);
 by (safe_tac ZF_cs);
-by (EVERY' [rtac UN_I, 
+by (EVERY' [wtac UN_I, 
 	    etac (i_subset_Vfrom RS subsetD),
 	    etac (Ord_in_Ord RS rank_of_Ord RS ssubst),
 	    assume_tac,
