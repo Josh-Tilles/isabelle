@@ -1,4 +1,4 @@
-(*  Title: 	ZF/inductive.ML
+(*  Title: 	ZF/Inductive.ML
     ID:         $Id$
     Author: 	Lawrence C Paulson, Cambridge University Computer Laboratory
     Copyright   1993  University of Cambridge
@@ -190,6 +190,8 @@ fun inductive_decl co =
             \structure " ^ stri_name ^ " =\n\
             \ let open Ind_Syntax in\n\
             \  struct\n\
+            \  val _ = writeln \"" ^ co ^ 
+	               "Inductive definition " ^ big_rec_name ^ "\"\n\
             \  val rec_tms\t= map (readtm (sign_of thy) iT) "
 	                     ^ srec_tms ^ "\n\
             \  and domts\t= map (readtm (sign_of thy) iT) "
@@ -205,8 +207,6 @@ fun inductive_decl co =
            ,
 	    "structure " ^ big_rec_name ^ " =\n\
             \  struct\n\
-            \  val _ = writeln \"" ^ co ^ 
-	               "Inductive definition " ^ big_rec_name ^ "\"\n\
             \  structure Result = " ^ co ^ "Ind_section_Fun\n\
             \  (open " ^ stri_name ^ "\n\
             \   val thy\t\t= thy\n\
