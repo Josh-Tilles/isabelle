@@ -1,18 +1,9 @@
-(*  Title:      Pure/MLWorks.ML
+(*  Title:      Pure/ML-Systems/mlworks.ML
     ID:         $Id$
     Author:     Lawrence C Paulson, Cambridge University Computer Laboratory
     Copyright   1996  University of Cambridge
 
-Compatibility file for MLWorks
-
-Build Pure by typing to MLWorks (in directory Pure)
-        use "ML-Systems/MLWorks.ML";
-        use "ROOT.ML";
-	collect_as_much_as_possible ();
-	Shell.saveImage ("/anfs/bigdisc/lcp/heaps/mlworks/Pure", false);
-
-Execute saved image by typing to the shell
-	mlimage -load /anfs/bigdisc/lcp/heaps/mlworks/Pure
+Compatibility file for MLWorks version 1.0r2 or later.
 *)
 
 (*** Poly/ML emulation ***)
@@ -21,7 +12,7 @@ Execute saved image by typing to the shell
 structure Option = General;
 
 (*To exit the system with an exit code -- an alternative to ^D *)
-fun exit 0 = OS.Process.exit OS.Process.success
+fun exit 0 = (OS.Process.exit OS.Process.success): unit
   | exit _ = OS.Process.exit OS.Process.failure;
 fun quit () = exit 0;
 
@@ -33,8 +24,6 @@ fun print_depth n = ();
 fun make_pp path pprint = ();
 fun install_pp _ = ();
 
-
-(*** New Jersey ML parameters ***)
 
 (*** Character/string functions which are compatible with 0.93 and Poly/ML ***)
 
