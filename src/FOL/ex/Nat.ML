@@ -1,11 +1,15 @@
-(*  Title:      FOL/ex/NatClass.ML
+(*  Title:      FOL/ex/Nat.ML
     ID:         $Id$
-    Author:     Markus Wenzel, TU Muenchen
+    Author:     Lawrence C Paulson, Cambridge University Computer Laboratory
+    Copyright   1992  University of Cambridge
 
-This is Nat.ML trivially modified to make it work with NatClass.thy.
+Proofs about the natural numbers.
+
+To generate similar output to manual, execute these commands:
+    Pretty.setmargin 72; print_depth 0;
 *)
 
-Goal "Suc(k) ~= (k::'a::nat)";
+Goal "Suc(k) ~= k";
 by (res_inst_tac [("n","k")] induct 1);
 by (rtac notI 1);
 by (etac Suc_neq_0 1);
@@ -52,7 +56,8 @@ by (res_inst_tac [("n","m")] induct 1);
 by (ALLGOALS (Asm_simp_tac));
 qed "add_Suc_right";
 
-val [prem] = goal (the_context ()) "(!!n. f(Suc(n)) = Suc(f(n))) ==> f(i+j) = i+f(j)";
+(*Example used in Reference Manual, Doc/Ref/simplifier.tex*)
+val [prem] = Goal "(!!n. f(Suc(n)) = Suc(f(n))) ==> f(i+j) = i+f(j)";
 by (res_inst_tac [("n","i")] induct 1);
 by (Simp_tac 1);
 by (asm_simp_tac (simpset() addsimps [prem]) 1);
