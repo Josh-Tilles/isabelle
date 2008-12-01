@@ -92,8 +92,8 @@ sig
 
   (* Storing results *)
   val local_note_qualified: string ->
-    (Name.binding * attribute list) * (thm list * attribute list) list ->
-    Proof.context -> (string * thm list) * Proof.context
+    ((Name.binding * attribute list) * (thm list * attribute list) list) list ->
+    Proof.context -> (string * thm list) list * Proof.context
   val add_thmss: string -> string -> (Attrib.binding * (thm list * Attrib.src list) list) list ->
     Proof.context -> Proof.context
   val add_type_syntax: string -> declaration -> Proof.context -> Proof.context
@@ -134,18 +134,18 @@ fun merge_lists _ xs [] = xs
 fun merge_alists eq xs = merge_lists (eq_fst eq) xs;
 
 
-(* auxiliary: noting with structured name bindings *)
+(* auxiliary: noting name bindings with qualified base names *)
 
-fun global_note_qualified kind ((b, atts), facts_atts_s) thy =
+fun global_note_qualified kind facts thy =
   thy
   |> Sign.qualified_names
-  |> yield_singleton (PureThy.note_thmss kind) ((b, atts), facts_atts_s)
+  |> PureThy.note_thmss kind facts
   ||> Sign.restore_naming thy;
 
-fun local_note_qualified kind ((b, atts), facts_atts_s) ctxt =
+fun local_note_qualified kind facts ctxt =
   ctxt
   |> ProofContext.qualified_names
-  |> yield_singleton (ProofContext.note_thmss_i kind) ((b, atts), facts_atts_s)
+  |> ProofContext.note_thmss_i kind facts
   ||> ProofContext.restore_naming ctxt;
 
 
@@ -947,8 +947,8 @@ fun flatten_expr ctxt ((prev_idents, prev_syntax), expr) =
         val ren = map fst ps ~~ map (fn p => (p, lookup_syn p)) params;
         val [env] = unify_parms ctxt all_params [map (apfst (Element.rename ren) o apsnd SOME) ps];
         val (lprfx, pprfx) = param_prefix name params;
-        val add_prefices = pprfx <> "" ? Name.add_prefix false pprfx
-          #> Name.add_prefix false lprfx;
+        val add_prefices = pprfx <> "" ? Binding.add_prefix false pprfx
+          #> Binding.add_prefix false lprfx;
         val elem_morphism =
           Element.rename_morphism ren $>
           Morphism.name_morphism add_prefices $>
@@ -1010,7 +1010,7 @@ fun activate_elem _ _ (Fixes fixes) (ctxt, mode) =
   | activate_elem _ is_ext (Notes (kind, facts)) (ctxt, mode) =
       let
         val facts' = Attrib.map_facts (Attrib.attribute_i (ProofContext.theory_of ctxt)) facts;
-        val (res, ctxt') = ctxt |> fold_map (local_note_qualified kind) facts';
+        val (res, ctxt') = ctxt |> local_note_qualified kind facts';
       in (if is_ext then (map (#1 o #1) facts' ~~ map #2 res) else [], (ctxt', mode)) end;
 
 fun activate_elems ax_in_ctxt (((name, ps), mode), elems) ctxt =
@@ -1634,10 +1634,10 @@ fun collect_witnesses ctxt (imprt as ((impT, _), (imp, _))) parms ids ext_ts = l
 
 fun name_morph phi_name (lprfx, pprfx) b =
   b
-  |> (if not (Name.is_nothing b) andalso pprfx <> ""
-        then Name.add_prefix false pprfx else I)
-  |> (if not (Name.is_nothing b)
-        then Name.add_prefix false lprfx else I)
+  |> (if not (Binding.is_nothing b) andalso pprfx <> ""
+        then Binding.add_prefix false pprfx else I)
+  |> (if not (Binding.is_nothing b)
+        then Binding.add_prefix false lprfx else I)
   |> phi_name;
 
 fun inst_morph thy phi_name param_prfx insts prems eqns export =
@@ -1696,7 +1696,8 @@ fun note_thmss_registrations target (kind, args) thy =
                (Attrib.attribute_i thy) insts prems eqns exp;
       in
         thy
-        |> fold (snd oo global_note_qualified kind) args'
+        |> global_note_qualified kind args'
+        |> snd
       end;
   in fold activate regs thy end;
 
@@ -2106,7 +2107,8 @@ fun gen_activate_facts_elemss mk_ctxt note attrib put_reg add_wit add_eqn
                  (attrib thy_ctxt) insts prems eqns exp;
         in 
           thy_ctxt
-          |> fold (snd oo note kind) facts'
+          |> note kind facts'
+          |> snd
         end
       | activate_elem _ _ _ _ _ _ _ thy_ctxt = thy_ctxt;
 
@@ -2128,7 +2130,7 @@ fun gen_activate_facts_elemss mk_ctxt note attrib put_reg add_wit add_eqn
   in
     thy_ctxt''
     (* add equations as lemmas to context *)
-    |> (fold2 o fold2) (fn attn => fn thm => snd o note Thm.lemmaK
+    |> (fold2 o fold2) (fn attn => fn thm => snd o yield_singleton (note Thm.lemmaK)
          ((apsnd o map) (attrib thy_ctxt'') attn, [([Element.conclude_witness thm], [])]))
             (unflat eq_thms eq_attns) eq_thms
     (* add interpreted facts *)
@@ -2383,7 +2385,8 @@ fun prep_registration_in_locale target expr thy =
                     |> (map o apfst o apfst) (name_morph phi_name param_prfx);
                 in
                   thy
-                  |> fold (snd oo global_note_qualified kind) facts'
+                  |> global_note_qualified kind facts'
+                  |> snd
                 end
               | activate_elem _ _ thy = thy;
 
@@ -2439,11 +2442,11 @@ fun gen_interpret prep_registration after_qed name_morph expr insts int state =
   end;
 
 fun standard_name_morph interp_prfx b =
-  if Name.is_nothing b then b
-  else Name.map_prefix (fn ((lprfx, _) :: pprfx) =>
-    fold (Name.add_prefix false o fst) pprfx
-    #> interp_prfx <> "" ? Name.add_prefix true interp_prfx
-    #> Name.add_prefix false lprfx
+  if Binding.is_nothing b then b
+  else Binding.map_prefix (fn ((lprfx, _) :: pprfx) =>
+    fold (Binding.add_prefix false o fst) pprfx
+    #> interp_prfx <> "" ? Binding.add_prefix true interp_prfx
+    #> Binding.add_prefix false lprfx
   ) b;
 
 in
