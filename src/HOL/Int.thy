@@ -855,7 +855,7 @@ next
     add: compare_rls of_nat_1 [symmetric] of_nat_add [symmetric])
 qed
 
-lemma neg_simps:
+lemma bin_less_0_simps:
   "Pls < 0 \<longleftrightarrow> False"
   "Min < 0 \<longleftrightarrow> True"
   "Bit0 w < 0 \<longleftrightarrow> w < 0"
@@ -908,7 +908,7 @@ lemma less_bin_simps [simp]:
     less_bin_lemma [of "Bit1 k"]
     less_bin_lemma [of "pred Pls"]
     less_bin_lemma [of "pred k"]
-  by (simp_all add: neg_simps succ_pred)
+  by (simp_all add: bin_less_0_simps succ_pred)
 
 text {* Less-than-or-equal *}
 
@@ -1187,6 +1187,12 @@ proof -
     by (auto simp add: iszero_def number_of_eq numeral_simps)
 qed
 
+lemmas iszero_simps =
+  iszero_0 not_iszero_1
+  iszero_number_of_Pls nonzero_number_of_Min
+  iszero_number_of_Bit0 iszero_number_of_Bit1
+(* iszero_number_of_Pls would never normally be used
+   because its lhs simplifies to "iszero 0" *)
 
 subsubsection {* The Less-Than Relation *}
 
@@ -1248,6 +1254,10 @@ proof -
   by (simp add: neg_def number_of_eq numeral_simps)
 qed
 
+lemmas neg_simps =
+  not_neg_0 not_neg_1
+  not_neg_number_of_Pls neg_number_of_Min
+  neg_number_of_Bit0 neg_number_of_Bit1
 
 text {* Less-Than or Equals *}
 
@@ -1307,15 +1317,15 @@ lemma le_number_of [simp]:
   "(number_of x::'a::{ordered_idom,number_ring}) \<le> number_of y \<longleftrightarrow> x \<le> y"
   unfolding number_of_eq by (rule of_int_le_iff)
 
+lemma eq_number_of [simp]:
+  "(number_of x::'a::{ring_char_0,number_ring}) = number_of y \<longleftrightarrow> x = y"
+  unfolding number_of_eq by (rule of_int_eq_iff)
+
 lemmas rel_simps [simp] = 
   less_number_of less_bin_simps
   le_number_of le_bin_simps
-  eq_number_of_eq iszero_0 nonzero_number_of_Min
-  iszero_number_of_Bit0 iszero_number_of_Bit1
-  not_neg_number_of_Pls not_neg_0 not_neg_1 not_iszero_1
-  neg_number_of_Min neg_number_of_Bit0 neg_number_of_Bit1
-(* iszero_number_of_Pls would never be used
-   because its lhs simplifies to "iszero 0" *)
+  eq_number_of_eq eq_bin_simps
+  iszero_simps neg_simps
 
 
 subsubsection {* Simplification of arithmetic when nested to the right. *}
@@ -1576,17 +1586,17 @@ lemmas eq_special =
 
 text{*Allow 0 or 1 on either side with a binary numeral on the other*}
 lemmas less_special =
-  binop_eq [of "op <", OF less_number_of_eq_neg numeral_0_eq_0 refl, standard]
-  binop_eq [of "op <", OF less_number_of_eq_neg numeral_1_eq_1 refl, standard]
-  binop_eq [of "op <", OF less_number_of_eq_neg refl numeral_0_eq_0, standard]
-  binop_eq [of "op <", OF less_number_of_eq_neg refl numeral_1_eq_1, standard]
+  binop_eq [of "op <", OF less_number_of numeral_0_eq_0 refl, standard]
+  binop_eq [of "op <", OF less_number_of numeral_1_eq_1 refl, standard]
+  binop_eq [of "op <", OF less_number_of refl numeral_0_eq_0, standard]
+  binop_eq [of "op <", OF less_number_of refl numeral_1_eq_1, standard]
 
 text{*Allow 0 or 1 on either side with a binary numeral on the other*}
 lemmas le_special =
-    binop_eq [of "op \<le>", OF le_number_of_eq numeral_0_eq_0 refl, standard]
-    binop_eq [of "op \<le>", OF le_number_of_eq numeral_1_eq_1 refl, standard]
-    binop_eq [of "op \<le>", OF le_number_of_eq refl numeral_0_eq_0, standard]
-    binop_eq [of "op \<le>", OF le_number_of_eq refl numeral_1_eq_1, standard]
+    binop_eq [of "op \<le>", OF le_number_of numeral_0_eq_0 refl, standard]
+    binop_eq [of "op \<le>", OF le_number_of numeral_1_eq_1 refl, standard]
+    binop_eq [of "op \<le>", OF le_number_of refl numeral_0_eq_0, standard]
+    binop_eq [of "op \<le>", OF le_number_of refl numeral_1_eq_1, standard]
 
 lemmas arith_special[simp] = 
        add_special diff_special eq_special less_special le_special
