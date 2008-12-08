@@ -113,6 +113,18 @@ locale use_decl = logic + semi "op ||"
 print_locale! use_decl thm use_decl_def
 
 
+text {* Defines *}
+
+locale logic_def =
+  fixes land (infixl "&&" 55)
+    and lor (infixl "||" 50)
+    and lnot ("-- _" [60] 60)
+  assumes assoc: "(x && y) && z = x && (y && z)"
+    and notnot: "-- (-- x) = x"
+  defines "x || y == --(-- x && -- y)"
+
+print_locale! logic_def
+
 text {* Theorem statements *}
 
 lemma (in lgrp) lcancel:
@@ -340,5 +352,25 @@ sublocale logic < two: logic2
   by unfold_locales (rule assoc notnot)+
 
 thm two.assoc
+
+
+text {* Interpretation in proofs *}
+
+lemma True
+proof
+  interpret "local": lgrp "op +" "0" "minus"
+    by unfold_locales  (* subsumed *)
+  {
+    fix zero :: int
+    assume "!!x. zero + x = x" "!!x. (-x) + x = zero"
+    then interpret local_fixed: lgrp "op +" zero "minus"
+      by unfold_locales
+    thm local_fixed.lone
+  }
+  assume "!!x zero. zero + x = x" "!!x zero. (-x) + x = zero"
+  then interpret local_free: lgrp "op +" zero "minus" for zero
+    by unfold_locales
+  thm local_free.lone [where ?zero = 0]
+qed
 
 end
