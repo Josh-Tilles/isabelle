@@ -413,7 +413,7 @@ lemma coeff_smult [simp]: "coeff (smult a p) n = a * coeff p n"
 lemma degree_smult_le: "degree (smult a p) \<le> degree p"
   by (rule degree_le, simp add: coeff_eq_0)
 
-lemma smult_smult: "smult a (smult b p) = smult (a * b) p"
+lemma smult_smult [simp]: "smult a (smult b p) = smult (a * b) p"
   by (rule poly_ext, simp add: mult_assoc)
 
 lemma smult_0_right [simp]: "smult a 0 = 0"
@@ -448,6 +448,10 @@ lemma smult_diff_right:
 lemma smult_diff_left:
   "smult (a - b::'a::comm_ring) p = smult a p - smult b p"
   by (rule poly_ext, simp add: ring_simps)
+
+lemmas smult_distribs =
+  smult_add_left smult_add_right
+  smult_diff_left smult_diff_right
 
 lemma smult_pCons [simp]:
   "smult a (pCons b p) = pCons (a * b) (smult a p)"
@@ -591,11 +595,11 @@ lemma mult_pCons_right [simp]:
   "p * pCons a q = smult a p + pCons 0 (p * q)"
   using mult_pCons_left [of a q p] by (simp add: mult_commute)
 
-lemma mult_smult_left: "smult a p * q = smult a (p * q)"
-  by (induct p, simp, simp add: smult_add_right smult_smult)
+lemma mult_smult_left [simp]: "smult a p * q = smult a (p * q)"
+  by (induct p, simp, simp add: smult_add_right)
 
-lemma mult_smult_right: "p * smult a q = smult a (p * q)"
-  using mult_smult_left [of a q p] by (simp add: mult_commute)
+lemma mult_smult_right [simp]: "p * smult a q = smult a (p * q)"
+  by (induct q, simp, simp add: smult_add_right)
 
 lemma mult_monom: "monom a m * monom b n = monom (a * b) (m + n)"
   by (induct m, simp add: monom_0 smult_monom, simp add: monom_Suc)
@@ -662,17 +666,7 @@ subsection {* Polynomials form an integral domain *}
 lemma coeff_mult_degree_sum:
   "coeff (p * q) (degree p + degree q) =
    coeff p (degree p) * coeff q (degree q)"
- apply (simp add: coeff_mult)
- apply (subst setsum_diff1' [where a="degree p"])
-   apply simp
-  apply simp
- apply (subst setsum_0' [rule_format])
-  apply clarsimp
-  apply (subgoal_tac "degree p < a \<or> degree q < degree p + degree q - a")
-   apply (force simp add: coeff_eq_0)
-  apply arith
- apply simp
-done
+  by (induct p, simp, simp add: coeff_eq_0)
 
 instance poly :: (idom) idom
 proof
