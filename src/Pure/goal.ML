@@ -6,6 +6,7 @@ Goals in tactical theorem proving.
 
 signature BASIC_GOAL =
 sig
+  val parallel_proofs: bool ref
   val SELECT_GOAL: tactic -> int -> tactic
   val CONJUNCTS: tactic -> int -> tactic
   val PRECISE_CONJUNCTS: int -> tactic -> int -> tactic
@@ -19,6 +20,7 @@ sig
   val conclude: thm -> thm
   val finish: thm -> thm
   val norm_result: thm -> thm
+  val future_enabled: unit -> bool
   val future_result: Proof.context -> thm future -> term -> thm
   val prove_internal: cterm list -> cterm -> (thm list -> tactic) -> thm
   val prove_multi: Proof.context -> string list -> term list -> term list ->
@@ -89,6 +91,14 @@ val norm_result =
   #> MetaSimplifier.norm_hhf_protect
   #> Thm.strip_shyps
   #> Drule.zero_var_indexes;
+
+
+(* future_enabled *)
+
+val parallel_proofs = ref true;
+
+fun future_enabled () =
+  Future.enabled () andalso ! parallel_proofs andalso is_some (Future.thread_data ());
 
 
 (* future_result *)
@@ -172,7 +182,7 @@ fun prove_common immediate ctxt xs asms props tac =
             else err ("Proved a different theorem: " ^ string_of_term (Thm.prop_of res))
           end);
     val res =
-      if immediate orelse #maxidx (Thm.rep_cterm stmt) >= 0 orelse not (Future.enabled ())
+      if immediate orelse #maxidx (Thm.rep_cterm stmt) >= 0 orelse not (future_enabled ())
       then result ()
       else future_result ctxt' (Future.fork_pri ~1 result) (Thm.term_of stmt);
   in

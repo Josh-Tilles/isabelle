@@ -747,12 +747,12 @@ done
 lemma zdiv_zmult_self1 [simp]: "b \<noteq> (0::int) ==> (a*b) div b = a"
 by (simp add: zdiv_zmult1_eq)
 
-lemma mod_div_trivial [simp]: "(a mod b) div b = (0::int)"
+lemma zmod_zdiv_trivial: "(a mod b) div b = (0::int)"
 apply (case_tac "b = 0", simp)
 apply (auto simp add: linorder_neq_iff div_pos_pos_trivial div_neg_neg_trivial)
 done
 
-lemma mod_mod_trivial [simp]: "(a mod b) mod b = a mod (b::int)"
+lemma zmod_zmod_trivial: "(a mod b) mod b = a mod (b::int)"
 apply (case_tac "b = 0", simp)
 apply (force simp add: linorder_neq_iff mod_pos_pos_trivial mod_neg_neg_trivial)
 done
@@ -776,72 +776,50 @@ apply (case_tac "c = 0", simp)
 apply (blast intro: zadd1_lemma [OF quorem_div_mod quorem_div_mod] quorem_mod)
 done
 
-lemma zdiv_zadd_self1[simp]: "a \<noteq> (0::int) ==> (a+b) div a = b div a + 1"
-by (simp add: zdiv_zadd1_eq)
-
-lemma zdiv_zadd_self2[simp]: "a \<noteq> (0::int) ==> (b+a) div a = b div a + 1"
-by (simp add: zdiv_zadd1_eq)
-
-instance int :: semiring_div
+instance int :: ring_div
 proof
   fix a b c :: int
   assume not0: "b \<noteq> 0"
   show "(a + c * b) div b = c + a div b"
     unfolding zdiv_zadd1_eq [of a "c * b"] using not0 
-      by (simp add: zmod_zmult1_eq)
+      by (simp add: zmod_zmult1_eq zmod_zdiv_trivial)
 qed auto
 
-lemma zdiv_zmult_self2 [simp]: "b \<noteq> (0::int) ==> (b*a) div b = a"
-by (subst mult_commute, erule zdiv_zmult_self1)
+lemma zdiv_zadd_self1: "a \<noteq> (0::int) ==> (a+b) div a = b div a + 1"
+by (rule div_add_self1) (* already declared [simp] *)
 
-lemma zmod_zmult_self1 [simp]: "(a*b) mod b = (0::int)"
-by (simp add: zmod_zmult1_eq)
+lemma zdiv_zadd_self2: "a \<noteq> (0::int) ==> (b+a) div a = b div a + 1"
+by (rule div_add_self2) (* already declared [simp] *)
 
-lemma zmod_zmult_self2 [simp]: "(b*a) mod b = (0::int)"
-by (simp add: mult_commute zmod_zmult1_eq)
+lemma zdiv_zmult_self2: "b \<noteq> (0::int) ==> (b*a) div b = a"
+by (rule div_mult_self1_is_id) (* already declared [simp] *)
+
+lemma zmod_zmult_self1: "(a*b) mod b = (0::int)"
+by (rule mod_mult_self2_is_0) (* already declared [simp] *)
+
+lemma zmod_zmult_self2: "(b*a) mod b = (0::int)"
+by (rule mod_mult_self1_is_0) (* already declared [simp] *)
 
 lemma zmod_eq_0_iff: "(m mod d = 0) = (EX q::int. m = d*q)"
-proof
-  assume "m mod d = 0"
-  with zmod_zdiv_equality[of m d] show "EX q::int. m = d*q" by auto
-next
-  assume "EX q::int. m = d*q"
-  thus "m mod d = 0" by auto
-qed
+by (simp add: dvd_eq_mod_eq_0 [symmetric] dvd_def)
 
+(* REVISIT: should this be generalized to all semiring_div types? *)
 lemmas zmod_eq_0D [dest!] = zmod_eq_0_iff [THEN iffD1]
 
 lemma zmod_zadd_left_eq: "(a+b) mod (c::int) = ((a mod c) + b) mod c"
-apply (rule trans [symmetric])
-apply (rule zmod_zadd1_eq, simp)
-apply (rule zmod_zadd1_eq [symmetric])
-done
+by (rule mod_add_left_eq)
 
 lemma zmod_zadd_right_eq: "(a+b) mod (c::int) = (a + (b mod c)) mod c"
-apply (rule trans [symmetric])
-apply (rule zmod_zadd1_eq, simp)
-apply (rule zmod_zadd1_eq [symmetric])
-done
+by (rule mod_add_right_eq)
 
-lemma zmod_zadd_self1[simp]: "(a+b) mod a = b mod (a::int)"
-apply (case_tac "a = 0", simp)
-apply (simp add: zmod_zadd1_eq)
-done
+lemma zmod_zadd_self1: "(a+b) mod a = b mod (a::int)"
+by (rule mod_add_self1) (* already declared [simp] *)
 
-lemma zmod_zadd_self2[simp]: "(b+a) mod a = b mod (a::int)"
-apply (case_tac "a = 0", simp)
-apply (simp add: zmod_zadd1_eq)
-done
+lemma zmod_zadd_self2: "(b+a) mod a = b mod (a::int)"
+by (rule mod_add_self2) (* already declared [simp] *)
 
-
-lemma zmod_zdiff1_eq: fixes a::int
-  shows "(a - b) mod c = (a mod c - b mod c) mod c" (is "?l = ?r")
-proof -
-  have "?l = (c + (a mod c - b mod c)) mod c"
-    using zmod_zadd1_eq[of a "-b" c] by(simp add:ring_simps zmod_zminus1_eq_if)
-  also have "\<dots> = ?r" by simp
-  finally show ?thesis .
-qed
+lemma zmod_zdiff1_eq: "(a - b) mod c = (a mod c - b mod c) mod (c::int)"
+by (rule mod_diff_eq)
 
 subsection{*Proving  @{term "a div (b*c) = (a div b) div c"} *}
 
@@ -954,18 +932,8 @@ apply (cut_tac c = c in zmod_zmult_zmult1)
 apply (auto simp add: mult_commute)
 done
 
-lemma zmod_zmod_cancel:
-assumes "n dvd m" shows "(k::int) mod m mod n = k mod n"
-proof -
-  from `n dvd m` obtain r where "m = n*r" by(auto simp:dvd_def)
-  have "k mod n = (m * (k div m) + k mod m) mod n"
-    using zmod_zdiv_equality[of k m] by simp
-  also have "\<dots> = (m * (k div m) mod n + k mod m mod n) mod n"
-    by(subst zmod_zadd1_eq, rule refl)
-  also have "m * (k div m) mod n = 0" using `m = n*r`
-    by(simp add:mult_ac)
-  finally show ?thesis by simp
-qed
+lemma zmod_zmod_cancel: "n dvd m \<Longrightarrow> (k::int) mod m mod n = k mod n"
+by (rule mod_mod_cancel)
 
 
 subsection {*Splitting Rules for div and mod*}
@@ -1169,50 +1137,31 @@ by (simp add: linorder_not_le [symmetric] neg_imp_zdiv_nonneg_iff)
 subsection {* The Divides Relation *}
 
 lemma zdvd_iff_zmod_eq_0: "(m dvd n) = (n mod m = (0::int))"
-  by (simp add: dvd_def zmod_eq_0_iff)
+  by (rule dvd_eq_mod_eq_0)
 
 lemmas zdvd_iff_zmod_eq_0_number_of [simp] =
   zdvd_iff_zmod_eq_0 [of "number_of x" "number_of y", standard]
 
-lemma zdvd_0_right [iff]: "(m::int) dvd 0"
-  by (simp add: dvd_def)
+lemma zdvd_0_right: "(m::int) dvd 0"
+  by (rule dvd_0_right) (* already declared [iff] *)
 
-lemma zdvd_0_left [iff,noatp]: "(0 dvd (m::int)) = (m = 0)"
-  by (simp add: dvd_def)
+lemma zdvd_0_left: "(0 dvd (m::int)) = (m = 0)"
+  by (rule dvd_0_left_iff) (* already declared [noatp,simp] *)
 
-lemma zdvd_1_left [iff]: "1 dvd (m::int)"
-  by (simp add: dvd_def)
+lemma zdvd_1_left: "1 dvd (m::int)"
+  by (rule one_dvd) (* already declared [simp] *)
 
 lemma zdvd_refl [simp]: "m dvd (m::int)"
-  by (auto simp add: dvd_def intro: zmult_1_right [symmetric])
+  by (rule dvd_refl) (* TODO: declare generic dvd_refl [simp] *)
 
 lemma zdvd_trans: "m dvd n ==> n dvd k ==> m dvd (k::int)"
-  by (auto simp add: dvd_def intro: mult_assoc)
+  by (rule dvd_trans)
 
 lemma zdvd_zminus_iff: "m dvd -n \<longleftrightarrow> m dvd (n::int)"
-proof
-  assume "m dvd - n"
-  then obtain k where "- n = m * k" ..
-  then have "n = m * - k" by simp
-  then show "m dvd n" ..
-next
-  assume "m dvd n"
-  then have "m dvd n * -1" by (rule dvd_mult2)
-  then show "m dvd - n" by simp
-qed
+  by (rule dvd_minus_iff)
 
 lemma zdvd_zminus2_iff: "-m dvd n \<longleftrightarrow> m dvd (n::int)"
-proof
-  assume "- m dvd n"
-  then obtain k where "n = - m * k" ..
-  then have "n = m * - k" by simp
-  then show "m dvd n" ..
-next
-  assume "m dvd n"
-  then obtain k where "n = m * k" ..
-  then have "n = - m * - k" by simp
-  then show "- m dvd n" ..
-qed
+  by (rule minus_dvd_iff)
 
 lemma zdvd_abs1: "( \<bar>i::int\<bar> dvd j) = (i dvd j)" 
   by (cases "i > 0") (simp_all add: zdvd_zminus2_iff)
@@ -1227,9 +1176,7 @@ lemma zdvd_anti_sym:
   done
 
 lemma zdvd_zadd: "k dvd m ==> k dvd n ==> k dvd (m + n :: int)"
-  apply (simp add: dvd_def)
-  apply (blast intro: right_distrib [symmetric])
-  done
+  by (rule dvd_add)
 
 lemma zdvd_dvd_eq: assumes anz:"a \<noteq> 0" and ab: "(a::int) dvd b" and ba:"b dvd a" 
   shows "\<bar>a\<bar> = \<bar>b\<bar>"
@@ -1244,9 +1191,7 @@ proof-
 qed
 
 lemma zdvd_zdiff: "k dvd m ==> k dvd n ==> k dvd (m - n :: int)"
-  apply (simp add: dvd_def)
-  apply (blast intro: right_diff_distrib [symmetric])
-  done
+  by (rule Ring_and_Field.dvd_diff)
 
 lemma zdvd_zdiffD: "k dvd m - n ==> k dvd n ==> k dvd (m::int)"
   apply (subgoal_tac "m = n + (m - n)")
@@ -1255,34 +1200,22 @@ lemma zdvd_zdiffD: "k dvd m - n ==> k dvd n ==> k dvd (m::int)"
   done
 
 lemma zdvd_zmult: "k dvd (n::int) ==> k dvd m * n"
-  apply (simp add: dvd_def)
-  apply (blast intro: mult_left_commute)
-  done
+  by (rule dvd_mult)
 
 lemma zdvd_zmult2: "k dvd (m::int) ==> k dvd m * n"
-  apply (subst mult_commute)
-  apply (erule zdvd_zmult)
-  done
+  by (rule dvd_mult2)
 
-lemma zdvd_triv_right [iff]: "(k::int) dvd m * k"
-  apply (rule zdvd_zmult)
-  apply (rule zdvd_refl)
-  done
+lemma zdvd_triv_right: "(k::int) dvd m * k"
+  by (rule dvd_triv_right) (* already declared [simp] *)
 
-lemma zdvd_triv_left [iff]: "(k::int) dvd k * m"
-  apply (rule zdvd_zmult2)
-  apply (rule zdvd_refl)
-  done
+lemma zdvd_triv_left: "(k::int) dvd k * m"
+  by (rule dvd_triv_left) (* already declared [simp] *)
 
 lemma zdvd_zmultD2: "j * k dvd n ==> j dvd (n::int)"
-  apply (simp add: dvd_def)
-  apply (simp add: mult_assoc, blast)
-  done
+  by (rule dvd_mult_left)
 
 lemma zdvd_zmultD: "j * k dvd n ==> k dvd (n::int)"
-  apply (rule zdvd_zmultD2)
-  apply (subst mult_commute, assumption)
-  done
+  by (rule dvd_mult_right)
 
 lemma zdvd_zmult_mono: "i dvd m ==> j dvd (n::int) ==> i * j dvd m * n"
   by (rule mult_dvd_mono)
@@ -1333,7 +1266,7 @@ proof-
   {assume "n \<noteq> m*h" hence "k* n \<noteq> k* (m*h)" using kz by simp
     with h have False by (simp add: mult_assoc)}
   hence "n = m * h" by blast
-  thus ?thesis by blast
+  thus ?thesis by simp
 qed
 
 lemma zdvd_zmult_cancel_disj[simp]:
@@ -1371,8 +1304,8 @@ proof -
       then show ?thesis by (simp only: negative_eq_positive) auto
     qed
   qed
-  then show ?thesis by (auto elim!: dvdE simp only: zmult_int [symmetric])
-qed 
+  then show ?thesis by (auto elim!: dvdE simp only: zdvd_triv_left int_mult)
+qed
 
 lemma zdvd1_eq[simp]: "(x::int) dvd 1 = ( \<bar>x\<bar> = 1)"
 proof
@@ -1404,10 +1337,10 @@ lemma nat_dvd_iff: "(nat z dvd m) = (if 0 \<le> z then (z dvd int m) else m = 0)
   by (auto simp add: dvd_int_iff)
 
 lemma zminus_dvd_iff [iff]: "(-z dvd w) = (z dvd (w::int))"
-  by (simp add: zdvd_zminus2_iff)
+  by (rule minus_dvd_iff)
 
 lemma dvd_zminus_iff [iff]: "(z dvd -w) = (z dvd (w::int))"
-  by (simp add: zdvd_zminus_iff)
+  by (rule dvd_minus_iff)
 
 lemma zdvd_imp_le: "[| z dvd n; 0 < n |] ==> z \<le> (n::int)"
   apply (rule_tac z=n in int_cases)
@@ -1449,20 +1382,13 @@ done
 
 text {* by Brian Huffman *}
 lemma zminus_zmod: "- ((x::int) mod m) mod m = - x mod m"
-by (simp only: zmod_zminus1_eq_if mod_mod_trivial)
+by (rule mod_minus_eq [symmetric])
 
 lemma zdiff_zmod_left: "(x mod m - y) mod m = (x - y) mod (m::int)"
-by (simp only: diff_def zmod_zadd_left_eq [symmetric])
+by (rule mod_diff_left_eq [symmetric])
 
 lemma zdiff_zmod_right: "(x - y mod m) mod m = (x - y) mod (m::int)"
-proof -
-  have "(x + - (y mod m) mod m) mod m = (x + - y mod m) mod m"
-    by (simp only: zminus_zmod)
-  hence "(x + - (y mod m)) mod m = (x + - y) mod m"
-    by (simp only: zmod_zadd_right_eq [symmetric])
-  thus "(x - y mod m) mod m = (x - y) mod m"
-    by (simp only: diff_def)
-qed
+by (rule mod_diff_right_eq [symmetric])
 
 lemmas zmod_simps =
   IntDiv.zmod_zadd_left_eq  [symmetric]
