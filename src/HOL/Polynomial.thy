@@ -208,7 +208,7 @@ subsection {* Recursion combinator for polynomials *}
 function
   poly_rec :: "'b \<Rightarrow> ('a::zero \<Rightarrow> 'a poly \<Rightarrow> 'b \<Rightarrow> 'b) \<Rightarrow> 'a poly \<Rightarrow> 'b"
 where
-  poly_rec_pCons_eq_if [simp del]:
+  poly_rec_pCons_eq_if [simp del, code del]:
     "poly_rec z f (pCons a p) = f a p (if p = 0 then z else poly_rec z f p)"
 by (case_tac x, rename_tac q, case_tac q, auto)
 
@@ -413,7 +413,7 @@ lemma coeff_smult [simp]: "coeff (smult a p) n = a * coeff p n"
 lemma degree_smult_le: "degree (smult a p) \<le> degree p"
   by (rule degree_le, simp add: coeff_eq_0)
 
-lemma smult_smult: "smult a (smult b p) = smult (a * b) p"
+lemma smult_smult [simp]: "smult a (smult b p) = smult (a * b) p"
   by (rule poly_ext, simp add: mult_assoc)
 
 lemma smult_0_right [simp]: "smult a 0 = 0"
@@ -449,6 +449,10 @@ lemma smult_diff_left:
   "smult (a - b::'a::comm_ring) p = smult a p - smult b p"
   by (rule poly_ext, simp add: ring_simps)
 
+lemmas smult_distribs =
+  smult_add_left smult_add_right
+  smult_diff_left smult_diff_right
+
 lemma smult_pCons [simp]:
   "smult a (pCons b p) = pCons (a * b) (smult a p)"
   by (rule poly_ext, simp add: coeff_pCons split: nat.split)
@@ -459,57 +463,7 @@ lemma smult_monom: "smult a (monom b n) = monom (a * b) n"
 
 subsection {* Multiplication of polynomials *}
 
-lemma Poly_mult_lemma:
-  fixes f g :: "nat \<Rightarrow> 'a::comm_semiring_0" and m n :: nat
-  assumes "\<forall>i>m. f i = 0"
-  assumes "\<forall>j>n. g j = 0"
-  shows "\<forall>k>m+n. (\<Sum>i\<le>k. f i * g (k-i)) = 0"
-proof (clarify)
-  fix k :: nat
-  assume "m + n < k"
-  show "(\<Sum>i\<le>k. f i * g (k - i)) = 0"
-  proof (rule setsum_0' [rule_format])
-    fix i :: nat
-    assume "i \<in> {..k}" hence "i \<le> k" by simp
-    with `m + n < k` have "m < i \<or> n < k - i" by arith
-    thus "f i * g (k - i) = 0"
-      using prems by auto
-  qed
-qed
-
-lemma Poly_mult:
-  fixes f g :: "nat \<Rightarrow> 'a::comm_semiring_0"
-  shows "\<lbrakk>f \<in> Poly; g \<in> Poly\<rbrakk> \<Longrightarrow> (\<lambda>n. \<Sum>i\<le>n. f i * g (n-i)) \<in> Poly"
-  unfolding Poly_def
-  by (safe, rule exI, rule Poly_mult_lemma)
-
-lemma poly_mult_assoc_lemma:
-  fixes k :: nat and f :: "nat \<Rightarrow> nat \<Rightarrow> nat \<Rightarrow> 'a::comm_monoid_add"
-  shows "(\<Sum>j\<le>k. \<Sum>i\<le>j. f i (j - i) (n - j)) =
-         (\<Sum>j\<le>k. \<Sum>i\<le>k - j. f j i (n - j - i))"
-proof (induct k)
-  case 0 show ?case by simp
-next
-  case (Suc k) thus ?case
-    by (simp add: Suc_diff_le setsum_addf add_assoc
-             cong: strong_setsum_cong)
-qed
-
-lemma poly_mult_commute_lemma:
-  fixes n :: nat and f :: "nat \<Rightarrow> nat \<Rightarrow> 'a::comm_monoid_add"
-  shows "(\<Sum>i\<le>n. f i (n - i)) = (\<Sum>i\<le>n. f (n - i) i)"
-proof (rule setsum_reindex_cong)
-  show "inj_on (\<lambda>i. n - i) {..n}"
-    by (rule inj_onI) simp
-  show "{..n} = (\<lambda>i. n - i) ` {..n}"
-    by (auto, rule_tac x="n - x" in image_eqI, simp_all)
-next
-  fix i assume "i \<in> {..n}"
-  hence "n - (n - i) = i" by simp
-  thus "f (n - i) i = f (n - i) (n - (n - i))" by simp
-qed
-
-text {* TODO: move to appropriate theory *}
+text {* TODO: move to SetInterval.thy *}
 lemma setsum_atMost_Suc_shift:
   fixes f :: "nat \<Rightarrow> 'a::comm_monoid_add"
   shows "(\<Sum>i\<le>Suc n. f i) = f 0 + (\<Sum>i\<le>n. f (Suc i))"
@@ -533,69 +487,69 @@ instantiation poly :: (comm_semiring_0) comm_semiring_0
 begin
 
 definition
-  times_poly_def:
-    "p * q = Abs_poly (\<lambda>n. \<Sum>i\<le>n. coeff p i * coeff q (n-i))"
+  times_poly_def [code del]:
+    "p * q = poly_rec 0 (\<lambda>a p pq. smult a q + pCons 0 pq) p"
 
-lemma coeff_mult:
-  "coeff (p * q) n = (\<Sum>i\<le>n. coeff p i * coeff q (n-i))"
-  unfolding times_poly_def
-  by (simp add: Abs_poly_inverse coeff Poly_mult)
+lemma mult_poly_0_left: "(0::'a poly) * q = 0"
+  unfolding times_poly_def by (simp add: poly_rec_0)
+
+lemma mult_pCons_left [simp]:
+  "pCons a p * q = smult a q + pCons 0 (p * q)"
+  unfolding times_poly_def by (simp add: poly_rec_pCons)
+
+lemma mult_poly_0_right: "p * (0::'a poly) = 0"
+  by (induct p, simp add: mult_poly_0_left, simp)
+
+lemma mult_pCons_right [simp]:
+  "p * pCons a q = smult a p + pCons 0 (p * q)"
+  by (induct p, simp add: mult_poly_0_left, simp add: ring_simps)
+
+lemmas mult_poly_0 = mult_poly_0_left mult_poly_0_right
+
+lemma mult_smult_left [simp]: "smult a p * q = smult a (p * q)"
+  by (induct p, simp add: mult_poly_0, simp add: smult_add_right)
+
+lemma mult_smult_right [simp]: "p * smult a q = smult a (p * q)"
+  by (induct q, simp add: mult_poly_0, simp add: smult_add_right)
+
+lemma mult_poly_add_left:
+  fixes p q r :: "'a poly"
+  shows "(p + q) * r = p * r + q * r"
+  by (induct r, simp add: mult_poly_0,
+                simp add: smult_distribs group_simps)
 
 instance proof
   fix p q r :: "'a poly"
   show 0: "0 * p = 0"
-    by (simp add: expand_poly_eq coeff_mult)
+    by (rule mult_poly_0_left)
   show "p * 0 = 0"
-    by (simp add: expand_poly_eq coeff_mult)
+    by (rule mult_poly_0_right)
   show "(p + q) * r = p * r + q * r"
-    by (simp add: expand_poly_eq coeff_mult left_distrib setsum_addf)
+    by (rule mult_poly_add_left)
   show "(p * q) * r = p * (q * r)"
-  proof (rule poly_ext)
-    fix n :: nat
-    have "(\<Sum>j\<le>n. \<Sum>i\<le>j. coeff p i * coeff q (j - i) * coeff r (n - j)) =
-          (\<Sum>j\<le>n. \<Sum>i\<le>n - j. coeff p j * coeff q i * coeff r (n - j - i))"
-      by (rule poly_mult_assoc_lemma)
-    thus "coeff ((p * q) * r) n = coeff (p * (q * r)) n"
-      by (simp add: coeff_mult setsum_right_distrib
-                    setsum_left_distrib mult_assoc)
-  qed
+    by (induct p, simp add: mult_poly_0, simp add: mult_poly_add_left)
   show "p * q = q * p"
-  proof (rule poly_ext)
-    fix n :: nat
-    have "(\<Sum>i\<le>n. coeff p i * coeff q (n - i)) =
-          (\<Sum>i\<le>n. coeff p (n - i) * coeff q i)"
-      by (rule poly_mult_commute_lemma)
-    thus "coeff (p * q) n = coeff (q * p) n"
-      by (simp add: coeff_mult mult_commute)
-  qed
+    by (induct p, simp add: mult_poly_0, simp)
 qed
 
 end
 
+lemma coeff_mult:
+  "coeff (p * q) n = (\<Sum>i\<le>n. coeff p i * coeff q (n-i))"
+proof (induct p arbitrary: n)
+  case 0 show ?case by simp
+next
+  case (pCons a p n) thus ?case
+    by (cases n, simp, simp add: setsum_atMost_Suc_shift
+                            del: setsum_atMost_Suc)
+qed
+
 lemma degree_mult_le: "degree (p * q) \<le> degree p + degree q"
-apply (rule degree_le, simp add: coeff_mult)
-apply (rule Poly_mult_lemma)
-apply (simp_all add: coeff_eq_0)
+apply (rule degree_le)
+apply (induct p)
+apply simp
+apply (simp add: coeff_eq_0 coeff_pCons split: nat.split)
 done
-
-lemma mult_pCons_left [simp]:
-  "pCons a p * q = smult a q + pCons 0 (p * q)"
-apply (rule poly_ext)
-apply (case_tac n)
-apply (simp add: coeff_mult)
-apply (simp add: coeff_mult setsum_atMost_Suc_shift
-            del: setsum_atMost_Suc)
-done
-
-lemma mult_pCons_right [simp]:
-  "p * pCons a q = smult a p + pCons 0 (p * q)"
-  using mult_pCons_left [of a q p] by (simp add: mult_commute)
-
-lemma mult_smult_left: "smult a p * q = smult a (p * q)"
-  by (induct p, simp, simp add: smult_add_right smult_smult)
-
-lemma mult_smult_right: "p * smult a q = smult a (p * q)"
-  using mult_smult_left [of a q p] by (simp add: mult_commute)
 
 lemma mult_monom: "monom a m * monom b n = monom (a * b) (m + n)"
   by (induct m, simp add: monom_0 smult_monom, simp add: monom_Suc)
@@ -662,17 +616,7 @@ subsection {* Polynomials form an integral domain *}
 lemma coeff_mult_degree_sum:
   "coeff (p * q) (degree p + degree q) =
    coeff p (degree p) * coeff q (degree q)"
- apply (simp add: coeff_mult)
- apply (subst setsum_diff1' [where a="degree p"])
-   apply simp
-  apply simp
- apply (subst setsum_0' [rule_format])
-  apply clarsimp
-  apply (subgoal_tac "degree p < a \<or> degree q < degree p + degree q - a")
-   apply (force simp add: coeff_eq_0)
-  apply arith
- apply simp
-done
+  by (induct p, simp, simp add: coeff_eq_0)
 
 instance poly :: (idom) idom
 proof
@@ -705,6 +649,7 @@ subsection {* Long division of polynomials *}
 definition
   divmod_poly_rel :: "'a::field poly \<Rightarrow> 'a poly \<Rightarrow> 'a poly \<Rightarrow> 'a poly \<Rightarrow> bool"
 where
+  [code del]:
   "divmod_poly_rel x y q r \<longleftrightarrow>
     x = q * y + r \<and> (if y = 0 then q = 0 else r = 0 \<or> degree r < degree y)"
 
