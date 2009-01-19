@@ -59,7 +59,7 @@ object YXML {
     val s = source.toString
     val i = s.indexOf('=')
     if (i <= 0) err_attribute()
-    (s.substring(0, i), s.substring(i + 1))
+    (s.substring(0, i).intern, s.substring(i + 1))
   }
 
 
@@ -91,7 +91,7 @@ object YXML {
       if (chunk == Y_string) pop()
       else {
         chunks(Y, chunk).toList match {
-          case "" :: name :: atts => push(name.toString, atts.map(parse_attrib))
+          case "" :: name :: atts => push(name.toString.intern, atts.map(parse_attrib))
           case txts => for (txt <- txts) add(XML.Text(txt.toString))
         }
       }
@@ -109,12 +109,21 @@ object YXML {
       case _ => err("multiple results")
     }
 
+
+  /* failsafe parsing */
+
+  private def markup_failsafe(source: CharSequence) =
+    XML.Elem (Markup.BAD, Nil,
+      List(XML.Text(source.toString.replace(X_string, "\\<^X>").replace(Y_string, "\\<^Y>"))))
+
+  def parse_body_failsafe(source: CharSequence) = {
+    try { parse_body(source) }
+    catch { case _: RuntimeException => List(markup_failsafe(source)) }
+  }
+
   def parse_failsafe(source: CharSequence) = {
     try { parse(source) }
-    catch {
-      case _: RuntimeException => XML.Elem (Markup.BAD, Nil,
-        List(XML.Text(source.toString.replace(X_string, "\\<^X>").replace(Y_string, "\\<^Y>"))))
-    }
+    catch { case _: RuntimeException => markup_failsafe(source) }
   }
 
 }

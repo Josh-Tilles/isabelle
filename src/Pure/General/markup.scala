@@ -119,12 +119,33 @@ object Markup {
   val DISPOSED = "disposed"
 
 
+  /* interactive documents */
+
+  val EDITS = "edits"
+  val EDIT = "edit"
+
+
   /* messages */
 
   val PID = "pid"
   val SESSION = "session"
 
   val MESSAGE = "message"
+  val CLASS = "class"
+
+  val INIT = "init"
+  val STATUS = "status"
+  val WRITELN = "writeln"
+  val PRIORITY = "priority"
+  val TRACING = "tracing"
+  val WARNING = "warning"
+  val ERROR = "error"
+  val DEBUG = "debug"
+  val SYSTEM = "system"
+  val STDIN = "stdin"
+  val STDOUT = "stdout"
+  val SIGNAL = "signal"
+  val EXIT = "exit"
 
 
   /* content */

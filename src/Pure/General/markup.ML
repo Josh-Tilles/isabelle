@@ -91,19 +91,11 @@ sig
   val failedN: string val failed: T
   val finishedN: string val finished: T
   val disposedN: string val disposed: T
+  val editsN: string val edits: string -> T
+  val editN: string val edit: string -> string -> T
   val pidN: string
   val sessionN: string
-  val classN: string
-  val messageN: string val message: string -> T
   val promptN: string val prompt: T
-  val writelnN: string
-  val priorityN: string
-  val tracingN: string
-  val warningN: string
-  val errorN: string
-  val debugN: string
-  val initN: string
-  val statusN: string
   val no_output: output * output
   val default_output: T -> output * output
   val add_mode: string -> (T -> output * output) -> unit
@@ -269,24 +261,21 @@ val (finishedN, finished) = markup_elem "finished";
 val (disposedN, disposed) = markup_elem "disposed";
 
 
+(* interactive documents *)
+
+val (editsN, edits) = markup_string "edits" idN;
+
+val editN = "edit";
+fun edit id state_id : T = (editN, [(idN, id), (stateN, state_id)]);
+
+
 (* messages *)
 
 val pidN = "pid";
 val sessionN = "session";
 
-val classN = "class";
-val (messageN, message) = markup_string "message" classN;
-
 val (promptN, prompt) = markup_elem "prompt";
 
-val writelnN = "writeln";
-val priorityN = "priority";
-val tracingN = "tracing";
-val warningN = "warning";
-val errorN = "error";
-val debugN = "debug";
-val initN = "init";
-val statusN = "status";
 
 
 (* print mode operations *)

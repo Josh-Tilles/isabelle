@@ -1,15 +1,12 @@
 (*  Title:      FOL/ex/NewLocaleTest.thy
     Author:     Clemens Ballarin, TU Muenchen
 
-Testing environment for locale expressions --- experimental.
+Testing environment for locale expressions.
 *)
 
 theory LocaleTest
 imports FOL
 begin
-
-ML_val {* set Toplevel.debug *}
-
 
 typedecl int arities int :: "term"
 consts plus :: "int => int => int" (infixl "+" 60)
