@@ -535,7 +535,7 @@ text {*
 \end{tabular}
 \end{center}
 \hrule
-\caption{Syntax of Locale Commands (abrigded).}
+\caption{Syntax of Locale Commands (abridged).}
 \label{tab:commands}
 \end{table}
   *}

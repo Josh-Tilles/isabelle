@@ -1,5 +1,4 @@
 (*  Title:      Pure/Isar/toplevel.ML
-    ID:         $Id$
     Author:     Markus Wenzel, TU Muenchen
 
 Isabelle/Isar toplevel transactions.
@@ -66,6 +65,8 @@ sig
   val theory': (bool -> theory -> theory) -> transition -> transition
   val begin_local_theory: bool -> (theory -> local_theory) -> transition -> transition
   val end_local_theory: transition -> transition
+  val local_theory': xstring option -> (bool -> local_theory -> local_theory) ->
+    transition -> transition
   val local_theory: xstring option -> (local_theory -> local_theory) -> transition -> transition
   val present_local_theory: xstring option -> (node -> unit) -> transition -> transition
   val local_theory_to_proof': xstring option -> (bool -> local_theory -> Proof.state) ->
@@ -95,7 +96,8 @@ sig
   val transition: bool -> transition -> state -> (state * (exn * string) option) option
   val commit_exit: Position.T -> transition
   val command: transition -> state -> state
-  val excursion: (transition * transition list) list -> (transition * state) list * (unit -> unit)
+  val run_command: string -> transition -> state -> state option
+  val excursion: (transition * transition list) list -> (transition * state) list lazy
 end;
 
 structure Toplevel: TOPLEVEL =
@@ -512,14 +514,15 @@ fun local_theory_presentation loc f g = transaction (fn int =>
   (fn Theory (gthy, _) =>
         let
           val finish = loc_finish loc gthy;
-          val lthy' = f (loc_begin loc gthy);
+          val lthy' = f int (loc_begin loc gthy);
         in Theory (finish lthy', SOME lthy') end
     | _ => raise UNDEF) #> tap g);
 
 in
 
-fun local_theory loc f = local_theory_presentation loc f (K I);
-fun present_local_theory loc g = local_theory_presentation loc I g;
+fun local_theory' loc f = local_theory_presentation loc f (K I);
+fun local_theory loc f = local_theory' loc (K f);
+fun present_local_theory loc g = local_theory_presentation loc (K I) g;
 
 end;
 
@@ -691,6 +694,22 @@ fun command tr st =
   | SOME (_, SOME exn_info) => raise EXCURSION_FAIL exn_info
   | NONE => raise EXCURSION_FAIL (TERMINATE, at_command tr));
 
+fun command_result tr st =
+  let val st' = command tr st
+  in (st', st') end;
+
+fun run_command thy_name tr st =
+  (case
+      (case init_of tr of
+        SOME name => Exn.capture (fn () => ThyLoad.check_name thy_name name) ()
+      | NONE => Exn.Result ()) of
+    Exn.Result () =>
+      (case transition true tr st of
+        SOME (st', NONE) => (status tr Markup.finished; SOME st')
+      | SOME (_, SOME exn_info) => (error_msg tr exn_info; status tr Markup.failed; NONE)
+      | NONE => (error_msg tr (TERMINATE, at_command tr); status tr Markup.failed; NONE))
+  | Exn.Exn exn => (error_msg tr (exn, at_command tr); status tr Markup.failed; NONE));
+
 
 (* excursion of units, consisting of commands with proof *)
 
@@ -699,10 +718,6 @@ structure States = ProofDataFun
   type T = state list future option;
   fun init _ = NONE;
 );
-
-fun command_result tr st =
-  let val st' = command tr st
-  in (st', st') end;
 
 fun proof_result immediate (tr, proof_trs) st =
   let val st' = command tr st in
@@ -716,9 +731,9 @@ fun proof_result immediate (tr, proof_trs) st =
         val (body_trs, end_tr) = split_last proof_trs;
         val finish = Context.Theory o ProofContext.theory_of;
 
-        val future_proof = Proof.future_proof
+        val future_proof = Proof.global_future_proof
           (fn prf =>
-            Future.fork_pri 1 (fn () =>
+            Future.fork_pri ~1 (fn () =>
               let val (states, State (result_node, _)) =
                 (case st' of State (SOME (Proof (_, (_, orig_gthy)), exit), prev)
                   => State (SOME (Proof (ProofNode.init prf, (finish, orig_gthy)), exit), prev))
@@ -743,13 +758,13 @@ fun excursion input =
   let
     val end_pos = if null input then error "No input" else pos_of (fst (List.last input));
 
-    val immediate = not (Future.enabled ());
-    val (future_results, end_state) = fold_map (proof_result immediate) input toplevel;
+    val immediate = not (Goal.future_enabled ());
+    val (results, end_state) = fold_map (proof_result immediate) input toplevel;
     val _ =
       (case end_state of
-        State (NONE, SOME (Theory (Context.Theory _, _), _)) => ()
+        State (NONE, SOME (Theory (Context.Theory _, _), _)) =>
+          command (commit_exit end_pos) end_state
       | _ => error "Unfinished development at end of input");
-    val results = maps Lazy.force future_results;
-  in (results, fn () => ignore (command (commit_exit end_pos) end_state)) end;
+  in Lazy.lazy (fn () => maps Lazy.force results) end;
 
 end;

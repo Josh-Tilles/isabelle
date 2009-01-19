@@ -1,4 +1,3 @@
-(* $Id$ *)
 (*<*)
 theory Library
 imports
@@ -22,7 +21,6 @@ imports
   Executable_Set
   Float
   FuncSet
-  Imperative_HOL
   Infinite_Set
   ListVector
   Multiset
@@ -39,6 +37,7 @@ imports
   Ramsey
   RBT
   State_Monad
+  Univ_Poly
   While_Combinator
   Word
   Zorn

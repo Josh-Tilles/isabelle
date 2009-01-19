@@ -368,15 +368,15 @@ consts %quote f :: "\<alpha> \<Rightarrow> \<alpha>"
 text {*
   \noindent The connection to the type system is done by means
   of a primitive axclass
-*}
+*} setup %invisible {* Sign.add_path "foo" *}
 
 axclass %quote idem < type
-  idem: "f (f x) = f x"
+  idem: "f (f x) = f x" setup %invisible {* Sign.parent_path *}
 
 text {* \noindent together with a corresponding interpretation: *}
 
 interpretation %quote idem_class:
-  idem ["f \<Colon> (\<alpha>\<Colon>idem) \<Rightarrow> \<alpha>"]
+  idem "f \<Colon> (\<alpha>\<Colon>idem) \<Rightarrow> \<alpha>"
 proof qed (rule idem)
 
 text {*
@@ -459,7 +459,7 @@ text {*
   of monoids for lists:
 *}
 
-interpretation %quote list_monoid: monoid [append "[]"]
+interpretation %quote list_monoid!: monoid append "[]"
   proof qed auto
 
 text {*
@@ -474,10 +474,10 @@ primrec %quote replicate :: "nat \<Rightarrow> \<alpha> list \<Rightarrow> \<alp
   "replicate 0 _ = []"
   | "replicate (Suc n) xs = xs @ replicate n xs"
 
-interpretation %quote list_monoid: monoid [append "[]"] where
+interpretation %quote list_monoid!: monoid append "[]" where
   "monoid.pow_nat append [] = replicate"
 proof -
-  interpret monoid [append "[]"] ..
+  interpret monoid append "[]" ..
   show "monoid.pow_nat append [] = replicate"
   proof
     fix n

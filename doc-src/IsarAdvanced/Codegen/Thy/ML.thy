@@ -24,9 +24,9 @@ text %mlref {*
   \begin{mldecls}
   @{index_ML Code.add_eqn: "thm -> theory -> theory"} \\
   @{index_ML Code.del_eqn: "thm -> theory -> theory"} \\
-  @{index_ML Code.add_eqnl: "string * (thm * bool) list Lazy.T -> theory -> theory"} \\
-  @{index_ML Code.map_pre: "(MetaSimplifier.simpset -> MetaSimplifier.simpset) -> theory -> theory"} \\
-  @{index_ML Code.map_post: "(MetaSimplifier.simpset -> MetaSimplifier.simpset) -> theory -> theory"} \\
+  @{index_ML Code.add_eqnl: "string * (thm * bool) list lazy -> theory -> theory"} \\
+  @{index_ML Code.map_pre: "(simpset -> simpset) -> theory -> theory"} \\
+  @{index_ML Code.map_post: "(simpset -> simpset) -> theory -> theory"} \\
   @{index_ML Code.add_functrans: "string * (theory -> (thm * bool) list -> (thm * bool) list option)
     -> theory -> theory"} \\
   @{index_ML Code.del_functrans: "string -> theory -> theory"} \\
@@ -45,7 +45,7 @@ text %mlref {*
      theorem @{text "thm"} from executable content, if present.
 
   \item @{ML Code.add_eqnl}~@{text "(const, lthms)"}~@{text "thy"} adds
-     suspended defining equations @{text lthms} for constant
+     suspended code equations @{text lthms} for constant
      @{text const} to executable content.
 
   \item @{ML Code.map_pre}~@{text "f"}~@{text "thy"} changes
@@ -53,11 +53,11 @@ text %mlref {*
 
   \item @{ML Code.add_functrans}~@{text "(name, f)"}~@{text "thy"} adds
      function transformer @{text f} (named @{text name}) to executable content;
-     @{text f} is a transformer of the defining equations belonging
+     @{text f} is a transformer of the code equations belonging
      to a certain function definition, depending on the
      current theory context.  Returning @{text NONE} indicates that no
      transformation took place;  otherwise, the whole process will be iterated
-     with the new defining equations.
+     with the new code equations.
 
   \item @{ML Code.del_functrans}~@{text "name"}~@{text "thy"} removes
      function transformer named @{text name} from executable content.
@@ -80,7 +80,7 @@ text %mlref {*
   \begin{mldecls}
   @{index_ML Code_Unit.read_const: "theory -> string -> string"} \\
   @{index_ML Code_Unit.head_eqn: "theory -> thm -> string * ((string * sort) list * typ)"} \\
-  @{index_ML Code_Unit.rewrite_eqn: "MetaSimplifier.simpset -> thm -> thm"} \\
+  @{index_ML Code_Unit.rewrite_eqn: "simpset -> thm -> thm"} \\
   \end{mldecls}
 
   \begin{description}
@@ -89,12 +89,12 @@ text %mlref {*
      reads a constant as a concrete term expression @{text s}.
 
   \item @{ML Code_Unit.head_eqn}~@{text thy}~@{text thm}
-     extracts the constant and its type from a defining equation @{text thm}.
+     extracts the constant and its type from a code equation @{text thm}.
 
   \item @{ML Code_Unit.rewrite_eqn}~@{text ss}~@{text thm}
-     rewrites a defining equation @{text thm} with a simpset @{text ss};
+     rewrites a code equation @{text thm} with a simpset @{text ss};
      only arguments and right hand side are rewritten,
-     not the head of the defining equation.
+     not the head of the code equation.
 
   \end{description}
 

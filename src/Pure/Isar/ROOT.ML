@@ -1,5 +1,4 @@
 (*  Title:      Pure/Isar/ROOT.ML
-    ID:         $Id$
     Author:     Markus Wenzel, TU Muenchen
 
 Isar -- Intelligible Semi-Automated Reasoning for Isabelle.
@@ -21,8 +20,9 @@ use "../Proof/proofchecker.ML";
 
 (*outer syntax*)
 use "outer_lex.ML";
-use "outer_parse.ML";
 use "outer_keyword.ML";
+use "outer_parse.ML";
+use "value_parse.ML";
 use "args.ML";
 use "antiquote.ML";
 use "../ML/ml_context.ML";
@@ -53,13 +53,12 @@ use "obtain.ML";
 (*local theories and targets*)
 use "local_theory.ML";
 use "overloading.ML";
+use "old_locale.ML";
 use "locale.ML";
-use "new_locale.ML";
+use "class_target.ML";
+use "theory_target.ML";
 use "expression.ML";
 use "class.ML";
-use "theory_target.ML";
-use "instance.ML";
-use "subclass.ML";
 
 (*complex proof machineries*)
 use "../simplifier.ML";
@@ -80,12 +79,13 @@ use "toplevel.ML";
 (*theory syntax*)
 use "../Thy/term_style.ML";
 use "../Thy/thy_output.ML";
-use "../Thy/thy_edit.ML";
+use "../Thy/thy_syntax.ML";
 use "../old_goals.ML";
 use "outer_syntax.ML";
 use "../Thy/thy_info.ML";
 use "session.ML";
 use "isar.ML";
+use "isar_document.ML";
 
 (*theory and proof operations*)
 use "rule_insts.ML";

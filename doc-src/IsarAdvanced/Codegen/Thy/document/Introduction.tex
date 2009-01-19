@@ -164,20 +164,20 @@ The key concept for understanding \isa{Isabelle}'s code generation is
 \hspace*{0pt}\\
 \hspace*{0pt}datatype 'a queue = Queue of 'a list * 'a list;\\
 \hspace*{0pt}\\
-\hspace*{0pt}val empty :~'a queue = Queue ([], []);\\
+\hspace*{0pt}val empty :~'a queue = Queue ([],~[])\\
 \hspace*{0pt}\\
-\hspace*{0pt}fun dequeue (Queue ([], [])) = (NONE, Queue ([], []))\\
-\hspace*{0pt} ~| dequeue (Queue (xs, y ::~ys)) = (SOME y, Queue (xs, ys))\\
-\hspace*{0pt} ~| dequeue (Queue (v ::~va, [])) =\\
+\hspace*{0pt}fun dequeue (Queue ([],~[])) = (NONE,~Queue ([],~[]))\\
+\hspace*{0pt} ~| dequeue (Queue (xs,~y ::~ys)) = (SOME y,~Queue (xs,~ys))\\
+\hspace*{0pt} ~| dequeue (Queue (v ::~va,~[])) =\\
 \hspace*{0pt} ~~~let\\
 \hspace*{0pt} ~~~~~val y ::~ys = rev (v ::~va);\\
 \hspace*{0pt} ~~~in\\
-\hspace*{0pt} ~~~~~(SOME y, Queue ([], ys))\\
+\hspace*{0pt} ~~~~~(SOME y,~Queue ([],~ys))\\
 \hspace*{0pt} ~~~end;\\
 \hspace*{0pt}\\
-\hspace*{0pt}fun enqueue x (Queue (xs, ys)) = Queue (x ::~xs, ys);\\
+\hspace*{0pt}fun enqueue x (Queue (xs,~ys)) = Queue (x ::~xs,~ys);\\
 \hspace*{0pt}\\
-\hspace*{0pt}end; (*struct Example*)%
+\hspace*{0pt}end;~(*struct Example*)%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -233,31 +233,31 @@ The key concept for understanding \isa{Isabelle}'s code generation is
 \hspace*{0pt}module Example where {\char123}\\
 \hspace*{0pt}\\
 \hspace*{0pt}\\
-\hspace*{0pt}foldla ::~forall a b. (a -> b -> a) -> a -> [b] -> a;\\
+\hspace*{0pt}foldla ::~forall a b.~(a -> b -> a) -> a -> [b] -> a;\\
 \hspace*{0pt}foldla f a [] = a;\\
 \hspace*{0pt}foldla f a (x :~xs) = foldla f (f a x) xs;\\
 \hspace*{0pt}\\
-\hspace*{0pt}rev ::~forall a. [a] -> [a];\\
+\hspace*{0pt}rev ::~forall a.~[a] -> [a];\\
 \hspace*{0pt}rev xs = foldla ({\char92}~xsa x -> x :~xsa) [] xs;\\
 \hspace*{0pt}\\
-\hspace*{0pt}list{\char95}case ::~forall t a. t -> (a -> [a] -> t) -> [a] -> t;\\
+\hspace*{0pt}list{\char95}case ::~forall t a.~t -> (a -> [a] -> t) -> [a] -> t;\\
 \hspace*{0pt}list{\char95}case f1 f2 (a :~list) = f2 a list;\\
 \hspace*{0pt}list{\char95}case f1 f2 [] = f1;\\
 \hspace*{0pt}\\
 \hspace*{0pt}data Queue a = Queue [a] [a];\\
 \hspace*{0pt}\\
-\hspace*{0pt}empty ::~forall a. Queue a;\\
+\hspace*{0pt}empty ::~forall a.~Queue a;\\
 \hspace*{0pt}empty = Queue [] [];\\
 \hspace*{0pt}\\
-\hspace*{0pt}dequeue ::~forall a. Queue a -> (Maybe a, Queue a);\\
-\hspace*{0pt}dequeue (Queue [] []) = (Nothing, Queue [] []);\\
-\hspace*{0pt}dequeue (Queue xs (y :~ys)) = (Just y, Queue xs ys);\\
+\hspace*{0pt}dequeue ::~forall a.~Queue a -> (Maybe a,~Queue a);\\
+\hspace*{0pt}dequeue (Queue [] []) = (Nothing,~Queue [] []);\\
+\hspace*{0pt}dequeue (Queue xs (y :~ys)) = (Just y,~Queue xs ys);\\
 \hspace*{0pt}dequeue (Queue (v :~va) []) =\\
 \hspace*{0pt} ~let {\char123}\\
 \hspace*{0pt} ~~~(y :~ys) = rev (v :~va);\\
-\hspace*{0pt} ~{\char125}~in (Just y, Queue [] ys);\\
+\hspace*{0pt} ~{\char125}~in (Just y,~Queue [] ys);\\
 \hspace*{0pt}\\
-\hspace*{0pt}enqueue ::~forall a. a -> Queue a -> Queue a;\\
+\hspace*{0pt}enqueue ::~forall a.~a -> Queue a -> Queue a;\\
 \hspace*{0pt}enqueue x (Queue xs ys) = Queue (x :~xs) ys;\\
 \hspace*{0pt}\\
 \hspace*{0pt}{\char125}%
@@ -293,7 +293,7 @@ What you have seen so far should be already enough in a lot of cases.  If you
       \tikzstyle process=[ellipse, draw, thick, color = green, fill = white];
       \tikzstyle process_arrow=[->, semithick, color = green];
       \node (HOL) at (0, 4) [style=entity] {\isa{Isabelle{\isacharslash}HOL} theory};
-      \node (eqn) at (2, 2) [style=entity] {defining equations};
+      \node (eqn) at (2, 2) [style=entity] {code equations};
       \node (iml) at (2, 0) [style=entity] {intermediate language};
       \node (seri) at (1, 0) [style=process] {serialisation};
       \node (SML) at (0, 3) [style=entity] {\isa{SML}};
@@ -318,12 +318,12 @@ What you have seen so far should be already enough in a lot of cases.  If you
   The code generator employs a notion of executability
   for three foundational executable ingredients known
   from functional programming:
-  \emph{defining equations}, \emph{datatypes}, and
-  \emph{type classes}.  A defining equation as a first approximation
+  \emph{code equations}, \emph{datatypes}, and
+  \emph{type classes}.  A code equation as a first approximation
   is a theorem of the form \isa{f\ t\isactrlisub {\isadigit{1}}\ t\isactrlisub {\isadigit{2}}\ {\isasymdots}\ t\isactrlisub n\ {\isasymequiv}\ t}
   (an equation headed by a constant \isa{f} with arguments
   \isa{t\isactrlisub {\isadigit{1}}\ t\isactrlisub {\isadigit{2}}\ {\isasymdots}\ t\isactrlisub n} and right hand side \isa{t}).
-  Code generation aims to turn defining equations
+  Code generation aims to turn code equations
   into a functional program.  This is achieved by three major
   components which operate sequentially, i.e. the result of one is
   the input
@@ -333,7 +333,7 @@ What you have seen so far should be already enough in a lot of cases.  If you
 
     \item Out of the vast collection of theorems proven in a
       \qn{theory}, a reasonable subset modelling
-      defining equations is \qn{selected}.
+      code equations is \qn{selected}.
 
     \item On those selected theorems, certain
       transformations are carried out
@@ -342,7 +342,7 @@ What you have seen so far should be already enough in a lot of cases.  If you
       specifications into equivalent but executable counterparts.
       The result is a structured collection of \qn{code theorems}.
 
-    \item Before the selected defining equations are continued with,
+    \item Before the selected code equations are continued with,
       they can be \qn{preprocessed}, i.e. subjected to theorem
       transformations.  This \qn{preprocessor} is an interface which
       allows to apply
@@ -350,12 +350,12 @@ What you have seen so far should be already enough in a lot of cases.  If you
       to code generation;  motivating examples are shown below, see
       \secref{sec:preproc}.
       The result of the preprocessing step is a structured collection
-      of defining equations.
+      of code equations.
 
-    \item These defining equations are \qn{translated} to a program
+    \item These code equations are \qn{translated} to a program
       in an abstract intermediate language.  Think of it as a kind
       of \qt{Mini-Haskell} with four \qn{statements}: \isa{data}
-      (for datatypes), \isa{fun} (stemming from defining equations),
+      (for datatypes), \isa{fun} (stemming from code equations),
       also \isa{class} and \isa{inst} (for type classes).
 
     \item Finally, the abstract program is \qn{serialised} into concrete

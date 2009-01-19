@@ -1,5 +1,4 @@
 (*  Title:      Pure/Syntax/lexicon.ML
-    ID:         $Id$
     Author:     Tobias Nipkow and Markus Wenzel, TU Muenchen
 
 Lexer for the inner Isabelle syntax (terms and types).
@@ -169,10 +168,10 @@ val token_kind_markup =
   | VarSy       => Markup.var
   | TFreeSy     => Markup.tfree
   | TVarSy      => Markup.tvar
-  | NumSy       => Markup.num
-  | FloatSy     => Markup.float
-  | XNumSy      => Markup.xnum
-  | StrSy       => Markup.xstr
+  | NumSy       => Markup.numeral
+  | FloatSy     => Markup.numeral
+  | XNumSy      => Markup.numeral
+  | StrSy       => Markup.inner_string
   | Space       => Markup.none
   | Comment     => Markup.inner_comment
   | EOF         => Markup.none;

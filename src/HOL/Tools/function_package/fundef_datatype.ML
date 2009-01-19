@@ -1,5 +1,4 @@
 (*  Title:      HOL/Tools/function_package/fundef_datatype.ML
-    ID:         $Id$
     Author:     Alexander Krauss, TU Muenchen
 
 A package for general recursive function definitions.
@@ -64,9 +63,10 @@ fun inst_free var inst thm =
 
 fun inst_case_thm thy x P thm =
     let
-        val [Pv, xv] = term_vars (prop_of thm)
+        val [Pv, xv] = Term.add_vars (prop_of thm) []
     in
-        cterm_instantiate [(cterm_of thy xv, cterm_of thy x), (cterm_of thy Pv, cterm_of thy P)] thm
+        cterm_instantiate [(cterm_of thy (Var xv), cterm_of thy x), 
+                           (cterm_of thy (Var Pv), cterm_of thy P)] thm
     end
 
 
@@ -199,14 +199,14 @@ fun pat_complete_tac ctxt = SUBGOAL (fn (subgoal, i) =>
 fun pat_completeness ctxt = Method.SIMPLE_METHOD' (pat_complete_tac ctxt)
 
 val by_pat_completeness_simp =
-    Proof.global_terminal_proof
+    Proof.global_future_terminal_proof
       (Method.Basic (pat_completeness, Position.none),
        SOME (Method.Source_i (Args.src (("HOL.auto", []), Position.none))))
 
-fun termination_by method =
+fun termination_by method int =
     FundefPackage.setup_termination_proof NONE
-    #> Proof.global_terminal_proof
-      (Method.Basic (method, Position.none), NONE)
+    #> Proof.global_future_terminal_proof
+      (Method.Basic (method, Position.none), NONE) int
 
 fun mk_catchall fixes arities =
     let
@@ -304,19 +304,19 @@ val fun_config = FundefConfig { sequential=true, default="%x. undefined" (*FIXME
 
 local structure P = OuterParse and K = OuterKeyword in
 
-fun fun_cmd config fixes statements flags lthy =
+fun fun_cmd config fixes statements flags int lthy =
   let val group = serial_string () in
     lthy
       |> LocalTheory.set_group group
       |> FundefPackage.add_fundef fixes statements config flags
-      |> by_pat_completeness_simp
+      |> by_pat_completeness_simp int
       |> LocalTheory.restore
       |> LocalTheory.set_group group
-      |> termination_by (FundefCommon.get_termination_prover (Context.Proof lthy))
+      |> termination_by (FundefCommon.get_termination_prover (Context.Proof lthy)) int
   end;
 
 val _ =
-  OuterSyntax.local_theory "fun" "define general recursive functions (short version)" K.thy_decl
+  OuterSyntax.local_theory' "fun" "define general recursive functions (short version)" K.thy_decl
   (fundef_parser fun_config
      >> (fn ((config, fixes), (flags, statements)) => fun_cmd config fixes statements flags));
 

@@ -1,5 +1,4 @@
 (*  Title:      HOL/Statespace/state_space.ML
-    ID:         $Id$
     Author:     Norbert Schirmer, TU Muenchen
 *)
 
@@ -156,15 +155,13 @@ fun prove_interpretation_in ctxt_tac (name, expr) thy =
 fun add_locale name expr elems thy =
   thy 
   |> Expression.add_locale name name expr elems
-  |> (fn ((target, notes), ctxt) => TheoryTarget.begin target ctxt |>
-           fold (fn (kind, facts) => LocalTheory.notes kind facts #> snd) notes)
+  |> snd
   |> LocalTheory.exit;
 
 fun add_locale_cmd name expr elems thy =
   thy 
-  |> Expression.add_locale_cmd name name expr elems
-  |> (fn ((target, notes), ctxt) => TheoryTarget.begin target ctxt |>
-           fold (fn (kind, facts) => LocalTheory.notes kind facts #> snd) notes)
+  |> Expression.add_locale_cmd name "" expr elems
+  |> snd
   |> LocalTheory.exit;
 
 type statespace_info =
@@ -266,7 +263,7 @@ fun interprete_parent name dist_thm_name parent_expr thy =
       in EVERY [rtac rule i] st
       end
 
-    fun tac ctxt = EVERY [NewLocale.intro_locales_tac true ctxt [],
+    fun tac ctxt = EVERY [Locale.intro_locales_tac true ctxt [],
                           ALLGOALS (SUBGOAL (solve_tac ctxt))]
 
   in thy
@@ -421,13 +418,16 @@ fun statespace_definition state_type args name parents parent_comps components t
 
         val expr = ([(suffix valuetypesN name, 
                      (("",false),Expression.Positional (map SOME pars)))],[]);
-      in prove_interpretation_in (K all_tac) (suffix valuetypesN name, expr) thy end;
+      in
+        prove_interpretation_in (ALLGOALS o solve_tac o Assumption.prems_of)
+          (suffix valuetypesN name, expr) thy
+      end;
 
     fun interprete_parent (_, pname, rs) =
       let
         val expr = ([(pname, (("",false), Expression.Positional rs))],[])
       in prove_interpretation_in
-           (fn ctxt => NewLocale.intro_locales_tac false ctxt [])
+           (fn ctxt => Locale.intro_locales_tac false ctxt [])
            (full_name, expr) end;
 
     fun declare_declinfo updates lthy phi ctxt =

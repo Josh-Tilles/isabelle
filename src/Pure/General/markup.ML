@@ -1,5 +1,4 @@
 (*  Title:      Pure/General/markup.ML
-    ID:         $Id$
     Author:     Makarius
 
 Common markup elements.
@@ -52,11 +51,9 @@ sig
   val skolemN: string val skolem: T
   val boundN: string val bound: T
   val varN: string val var: T
-  val numN: string val num: T
-  val floatN: string val float: T
-  val xnumN: string val xnum: T
-  val xstrN: string val xstr: T
+  val numeralN: string val numeral: T
   val literalN: string val literal: T
+  val inner_stringN: string val inner_string: T
   val inner_commentN: string val inner_comment: T
   val sortN: string val sort: T
   val typN: string val typ: T
@@ -88,24 +85,18 @@ sig
   val subgoalN: string val subgoal: T
   val sendbackN: string val sendback: T
   val hiliteN: string val hilite: T
+  val taskN: string
   val unprocessedN: string val unprocessed: T
-  val runningN: string val running: T
+  val runningN: string val running: string -> T
   val failedN: string val failed: T
   val finishedN: string val finished: T
   val disposedN: string val disposed: T
+  val editsN: string val edits: string -> T
+  val editN: string val edit: string -> string -> T
   val pidN: string
   val sessionN: string
-  val classN: string
-  val messageN: string val message: string -> T
   val promptN: string val prompt: T
-  val writelnN: string
-  val priorityN: string
-  val tracingN: string
-  val warningN: string
-  val errorN: string
-  val debugN: string
-  val initN: string
-  val statusN: string
+  val no_output: output * output
   val default_output: T -> output * output
   val add_mode: string -> (T -> output * output) -> unit
   val output: T -> output * output
@@ -203,11 +194,9 @@ val (freeN, free) = markup_elem "free";
 val (skolemN, skolem) = markup_elem "skolem";
 val (boundN, bound) = markup_elem "bound";
 val (varN, var) = markup_elem "var";
-val (numN, num) = markup_elem "num";
-val (floatN, float) = markup_elem "float";
-val (xnumN, xnum) = markup_elem "xnum";
-val (xstrN, xstr) = markup_elem "xstr";
+val (numeralN, numeral) = markup_elem "numeral";
 val (literalN, literal) = markup_elem "literal";
+val (inner_stringN, inner_string) = markup_elem "inner_string";
 val (inner_commentN, inner_comment) = markup_elem "inner_comment";
 
 val (sortN, sort) = markup_elem "sort";
@@ -263,11 +252,21 @@ val (hiliteN, hilite) = markup_elem "hilite";
 
 (* command status *)
 
+val taskN = "task";
+
 val (unprocessedN, unprocessed) = markup_elem "unprocessed";
-val (runningN, running) = markup_elem "running";
+val (runningN, running) = markup_string "running" taskN;
 val (failedN, failed) = markup_elem "failed";
 val (finishedN, finished) = markup_elem "finished";
 val (disposedN, disposed) = markup_elem "disposed";
+
+
+(* interactive documents *)
+
+val (editsN, edits) = markup_string "edits" idN;
+
+val editN = "edit";
+fun edit id state_id : T = (editN, [(idN, id), (stateN, state_id)]);
 
 
 (* messages *)
@@ -275,24 +274,14 @@ val (disposedN, disposed) = markup_elem "disposed";
 val pidN = "pid";
 val sessionN = "session";
 
-val classN = "class";
-val (messageN, message) = markup_string "message" classN;
-
 val (promptN, prompt) = markup_elem "prompt";
 
-val writelnN = "writeln";
-val priorityN = "priority";
-val tracingN = "tracing";
-val warningN = "warning";
-val errorN = "error";
-val debugN = "debug";
-val initN = "init";
-val statusN = "status";
 
 
 (* print mode operations *)
 
-fun default_output (_: T) = ("", "");
+val no_output = ("", "");
+fun default_output (_: T) = no_output;
 
 local
   val default = {output = default_output};
@@ -304,7 +293,7 @@ in
     the_default default (Library.get_first (Symtab.lookup (! modes)) (print_mode_value ()));
 end;
 
-fun output m = if is_none m then ("", "") else #output (get_mode ()) m;
+fun output m = if is_none m then no_output else #output (get_mode ()) m;
 
 val enclose = output #-> Library.enclose;
 

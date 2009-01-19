@@ -6,7 +6,7 @@
 
 default: HOL
 generate: HOL-Generate-HOL HOL-Generate-HOLLight
-images: HOL-Plain HOL-Main HOL HOL-Algebra HOL-Nominal HOL-NSA HOL-Word TLA HOL4
+images: HOL HOL-Base HOL-Plain HOL-Main HOL-Algebra HOL-Nominal HOL-NSA HOL-Word TLA HOL4
 
 #Note: keep targets sorted (except for HOL-Library and HOL-ex)
 test: \
@@ -23,6 +23,7 @@ test: \
   HOL-IMP \
   HOL-IMPP \
   HOL-IOA \
+  HOL-Imperative_HOL \
   HOL-Induct \
   HOL-Isar_examples \
   HOL-Lambda \
@@ -65,6 +66,8 @@ LOG = $(OUT)/log
 
 HOL: Pure $(OUT)/HOL
 
+HOL-Base: Pure $(OUT)/HOL-Base
+
 HOL-Plain: Pure $(OUT)/HOL-Plain
 
 HOL-Main: Pure $(OUT)/HOL-Main
@@ -74,15 +77,50 @@ Pure:
 
 $(OUT)/Pure: Pure
 
-PLAIN_DEPENDENCIES = $(OUT)/Pure \
+BASE_DEPENDENCIES = $(OUT)/Pure \
   Code_Setup.thy \
+  HOL.thy \
+  Tools/hologic.ML \
+  Tools/recfun_codegen.ML \
+  Tools/simpdata.ML \
+  $(SRC)/Tools/atomize_elim.ML \
+  $(SRC)/Tools/code/code_funcgr.ML \
+  $(SRC)/Tools/code/code_funcgr.ML \
+  $(SRC)/Tools/code/code_name.ML \
+  $(SRC)/Tools/code/code_printer.ML \
+  $(SRC)/Tools/code/code_target.ML \
+  $(SRC)/Tools/code/code_ml.ML \
+  $(SRC)/Tools/code/code_haskell.ML \
+  $(SRC)/Tools/code/code_thingol.ML \
+  $(SRC)/Tools/induct.ML \
+  $(SRC)/Tools/induct_tacs.ML \
+  $(SRC)/Tools/IsaPlanner/isand.ML \
+  $(SRC)/Tools/IsaPlanner/rw_inst.ML \
+  $(SRC)/Tools/IsaPlanner/rw_tools.ML \
+  $(SRC)/Tools/IsaPlanner/zipper.ML \
+  $(SRC)/Tools/nbe.ML \
+  $(SRC)/Tools/random_word.ML \
+  $(SRC)/Tools/value.ML \
+  $(SRC)/Provers/blast.ML \
+  $(SRC)/Provers/clasimp.ML \
+  $(SRC)/Provers/classical.ML \
+  $(SRC)/Provers/coherent.ML \
+  $(SRC)/Provers/eqsubst.ML \
+  $(SRC)/Provers/hypsubst.ML \
+  $(SRC)/Provers/project_rule.ML \
+  $(SRC)/Provers/quantifier1.ML \
+  $(SRC)/Provers/splitter.ML \
+
+$(OUT)/HOL-Base: base.ML $(BASE_DEPENDENCIES)
+	@$(ISABELLE_TOOL) usedir -b -f base.ML -d false -g false $(OUT)/Pure HOL-Base
+
+PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES)\
   Datatype.thy \
   Divides.thy \
   Extraction.thy \
   Finite_Set.thy \
   Fun.thy \
   FunDef.thy \
-  HOL.thy \
   Inductive.thy \
   Lattices.thy \
   Nat.thy \
@@ -130,7 +168,6 @@ PLAIN_DEPENDENCIES = $(OUT)/Pure \
   Tools/function_package/size.ML \
   Tools/function_package/sum_tree.ML \
   Tools/function_package/termination.ML \
-  Tools/hologic.ML \
   Tools/inductive_codegen.ML \
   Tools/inductive_package.ML \
   Tools/inductive_realizer.ML \
@@ -139,14 +176,12 @@ PLAIN_DEPENDENCIES = $(OUT)/Pure \
   Tools/old_primrec_package.ML \
   Tools/primrec_package.ML \
   Tools/prop_logic.ML \
-  Tools/recfun_codegen.ML \
   Tools/record_package.ML \
   Tools/refute.ML \
   Tools/refute_isar.ML \
   Tools/rewrite_hol_proof.ML \
   Tools/sat_funcs.ML \
   Tools/sat_solver.ML \
-  Tools/simpdata.ML \
   Tools/split_rule.ML \
   Tools/typecopy_package.ML \
   Tools/typedef_codegen.ML \
@@ -158,35 +193,8 @@ PLAIN_DEPENDENCIES = $(OUT)/Pure \
   $(SRC)/Provers/Arith/cancel_div_mod.ML \
   $(SRC)/Provers/Arith/cancel_sums.ML \
   $(SRC)/Provers/Arith/fast_lin_arith.ML \
-  $(SRC)/Provers/blast.ML \
-  $(SRC)/Provers/clasimp.ML \
-  $(SRC)/Provers/classical.ML \
-  $(SRC)/Provers/coherent.ML \
-  $(SRC)/Provers/eqsubst.ML \
-  $(SRC)/Provers/hypsubst.ML \
   $(SRC)/Provers/order.ML \
-  $(SRC)/Provers/project_rule.ML \
-  $(SRC)/Provers/quantifier1.ML \
-  $(SRC)/Provers/splitter.ML \
   $(SRC)/Provers/trancl.ML \
-  $(SRC)/Tools/IsaPlanner/isand.ML \
-  $(SRC)/Tools/IsaPlanner/rw_inst.ML \
-  $(SRC)/Tools/IsaPlanner/rw_tools.ML \
-  $(SRC)/Tools/IsaPlanner/zipper.ML \
-  $(SRC)/Tools/atomize_elim.ML \
-  $(SRC)/Tools/code/code_funcgr.ML \
-  $(SRC)/Tools/code/code_funcgr.ML \
-  $(SRC)/Tools/code/code_name.ML \
-  $(SRC)/Tools/code/code_printer.ML \
-  $(SRC)/Tools/code/code_target.ML \
-  $(SRC)/Tools/code/code_ml.ML \
-  $(SRC)/Tools/code/code_haskell.ML \
-  $(SRC)/Tools/code/code_thingol.ML \
-  $(SRC)/Tools/induct.ML \
-  $(SRC)/Tools/induct_tacs.ML \
-  $(SRC)/Tools/value.ML \
-  $(SRC)/Tools/nbe.ML \
-  $(SRC)/Tools/random_word.ML \
   $(SRC)/Tools/rat.ML
 
 $(OUT)/HOL-Plain: plain.ML $(PLAIN_DEPENDENCIES)
@@ -279,8 +287,8 @@ $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
   GCD.thy \
   Order_Relation.thy \
   Parity.thy \
-  Univ_Poly.thy \
   Lubs.thy \
+  Polynomial.thy \
   PReal.thy \
   Rational.thy \
   RComplete.thy \
@@ -325,9 +333,7 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Code_Char_chr.thy Library/Code_Integer.thy			\
   Library/Numeral_Type.thy			\
   Library/Boolean_Algebra.thy Library/Countable.thy	\
-  Library/Heap.thy Library/Heap_Monad.thy Library/Array.thy		\
-  Library/Relational.thy Library/Sublist.thy Library/Subarray.thy	\
-  Library/Ref.thy Library/Imperative_HOL.thy Library/RBT.thy		\
+  Library/RBT.thy	Library/Univ_Poly.thy	\
   Library/Enum.thy Library/Float.thy $(SRC)/Tools/float.ML $(SRC)/HOL/Tools/float_arith.ML
 	@cd Library; $(ISABELLE_TOOL) usedir $(OUT)/HOL Library
 
@@ -625,6 +631,17 @@ $(LOG)/HOL-Modelcheck.gz: $(OUT)/HOL Modelcheck/CTL.thy		\
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Modelcheck
 
 
+## HOL-Imperative_HOL
+
+HOL-Imperative_HOL: HOL $(LOG)/HOL-Imperative_HOL.gz
+
+$(LOG)/HOL-Imperative_HOL.gz: $(OUT)/HOL Imperative_HOL/Heap.thy \
+  Imperative_HOL/Heap_Monad.thy Imperative_HOL/Array.thy \
+  Imperative_HOL/Relational.thy \
+  Imperative_HOL/Ref.thy Imperative_HOL/Imperative_HOL.thy
+	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Imperative_HOL
+
+
 ## HOL-SizeChange
 
 HOL-SizeChange: HOL $(LOG)/HOL-SizeChange.gz
@@ -796,8 +813,9 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Library/Commutative_Ring.thy		\
   ex/ReflectionEx.thy ex/ROOT.ML ex/Recdefs.thy ex/Records.thy		\
   ex/Reflected_Presburger.thy ex/coopertac.ML				\
   ex/Refute_Examples.thy ex/SAT_Examples.thy ex/SVC_Oracle.thy		\
-  ex/Sudoku.thy ex/Tarski.thy ex/Termination.thy ex/Term_Of_Syntax.thy			\
-  ex/Unification.thy ex/document/root.bib			\
+  ex/Subarray.thy ex/Sublist.thy                                        \
+  ex/Sudoku.thy ex/Tarski.thy ex/Termination.thy ex/Term_Of_Syntax.thy	\
+  ex/Unification.thy ex/document/root.bib			        \
   ex/document/root.tex ex/Meson_Test.thy ex/reflection.ML ex/set.thy	\
   ex/svc_funcs.ML ex/svc_test.thy	\
   ex/ImperativeQuicksort.thy	\

@@ -235,19 +235,21 @@ lemma minus_mult_left: "- (a * b) = - a * b"
 lemma minus_mult_right: "- (a * b) = a * - b"
   by (rule equals_zero_I) (simp add: right_distrib [symmetric]) 
 
+text{*Extract signs from products*}
+lemmas mult_minus_left [simp] = minus_mult_left [symmetric]
+lemmas mult_minus_right [simp] = minus_mult_right [symmetric]
+
 lemma minus_mult_minus [simp]: "- a * - b = a * b"
-  by (simp add: minus_mult_left [symmetric] minus_mult_right [symmetric])
+  by simp
 
 lemma minus_mult_commute: "- a * b = a * - b"
-  by (simp add: minus_mult_left [symmetric] minus_mult_right [symmetric])
+  by simp
 
 lemma right_diff_distrib: "a * (b - c) = a * b - a * c"
-  by (simp add: right_distrib diff_minus 
-    minus_mult_left [symmetric] minus_mult_right [symmetric]) 
+  by (simp add: right_distrib diff_minus)
 
 lemma left_diff_distrib: "(a - b) * c = a * c - b * c"
-  by (simp add: left_distrib diff_minus 
-    minus_mult_left [symmetric] minus_mult_right [symmetric]) 
+  by (simp add: left_distrib diff_minus)
 
 lemmas ring_distribs =
   right_distrib left_distrib left_diff_distrib right_diff_distrib
@@ -292,6 +294,33 @@ begin
 
 subclass ring_1 ..
 subclass comm_semiring_1_cancel ..
+
+lemma dvd_minus_iff [simp]: "x dvd - y \<longleftrightarrow> x dvd y"
+proof
+  assume "x dvd - y"
+  then have "x dvd - 1 * - y" by (rule dvd_mult)
+  then show "x dvd y" by simp
+next
+  assume "x dvd y"
+  then have "x dvd - 1 * y" by (rule dvd_mult)
+  then show "x dvd - y" by simp
+qed
+
+lemma minus_dvd_iff [simp]: "- x dvd y \<longleftrightarrow> x dvd y"
+proof
+  assume "- x dvd y"
+  then obtain k where "y = - x * k" ..
+  then have "y = x * - k" by simp
+  then show "x dvd y" ..
+next
+  assume "x dvd y"
+  then obtain k where "y = x * k" ..
+  then have "y = - x * - k" by simp
+  then show "- x dvd y" ..
+qed
+
+lemma dvd_diff: "x dvd y \<Longrightarrow> x dvd z \<Longrightarrow> x dvd (y - z)"
+  by (simp add: diff_minus dvd_add dvd_minus_iff)
 
 end
 
@@ -397,67 +426,47 @@ apply (drule nonzero_imp_inverse_nonzero)
 apply auto
 done
 
-lemma nonzero_inverse_minus_eq:
-  assumes "a \<noteq> 0"
-  shows "inverse (- a) = - inverse a"
-proof -
-  have "- a * inverse (- a) = - a * - inverse a"
-    using assms by simp
-  then show ?thesis unfolding mult_cancel_left using assms by simp 
-qed
-
-lemma nonzero_inverse_inverse_eq:
-  assumes "a \<noteq> 0"
-  shows "inverse (inverse a) = a"
-proof -
-  have "(inverse (inverse a) * inverse a) * a = a" 
-    using assms by (simp add: nonzero_imp_inverse_nonzero)
-  then show ?thesis using assms by (simp add: mult_assoc)
-qed
-
-lemma nonzero_inverse_eq_imp_eq:
-  assumes inveq: "inverse a = inverse b"
-    and anz:  "a \<noteq> 0"
-    and bnz:  "b \<noteq> 0"
-  shows "a = b"
-proof -
-  have "a * inverse b = a * inverse a"
-    by (simp add: inveq)
-  hence "(a * inverse b) * b = (a * inverse a) * b"
-    by simp
-  then show "a = b"
-    by (simp add: mult_assoc anz bnz)
-qed
-
-lemma inverse_1 [simp]: "inverse 1 = 1"
-proof -
-  have "inverse 1 * 1 = 1" 
-    by (rule left_inverse) (rule one_neq_zero)
-  then show ?thesis by simp
-qed
-
 lemma inverse_unique: 
   assumes ab: "a * b = 1"
   shows "inverse a = b"
 proof -
   have "a \<noteq> 0" using ab by (cases "a = 0") simp_all
-  moreover have "inverse a * (a * b) = inverse a" by (simp add: ab) 
-  ultimately show ?thesis by (simp add: mult_assoc [symmetric]) 
+  moreover have "inverse a * (a * b) = inverse a" by (simp add: ab)
+  ultimately show ?thesis by (simp add: mult_assoc [symmetric])
 qed
 
+lemma nonzero_inverse_minus_eq:
+  "a \<noteq> 0 \<Longrightarrow> inverse (- a) = - inverse a"
+  by (rule inverse_unique) simp
+
+lemma nonzero_inverse_inverse_eq:
+  "a \<noteq> 0 \<Longrightarrow> inverse (inverse a) = a"
+  by (rule inverse_unique) simp
+
+lemma nonzero_inverse_eq_imp_eq:
+  assumes "inverse a = inverse b" and "a \<noteq> 0" and "b \<noteq> 0"
+  shows "a = b"
+proof -
+  from `inverse a = inverse b`
+  have "inverse (inverse a) = inverse (inverse b)"
+    by (rule arg_cong)
+  with `a \<noteq> 0` and `b \<noteq> 0` show "a = b"
+    by (simp add: nonzero_inverse_inverse_eq)
+qed
+
+lemma inverse_1 [simp]: "inverse 1 = 1"
+  by (rule inverse_unique) simp
+
 lemma nonzero_inverse_mult_distrib: 
-  assumes anz: "a \<noteq> 0"
-    and bnz: "b \<noteq> 0"
+  assumes "a \<noteq> 0" and "b \<noteq> 0"
   shows "inverse (a * b) = inverse b * inverse a"
 proof -
-  have "inverse (a * b) * (a * b) * inverse b = inverse b" 
-    by (simp add: anz bnz)
-  hence "inverse (a * b) * a = inverse b" 
-    by (simp add: mult_assoc bnz)
-  hence "inverse (a * b) * a * inverse a = inverse b * inverse a" 
-    by simp
+  have "a * (b * inverse b) * inverse a = 1"
+    using assms by simp
+  hence "a * b * (inverse b * inverse a) = 1"
+    by (simp only: mult_assoc)
   thus ?thesis
-    by (simp add: mult_assoc anz)
+    by (rule inverse_unique)
 qed
 
 lemma division_ring_inverse_add:
@@ -1266,30 +1275,25 @@ using nonzero_mult_divide_mult_cancel_right[of b c a] by(simp add:mult_ac)
 subsection {* Division and Unary Minus *}
 
 lemma nonzero_minus_divide_left: "b \<noteq> 0 ==> - (a/b) = (-a) / (b::'a::field)"
-by (simp add: divide_inverse minus_mult_left)
+by (simp add: divide_inverse)
 
 lemma nonzero_minus_divide_right: "b \<noteq> 0 ==> - (a/b) = a / -(b::'a::field)"
-by (simp add: divide_inverse nonzero_inverse_minus_eq minus_mult_right)
+by (simp add: divide_inverse nonzero_inverse_minus_eq)
 
 lemma nonzero_minus_divide_divide: "b \<noteq> 0 ==> (-a)/(-b) = a / (b::'a::field)"
 by (simp add: divide_inverse nonzero_inverse_minus_eq)
 
 lemma minus_divide_left: "- (a/b) = (-a) / (b::'a::field)"
-by (simp add: divide_inverse minus_mult_left [symmetric])
+by (simp add: divide_inverse)
 
 lemma minus_divide_right: "- (a/b) = a / -(b::'a::{field,division_by_zero})"
-by (simp add: divide_inverse minus_mult_right [symmetric])
+by (simp add: divide_inverse)
 
 
 text{*The effect is to extract signs from divisions*}
 lemmas divide_minus_left = minus_divide_left [symmetric]
 lemmas divide_minus_right = minus_divide_right [symmetric]
 declare divide_minus_left [simp]   divide_minus_right [simp]
-
-text{*Also, extract signs from products*}
-lemmas mult_minus_left = minus_mult_left [symmetric]
-lemmas mult_minus_right = minus_mult_right [symmetric]
-declare mult_minus_left [simp]   mult_minus_right [simp]
 
 lemma minus_divide_divide [simp]:
   "(-a)/(-b) = a / (b::'a::{field,division_by_zero})"

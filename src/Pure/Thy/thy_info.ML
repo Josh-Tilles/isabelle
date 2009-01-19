@@ -1,5 +1,4 @@
 (*  Title:      Pure/Thy/thy_info.ML
-    ID:         $Id$
     Author:     Markus Wenzel, TU Muenchen
 
 Main part of theory loader database, including handling of theory and
@@ -24,6 +23,8 @@ sig
   val get_parents: string -> string list
   val touch_thy: string -> unit
   val touch_child_thys: string -> unit
+  val remove_thy: string -> unit
+  val kill_thy: string -> unit
   val provide_file: Path.T -> string -> unit
   val load_file: bool -> Path.T -> unit
   val exec_file: bool -> Path.T -> Context.generic -> Context.generic
@@ -32,8 +33,6 @@ sig
   val use_thys: string list -> unit
   val use_thy: string -> unit
   val time_use_thy: string -> unit
-  val remove_thy: string -> unit
-  val kill_thy: string -> unit
   val thy_ord: theory * theory -> order
   val begin_theory: string -> string list -> (Path.T * bool) list -> bool -> theory
   val end_theory: theory -> unit
@@ -232,6 +231,35 @@ fun touch_child_thys name = touch_thys (thy_graph Graph.imm_succs name);
 end;
 
 
+(* manage pending proofs *)
+
+fun join_thy name =
+  (case lookup_theory name of
+    NONE => []
+  | SOME thy => PureThy.join_proofs thy);
+
+fun cancel_thy name =
+  (case lookup_theory name of
+    NONE => ()
+  | SOME thy => PureThy.cancel_proofs thy);
+
+
+(* remove theory *)
+
+fun remove_thy name =
+  if is_finished name then error (loader_msg "cannot remove finished theory" [name])
+  else
+    let
+      val succs = thy_graph Graph.all_succs [name];
+      val _ = List.app cancel_thy succs;
+      val _ = priority (loader_msg "removing" succs);
+      val _ = CRITICAL (fn () =>
+        (List.app (perform Remove) succs; change_thys (Graph.del_nodes succs)));
+    in () end;
+
+val kill_thy = if_known_thy remove_thy;
+
+
 (* load_file *)
 
 local
@@ -300,50 +328,62 @@ fun load_thy time upd_time initiators name =
     val _ = CRITICAL (fn () =>
       change_deps name (Option.map (fn {master, text, parents, files, ...} =>
         make_deps upd_time master text parents files)));
-    val _ = OuterSyntax.load_thy name pos text (time orelse ! Output.timing);
-  in
-    CRITICAL (fn () =>
-     (change_deps name
-        (Option.map (fn {update_time, master, parents, files, ...} =>
-          make_deps update_time master [] parents files));
-      perform Update name))
-  end;
+    val after_load = OuterSyntax.load_thy name pos text (time orelse ! Output.timing);
+    val _ =
+      CRITICAL (fn () =>
+       (change_deps name
+          (Option.map (fn {update_time, master, parents, files, ...} =>
+            make_deps update_time master [] parents files));
+        perform Update name));
+  in after_load end;
 
 
 (* scheduling loader tasks *)
 
-datatype task = Task of (unit -> unit) | Finished | Running;
+datatype task = Task of (unit -> unit -> unit) | Finished | Running;
 fun task_finished Finished = true | task_finished _ = false;
 
 local
-
-fun schedule_seq tasks =
-  Graph.topological_order tasks
-  |> List.app (fn name => (case Graph.get_node tasks name of Task body => body () | _ => ()));
 
 fun schedule_futures task_graph =
   let
     val tasks = Graph.topological_order task_graph |> map_filter (fn name =>
       (case Graph.get_node task_graph name of Task body => SOME (name, body) | _ => NONE));
 
-    fun future (name, body) tab =
+    val par_proofs = ! parallel_proofs;
+
+    fun fork (name, body) tab =
       let
         val deps = Graph.imm_preds task_graph name
           |> map_filter (fn parent =>
             (case Symtab.lookup tab parent of SOME future => SOME (parent, future) | NONE => NONE));
         fun failed (parent, future) = if can Future.join future then NONE else SOME parent;
 
-        val x = Future.fork_deps (map #2 deps) (fn () =>
+        val future = Future.fork_deps (map #2 deps) (fn () =>
           (case map_filter failed deps of
             [] => body ()
           | bad => error (loader_msg
               ("failed to load " ^ quote name ^ " (unresolved " ^ commas_quote bad ^ ")") [])));
+        val future' =
+          if par_proofs then future
+          else Future.map (fn after_load => (after_load (); fn () => ())) future;
+      in Symtab.update (name, future') tab end;
 
-      in (x, Symtab.update (name, x) tab) end;
+    val futures = fold fork tasks Symtab.empty;
 
-    val thy_results = Future.join_results (#1 (fold_map future tasks Symtab.empty));
-    val proof_results = PureThy.join_proofs (map_filter (try get_theory o #1) tasks);
-  in ignore (Exn.release_all (thy_results @ proof_results)) end;
+    val exns = rev tasks |> maps (fn (name, _) =>
+      let
+        val after_load = Future.join (the (Symtab.lookup futures name));
+        val proof_exns = join_thy name;
+        val _ = null proof_exns orelse raise Exn.EXCEPTIONS proof_exns;
+        val _ = after_load ();
+      in [] end handle exn => (kill_thy name; [exn]));
+
+  in ignore (Exn.release_all (map Exn.Exn (rev exns))) end;
+
+fun schedule_seq tasks =
+  Graph.topological_order tasks
+  |> List.app (fn name => (case Graph.get_node tasks name of Task body => body () () | _ => ()));
 
 in
 
@@ -462,19 +502,6 @@ val use_thy = gen_use_thy (require_thy false);
 val time_use_thy = gen_use_thy (require_thy true);
 
 end;
-
-
-(* remove theory *)
-
-fun remove_thy name =
-  if is_finished name then error (loader_msg "cannot remove finished theory" [name])
-  else
-    let val succs = thy_graph Graph.all_succs [name] in
-      priority (loader_msg "removing" succs);
-      CRITICAL (fn () => (List.app (perform Remove) succs; change_thys (Graph.del_nodes succs)))
-    end;
-
-val kill_thy = if_known_thy remove_thy;
 
 
 (* update_time *)

@@ -1,7 +1,5 @@
 (*  Title:   HOL/OrderedGroup.thy
-    ID:      $Id$
-    Author:  Gertrud Bauer, Steven Obua, Lawrence C Paulson, and Markus Wenzel,
-             with contributions by Jeremy Avigad
+    Author:  Gertrud Bauer, Steven Obua, Lawrence C Paulson, Markus Wenzel, Jeremy Avigad
 *)
 
 header {* Ordered Groups *}
@@ -1233,7 +1231,7 @@ proof -
 qed
 
 subclass pordered_ab_group_add_abs
-proof -
+proof
   have abs_ge_zero [simp]: "\<And>a. 0 \<le> \<bar>a\<bar>"
   proof -
     fix a b
@@ -1242,37 +1240,26 @@ proof -
   qed
   have abs_leI: "\<And>a b. a \<le> b \<Longrightarrow> - a \<le> b \<Longrightarrow> \<bar>a\<bar> \<le> b"
     by (simp add: abs_lattice le_supI)
-  show ?thesis
-  proof
-    fix a
-    show "0 \<le> \<bar>a\<bar>" by simp
-  next
-    fix a
-    show "a \<le> \<bar>a\<bar>"
-      by (auto simp add: abs_lattice)
-  next
-    fix a
-    show "\<bar>-a\<bar> = \<bar>a\<bar>"
-      by (simp add: abs_lattice sup_commute)
-  next
-    fix a b
-    show "a \<le> b \<Longrightarrow> - a \<le> b \<Longrightarrow> \<bar>a\<bar> \<le> b" by (erule abs_leI)
-  next
-    fix a b
-    show "\<bar>a + b\<bar> \<le> \<bar>a\<bar> + \<bar>b\<bar>"
-    proof -
-      have g:"abs a + abs b = sup (a+b) (sup (-a-b) (sup (-a+b) (a + (-b))))" (is "_=sup ?m ?n")
-        by (simp add: abs_lattice add_sup_inf_distribs sup_ACI diff_minus)
-      have a:"a+b <= sup ?m ?n" by (simp)
-      have b:"-a-b <= ?n" by (simp) 
-      have c:"?n <= sup ?m ?n" by (simp)
-      from b c have d: "-a-b <= sup ?m ?n" by(rule order_trans)
-      have e:"-a-b = -(a+b)" by (simp add: diff_minus)
-      from a d e have "abs(a+b) <= sup ?m ?n" 
-        by (drule_tac abs_leI, auto)
-      with g[symmetric] show ?thesis by simp
-    qed
-  qed auto
+  fix a b
+  show "0 \<le> \<bar>a\<bar>" by simp
+  show "a \<le> \<bar>a\<bar>"
+    by (auto simp add: abs_lattice)
+  show "\<bar>-a\<bar> = \<bar>a\<bar>"
+    by (simp add: abs_lattice sup_commute)
+  show "a \<le> b \<Longrightarrow> - a \<le> b \<Longrightarrow> \<bar>a\<bar> \<le> b" by (fact abs_leI)
+  show "\<bar>a + b\<bar> \<le> \<bar>a\<bar> + \<bar>b\<bar>"
+  proof -
+    have g:"abs a + abs b = sup (a+b) (sup (-a-b) (sup (-a+b) (a + (-b))))" (is "_=sup ?m ?n")
+      by (simp add: abs_lattice add_sup_inf_distribs sup_ACI diff_minus)
+    have a:"a+b <= sup ?m ?n" by (simp)
+    have b:"-a-b <= ?n" by (simp) 
+    have c:"?n <= sup ?m ?n" by (simp)
+    from b c have d: "-a-b <= sup ?m ?n" by(rule order_trans)
+    have e:"-a-b = -(a+b)" by (simp add: diff_minus)
+    from a d e have "abs(a+b) <= sup ?m ?n" 
+      by (drule_tac abs_leI, auto)
+    with g[symmetric] show ?thesis by simp
+  qed
 qed
 
 end
@@ -1376,7 +1363,7 @@ fun agrp_ord (Const (a, _)) = find_index (fn a' => a = a')
         @{const_name HOL.uminus}, @{const_name HOL.minus}]
   | agrp_ord _ = ~1;
 
-fun termless_agrp (a, b) = (Term.term_lpo agrp_ord (a, b) = LESS);
+fun termless_agrp (a, b) = (TermOrd.term_lpo agrp_ord (a, b) = LESS);
 
 local
   val ac1 = mk_meta_eq @{thm add_assoc};

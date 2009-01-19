@@ -1,7 +1,6 @@
 (*  Title:      Pure/thm.ML
-    ID:         $Id$
     Author:     Lawrence C Paulson, Cambridge University Computer Laboratory
-    Copyright   1994  University of Cambridge
+    Author:     Makarius
 
 The very core of Isabelle's Meta Logic: certified types and terms,
 derivations, theorems, framework rules (including lifting and
@@ -147,6 +146,7 @@ sig
   val varifyT': (string * sort) list -> thm -> ((string * sort) * indexname) list * thm
   val freezeT: thm -> thm
   val future: thm future -> cterm -> thm
+  val pending_groups: thm -> Task_Queue.group list -> Task_Queue.group list
   val proof_body_of: thm -> proof_body
   val proof_of: thm -> proof
   val join_proof: thm -> unit
@@ -380,9 +380,9 @@ fun attach_tpairs tpairs prop =
 
 fun full_prop_of (Thm (_, {tpairs, prop, ...})) = attach_tpairs tpairs prop;
 
-val union_hyps = OrdList.union Term.fast_term_ord;
-val insert_hyps = OrdList.insert Term.fast_term_ord;
-val remove_hyps = OrdList.remove Term.fast_term_ord;
+val union_hyps = OrdList.union TermOrd.fast_term_ord;
+val insert_hyps = OrdList.insert TermOrd.fast_term_ord;
+val remove_hyps = OrdList.remove TermOrd.fast_term_ord;
 
 
 (* merge theories of cterms/thms -- trivial absorption only *)
@@ -1155,7 +1155,7 @@ fun unconstrainT
 (* Replace all TFrees not fixed or in the hyps by new TVars *)
 fun varifyT' fixed (Thm (der, {thy_ref, maxidx, shyps, hyps, tpairs, prop, ...})) =
   let
-    val tfrees = List.foldr add_term_tfrees fixed hyps;
+    val tfrees = fold Term.add_tfrees hyps fixed;
     val prop1 = attach_tpairs tpairs prop;
     val (al, prop2) = Type.varify tfrees prop1;
     val (ts, prop3) = Logic.strip_prems (length tpairs, [], prop2);
@@ -1561,9 +1561,9 @@ fun bicompose match arg i state =
 (*Quick test whether rule is resolvable with the subgoal with hyps Hs
   and conclusion B.  If eres_flg then checks 1st premise of rule also*)
 fun could_bires (Hs, B, eres_flg, rule) =
-    let fun could_reshyp (A1::_) = exists (fn H => could_unify (A1, H)) Hs
+    let fun could_reshyp (A1::_) = exists (fn H => Term.could_unify (A1, H)) Hs
           | could_reshyp [] = false;  (*no premise -- illegal*)
-    in  could_unify(concl_of rule, B) andalso
+    in  Term.could_unify(concl_of rule, B) andalso
         (not eres_flg  orelse  could_reshyp (prems_of rule))
     end;
 
@@ -1613,7 +1613,7 @@ fun future future_thm ct =
     val _ = T <> propT andalso raise CTERM ("future: prop expected", [ct]);
 
     val i = serial ();
-    val future = future_thm |> Future.map (future_result i thy sorts prop o norm_proof);
+    val future = future_thm |> Future.map (future_result i thy sorts prop);
     val promise = (i, future);
   in
     Thm (make_deriv i [promise] [promise] [] [] (Pt.promise_proof thy i prop),
@@ -1627,7 +1627,13 @@ fun future future_thm ct =
   end;
 
 
-(* fulfilled proof *)
+(* pending task groups *)
+
+fun pending_groups (Thm (Deriv {open_promises, ...}, _)) =
+  fold (insert Task_Queue.eq_group o Future.group_of o #2) open_promises;
+
+
+(* fulfilled proofs *)
 
 fun raw_proof_of (Thm (Deriv {body, ...}, _)) = Proofterm.proof_of body;
 
@@ -1696,7 +1702,7 @@ structure Oracles = TheoryDataFun
   val empty = NameSpace.empty_table;
   val copy = I;
   val extend = I;
-  fun merge _ oracles = NameSpace.merge_tables (op =) oracles
+  fun merge _ oracles : T = NameSpace.merge_tables (op =) oracles
     handle Symtab.DUP dup => err_dup_ora dup;
 );
 

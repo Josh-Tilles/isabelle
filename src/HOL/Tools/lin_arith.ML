@@ -1,6 +1,5 @@
 (*  Title:      HOL/Tools/lin_arith.ML
-    ID:         $Id$
-    Author:     Tjark Weber and Tobias Nipkow
+    Author:     Tjark Weber and Tobias Nipkow, TU Muenchen
 
 HOL setup for linear arithmetic (see Provers/Arith/fast_lin_arith.ML).
 *)
@@ -99,8 +98,9 @@ structure ArithContextData = GenericDataFun
             tactics: arith_tactic list};
   val empty = {splits = [], inj_consts = [], discrete = [], tactics = []};
   val extend = I;
-  fun merge _ ({splits= splits1, inj_consts= inj_consts1, discrete= discrete1, tactics= tactics1},
-             {splits= splits2, inj_consts= inj_consts2, discrete= discrete2, tactics= tactics2}) =
+  fun merge _
+   ({splits= splits1, inj_consts= inj_consts1, discrete= discrete1, tactics= tactics1},
+    {splits= splits2, inj_consts= inj_consts2, discrete= discrete2, tactics= tactics2}) : T =
    {splits = Library.merge Thm.eq_thm_prop (splits1, splits2),
     inj_consts = Library.merge (op =) (inj_consts1, inj_consts2),
     discrete = Library.merge (op =) (discrete1, discrete2),
@@ -149,9 +149,9 @@ fun nT (Type ("fun", [N, _])) = (N = HOLogic.natT)
 
 fun add_atom (t : term) (m : Rat.rat) (p : (term * Rat.rat) list, i : Rat.rat) :
              (term * Rat.rat) list * Rat.rat =
-  case AList.lookup (op =) p t of
+  case AList.lookup Pattern.aeconv p t of
       NONE   => ((t, m) :: p, i)
-    | SOME n => (AList.update (op =) (t, Rat.add n m) p, i);
+    | SOME n => (AList.update Pattern.aeconv (t, Rat.add n m) p, i);
 
 (* decompose nested multiplications, bracketing them to the right and combining
    all their coefficients
@@ -340,7 +340,7 @@ fun is_split_thm (thm : thm) : bool =
 
 fun subst_term ([] : (term * term) list) (t : term) = t
   | subst_term pairs                     t          =
-      (case AList.lookup (op aconv) pairs t of
+      (case AList.lookup Pattern.aeconv pairs t of
         SOME new =>
           new
       | NONE     =>
@@ -682,7 +682,7 @@ end;
 
 fun negated_term_occurs_positively (terms : term list) : bool =
   List.exists
-    (fn (Trueprop $ (Const ("Not", _) $ t)) => member (op aconv) terms (Trueprop $ t)
+    (fn (Trueprop $ (Const ("Not", _) $ t)) => member Pattern.aeconv terms (Trueprop $ t)
       | _                                   => false)
     terms;
 

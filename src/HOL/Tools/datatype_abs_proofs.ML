@@ -1,5 +1,4 @@
 (*  Title:      HOL/Tools/datatype_abs_proofs.ML
-    ID:         $Id$
     Author:     Stefan Berghofer, TU Muenchen
 
 Proofs and defintions independent of concrete representation
@@ -10,8 +9,7 @@ injectivity / distinctness of constructors and induction)
  - characteristic equations for primrec combinators
  - characteristic equations for case combinators
  - equations for splitting "P (case ...)" expressions
-  - "nchotomy" and "case_cong" theorems for TFL
-
+ - "nchotomy" and "case_cong" theorems for TFL
 *)
 
 signature DATATYPE_ABS_PROOFS =
@@ -98,7 +96,7 @@ fun prove_primrec_thms flat_names new_type_names descr sorts
 
     val descr' = List.concat descr;
     val recTs = get_rec_types descr' sorts;
-    val used = foldr add_typ_tfree_names [] recTs;
+    val used = foldr OldTerm.add_typ_tfree_names [] recTs;
     val newTs = Library.take (length (hd descr), recTs);
 
     val induct_Ps = map head_of (HOLogic.dest_conj (HOLogic.dest_Trueprop (concl_of induct)));
@@ -157,7 +155,7 @@ fun prove_primrec_thms flat_names new_type_names descr sorts
         InductivePackage.add_inductive_global (serial_string ())
           {quiet_mode = ! quiet_mode, verbose = false, kind = Thm.internalK,
             alt_name = Binding.name big_rec_name', coind = false, no_elim = false, no_ind = true,
-            skip_mono = true}
+            skip_mono = true, fork_mono = false}
           (map (fn (s, T) => ((Binding.name s, T), NoSyn)) (rec_set_names' ~~ rec_set_Ts))
           (map dest_Free rec_fns)
           (map (fn x => (Attrib.empty_binding, x)) rec_intr_ts) [] thy0;
@@ -281,7 +279,7 @@ fun prove_case_thms flat_names new_type_names descr sorts reccomb_names primrec_
 
     val descr' = List.concat descr;
     val recTs = get_rec_types descr' sorts;
-    val used = foldr add_typ_tfree_names [] recTs;
+    val used = foldr OldTerm.add_typ_tfree_names [] recTs;
     val newTs = Library.take (length (hd descr), recTs);
     val T' = TFree (Name.variant used "'t", HOLogic.typeS);
 
@@ -425,8 +423,8 @@ fun prove_case_congs new_type_names descr sorts nchotomys case_thms thy =
         val (Const ("Trueprop", _) $ (Const ("op =", _) $ _ $ Ma)) = tm;
         val cert = cterm_of thy;
         val nchotomy' = nchotomy RS spec;
-        val nchotomy'' = cterm_instantiate
-          [(cert (hd (add_term_vars (concl_of nchotomy', []))), cert Ma)] nchotomy'
+        val [v] = Term.add_vars (concl_of nchotomy') [];
+        val nchotomy'' = cterm_instantiate [(cert (Var v), cert Ma)] nchotomy'
       in
         SkipProof.prove_global thy [] (Logic.strip_imp_prems t) (Logic.strip_imp_concl t)
           (fn {prems, ...} => 
