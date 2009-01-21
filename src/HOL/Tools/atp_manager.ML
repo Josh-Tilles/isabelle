@@ -19,7 +19,7 @@ sig
   val kill: unit -> unit
   val info: unit -> unit
   val messages: int option -> unit
-  type prover = int -> Proof.state -> bool * string
+  type prover = int -> int -> Proof.state -> bool * string
   val add_prover: string -> prover -> theory -> theory
   val print_provers: theory -> unit
   val sledgehammer: string list -> Proof.state -> unit
@@ -35,9 +35,9 @@ val message_display_limit = 5;
 
 local
 
-val atps = ref "e";
+val atps = ref "e remote_vampire";
 val max_atps = ref 5;   (* ~1 means infinite number of atps *)
-val timeout = ref 60;
+val timeout = ref 100;
 
 in
 
@@ -114,16 +114,18 @@ fun unregister (success, message) thread = Synchronized.change_result state
           val (group, active') =
             if success then List.partition (fn (_, (tb, _, _)) => tb = birthtime) active
             else List.partition (fn (th, _) => Thread.equal (th, thread)) active
-          val others = delete_thread thread group
+          (* do not interrupt successful thread, as it needs to print out its message
+          (and terminates afterwards - see start_prover )*)
+          val group' = if success then delete_thread thread group else group
 
           val now = Time.now ()
           val cancelling' =
-            fold (fn (th, (tb, _, desc)) => update_thread (th, (tb, now, desc))) others cancelling
+            fold (fn (th, (tb, _, desc)) => update_thread (th, (tb, now, desc))) group' cancelling
 
           val msg = description ^ "\n" ^ message
           val message' = "Sledgehammer: " ^ msg ^
-            (if null others then ""
-             else "\nInterrupted " ^ string_of_int (length others) ^ " other group members")
+            (if length group <= 1 then ""
+             else "\nInterrupted " ^ string_of_int (length group - 1) ^ " other group members")
           val messages' = msg ::
             (if length messages <= message_store_limit then messages
              else #1 (chop message_store_limit messages))
@@ -264,7 +266,7 @@ fun messages opt_limit =
 
 (* named provers *)
 
-type prover = int -> Proof.state -> bool * string;
+type prover = int -> int -> Proof.state -> bool * string;
 
 fun err_dup_prover name = error ("Duplicate prover: " ^ quote name);
 
@@ -300,7 +302,7 @@ fun start_prover name birthtime deadtime i proof_state =
         val _ = SimpleThread.fork true (fn () =>
           let
             val _ = register birthtime deadtime (Thread.self (), desc)
-            val result = prover i proof_state
+            val result = prover (get_timeout ()) i proof_state
               handle ResHolClause.TOO_TRIVIAL
                 => (true, "Empty clause: Try this command: " ^ Markup.markup Markup.sendback "apply metis")
               | ERROR msg
