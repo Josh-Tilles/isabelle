@@ -442,11 +442,11 @@ lemma smult_1_left [simp]: "smult (1::'a::comm_semiring_1) p = p"
 
 lemma smult_add_right:
   "smult a (p + q) = smult a p + smult a q"
-  by (rule poly_ext, simp add: ring_simps)
+  by (rule poly_ext, simp add: algebra_simps)
 
 lemma smult_add_left:
   "smult (a + b) p = smult a p + smult b p"
-  by (rule poly_ext, simp add: ring_simps)
+  by (rule poly_ext, simp add: algebra_simps)
 
 lemma smult_minus_right [simp]:
   "smult (a::'a::comm_ring) (- p) = - smult a p"
@@ -458,11 +458,11 @@ lemma smult_minus_left [simp]:
 
 lemma smult_diff_right:
   "smult (a::'a::comm_ring) (p - q) = smult a p - smult a q"
-  by (rule poly_ext, simp add: ring_simps)
+  by (rule poly_ext, simp add: algebra_simps)
 
 lemma smult_diff_left:
   "smult (a - b::'a::comm_ring) p = smult a p - smult b p"
-  by (rule poly_ext, simp add: ring_simps)
+  by (rule poly_ext, simp add: algebra_simps)
 
 lemmas smult_distribs =
   smult_add_left smult_add_right
@@ -474,6 +474,16 @@ lemma smult_pCons [simp]:
 
 lemma smult_monom: "smult a (monom b n) = monom (a * b) n"
   by (induct n, simp add: monom_0, simp add: monom_Suc)
+
+lemma degree_smult_eq [simp]:
+  fixes a :: "'a::idom"
+  shows "degree (smult a p) = (if a = 0 then 0 else degree p)"
+  by (cases "a = 0", simp, simp add: degree_def)
+
+lemma smult_eq_0_iff [simp]:
+  fixes a :: "'a::idom"
+  shows "smult a p = 0 \<longleftrightarrow> a = 0 \<or> p = 0"
+  by (simp add: expand_poly_eq)
 
 
 subsection {* Multiplication of polynomials *}
@@ -517,7 +527,7 @@ lemma mult_poly_0_right: "p * (0::'a poly) = 0"
 
 lemma mult_pCons_right [simp]:
   "p * pCons a q = smult a p + pCons 0 (p * q)"
-  by (induct p, simp add: mult_poly_0_left, simp add: ring_simps)
+  by (induct p, simp add: mult_poly_0_left, simp add: algebra_simps)
 
 lemmas mult_poly_0 = mult_poly_0_left mult_poly_0_right
 
@@ -531,7 +541,7 @@ lemma mult_poly_add_left:
   fixes p q r :: "'a poly"
   shows "(p + q) * r = p * r + q * r"
   by (induct r, simp add: mult_poly_0,
-                simp add: smult_distribs group_simps)
+                simp add: smult_distribs algebra_simps)
 
 instance proof
   fix p q r :: "'a poly"
@@ -758,7 +768,7 @@ next
   from 2 have q2: "x = q2 * y + r2" and r2: "r2 = 0 \<or> degree r2 < degree y"
     unfolding pdivmod_rel_def by simp_all
   from q1 q2 have q3: "(q1 - q2) * y = r2 - r1"
-    by (simp add: ring_simps)
+    by (simp add: algebra_simps)
   from r1 r2 have r3: "(r2 - r1) = 0 \<or> degree (r2 - r1) < degree y"
     by (auto intro: degree_diff_less)
 
@@ -776,6 +786,12 @@ next
     then show "False" by simp
   qed
 qed
+
+lemma pdivmod_rel_0_iff: "pdivmod_rel 0 y q r \<longleftrightarrow> q = 0 \<and> r = 0"
+by (auto dest: pdivmod_rel_unique intro: pdivmod_rel_0)
+
+lemma pdivmod_rel_by_0_iff: "pdivmod_rel x 0 q r \<longleftrightarrow> q = 0 \<and> r = x"
+by (auto dest: pdivmod_rel_unique intro: pdivmod_rel_by_0)
 
 lemmas pdivmod_rel_unique_div =
   pdivmod_rel_unique [THEN conjunct1, standard]
@@ -861,6 +877,54 @@ proof -
   thus "x mod y = x" by (rule mod_poly_eq)
 qed
 
+lemma pdivmod_rel_smult_left:
+  "pdivmod_rel x y q r
+    \<Longrightarrow> pdivmod_rel (smult a x) y (smult a q) (smult a r)"
+  unfolding pdivmod_rel_def by (simp add: smult_add_right)
+
+lemma div_smult_left: "(smult a x) div y = smult a (x div y)"
+  by (rule div_poly_eq, rule pdivmod_rel_smult_left, rule pdivmod_rel)
+
+lemma mod_smult_left: "(smult a x) mod y = smult a (x mod y)"
+  by (rule mod_poly_eq, rule pdivmod_rel_smult_left, rule pdivmod_rel)
+
+lemma pdivmod_rel_smult_right:
+  "\<lbrakk>a \<noteq> 0; pdivmod_rel x y q r\<rbrakk>
+    \<Longrightarrow> pdivmod_rel x (smult a y) (smult (inverse a) q) r"
+  unfolding pdivmod_rel_def by simp
+
+lemma div_smult_right:
+  "a \<noteq> 0 \<Longrightarrow> x div (smult a y) = smult (inverse a) (x div y)"
+  by (rule div_poly_eq, erule pdivmod_rel_smult_right, rule pdivmod_rel)
+
+lemma mod_smult_right: "a \<noteq> 0 \<Longrightarrow> x mod (smult a y) = x mod y"
+  by (rule mod_poly_eq, erule pdivmod_rel_smult_right, rule pdivmod_rel)
+
+lemma pdivmod_rel_mult:
+  "\<lbrakk>pdivmod_rel x y q r; pdivmod_rel q z q' r'\<rbrakk>
+    \<Longrightarrow> pdivmod_rel x (y * z) q' (y * r' + r)"
+apply (cases "z = 0", simp add: pdivmod_rel_def)
+apply (cases "y = 0", simp add: pdivmod_rel_by_0_iff pdivmod_rel_0_iff)
+apply (cases "r = 0")
+apply (cases "r' = 0")
+apply (simp add: pdivmod_rel_def)
+apply (simp add: pdivmod_rel_def ring_simps degree_mult_eq)
+apply (cases "r' = 0")
+apply (simp add: pdivmod_rel_def degree_mult_eq)
+apply (simp add: pdivmod_rel_def ring_simps)
+apply (simp add: degree_mult_eq degree_add_less)
+done
+
+lemma poly_div_mult_right:
+  fixes x y z :: "'a::field poly"
+  shows "x div (y * z) = (x div y) div z"
+  by (rule div_poly_eq, rule pdivmod_rel_mult, (rule pdivmod_rel)+)
+
+lemma poly_mod_mult_right:
+  fixes x y z :: "'a::field poly"
+  shows "x mod (y * z) = y * (x div y mod z) + x mod y"
+  by (rule mod_poly_eq, rule pdivmod_rel_mult, (rule pdivmod_rel)+)
+
 lemma mod_pCons:
   fixes a and x
   assumes y: "y \<noteq> 0"
@@ -894,7 +958,7 @@ lemma poly_monom:
 
 lemma poly_add [simp]: "poly (p + q) x = poly p x + poly q x"
   apply (induct p arbitrary: q, simp)
-  apply (case_tac q, simp, simp add: ring_simps)
+  apply (case_tac q, simp, simp add: algebra_simps)
   done
 
 lemma poly_minus [simp]:
@@ -911,10 +975,10 @@ lemma poly_setsum: "poly (\<Sum>k\<in>A. p k) x = (\<Sum>k\<in>A. poly (p k) x)"
   by (cases "finite A", induct set: finite, simp_all)
 
 lemma poly_smult [simp]: "poly (smult a p) x = a * poly p x"
-  by (induct p, simp, simp add: ring_simps)
+  by (induct p, simp, simp add: algebra_simps)
 
 lemma poly_mult [simp]: "poly (p * q) x = poly p x * poly q x"
-  by (induct p, simp_all, simp add: ring_simps)
+  by (induct p, simp_all, simp add: algebra_simps)
 
 lemma poly_power [simp]:
   fixes p :: "'a::{comm_semiring_1,recpower} poly"
@@ -983,7 +1047,7 @@ lemma synthetic_div_correct':
   fixes c :: "'a::comm_ring_1"
   shows "[:-c, 1:] * synthetic_div p c + [:poly p c:] = p"
   using synthetic_div_correct [of p c]
-  by (simp add: group_simps)
+  by (simp add: algebra_simps)
 
 lemma poly_eq_0_iff_dvd:
   fixes c :: "'a::idom"
