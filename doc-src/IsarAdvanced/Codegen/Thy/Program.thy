@@ -26,11 +26,11 @@ text {*
 *}
 
 lemma %quote [code]:
-  "dequeue (Queue xs []) =
-     (if xs = [] then (None, Queue [] [])
-       else dequeue (Queue [] (rev xs)))"
-  "dequeue (Queue xs (y # ys)) =
-     (Some y, Queue xs ys)"
+  "dequeue (AQueue xs []) =
+     (if xs = [] then (None, AQueue [] [])
+       else dequeue (AQueue [] (rev xs)))"
+  "dequeue (AQueue xs (y # ys)) =
+     (Some y, AQueue xs ys)"
   by (cases xs, simp_all) (cases "rev xs", simp_all)
 
 text {*
@@ -48,7 +48,7 @@ text {*
   setup in the \qn{preprocessor} to be discussed further below (\secref{sec:preproc}).
 
   Changing the default constructor set of datatypes is also
-  possible but rarely desired in practice.  See \secref{sec:datatypes} for an example.
+  possible.  See \secref{sec:datatypes} for an example.
 
   As told in \secref{sec:concept}, code generation is based
   on a structured collection of code theorems.
@@ -75,7 +75,7 @@ text {*
   from abstract algebra:
 *}
 
-class %quote semigroup = type +
+class %quote semigroup =
   fixes mult :: "'a \<Rightarrow> 'a \<Rightarrow> 'a" (infixl "\<otimes>" 70)
   assumes assoc: "(x \<otimes> y) \<otimes> z = x \<otimes> (y \<otimes> z)"
 
@@ -221,105 +221,114 @@ subsection {* Datatypes \label{sec:datatypes} *}
 
 text {*
   Conceptually, any datatype is spanned by a set of
-  \emph{constructors} of type @{text "\<tau> = \<dots> \<Rightarrow> \<kappa> \<alpha>\<^isub>1 \<dots> \<alpha>\<^isub>n"}
-  where @{text "{\<alpha>\<^isub>1, \<dots>, \<alpha>\<^isub>n}"} is exactly the set of \emph{all}
-  type variables in @{text "\<tau>"}.  The HOL datatype package
-  by default registers any new datatype in the table
-  of datatypes, which may be inspected using
-  the @{command print_codesetup} command.
+  \emph{constructors} of type @{text "\<tau> = \<dots> \<Rightarrow> \<kappa> \<alpha>\<^isub>1 \<dots> \<alpha>\<^isub>n"} where @{text
+  "{\<alpha>\<^isub>1, \<dots>, \<alpha>\<^isub>n}"} is exactly the set of \emph{all} type variables in
+  @{text "\<tau>"}.  The HOL datatype package by default registers any new
+  datatype in the table of datatypes, which may be inspected using the
+  @{command print_codesetup} command.
 
-  In some cases, it may be convenient to alter or
-  extend this table;  as an example, we will develop an alternative
-  representation of natural numbers as binary digits, whose
-  size does increase logarithmically with its value, not linear
-  \footnote{Indeed, the @{theory Efficient_Nat} theory (see \ref{eff_nat})
-    does something similar}.  First, the digit representation:
+  In some cases, it is appropriate to alter or extend this table.  As
+  an example, we will develop an alternative representation of the
+  queue example given in \secref{sec:intro}.  The amortised
+  representation is convenient for generating code but exposes its
+  \qt{implementation} details, which may be cumbersome when proving
+  theorems about it.  Therefore, here a simple, straightforward
+  representation of queues:
 *}
 
-definition %quote Dig0 :: "nat \<Rightarrow> nat" where
-  "Dig0 n = 2 * n"
+datatype %quote 'a queue = Queue "'a list"
 
-definition %quote  Dig1 :: "nat \<Rightarrow> nat" where
-  "Dig1 n = Suc (2 * n)"
+definition %quote empty :: "'a queue" where
+  "empty = Queue []"
+
+primrec %quote enqueue :: "'a \<Rightarrow> 'a queue \<Rightarrow> 'a queue" where
+  "enqueue x (Queue xs) = Queue (xs @ [x])"
+
+fun %quote dequeue :: "'a queue \<Rightarrow> 'a option \<times> 'a queue" where
+    "dequeue (Queue []) = (None, Queue [])"
+  | "dequeue (Queue (x # xs)) = (Some x, Queue xs)"
 
 text {*
-  \noindent We will use these two \qt{digits} to represent natural numbers
-  in binary digits, e.g.:
+  \noindent This we can use directly for proving;  for executing,
+  we provide an alternative characterisation:
 *}
 
-lemma %quote 42: "42 = Dig0 (Dig1 (Dig0 (Dig1 (Dig0 1))))"
-  by (simp add: Dig0_def Dig1_def)
+definition %quote AQueue :: "'a list \<Rightarrow> 'a list \<Rightarrow> 'a queue" where
+  "AQueue xs ys = Queue (ys @ rev xs)"
+
+code_datatype %quote AQueue
 
 text {*
-  \noindent Of course we also have to provide proper code equations for
-  the operations, e.g. @{term "op + \<Colon> nat \<Rightarrow> nat \<Rightarrow> nat"}:
+  \noindent Here we define a \qt{constructor} @{const "AQueue"} which
+  is defined in terms of @{text "Queue"} and interprets its arguments
+  according to what the \emph{content} of an amortised queue is supposed
+  to be.  Equipped with this, we are able to prove the following equations
+  for our primitive queue operations which \qt{implement} the simple
+  queues in an amortised fashion:
 *}
 
-lemma %quote plus_Dig [code]:
-  "0 + n = n"
-  "m + 0 = m"
-  "1 + Dig0 n = Dig1 n"
-  "Dig0 m + 1 = Dig1 m"
-  "1 + Dig1 n = Dig0 (n + 1)"
-  "Dig1 m + 1 = Dig0 (m + 1)"
-  "Dig0 m + Dig0 n = Dig0 (m + n)"
-  "Dig0 m + Dig1 n = Dig1 (m + n)"
-  "Dig1 m + Dig0 n = Dig1 (m + n)"
-  "Dig1 m + Dig1 n = Dig0 (m + n + 1)"
-  by (simp_all add: Dig0_def Dig1_def)
+lemma %quote empty_AQueue [code]:
+  "empty = AQueue [] []"
+  unfolding AQueue_def empty_def by simp
+
+lemma %quote enqueue_AQueue [code]:
+  "enqueue x (AQueue xs ys) = AQueue (x # xs) ys"
+  unfolding AQueue_def by simp
+
+lemma %quote dequeue_AQueue [code]:
+  "dequeue (AQueue xs []) =
+    (if xs = [] then (None, AQueue [] [])
+    else dequeue (AQueue [] (rev xs)))"
+  "dequeue (AQueue xs (y # ys)) = (Some y, AQueue xs ys)"
+  unfolding AQueue_def by simp_all
 
 text {*
-  \noindent We then instruct the code generator to view @{term "0\<Colon>nat"},
-  @{term "1\<Colon>nat"}, @{term Dig0} and @{term Dig1} as
-  datatype constructors:
+  \noindent For completeness, we provide a substitute for the
+  @{text case} combinator on queues:
 *}
 
-code_datatype %quote "0\<Colon>nat" "1\<Colon>nat" Dig0 Dig1
+definition %quote
+  aqueue_case_def: "aqueue_case = queue_case"
+
+lemma %quote aqueue_case [code, code inline]:
+  "queue_case = aqueue_case"
+  unfolding aqueue_case_def ..
+
+lemma %quote case_AQueue [code]:
+  "aqueue_case f (AQueue xs ys) = f (ys @ rev xs)"
+  unfolding aqueue_case_def AQueue_def by simp
 
 text {*
-  \noindent For the former constructor @{term Suc}, we provide a code
-  equation and remove some parts of the default code generator setup
-  which are an obstacle here:
+  \noindent The resulting code looks as expected:
 *}
 
-lemma %quote Suc_Dig [code]:
-  "Suc n = n + 1"
-  by simp
-
-declare %quote One_nat_def [code inline del]
-declare %quote add_Suc_shift [code del] 
+text %quote {*@{code_stmts empty enqueue dequeue (SML)}*}
 
 text {*
-  \noindent This yields the following code:
-*}
-
-text %quote {*@{code_stmts "op + \<Colon> nat \<Rightarrow> nat \<Rightarrow> nat" (SML)}*}
-
-text {*
-  \noindent From this example, it can be easily glimpsed that using own constructor sets
-  is a little delicate since it changes the set of valid patterns for values
-  of that type.  Without going into much detail, here some practical hints:
+  \noindent From this example, it can be glimpsed that using own
+  constructor sets is a little delicate since it changes the set of
+  valid patterns for values of that type.  Without going into much
+  detail, here some practical hints:
 
   \begin{itemize}
-    \item When changing the constructor set for datatypes, take care to
-      provide an alternative for the @{text case} combinator (e.g.~by replacing
-      it using the preprocessor).
-    \item Values in the target language need not to be normalised -- different
-      values in the target language may represent the same value in the
-      logic (e.g. @{term "Dig1 0 = 1"}).
-    \item Usually, a good methodology to deal with the subtleties of pattern
-      matching is to see the type as an abstract type: provide a set
-      of operations which operate on the concrete representation of the type,
-      and derive further operations by combinations of these primitive ones,
-      without relying on a particular representation.
+
+    \item When changing the constructor set for datatypes, take care
+      to provide an alternative for the @{text case} combinator
+      (e.g.~by replacing it using the preprocessor).
+
+    \item Values in the target language need not to be normalised --
+      different values in the target language may represent the same
+      value in the logic.
+
+    \item Usually, a good methodology to deal with the subtleties of
+      pattern matching is to see the type as an abstract type: provide
+      a set of operations which operate on the concrete representation
+      of the type, and derive further operations by combinations of
+      these primitive ones, without relying on a particular
+      representation.
+
   \end{itemize}
 *}
-
-code_datatype %invisible "0::nat" Suc
-declare %invisible plus_Dig [code del]
-declare %invisible One_nat_def [code inline]
-declare %invisible add_Suc_shift [code] 
-lemma %invisible [code]: "0 + n = (n \<Colon> nat)" by simp
 
 
 subsection {* Equality and wellsortedness *}
@@ -457,14 +466,19 @@ text {*
   in the following example, again for amortised queues:
 *}
 
-fun %quote strict_dequeue :: "'a queue \<Rightarrow> 'a \<times> 'a queue" where
-  "strict_dequeue (Queue xs (y # ys)) = (y, Queue xs ys)"
-  | "strict_dequeue (Queue xs []) =
-      (case rev xs of y # ys \<Rightarrow> (y, Queue [] ys))"
+definition %quote strict_dequeue :: "'a queue \<Rightarrow> 'a \<times> 'a queue" where
+  "strict_dequeue q = (case dequeue q
+    of (Some x, q') \<Rightarrow> (x, q'))"
+
+lemma %quote strict_dequeue_AQueue [code]:
+  "strict_dequeue (AQueue xs (y # ys)) = (y, AQueue xs ys)"
+  "strict_dequeue (AQueue xs []) =
+    (case rev xs of y # ys \<Rightarrow> (y, AQueue [] ys))"
+  by (simp_all add: strict_dequeue_def dequeue_AQueue split: list.splits)
 
 text {*
   \noindent In the corresponding code, there is no equation
-  for the pattern @{term "Queue [] []"}:
+  for the pattern @{term "AQueue [] []"}:
 *}
 
 text %quote {*@{code_stmts strict_dequeue (consts) strict_dequeue (Haskell)}*}
@@ -476,30 +490,28 @@ text {*
 
 axiomatization %quote empty_queue :: 'a
 
-function %quote strict_dequeue' :: "'a queue \<Rightarrow> 'a \<times> 'a queue" where
-  "strict_dequeue' (Queue xs []) = (if xs = [] then empty_queue
-     else strict_dequeue' (Queue [] (rev xs)))"
-  | "strict_dequeue' (Queue xs (y # ys)) =
-       (y, Queue xs ys)"
-by pat_completeness auto
+definition %quote strict_dequeue' :: "'a queue \<Rightarrow> 'a \<times> 'a queue" where
+  "strict_dequeue' q = (case dequeue q of (Some x, q') \<Rightarrow> (x, q') | _ \<Rightarrow> empty_queue)"
 
-termination %quote strict_dequeue'
-by (relation "measure (\<lambda>q::'a queue. case q of Queue xs ys \<Rightarrow> length xs)") simp_all
+lemma %quote strict_dequeue'_AQueue [code]:
+  "strict_dequeue' (AQueue xs []) = (if xs = [] then empty_queue
+     else strict_dequeue' (AQueue [] (rev xs)))"
+  "strict_dequeue' (AQueue xs (y # ys)) =
+     (y, AQueue xs ys)"
+  by (simp_all add: strict_dequeue'_def dequeue_AQueue split: list.splits)
 
 text {*
-  \noindent For technical reasons the definition of
-  @{const strict_dequeue'} is more involved since it requires
-  a manual termination proof.  Apart from that observe that
-  on the right hand side of its first equation the constant
-  @{const empty_queue} occurs which is unspecified.
+  Observe that on the right hand side of the definition of @{const
+  "strict_dequeue'"} the constant @{const empty_queue} occurs
+  which is unspecified.
 
-  Normally, if constants without any code equations occur in
-  a program, the code generator complains (since in most cases
-  this is not what the user expects).  But such constants can also
-  be thought of as function definitions with no equations which
-  always fail, since there is never a successful pattern match
-  on the left hand side.  In order to categorise a constant into
-  that category explicitly, use @{command "code_abort"}:
+  Normally, if constants without any code equations occur in a
+  program, the code generator complains (since in most cases this is
+  not what the user expects).  But such constants can also be thought
+  of as function definitions with no equations which always fail,
+  since there is never a successful pattern match on the left hand
+  side.  In order to categorise a constant into that category
+  explicitly, use @{command "code_abort"}:
 *}
 
 code_abort %quote empty_queue
