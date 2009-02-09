@@ -1215,10 +1215,10 @@ by (induct xs) auto
 
 subsubsection {* @{text nth} *}
 
-lemma nth_Cons_0 [simp]: "(x # xs)!0 = x"
+lemma nth_Cons_0 [simp, code]: "(x # xs)!0 = x"
 by auto
 
-lemma nth_Cons_Suc [simp]: "(x # xs)!(Suc n) = xs!n"
+lemma nth_Cons_Suc [simp, code]: "(x # xs)!(Suc n) = xs!n"
 by auto
 
 declare nth.simps [simp del]
@@ -1374,6 +1374,12 @@ apply auto
 apply (case_tac i')
 apply auto
 done
+
+lemma list_update_code [code]:
+  "[][i := y] = []"
+  "(x # xs)[0 := y] = y # xs"
+  "(x # xs)[Suc i := y] = x # xs[i := y]"
+  by simp_all
 
 
 subsubsection {* @{text last} and @{text butlast} *}
@@ -1845,6 +1851,15 @@ by (induct xs ys rule:list_induct2') auto
 lemma in_set_zipE:
   "(x,y) : set(zip xs ys) \<Longrightarrow> (\<lbrakk> x : set xs; y : set ys \<rbrakk> \<Longrightarrow> R) \<Longrightarrow> R"
 by(blast dest: set_zip_leftD set_zip_rightD)
+
+lemma zip_map_fst_snd:
+  "zip (map fst zs) (map snd zs) = zs"
+  by (induct zs) simp_all
+
+lemma zip_eq_conv:
+  "length xs = length ys \<Longrightarrow> zip xs ys = zs \<longleftrightarrow> map fst zs = xs \<and> map snd zs = ys"
+  by (auto simp add: zip_map_fst_snd)
+
 
 subsubsection {* @{text list_all2} *}
 
