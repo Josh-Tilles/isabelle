@@ -147,6 +147,9 @@ qed
 
 end
 
+class cancel_comm_monoid_add = cancel_ab_semigroup_add + comm_monoid_add
+
+
 subsection {* Groups *}
 
 class group_add = minus + uminus + monoid_add +
@@ -251,6 +254,16 @@ by (simp add: diff_minus add_assoc)
 
 declare diff_minus[symmetric, algebra_simps]
 
+lemma eq_neg_iff_add_eq_0: "a = - b \<longleftrightarrow> a + b = 0"
+proof
+  assume "a = - b" then show "a + b = 0" by simp
+next
+  assume "a + b = 0"
+  moreover have "a + (b + - b) = (a + b) + - b"
+    by (simp only: add_assoc)
+  ultimately show "a = - b" by simp
+qed
+
 end
 
 class ab_group_add = minus + uminus + comm_monoid_add +
@@ -261,7 +274,7 @@ begin
 subclass group_add
   proof qed (simp_all add: ab_left_minus ab_diff_minus)
 
-subclass cancel_ab_semigroup_add
+subclass cancel_comm_monoid_add
 proof
   fix a b c :: 'a
   assume "a + b = a + c"
@@ -476,6 +489,26 @@ proof -
   have "a + b \<le> 0 + 0"
     using assms by (rule add_mono)
   then show ?thesis by simp
+qed
+
+lemma add_nonneg_eq_0_iff:
+  assumes x: "0 \<le> x" and y: "0 \<le> y"
+  shows "x + y = 0 \<longleftrightarrow> x = 0 \<and> y = 0"
+proof (intro iffI conjI)
+  have "x = x + 0" by simp
+  also have "x + 0 \<le> x + y" using y by (rule add_left_mono)
+  also assume "x + y = 0"
+  also have "0 \<le> x" using x .
+  finally show "x = 0" .
+next
+  have "y = 0 + y" by simp
+  also have "0 + y \<le> x + y" using x by (rule add_right_mono)
+  also assume "x + y = 0"
+  also have "0 \<le> y" using y .
+  finally show "y = 0" .
+next
+  assume "x = 0 \<and> y = 0"
+  then show "x + y = 0" by simp
 qed
 
 end

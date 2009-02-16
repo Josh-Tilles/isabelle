@@ -40,7 +40,7 @@ lemma setsum_2: "setsum f {1::nat..2} = f 1 + f 2"
 lemma setsum_3: "setsum f {1::nat..3} = f 1 + f 2 + f 3" 
   by (simp add: nat_number  atLeastAtMostSuc_conv add_commute)
 
-section{* Basic componentwise operations on vectors. *}
+subsection{* Basic componentwise operations on vectors. *}
 
 instantiation "^" :: (plus,type) plus
 begin
@@ -84,7 +84,7 @@ definition vector_less_def: "less (x :: 'a ^'b) y = (ALL i : {1 ..
 instance by (intro_classes)
 end
 
-text{* Also the scalar-vector multiplication. FIXME: We should unify this with the scalar multiplication in real_vector *}
+text{* Also the scalar-vector multiplication. FIXME: We should unify this with the scalar multiplication in @{text real_vector} *}
 
 definition vector_scalar_mult:: "'a::times \<Rightarrow> 'a ^'n \<Rightarrow> 'a ^ 'n" (infixr "*s" 75)
   where "c *s x = (\<chi> i. c * (x$i))"
@@ -106,7 +106,7 @@ lemma dot_2[simp]: "(x::'a::{comm_monoid_add, times}^2) \<bullet> y = (x$1) * (y
 lemma dot_3[simp]: "(x::'a::{comm_monoid_add, times}^3) \<bullet> y = (x$1) * (y$1) + (x$2) * (y$2) + (x$3) * (y$3)"
   by (simp add: dot_def dimindex_def nat_number)
 
-section {* A naive proof procedure to lift really trivial arithmetic stuff from the basis of the vector space. *}
+subsection {* A naive proof procedure to lift really trivial arithmetic stuff from the basis of the vector space. *}
 
 lemmas Cart_lambda_beta' = Cart_lambda_beta[rule_format]
 method_setup vector = {*
@@ -236,6 +236,7 @@ instance "^" :: (comm_semiring,type) comm_semiring
   apply (intro_classes) by (vector ring_simps)+
 
 instance "^" :: (comm_semiring_0,type) comm_semiring_0 by (intro_classes) 
+instance "^" :: (cancel_comm_monoid_add, type) cancel_comm_monoid_add ..
 instance "^" :: (semiring_0_cancel,type) semiring_0_cancel by (intro_classes) 
 instance "^" :: (comm_semiring_0_cancel,type) comm_semiring_0_cancel by (intro_classes) 
 instance "^" :: (ring,type) ring by (intro_classes) 
@@ -456,7 +457,7 @@ proof-
     ultimately show ?thesis using alb by metis
 qed
 
-text{* One immediately useful corollary is the existence of square roots! --- Should help to get rid of all the development of square-root for reals as a special case real ^1 *}
+text{* One immediately useful corollary is the existence of square roots! --- Should help to get rid of all the development of square-root for reals as a special case @{typ "real^1"} *}
 
 lemma square_bound_lemma: "(x::real) < (1 + x) * (1 + x)"
 proof-
@@ -1737,7 +1738,7 @@ lemma adjoint_unique:
   using u
   by (simp add: vector_eq_rdot[symmetric] adjoint_clauses[OF lf])
 
-text{* Matrix notation. NB: an MxN matrix is of type 'a^'n^'m, not 'a^'m^'n *}
+text{* Matrix notation. NB: an MxN matrix is of type @{typ "'a^'n^'m"}, not @{typ "'a^'m^'n"} *}
 
 consts generic_mult :: "'a \<Rightarrow> 'b \<Rightarrow> 'c" (infixr "\<star>" 75)
 

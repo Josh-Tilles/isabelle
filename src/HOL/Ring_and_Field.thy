@@ -41,7 +41,7 @@ class mult_zero = times + zero +
 
 class semiring_0 = semiring + comm_monoid_add + mult_zero
 
-class semiring_0_cancel = semiring + comm_monoid_add + cancel_ab_semigroup_add
+class semiring_0_cancel = semiring + cancel_comm_monoid_add
 begin
 
 subclass semiring_0
@@ -80,7 +80,7 @@ subclass semiring_0 ..
 
 end
 
-class comm_semiring_0_cancel = comm_semiring + comm_monoid_add + cancel_ab_semigroup_add
+class comm_semiring_0_cancel = comm_semiring + cancel_comm_monoid_add
 begin
 
 subclass semiring_0_cancel ..
@@ -122,7 +122,7 @@ begin
 
 subclass semiring_1 ..
 
-lemma dvd_refl: "a dvd a"
+lemma dvd_refl[simp]: "a dvd a"
 proof
   show "a = a * 1" by simp
 qed
@@ -182,24 +182,23 @@ lemma dvd_mult_right: "a * b dvd c \<Longrightarrow> b dvd c"
 lemma dvd_0_left: "0 dvd a \<Longrightarrow> a = 0"
 by simp
 
-lemma dvd_add:
-  assumes ab: "a dvd b"
-    and ac: "a dvd c"
-    shows "a dvd (b + c)"
+lemma dvd_add[simp]:
+  assumes "a dvd b" and "a dvd c" shows "a dvd (b + c)"
 proof -
-  from ab obtain b' where "b = a * b'" ..
-  moreover from ac obtain c' where "c = a * c'" ..
+  from `a dvd b` obtain b' where "b = a * b'" ..
+  moreover from `a dvd c` obtain c' where "c = a * c'" ..
   ultimately have "b + c = a * (b' + c')" by (simp add: right_distrib)
   then show ?thesis ..
 qed
 
 end
 
+
 class no_zero_divisors = zero + times +
   assumes no_zero_divisors: "a \<noteq> 0 \<Longrightarrow> b \<noteq> 0 \<Longrightarrow> a * b \<noteq> 0"
 
-class semiring_1_cancel = semiring + comm_monoid_add + zero_neq_one
-  + cancel_ab_semigroup_add + monoid_mult
+class semiring_1_cancel = semiring + cancel_comm_monoid_add
+  + zero_neq_one + monoid_mult
 begin
 
 subclass semiring_0_cancel ..
@@ -208,8 +207,8 @@ subclass semiring_1 ..
 
 end
 
-class comm_semiring_1_cancel = comm_semiring + comm_monoid_add + comm_monoid_mult
-  + zero_neq_one + cancel_ab_semigroup_add
+class comm_semiring_1_cancel = comm_semiring + cancel_comm_monoid_add
+  + zero_neq_one + comm_monoid_mult
 begin
 
 subclass semiring_1_cancel ..
@@ -373,6 +372,18 @@ class idom = comm_ring_1 + no_zero_divisors
 begin
 
 subclass ring_1_no_zero_divisors ..
+
+lemma square_eq_iff: "a * a = b * b \<longleftrightarrow> (a = b \<or> a = - b)"
+proof
+  assume "a * a = b * b"
+  then have "(a - b) * (a + b) = 0"
+    by (simp add: algebra_simps)
+  then show "a = b \<or> a = - b"
+    by (simp add: right_minus_eq eq_neg_iff_add_eq_0)
+next
+  assume "a = b \<or> a = - b"
+  then show "a * a = b * b" by auto
+qed
 
 end
 
@@ -543,7 +554,7 @@ done
 end
 
 class pordered_cancel_semiring = mult_mono + pordered_ab_semigroup_add
-  + semiring + comm_monoid_add + cancel_ab_semigroup_add
+  + semiring + cancel_comm_monoid_add
 begin
 
 subclass semiring_0_cancel ..
