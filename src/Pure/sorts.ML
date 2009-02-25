@@ -46,9 +46,7 @@ sig
   val add_arities: Pretty.pp -> string * (class * sort list) list -> algebra -> algebra
   val empty_algebra: algebra
   val merge_algebra: Pretty.pp -> algebra * algebra -> algebra
-  val classrels_of: algebra -> (class * class list) list
-  val instances_of: algebra -> (string * class) list
-  val subalgebra: Pretty.pp -> (class -> bool) -> (class * string -> sort list)
+  val subalgebra: Pretty.pp -> (class -> bool) -> (class * string -> sort list option)
     -> algebra -> (sort -> sort) * algebra
   type class_error
   val class_error: Pretty.pp -> class_error -> string
@@ -302,29 +300,14 @@ fun merge_algebra pp
 
 (* algebra projections *)
 
-val sorted_classes = rev o flat o Graph.strong_conn o classes_of;
-
-fun classrels_of algebra = 
-  map (fn c => (c, Graph.imm_succs (classes_of algebra) c)) (sorted_classes algebra);
-
-fun instances_of algebra =
-  let
-    val arities = arities_of algebra;
-    val all_classes = sorted_classes algebra;
-    fun sort_classes cs = filter (member (op = o apsnd fst) cs)
-      all_classes;
-  in
-    Symtab.fold (fn (a, cs) => append ((map (pair a) o sort_classes) cs))
-      arities []
-  end;
-
 fun subalgebra pp P sargs (algebra as Algebra {classes, arities}) =
   let
     val restrict_sort = minimize_sort algebra o filter P o Graph.all_succs classes;
     fun restrict_arity tyco (c, (_, Ss)) =
-      if P c then
-        SOME (c, (c, Ss |> map2 (curry (inter_sort algebra)) (sargs (c, tyco))
+      if P c then case sargs (c, tyco)
+       of SOME sorts => SOME (c, (c, Ss |> map2 (curry (inter_sort algebra)) sorts
           |> map restrict_sort))
+        | NONE => NONE
       else NONE;
     val classes' = classes |> Graph.subgraph P;
     val arities' = arities |> Symtab.map' (map_filter o restrict_arity);

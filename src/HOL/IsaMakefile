@@ -86,7 +86,7 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   Tools/simpdata.ML \
   $(SRC)/Tools/atomize_elim.ML \
   $(SRC)/Tools/code/code_funcgr.ML \
-  $(SRC)/Tools/code/code_funcgr.ML \
+  $(SRC)/Tools/code/code_wellsorted.ML \
   $(SRC)/Tools/code/code_name.ML \
   $(SRC)/Tools/code/code_printer.ML \
   $(SRC)/Tools/code/code_target.ML \
@@ -339,6 +339,8 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Random.thy	Library/Quickcheck.thy	\
   Library/Poly_Deriv.thy \
   Library/Polynomial.thy \
+  Library/Product_plus.thy \
+  Library/Product_Vector.thy \
   Library/Enum.thy Library/Float.thy $(SRC)/Tools/float.ML $(SRC)/HOL/Tools/float_arith.ML \
   Library/reify_data.ML Library/reflection.ML
 	@cd Library; $(ISABELLE_TOOL) usedir $(OUT)/HOL Library

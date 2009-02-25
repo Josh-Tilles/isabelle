@@ -122,14 +122,13 @@ val ss2 = HOL_basic_ss
   addcongs [@{thm "conj_le_cong"}, @{thm "imp_le_cong"}]
 val div_mod_ss = HOL_basic_ss addsimps simp_thms 
   @ map (symmetric o mk_meta_eq) 
-    [@{thm "dvd_eq_mod_eq_0"}, @{thm "zdvd_iff_zmod_eq_0"}, @{thm "mod_add1_eq"}, 
+    [@{thm "dvd_eq_mod_eq_0"}, @{thm "mod_add1_eq"}, 
      @{thm "mod_add_left_eq"}, @{thm "mod_add_right_eq"}, 
-     @{thm "mod_add_eq"}, @{thm "zmod_zadd_left_eq"}, 
-     @{thm "zmod_zadd_right_eq"}, @{thm "div_add1_eq"}, @{thm "zdiv_zadd1_eq"}]
+     @{thm "mod_add_eq"}, @{thm "div_add1_eq"}, @{thm "zdiv_zadd1_eq"}]
   @ [@{thm "mod_self"}, @{thm "zmod_self"}, @{thm "mod_by_0"}, 
      @{thm "div_by_0"}, @{thm "DIVISION_BY_ZERO"} RS conjunct1, 
      @{thm "DIVISION_BY_ZERO"} RS conjunct2, @{thm "zdiv_zero"}, @{thm "zmod_zero"}, 
-     @{thm "div_0"}, @{thm "mod_0"}, @{thm "zdiv_1"}, @{thm "zmod_1"}, @{thm "div_1"}, 
+     @{thm "div_0"}, @{thm "mod_0"}, @{thm "div_by_1"}, @{thm "mod_by_1"}, @{thm "div_1"}, 
      @{thm "mod_1"}, @{thm "Suc_plus1"}]
   @ @{thms add_ac}
  addsimprocs [cancel_div_mod_proc]

@@ -31,7 +31,7 @@ lemma power_one [simp]: "1^n = (1::'a::recpower)"
   by (induct n) (simp_all add: power_Suc)
 
 lemma power_one_right [simp]: "(a::'a::recpower) ^ 1 = a"
-  by (simp add: power_Suc)
+  unfolding One_nat_def by (simp add: power_Suc)
 
 lemma power_commutes: "(a::'a::recpower) ^ n * a = a * a ^ n"
   by (induct n) (simp_all add: power_Suc mult_assoc)
@@ -143,10 +143,12 @@ apply (auto simp add: mult_strict_mono power_Suc
 done
 
 lemma power_eq_0_iff [simp]:
-  "(a^n = 0) = (a = (0::'a::{ring_1_no_zero_divisors,recpower}) & n>0)"
+  "(a^n = 0) \<longleftrightarrow>
+   (a = (0::'a::{mult_zero,zero_neq_one,no_zero_divisors,recpower}) & n\<noteq>0)"
 apply (induct "n")
-apply (auto simp add: power_Suc zero_neq_one [THEN not_sym])
+apply (auto simp add: power_Suc zero_neq_one [THEN not_sym] no_zero_divisors)
 done
+
 
 lemma field_power_not_zero:
   "a \<noteq> (0::'a::{ring_1_no_zero_divisors,recpower}) ==> a^n \<noteq> 0"
@@ -364,11 +366,18 @@ lemma of_nat_power:
   "of_nat (m ^ n) = (of_nat m::'a::{semiring_1,recpower}) ^ n"
 by (induct n, simp_all add: power_Suc of_nat_mult)
 
-lemma nat_one_le_power [simp]: "1 \<le> i ==> Suc 0 \<le> i^n"
-by (insert one_le_power [of i n], simp)
+lemma nat_one_le_power [simp]: "Suc 0 \<le> i ==> Suc 0 \<le> i^n"
+by (rule one_le_power [of i n, unfolded One_nat_def])
 
 lemma nat_zero_less_power_iff [simp]: "(x^n > 0) = (x > (0::nat) | n=0)"
 by (induct "n", auto)
+
+lemma nat_power_eq_Suc_0_iff [simp]: 
+  "((x::nat)^m = Suc 0) = (m = 0 | x = Suc 0)"
+by (induct_tac m, auto)
+
+lemma power_Suc_0[simp]: "(Suc 0)^n = Suc 0"
+by simp
 
 text{*Valid for the naturals, but what if @{text"0<i<1"}?
 Premises cannot be weakened: consider the case where @{term "i=0"},
@@ -443,4 +452,3 @@ val nat_zero_less_power_iff = thm"nat_zero_less_power_iff";
 *}
 
 end
-
