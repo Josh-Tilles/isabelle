@@ -5,7 +5,7 @@
 header {* Rational numbers *}
 
 theory Rational
-imports Nat_Int_Bij GCD
+imports GCD Archimedean_Field
 uses ("Tools/rat_arith.ML")
 begin
 
@@ -255,7 +255,6 @@ next
   with `b \<noteq> 0` have "a \<noteq> 0" by (simp add: Zero_rat_def eq_rat)
   with Fract `q = Fract a b` `b \<noteq> 0` show C by auto
 qed
-  
 
 
 subsubsection {* The field of rational numbers *}
@@ -532,8 +531,67 @@ proof (cases q)
 qed
 
 lemma zero_less_Fract_iff:
-  "0 < b ==> (0 < Fract a b) = (0 < a)"
-by (simp add: Zero_rat_def order_less_imp_not_eq2 zero_less_mult_iff)
+  "0 < b \<Longrightarrow> 0 < Fract a b \<longleftrightarrow> 0 < a"
+  by (simp add: Zero_rat_def zero_less_mult_iff)
+
+lemma Fract_less_zero_iff:
+  "0 < b \<Longrightarrow> Fract a b < 0 \<longleftrightarrow> a < 0"
+  by (simp add: Zero_rat_def mult_less_0_iff)
+
+lemma zero_le_Fract_iff:
+  "0 < b \<Longrightarrow> 0 \<le> Fract a b \<longleftrightarrow> 0 \<le> a"
+  by (simp add: Zero_rat_def zero_le_mult_iff)
+
+lemma Fract_le_zero_iff:
+  "0 < b \<Longrightarrow> Fract a b \<le> 0 \<longleftrightarrow> a \<le> 0"
+  by (simp add: Zero_rat_def mult_le_0_iff)
+
+lemma one_less_Fract_iff:
+  "0 < b \<Longrightarrow> 1 < Fract a b \<longleftrightarrow> b < a"
+  by (simp add: One_rat_def mult_less_cancel_right_disj)
+
+lemma Fract_less_one_iff:
+  "0 < b \<Longrightarrow> Fract a b < 1 \<longleftrightarrow> a < b"
+  by (simp add: One_rat_def mult_less_cancel_right_disj)
+
+lemma one_le_Fract_iff:
+  "0 < b \<Longrightarrow> 1 \<le> Fract a b \<longleftrightarrow> b \<le> a"
+  by (simp add: One_rat_def mult_le_cancel_right)
+
+lemma Fract_le_one_iff:
+  "0 < b \<Longrightarrow> Fract a b \<le> 1 \<longleftrightarrow> a \<le> b"
+  by (simp add: One_rat_def mult_le_cancel_right)
+
+
+subsubsection {* Rationals are an Archimedean field *}
+
+lemma rat_floor_lemma:
+  assumes "0 < b"
+  shows "of_int (a div b) \<le> Fract a b \<and> Fract a b < of_int (a div b + 1)"
+proof -
+  have "Fract a b = of_int (a div b) + Fract (a mod b) b"
+    using `0 < b` by (simp add: of_int_rat)
+  moreover have "0 \<le> Fract (a mod b) b \<and> Fract (a mod b) b < 1"
+    using `0 < b` by (simp add: zero_le_Fract_iff Fract_less_one_iff)
+  ultimately show ?thesis by simp
+qed
+
+instance rat :: archimedean_field
+proof
+  fix r :: rat
+  show "\<exists>z. r \<le> of_int z"
+  proof (induct r)
+    case (Fract a b)
+    then have "Fract a b \<le> of_int (a div b + 1)"
+      using rat_floor_lemma [of b a] by simp
+    then show "\<exists>z. Fract a b \<le> of_int z" ..
+  qed
+qed
+
+lemma floor_Fract:
+  assumes "0 < b" shows "floor (Fract a b) = a div b"
+  using rat_floor_lemma [OF `0 < b`, of a]
+  by (simp add: floor_unique)
 
 
 subsection {* Arithmetic setup *}
@@ -790,46 +848,6 @@ lemma Rats_induct [case_names of_rat, induct set: Rats]:
   by (rule Rats_cases) auto
 
 
-subsection {* The Rationals are Countably Infinite *}
-
-definition nat_to_rat_surj :: "nat \<Rightarrow> rat" where
-"nat_to_rat_surj n = (let (a,b) = nat_to_nat2 n
-                      in Fract (nat_to_int_bij a) (nat_to_int_bij b))"
-
-lemma surj_nat_to_rat_surj: "surj nat_to_rat_surj"
-unfolding surj_def
-proof
-  fix r::rat
-  show "\<exists>n. r = nat_to_rat_surj n"
-  proof(cases r)
-    fix i j assume [simp]: "r = Fract i j" and "j \<noteq> 0"
-    have "r = (let m = inv nat_to_int_bij i; n = inv nat_to_int_bij j
-               in nat_to_rat_surj(nat2_to_nat (m,n)))"
-      using nat2_to_nat_inj surj_f_inv_f[OF surj_nat_to_int_bij]
-      by(simp add:Let_def nat_to_rat_surj_def nat_to_nat2_def)
-    thus "\<exists>n. r = nat_to_rat_surj n" by(auto simp:Let_def)
-  qed
-qed
-
-lemma Rats_eq_range_nat_to_rat_surj: "\<rat> = range nat_to_rat_surj"
-by (simp add: Rats_def surj_nat_to_rat_surj surj_range)
-
-context field_char_0
-begin
-
-lemma Rats_eq_range_of_rat_o_nat_to_rat_surj:
-  "\<rat> = range (of_rat o nat_to_rat_surj)"
-using surj_nat_to_rat_surj
-by (auto simp: Rats_def image_def surj_def)
-   (blast intro: arg_cong[where f = of_rat])
-
-lemma surj_of_rat_nat_to_rat_surj:
-  "r\<in>\<rat> \<Longrightarrow> \<exists>n. r = of_rat(nat_to_rat_surj n)"
-by(simp add: Rats_eq_range_of_rat_o_nat_to_rat_surj image_def)
-
-end
-
-
 subsection {* Implementation of rational numbers as pairs of integers *}
 
 lemma Fract_norm: "Fract (a div zgcd a b) (b div zgcd a b) = Fract a b"
@@ -841,7 +859,7 @@ next
   then have "?c \<noteq> 0" by simp
   then have "Fract ?c ?c = Fract 1 1" by (simp add: eq_rat)
   moreover have "Fract (a div ?c * ?c + a mod ?c) (b div ?c * ?c + b mod ?c) = Fract a b"
-   by (simp add: semiring_div_class.mod_div_equality)
+    by (simp add: semiring_div_class.mod_div_equality)
   moreover have "a mod ?c = 0" by (simp add: dvd_eq_mod_eq_0 [symmetric])
   moreover have "b mod ?c = 0" by (simp add: dvd_eq_mod_eq_0 [symmetric])
   ultimately show ?thesis
@@ -926,14 +944,13 @@ proof -
   finally show ?thesis using assms by simp
 qed
 
-lemma rat_less_eq_code [code]:
-  "Fract a b \<le> Fract c d \<longleftrightarrow> (if b = 0
-       then sgn c * sgn d \<ge> 0
-     else if d = 0
-       then sgn a * sgn b \<le> 0
-     else a * \<bar>d\<bar> * sgn b \<le> c * \<bar>b\<bar> * sgn d)"
-by (auto simp add: sgn_times mult_le_0_iff zero_le_mult_iff le_rat' eq_rat simp del: le_rat)
-  (auto simp add: sgn_times sgn_0_0 le_less sgn_1_pos [symmetric] sgn_1_neg [symmetric])
+lemma (in ordered_idom) sgn_greater [simp]:
+  "0 < sgn a \<longleftrightarrow> 0 < a"
+  unfolding sgn_if by auto
+
+lemma (in ordered_idom) sgn_less [simp]:
+  "sgn a < 0 \<longleftrightarrow> a < 0"
+  unfolding sgn_if by auto
 
 lemma rat_le_eq_code [code]:
   "Fract a b < Fract c d \<longleftrightarrow> (if b = 0
@@ -941,9 +958,17 @@ lemma rat_le_eq_code [code]:
      else if d = 0
        then sgn a * sgn b < 0
      else a * \<bar>d\<bar> * sgn b < c * \<bar>b\<bar> * sgn d)"
-by (auto simp add: sgn_times mult_less_0_iff zero_less_mult_iff less_rat' eq_rat simp del: less_rat)
-   (auto simp add: sgn_times sgn_0_0 sgn_1_pos [symmetric] sgn_1_neg [symmetric],
-     auto simp add: sgn_1_pos)
+  by (auto simp add: sgn_times mult_less_0_iff zero_less_mult_iff less_rat' eq_rat simp del: less_rat)
+
+lemma rat_less_eq_code [code]:
+  "Fract a b \<le> Fract c d \<longleftrightarrow> (if b = 0
+       then sgn c * sgn d \<ge> 0
+     else if d = 0
+       then sgn a * sgn b \<le> 0
+     else a * \<bar>d\<bar> * sgn b \<le> c * \<bar>b\<bar> * sgn d)"
+  by (auto simp add: sgn_times mult_le_0_iff zero_le_mult_iff le_rat' eq_rat simp del: le_rat)
+    (auto simp add: le_less not_less sgn_0_0)
+
 
 lemma rat_plus_code [code]:
   "Fract a b + Fract c d = (if b = 0

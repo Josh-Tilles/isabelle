@@ -262,7 +262,8 @@ fun prove_primrec_thms flat_names new_type_names descr sorts
   in
     thy2
     |> Sign.add_path (space_implode "_" new_type_names)
-    |> PureThy.add_thmss [((Binding.name "recs", rec_thms), [])]
+    |> PureThy.add_thmss [((Binding.name "recs", rec_thms),
+         [Nitpick_Const_Simp_Thms.add])]
     ||> Sign.parent_path
     ||> Theory.checkpoint
     |-> (fn thms => pair (reccomb_names, Library.flat thms))
@@ -333,9 +334,10 @@ fun prove_case_thms flat_names new_type_names descr sorts reccomb_names primrec_
     val case_thms = map (map (fn t => SkipProof.prove_global thy2 [] [] t
       (fn _ => EVERY [rewrite_goals_tac (case_defs @ map mk_meta_eq primrec_thms), rtac refl 1])))
           (DatatypeProp.make_cases new_type_names descr sorts thy2)
-
   in
     thy2
+    |> Context.the_theory o fold (fold Nitpick_Const_Simp_Thms.add_thm) case_thms
+       o Context.Theory
     |> parent_path flat_names
     |> store_thmss "cases" new_type_names case_thms
     |-> (fn thmss => pair (thmss, case_names))

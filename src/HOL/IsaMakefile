@@ -14,6 +14,7 @@ test: \
   HOL-ex \
   HOL-Auth \
   HOL-Bali \
+  HOL-Decision_Procs \
   HOL-Extraction \
   HOL-HahnBanach \
   HOL-Hoare \
@@ -84,7 +85,7 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   Tools/simpdata.ML \
   $(SRC)/Tools/atomize_elim.ML \
   $(SRC)/Tools/code/code_funcgr.ML \
-  $(SRC)/Tools/code/code_funcgr.ML \
+  $(SRC)/Tools/code/code_wellsorted.ML \
   $(SRC)/Tools/code/code_name.ML \
   $(SRC)/Tools/code/code_printer.ML \
   $(SRC)/Tools/code/code_target.ML \
@@ -214,7 +215,6 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Main.thy \
   Map.thy \
   NatBin.thy \
-  Nat_Int_Bij.thy \
   Presburger.thy \
   Recdef.thy \
   Relation_Power.thy \
@@ -266,12 +266,11 @@ $(OUT)/HOL-Main: main.ML $(MAIN_DEPENDENCIES)
 	@$(ISABELLE_TOOL) usedir -b -f main.ML -g true $(OUT)/Pure HOL-Main
 
 $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
+  Archimedean_Field.thy \
   Complex_Main.thy \
   Complex.thy \
-  Fundamental_Theorem_Algebra.thy \
   Deriv.thy \
   Fact.thy \
-  FrechetDeriv.thy \
   Integration.thy \
   Lim.thy \
   Ln.thy \
@@ -282,12 +281,9 @@ $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
   Series.thy \
   Taylor.thy \
   Transcendental.thy \
-  Dense_Linear_Order.thy \
   GCD.thy \
-  Order_Relation.thy \
   Parity.thy \
   Lubs.thy \
-  Polynomial.thy \
   PReal.thy \
   Rational.thy \
   RComplete.thy \
@@ -309,16 +305,23 @@ $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
 
 HOL-Library: HOL $(LOG)/HOL-Library.gz
 
+
 $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Abstract_Rat.thy \
   Library/BigO.thy Library/ContNotDenum.thy Library/Efficient_Nat.thy	\
+  Library/Euclidean_Space.thy Library/Glbs.thy Library/normarith.ML \
   Library/Executable_Set.thy Library/Infinite_Set.thy			\
-  Library/FuncSet.thy			\
+  Library/FuncSet.thy Library/Permutations.thy Library/Determinants.thy\
+  Library/Bit.thy \
+  Library/Finite_Cartesian_Product.thy \
+  Library/FrechetDeriv.thy \
+  Library/Fundamental_Theorem_Algebra.thy \
+  Library/Inner_Product.thy \
   Library/Library.thy Library/List_Prefix.thy Library/State_Monad.thy	\
-  Library/Multiset.thy Library/Permutation.thy	\
+  Library/Nat_Int_Bij.thy Library/Multiset.thy Library/Permutation.thy	\
   Library/Primes.thy Library/Pocklington.thy Library/Quotient.thy	\
   Library/Quicksort.thy Library/Nat_Infinity.thy Library/Word.thy	\
-  Library/README.html Library/Continuity.thy				\
+  Library/README.html Library/Continuity.thy Library/Order_Relation.thy \
   Library/Nested_Environment.thy Library/Ramsey.thy Library/Zorn.thy	\
   Library/Library/ROOT.ML Library/Library/document/root.tex		\
   Library/Library/document/root.bib Library/While_Combinator.thy	\
@@ -333,6 +336,11 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Mapping.thy	Library/Numeral_Type.thy	Library/Reflection.thy		\
   Library/Boolean_Algebra.thy Library/Countable.thy	\
   Library/RBT.thy	Library/Univ_Poly.thy	\
+  Library/Random.thy	Library/Quickcheck.thy	\
+  Library/Poly_Deriv.thy \
+  Library/Polynomial.thy \
+  Library/Product_plus.thy \
+  Library/Product_Vector.thy \
   Library/Enum.thy Library/Float.thy $(SRC)/Tools/float.ML $(SRC)/HOL/Tools/float_arith.ML \
   Library/reify_data.ML Library/reflection.ML
 	@cd Library; $(ISABELLE_TOOL) usedir $(OUT)/HOL Library
@@ -655,6 +663,24 @@ $(LOG)/HOL-SizeChange.gz: $(OUT)/HOL SizeChange/Kleene_Algebras.thy	\
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL SizeChange
 
 
+## HOL-Decision_Procs
+
+HOL-Decision_Procs: HOL $(LOG)/HOL-Decision_Procs.gz
+
+$(LOG)/HOL-Decision_Procs.gz: $(OUT)/HOL \
+  Decision_Procs/Approximation.thy \
+  Decision_Procs/Cooper.thy \
+  Decision_Procs/cooper_tac.ML \
+  Decision_Procs/Dense_Linear_Order.thy \
+  Decision_Procs/Ferrack.thy \
+  Decision_Procs/ferrack_tac.ML \
+  Decision_Procs/MIR.thy \
+  Decision_Procs/mir_tac.ML \
+  Decision_Procs/Decision_Procs.thy \
+  Decision_Procs/ROOT.ML
+	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Decision_Procs
+
+
 ## HOL-Lambda
 
 HOL-Lambda: HOL $(LOG)/HOL-Lambda.gz
@@ -788,7 +814,7 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Library/Commutative_Ring.thy		\
   ex/Abstract_NAT.thy ex/Antiquote.thy ex/Arith_Examples.thy ex/BT.thy	\
   ex/BinEx.thy ex/CTL.thy ex/Chinese.thy ex/Classical.thy		\
   ex/Coherent.thy ex/Dense_Linear_Order_Ex.thy ex/Eval_Examples.thy	\
-  ex/Groebner_Examples.thy ex/Random.thy ex/Quickcheck.thy		\
+  ex/Groebner_Examples.thy ex/Quickcheck_Generators.thy		\
   ex/Codegenerator.thy ex/Codegenerator_Pretty.thy			\
   ex/CodegenSML_Test.thy ex/Formal_Power_Series_Examples.thy						\
   ex/Commutative_RingEx.thy ex/Efficient_Nat_examples.thy		\
@@ -802,7 +828,6 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Library/Commutative_Ring.thy		\
   ex/Numeral.thy ex/PER.thy ex/PresburgerEx.thy ex/Primrec.thy		\
   ex/Quickcheck_Examples.thy	\
   ex/ReflectionEx.thy ex/ROOT.ML ex/Recdefs.thy ex/Records.thy		\
-  ex/Reflected_Presburger.thy ex/coopertac.ML				\
   ex/Refute_Examples.thy ex/SAT_Examples.thy ex/SVC_Oracle.thy		\
   ex/Subarray.thy ex/Sublist.thy                                        \
   ex/Sudoku.thy ex/Tarski.thy ex/Termination.thy ex/Term_Of_Syntax.thy	\
@@ -810,12 +835,9 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Library/Commutative_Ring.thy		\
   ex/document/root.tex ex/Meson_Test.thy ex/set.thy	\
   ex/svc_funcs.ML ex/svc_test.thy	\
   ex/ImperativeQuicksort.thy	\
-  ex/BigO_Complex.thy			\
   ex/Arithmetic_Series_Complex.thy ex/HarmonicSeries.thy	\
-  ex/Sqrt.thy							\
-  ex/Sqrt_Script.thy ex/MIR.thy ex/mirtac.ML	\
-  ex/ReflectedFerrack.thy					\
-  ex/linrtac.ML
+  ex/Sqrt.thy ex/Sqrt_Script.thy \
+  ex/ApproximationEx.thy
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL ex
 
 
@@ -862,6 +884,7 @@ $(LOG)/HOL-Matrix.gz: $(OUT)/HOL				\
   $(SRC)/Tools/Compute_Oracle/am_ghc.ML					\
   $(SRC)/Tools/Compute_Oracle/am_sml.ML					\
   $(SRC)/Tools/Compute_Oracle/compute.ML	\
+  Tools/ComputeFloat.thy Tools/float_arith.ML \
   Matrix/Matrix.thy Matrix/SparseMatrix.thy Matrix/LP.thy		\
   Matrix/document/root.tex Matrix/ROOT.ML Matrix/cplex/Cplex.thy	\
   Matrix/cplex/CplexMatrixConverter.ML Matrix/cplex/Cplex_tools.ML	\

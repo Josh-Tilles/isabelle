@@ -32,15 +32,6 @@ where
                      else raise (''array lookup: index out of range''))
               done)"
 
--- {* FIXME adjustion for List theory *}
-no_syntax
-  nth  :: "'a list \<Rightarrow> nat \<Rightarrow> 'a" (infixl "!" 100)
-
-abbreviation
-  nth_list :: "'a list \<Rightarrow> nat \<Rightarrow> 'a" (infixl "!" 100)
-where
-  "nth_list \<equiv> List.nth"
-
 definition
   upd :: "nat \<Rightarrow> 'a \<Rightarrow> 'a\<Colon>heap array \<Rightarrow> 'a\<Colon>heap array Heap"
 where
@@ -124,47 +115,47 @@ subsection {* Code generator setup *}
 subsubsection {* Logical intermediate layer *}
 
 definition new' where
-  [code del]: "new' = Array.new o nat_of_index"
+  [code del]: "new' = Array.new o Code_Index.nat_of"
 hide (open) const new'
 lemma [code]:
-  "Array.new = Array.new' o index_of_nat"
+  "Array.new = Array.new' o Code_Index.of_nat"
   by (simp add: new'_def o_def)
 
 definition of_list' where
-  [code del]: "of_list' i xs = Array.of_list (take (nat_of_index i) xs)"
+  [code del]: "of_list' i xs = Array.of_list (take (Code_Index.nat_of i) xs)"
 hide (open) const of_list'
 lemma [code]:
-  "Array.of_list xs = Array.of_list' (index_of_nat (List.length xs)) xs"
+  "Array.of_list xs = Array.of_list' (Code_Index.of_nat (List.length xs)) xs"
   by (simp add: of_list'_def)
 
 definition make' where
-  [code del]: "make' i f = Array.make (nat_of_index i) (f o index_of_nat)"
+  [code del]: "make' i f = Array.make (Code_Index.nat_of i) (f o Code_Index.of_nat)"
 hide (open) const make'
 lemma [code]:
-  "Array.make n f = Array.make' (index_of_nat n) (f o nat_of_index)"
+  "Array.make n f = Array.make' (Code_Index.of_nat n) (f o Code_Index.nat_of)"
   by (simp add: make'_def o_def)
 
 definition length' where
-  [code del]: "length' = Array.length \<guillemotright>== liftM index_of_nat"
+  [code del]: "length' = Array.length \<guillemotright>== liftM Code_Index.of_nat"
 hide (open) const length'
 lemma [code]:
-  "Array.length = Array.length' \<guillemotright>== liftM nat_of_index"
+  "Array.length = Array.length' \<guillemotright>== liftM Code_Index.nat_of"
   by (simp add: length'_def monad_simp',
     simp add: liftM_def comp_def monad_simp,
     simp add: monad_simp')
 
 definition nth' where
-  [code del]: "nth' a = Array.nth a o nat_of_index"
+  [code del]: "nth' a = Array.nth a o Code_Index.nat_of"
 hide (open) const nth'
 lemma [code]:
-  "Array.nth a n = Array.nth' a (index_of_nat n)"
+  "Array.nth a n = Array.nth' a (Code_Index.of_nat n)"
   by (simp add: nth'_def)
 
 definition upd' where
-  [code del]: "upd' a i x = Array.upd (nat_of_index i) x a \<guillemotright> return ()"
+  [code del]: "upd' a i x = Array.upd (Code_Index.nat_of i) x a \<guillemotright> return ()"
 hide (open) const upd'
 lemma [code]:
-  "Array.upd i x a = Array.upd' a (index_of_nat i) x \<guillemotright> return a"
+  "Array.upd i x a = Array.upd' a (Code_Index.of_nat i) x \<guillemotright> return a"
   by (simp add: upd'_def monad_simp upd_return)
 
 
@@ -198,12 +189,12 @@ code_reserved OCaml Array
 
 subsubsection {* Haskell *}
 
-code_type array (Haskell "STArray/ RealWorld/ _")
+code_type array (Haskell "Heap.STArray/ Heap.RealWorld/ _")
 code_const Array (Haskell "error/ \"bare Array\"")
-code_const Array.new' (Haskell "newArray/ (0,/ _)")
-code_const Array.of_list' (Haskell "newListArray/ (0,/ _)")
-code_const Array.length' (Haskell "lengthArray")
-code_const Array.nth' (Haskell "readArray")
-code_const Array.upd' (Haskell "writeArray")
+code_const Array.new' (Haskell "Heap.newArray/ (0,/ _)")
+code_const Array.of_list' (Haskell "Heap.newListArray/ (0,/ _)")
+code_const Array.length' (Haskell "Heap.lengthArray")
+code_const Array.nth' (Haskell "Heap.readArray")
+code_const Array.upd' (Haskell "Heap.writeArray")
 
 end

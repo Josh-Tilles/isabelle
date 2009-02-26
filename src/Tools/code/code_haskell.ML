@@ -101,7 +101,7 @@ fun pr_haskell_stmt naming labelled_name syntax_class syntax_tyco syntax_const
     and pr_bind tyvars = pr_haskell_bind (pr_term tyvars)
     and pr_case tyvars thm vars fxy (cases as ((_, [_]), _)) =
           let
-            val (binds, t) = Code_Thingol.unfold_let (ICase cases);
+            val (binds, body) = Code_Thingol.unfold_let (ICase cases);
             fun pr ((pat, ty), t) vars =
               vars
               |> pr_bind tyvars thm BR ((NONE, SOME pat), ty)
@@ -110,20 +110,20 @@ fun pr_haskell_stmt naming labelled_name syntax_class syntax_tyco syntax_const
           in
             Pretty.block_enclose (
               str "let {",
-              concat [str "}", str "in", pr_term tyvars thm vars' NOBR t]
+              concat [str "}", str "in", pr_term tyvars thm vars' NOBR body]
             ) ps
           end
-      | pr_case tyvars thm vars fxy (((td, ty), bs as _ :: _), _) =
+      | pr_case tyvars thm vars fxy (((t, ty), clauses as _ :: _), _) =
           let
-            fun pr (pat, t) =
+            fun pr (pat, body) =
               let
                 val (p, vars') = pr_bind tyvars thm NOBR ((NONE, SOME pat), ty) vars;
-              in semicolon [p, str "->", pr_term tyvars thm vars' NOBR t] end;
+              in semicolon [p, str "->", pr_term tyvars thm vars' NOBR body] end;
           in
             Pretty.block_enclose (
-              concat [str "(case", pr_term tyvars thm vars NOBR td, str "of", str "{"],
+              concat [str "(case", pr_term tyvars thm vars NOBR t, str "of", str "{"],
               str "})"
-            ) (map pr bs)
+            ) (map pr clauses)
           end
       | pr_case tyvars thm vars fxy ((_, []), _) = str "error \"empty case\"";
     fun pr_stmt (name, Code_Thingol.Fun (_, ((vs, ty), []))) =
@@ -385,7 +385,7 @@ fun serialize_haskell module_prefix raw_module_name string_classes labelled_name
         val imports = deps'
           |> map NameSpace.qualifier
           |> distinct (op =);
-        fun pr_import_include (name, _) = str ("import " ^ name ^ ";");
+        fun pr_import_include (name, _) = str ("import qualified " ^ name ^ ";");
         val pr_import_module = str o (if qualified
           then prefix "import qualified "
           else prefix "import ") o suffix ";";
@@ -407,6 +407,8 @@ fun serialize_haskell module_prefix raw_module_name string_classes labelled_name
           | (_, (_, NONE)) => NONE) stmts));
     val serialize_module =
       if null stmt_names then serialize_module1 else pair "" o serialize_module2;
+    fun check_destination destination =
+      (File.check destination; destination);
     fun write_module destination (modlname, content) =
       let
         val filename = case modlname
@@ -421,7 +423,8 @@ fun serialize_haskell module_prefix raw_module_name string_classes labelled_name
       end
   in
     Code_Target.mk_serialization target NONE
-      (fn NONE => K () o map (Code_Target.code_writeln o snd) | SOME file => K () o map (write_module file))
+      (fn NONE => K () o map (Code_Target.code_writeln o snd) | SOME file => K () o map
+        (write_module (check_destination file)))
       (rpair [] o cat_lines o map (Code_Target.code_of_pretty o snd))
       (map (uncurry pr_module) includes
         @ map serialize_module (Symtab.dest hs_program))

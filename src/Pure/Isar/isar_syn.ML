@@ -860,6 +860,7 @@ val criterion =
   P.reserved "intro" >> K FindTheorems.Intro ||
   P.reserved "elim" >> K FindTheorems.Elim ||
   P.reserved "dest" >> K FindTheorems.Dest ||
+  P.reserved "solves" >> K FindTheorems.Solves ||
   P.reserved "simp" |-- P.!!! (P.$$$ ":" |-- P.term) >> FindTheorems.Simp ||
   P.term >> FindTheorems.Pattern;
 
@@ -874,6 +875,22 @@ val _ =
   OuterSyntax.improper_command "find_theorems" "print theorems meeting specified criteria" K.diag
     (options -- Scan.repeat (((Scan.option P.minus >> is_none) -- criterion))
       >> (Toplevel.no_timing oo IsarCmd.find_theorems));
+
+end;
+
+local
+
+val criterion =
+  P.reserved "strict" |-- P.!!! (P.$$$ ":" |-- P.xname) >> FindConsts.Strict ||
+  P.reserved "name" |-- P.!!! (P.$$$ ":" |-- P.xname) >> FindConsts.Name ||
+  P.xname >> FindConsts.Loose;
+
+in
+
+val _ =
+  OuterSyntax.improper_command "find_consts" "search constants by type pattern"
+    K.diag (Scan.repeat (((Scan.option P.minus >> is_none) -- criterion))
+            >> (Toplevel.no_timing oo IsarCmd.find_consts));
 
 end;
 

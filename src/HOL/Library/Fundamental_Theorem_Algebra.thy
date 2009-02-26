@@ -3,7 +3,7 @@
 header{*Fundamental Theorem of Algebra*}
 
 theory Fundamental_Theorem_Algebra
-imports Polynomial Dense_Linear_Order Complex
+imports Polynomial Complex
 begin
 
 subsection {* Square root of complex numbers *}
@@ -59,7 +59,8 @@ lemma complex_of_real_power: "complex_of_real x ^ n = complex_of_real (x^n)"
   by (rule of_real_power [symmetric])
 
 lemma real_down2: "(0::real) < d1 \<Longrightarrow> 0 < d2 ==> EX e. 0 < e & e < d1 & e < d2"
-  apply ferrack apply arith done
+  apply (rule exI[where x = "min d1 d2 / 2"])
+  by (simp add: field_simps min_def)
 
 text{* The triangle inequality for cmod *}
 lemma complex_mod_triangle_sub: "cmod w \<le> cmod (w + z) + norm z"
@@ -193,26 +194,6 @@ apply (simp add: nat_rec_0)
 apply (erule_tac x="n" in allE)
 apply (simp)
 done
-
- text{* An equivalent formulation of monotony -- Not used here, but might be useful *}
-lemma mono_Suc: "mono f = (\<forall>n. (f n :: 'a :: order) \<le> f (Suc n))"
-unfolding mono_def
-proof auto
-  fix A B :: nat
-  assume H: "\<forall>n. f n \<le> f (Suc n)" "A \<le> B"
-  hence "\<exists>k. B = A + k" apply -  apply (thin_tac "\<forall>n. f n \<le> f (Suc n)") 
-    by presburger
-  then obtain k where k: "B = A + k" by blast
-  {fix a k
-    have "f a \<le> f (a + k)"
-    proof (induct k)
-      case 0 thus ?case by simp
-    next
-      case (Suc k)
-      from Suc.hyps H(1)[rule_format, of "a + k"] show ?case by simp
-    qed}
-  with k show "f A \<le> f B" by blast
-qed
 
 text{* for any sequence, there is a mootonic subsequence *}
 lemma seq_monosub: "\<exists>f. subseq f \<and> monoseq (\<lambda> n. (s (f n)))"
@@ -964,113 +945,6 @@ proof(induct p)
       from fundamental_theorem_of_algebra[OF nc] have ?case .}
   ultimately show ?case by blast  
 qed simp
-
-subsection {* Order of polynomial roots *}
-
-definition
-  order :: "'a::{idom,recpower} \<Rightarrow> 'a poly \<Rightarrow> nat"
-where
-  [code del]:
-  "order a p = (LEAST n. \<not> [:-a, 1:] ^ Suc n dvd p)"
-
-lemma degree_power_le: "degree (p ^ n) \<le> degree p * n"
-by (induct n, simp, auto intro: order_trans degree_mult_le)
-
-lemma coeff_linear_power:
-  fixes a :: "'a::{comm_semiring_1,recpower}"
-  shows "coeff ([:a, 1:] ^ n) n = 1"
-apply (induct n, simp_all)
-apply (subst coeff_eq_0)
-apply (auto intro: le_less_trans degree_power_le)
-done
-
-lemma degree_linear_power:
-  fixes a :: "'a::{comm_semiring_1,recpower}"
-  shows "degree ([:a, 1:] ^ n) = n"
-apply (rule order_antisym)
-apply (rule ord_le_eq_trans [OF degree_power_le], simp)
-apply (rule le_degree, simp add: coeff_linear_power)
-done
-
-lemma order_1: "[:-a, 1:] ^ order a p dvd p"
-apply (cases "p = 0", simp)
-apply (cases "order a p", simp)
-apply (subgoal_tac "nat < (LEAST n. \<not> [:-a, 1:] ^ Suc n dvd p)")
-apply (drule not_less_Least, simp)
-apply (fold order_def, simp)
-done
-
-lemma order_2: "p \<noteq> 0 \<Longrightarrow> \<not> [:-a, 1:] ^ Suc (order a p) dvd p"
-unfolding order_def
-apply (rule LeastI_ex)
-apply (rule_tac x="degree p" in exI)
-apply (rule notI)
-apply (drule (1) dvd_imp_degree_le)
-apply (simp only: degree_linear_power)
-done
-
-lemma order:
-  "p \<noteq> 0 \<Longrightarrow> [:-a, 1:] ^ order a p dvd p \<and> \<not> [:-a, 1:] ^ Suc (order a p) dvd p"
-by (rule conjI [OF order_1 order_2])
-
-lemma order_degree:
-  assumes p: "p \<noteq> 0"
-  shows "order a p \<le> degree p"
-proof -
-  have "order a p = degree ([:-a, 1:] ^ order a p)"
-    by (simp only: degree_linear_power)
-  also have "\<dots> \<le> degree p"
-    using order_1 p by (rule dvd_imp_degree_le)
-  finally show ?thesis .
-qed
-
-lemma order_root: "poly p a = 0 \<longleftrightarrow> p = 0 \<or> order a p \<noteq> 0"
-apply (cases "p = 0", simp_all)
-apply (rule iffI)
-apply (rule ccontr, simp)
-apply (frule order_2 [where a=a], simp)
-apply (simp add: poly_eq_0_iff_dvd)
-apply (simp add: poly_eq_0_iff_dvd)
-apply (simp only: order_def)
-apply (drule not_less_Least, simp)
-done
-
-lemma UNIV_nat_infinite:
-  "\<not> finite (UNIV :: nat set)" (is "\<not> finite ?U")
-proof
-  assume "finite ?U"
-  moreover have "Suc (Max ?U) \<in> ?U" ..
-  ultimately have "Suc (Max ?U) \<le> Max ?U" by (rule Max_ge)
-  then show "False" by simp
-qed
-
-lemma UNIV_char_0_infinite:
-  "\<not> finite (UNIV::'a::semiring_char_0 set)"
-proof
-  assume "finite (UNIV::'a set)"
-  with subset_UNIV have "finite (range of_nat::'a set)"
-    by (rule finite_subset)
-  moreover have "inj (of_nat::nat \<Rightarrow> 'a)"
-    by (simp add: inj_on_def)
-  ultimately have "finite (UNIV::nat set)"
-    by (rule finite_imageD)
-  then show "False"
-    by (simp add: UNIV_nat_infinite)
-qed
-
-lemma poly_zero:
-  fixes p :: "'a::{idom,ring_char_0} poly"
-  shows "poly p = poly 0 \<longleftrightarrow> p = 0"
-apply (cases "p = 0", simp_all)
-apply (drule poly_roots_finite)
-apply (auto simp add: UNIV_char_0_infinite)
-done
-
-lemma poly_eq_iff:
-  fixes p q :: "'a::{idom,ring_char_0} poly"
-  shows "poly p = poly q \<longleftrightarrow> p = q"
-  using poly_zero [of "p - q"]
-  by (simp add: expand_fun_eq)
 
 
 subsection{* Nullstellenstatz, degrees and divisibility of polynomials *}

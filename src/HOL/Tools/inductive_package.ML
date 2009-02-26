@@ -691,7 +691,8 @@ fun declare_rules kind rec_binding coind no_ind cnames intrs intr_bindings intr_
       ctxt |>
       LocalTheory.notes kind
         (map rec_qualified intr_bindings ~~ intr_atts ~~ map (fn th => [([th],
-           [Attrib.internal (K (ContextRules.intro_query NONE))])]) intrs) |>>
+           [Attrib.internal (K (ContextRules.intro_query NONE)),
+            Attrib.internal (K Nitpick_Ind_Intro_Thms.add)])]) intrs) |>>
       map (hd o snd);
     val (((_, elims'), (_, [induct'])), ctxt2) =
       ctxt1 |>
@@ -737,7 +738,7 @@ fun add_ind_def {quiet_mode, verbose, kind, alt_name, coind, no_elim, no_ind, sk
     val _ = message (quiet_mode andalso not verbose)
       ("Proofs for " ^ coind_prefix coind ^ "inductive predicate(s) " ^ commas_quote names);
 
-    val cnames = map (Sign.full_name (ProofContext.theory_of ctxt) o #1) cnames_syn;  (* FIXME *)
+    val cnames = map (LocalTheory.full_name ctxt o #1) cnames_syn;  (* FIXME *)
     val ((intr_names, intr_atts), intr_ts) =
       apfst split_list (split_list (map (check_rule ctxt cs params) intros));
 

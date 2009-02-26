@@ -27,7 +27,6 @@ consts
   set :: "'a list => 'a set"
   map :: "('a=>'b) => ('a list => 'b list)"
   listsum ::  "'a list => 'a::monoid_add"
-  nth :: "'a list => nat => 'a"    (infixl "!" 100)
   list_update :: "'a list => nat => 'a => 'a list"
   take:: "nat => 'a list => 'a list"
   drop:: "nat => 'a list => 'a list"
@@ -146,8 +145,8 @@ primrec
   -- {*Warning: simpset does not contain this definition, but separate
        theorems for @{text "n = 0"} and @{text "n = Suc k"} *}
 
-primrec
-  nth_Cons:"(x#xs)!n = (case n of 0 => x | (Suc k) => xs!k)"
+primrec nth :: "'a list => nat => 'a" (infixl "!" 100) where
+  nth_Cons: "(x#xs)!n = (case n of 0 => x | (Suc k) => xs!k)"
   -- {*Warning: simpset does not contain this definition, but separate
        theorems for @{text "n = 0"} and @{text "n = Suc k"} *}
 
@@ -258,7 +257,7 @@ text{*
 \caption{Characteristic examples}
 \label{fig:Characteristic}
 \end{figure}
-Figure~\ref{fig:Characteristic} shows charachteristic examples
+Figure~\ref{fig:Characteristic} shows characteristic examples
 that should give an intuitive understanding of the above functions.
 *}
 
@@ -510,11 +509,11 @@ of those of the other list and there are fewer Cons's in one than the other.
 
 let
 
-fun len (Const("List.list.Nil",_)) acc = acc
-  | len (Const("List.list.Cons",_) $ _ $ xs) (ts,n) = len xs (ts,n+1)
-  | len (Const("List.append",_) $ xs $ ys) acc = len xs (len ys acc)
-  | len (Const("List.rev",_) $ xs) acc = len xs acc
-  | len (Const("List.map",_) $ _ $ xs) acc = len xs acc
+fun len (Const(@{const_name Nil},_)) acc = acc
+  | len (Const(@{const_name Cons},_) $ _ $ xs) (ts,n) = len xs (ts,n+1)
+  | len (Const(@{const_name append},_) $ xs $ ys) acc = len xs (len ys acc)
+  | len (Const(@{const_name rev},_) $ xs) acc = len xs acc
+  | len (Const(@{const_name map},_) $ _ $ xs) acc = len xs acc
   | len t (ts,n) = (t::ts,n);
 
 fun list_neq _ ss ct =
@@ -546,11 +545,6 @@ by (induct xs) auto
 
 lemma append_Nil2 [simp]: "xs @ [] = xs"
 by (induct xs) auto
-
-interpretation semigroup_append!: semigroup_add "op @"
-  proof qed simp
-interpretation monoid_append!: monoid_add "[]" "op @"
-  proof qed simp+
 
 lemma append_is_Nil_conv [iff]: "(xs @ ys = []) = (xs = [] \<and> ys = [])"
 by (induct xs) auto
@@ -645,18 +639,18 @@ Currently only tries to rearrange @{text "@"} to see if
 ML {*
 local
 
-fun last (cons as Const("List.list.Cons",_) $ _ $ xs) =
-  (case xs of Const("List.list.Nil",_) => cons | _ => last xs)
-  | last (Const("List.append",_) $ _ $ ys) = last ys
+fun last (cons as Const(@{const_name Cons},_) $ _ $ xs) =
+  (case xs of Const(@{const_name Nil},_) => cons | _ => last xs)
+  | last (Const(@{const_name append},_) $ _ $ ys) = last ys
   | last t = t;
 
-fun list1 (Const("List.list.Cons",_) $ _ $ Const("List.list.Nil",_)) = true
+fun list1 (Const(@{const_name Cons},_) $ _ $ Const(@{const_name Nil},_)) = true
   | list1 _ = false;
 
-fun butlast ((cons as Const("List.list.Cons",_) $ x) $ xs) =
-  (case xs of Const("List.list.Nil",_) => xs | _ => cons $ butlast xs)
-  | butlast ((app as Const("List.append",_) $ xs) $ ys) = app $ butlast ys
-  | butlast xs = Const("List.list.Nil",fastype_of xs);
+fun butlast ((cons as Const(@{const_name Cons},_) $ x) $ xs) =
+  (case xs of Const(@{const_name Nil},_) => xs | _ => cons $ butlast xs)
+  | butlast ((app as Const(@{const_name append},_) $ xs) $ ys) = app $ butlast ys
+  | butlast xs = Const(@{const_name Nil},fastype_of xs);
 
 val rearr_ss = HOL_basic_ss addsimps [@{thm append_assoc},
   @{thm append_Nil}, @{thm append_Cons}];
@@ -669,7 +663,7 @@ fun list_eq ss (F as (eq as Const(_,eqT)) $ lhs $ rhs) =
         val lhs1 = butlast lhs and rhs1 = butlast rhs;
         val Type(_,listT::_) = eqT
         val appT = [listT,listT] ---> listT
-        val app = Const("List.append",appT)
+        val app = Const(@{const_name append},appT)
         val F2 = eq $ (app$lhs1$lastl) $ (app$rhs1$lastr)
         val eq = HOLogic.mk_Trueprop (HOLogic.mk_eq (F,F2));
         val thm = Goal.prove (Simplifier.the_context ss) [] [] eq
@@ -1221,10 +1215,10 @@ by (induct xs) auto
 
 subsubsection {* @{text nth} *}
 
-lemma nth_Cons_0 [simp]: "(x # xs)!0 = x"
+lemma nth_Cons_0 [simp, code]: "(x # xs)!0 = x"
 by auto
 
-lemma nth_Cons_Suc [simp]: "(x # xs)!(Suc n) = xs!n"
+lemma nth_Cons_Suc [simp, code]: "(x # xs)!(Suc n) = xs!n"
 by auto
 
 declare nth.simps [simp del]
@@ -1381,6 +1375,12 @@ apply (case_tac i')
 apply auto
 done
 
+lemma list_update_code [code]:
+  "[][i := y] = []"
+  "(x # xs)[0 := y] = y # xs"
+  "(x # xs)[Suc i := y] = x # xs[i := y]"
+  by simp_all
+
 
 subsubsection {* @{text last} and @{text butlast} *}
 
@@ -1438,10 +1438,10 @@ apply (induct xs arbitrary: n)
 apply (auto split:nat.split)
 done
 
-lemma last_conv_nth: "xs\<noteq>[] \<Longrightarrow> last xs = xs!(length xs - 1)"
+lemma last_conv_nth: "xs\<noteq>[] \<Longrightarrow> last xs = xs!(length xs - Suc 0)"
 by(induct xs)(auto simp:neq_Nil_conv)
 
-lemma butlast_conv_take: "butlast xs = take (length xs - 1) xs"
+lemma butlast_conv_take: "butlast xs = take (length xs - Suc 0) xs"
 by (induct xs, simp, case_tac xs, simp_all)
 
 
@@ -1588,7 +1588,7 @@ apply (case_tac xs, auto)
 done
 
 lemma butlast_take:
-  "n <= length xs ==> butlast (take n xs) = take (n - 1) xs"
+  "n <= length xs ==> butlast (take n xs) = take (n - Suc 0) xs"
 by (simp add: butlast_conv_take min_max.inf_absorb1 min_max.inf_absorb2)
 
 lemma butlast_drop: "butlast (drop n xs) = drop n (butlast xs)"
@@ -1639,7 +1639,7 @@ apply simp_all
 done
 
 lemma take_hd_drop:
-  "n < length xs \<Longrightarrow> take n xs @ [hd (drop n xs)] = take (n+1) xs"
+  "n < length xs \<Longrightarrow> take n xs @ [hd (drop n xs)] = take (Suc n) xs"
 apply(induct xs arbitrary: n)
 apply simp
 apply(simp add:drop_Cons split:nat.split)
@@ -1851,6 +1851,15 @@ by (induct xs ys rule:list_induct2') auto
 lemma in_set_zipE:
   "(x,y) : set(zip xs ys) \<Longrightarrow> (\<lbrakk> x : set xs; y : set ys \<rbrakk> \<Longrightarrow> R) \<Longrightarrow> R"
 by(blast dest: set_zip_leftD set_zip_rightD)
+
+lemma zip_map_fst_snd:
+  "zip (map fst zs) (map snd zs) = zs"
+  by (induct zs) simp_all
+
+lemma zip_eq_conv:
+  "length xs = length ys \<Longrightarrow> zip xs ys = zs \<longleftrightarrow> map fst zs = xs \<and> map snd zs = ys"
+  by (auto simp add: zip_map_fst_snd)
+
 
 subsubsection {* @{text list_all2} *}
 
@@ -2082,12 +2091,18 @@ lemma foldl_invariant:
 
 text{* @{const foldl} and @{text concat} *}
 
-lemma concat_conv_foldl: "concat xss = foldl op@ [] xss"
-by (induct xss) (simp_all add:monoid_append.foldl_absorb0)
-
 lemma foldl_conv_concat:
-  "foldl (op @) xs xxs = xs @ (concat xxs)"
-by(simp add:concat_conv_foldl monoid_append.foldl_absorb0)
+  "foldl (op @) xs xss = xs @ concat xss"
+proof (induct xss arbitrary: xs)
+  case Nil show ?case by simp
+next
+  interpret monoid_add "[]" "op @" proof qed simp_all
+  case Cons then show ?case by (simp add: foldl_absorb0)
+qed
+
+lemma concat_conv_foldl: "concat xss = foldl (op @) [] xss"
+  by (simp add: foldl_conv_concat)
+
 
 subsubsection {* List summation: @{const listsum} and @{text"\<Sum>"}*}
 
@@ -2443,7 +2458,7 @@ apply blast
 done
 
 lemma length_remove1:
-  "length(remove1 x xs) = (if x : set xs then length xs - 1 else length xs)"
+  "length(remove1 x xs) = (if x : set xs then length xs - Suc 0 else length xs)"
 apply (induct xs)
  apply (auto dest!:length_pos_if_in_set)
 done
@@ -3549,52 +3564,51 @@ local
 
 open Basic_Code_Thingol;
 
-fun implode_list (nil', cons') t =
-  let
-    fun dest_cons (IConst (c, _) `$ t1 `$ t2) =
-          if c = cons'
-          then SOME (t1, t2)
-          else NONE
-      | dest_cons _ = NONE;
-    val (ts, t') = Code_Thingol.unfoldr dest_cons t;
-  in case t'
-   of IConst (c, _) => if c = nil' then SOME ts else NONE
+fun implode_list naming t = case pairself
+  (Code_Thingol.lookup_const naming) (@{const_name Nil}, @{const_name Cons})
+   of (SOME nil', SOME cons') => let
+          fun dest_cons (IConst (c, _) `$ t1 `$ t2) =
+                if c = cons'
+                then SOME (t1, t2)
+                else NONE
+            | dest_cons _ = NONE;
+          val (ts, t') = Code_Thingol.unfoldr dest_cons t;
+        in case t'
+         of IConst (c, _) => if c = nil' then SOME ts else NONE
+          | _ => NONE
+        end
     | _ => NONE
-  end;
 
-fun decode_char nibbles' (IConst (c1, _), IConst (c2, _)) =
-      let
-        fun idx c = find_index (curry (op =) c) nibbles';
-        fun decode ~1 _ = NONE
-          | decode _ ~1 = NONE
-          | decode n m = SOME (chr (n * 16 + m));
-      in decode (idx c1) (idx c2) end
-  | decode_char _ _ = NONE;
-
-fun implode_string (char', nibbles') mk_char mk_string ts =
-  let
-    fun implode_char (IConst (c, _) `$ t1 `$ t2) =
-          if c = char' then decode_char nibbles' (t1, t2) else NONE
-      | implode_char _ = NONE;
-    val ts' = map implode_char ts;
-  in if forall is_some ts'
-    then (SOME o Code_Printer.str o mk_string o implode o map_filter I) ts'
-    else NONE
-  end;
-
-fun list_names naming = pairself (the o Code_Thingol.lookup_const naming)
-  (@{const_name Nil}, @{const_name Cons});
-fun char_name naming = (the o Code_Thingol.lookup_const naming)
-  @{const_name Char}
-fun nibble_names naming = map (the o Code_Thingol.lookup_const naming)
-  [@{const_name Nibble0}, @{const_name Nibble1},
+fun decode_char naming (IConst (c1, _), IConst (c2, _)) = (case map_filter
+  (Code_Thingol.lookup_const naming)[@{const_name Nibble0}, @{const_name Nibble1},
    @{const_name Nibble2}, @{const_name Nibble3},
    @{const_name Nibble4}, @{const_name Nibble5},
    @{const_name Nibble6}, @{const_name Nibble7},
    @{const_name Nibble8}, @{const_name Nibble9},
    @{const_name NibbleA}, @{const_name NibbleB},
    @{const_name NibbleC}, @{const_name NibbleD},
-   @{const_name NibbleE}, @{const_name NibbleF}];
+   @{const_name NibbleE}, @{const_name NibbleF}]
+   of nibbles' as [_, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _] => let
+          fun idx c = find_index (curry (op =) c) nibbles';
+          fun decode ~1 _ = NONE
+            | decode _ ~1 = NONE
+            | decode n m = SOME (chr (n * 16 + m));
+        in decode (idx c1) (idx c2) end
+    | _ => NONE)
+ | decode_char _ _ = NONE
+   
+fun implode_string naming mk_char mk_string ts = case
+  Code_Thingol.lookup_const naming @{const_name Char}
+   of SOME char' => let
+        fun implode_char (IConst (c, _) `$ t1 `$ t2) =
+              if c = char' then decode_char naming (t1, t2) else NONE
+          | implode_char _ = NONE;
+        val ts' = map implode_char ts;
+      in if forall is_some ts'
+        then (SOME o Code_Printer.str o mk_string o implode o map_filter I) ts'
+        else NONE
+      end
+    | _ => NONE;
 
 fun default_list (target_fxy, target_cons) pr fxy t1 t2 =
   Code_Printer.brackify_infix (target_fxy, Code_Printer.R) fxy [
@@ -3607,7 +3621,7 @@ fun pretty_list literals =
   let
     val mk_list = Code_Printer.literal_list literals;
     fun pretty pr naming thm vars fxy [(t1, _), (t2, _)] =
-      case Option.map (cons t1) (implode_list (list_names naming) t2)
+      case Option.map (cons t1) (implode_list naming t2)
        of SOME ts => mk_list (map (pr vars Code_Printer.NOBR) ts)
         | NONE => default_list (Code_Printer.infix_cons literals) (pr vars) fxy t1 t2;
   in (2, pretty) end;
@@ -3618,8 +3632,8 @@ fun pretty_list_string literals =
     val mk_char = Code_Printer.literal_char literals;
     val mk_string = Code_Printer.literal_string literals;
     fun pretty pr naming thm vars fxy [(t1, _), (t2, _)] =
-      case Option.map (cons t1) (implode_list (list_names naming) t2)
-       of SOME ts => (case implode_string (char_name naming, nibble_names naming) mk_char mk_string ts
+      case Option.map (cons t1) (implode_list naming t2)
+       of SOME ts => (case implode_string naming mk_char mk_string ts
            of SOME p => p
             | NONE => mk_list (map (pr vars Code_Printer.NOBR) ts))
         | NONE => default_list (Code_Printer.infix_cons literals) (pr vars) fxy t1 t2;
@@ -3629,7 +3643,7 @@ fun pretty_char literals =
   let
     val mk_char = Code_Printer.literal_char literals;
     fun pretty _ naming thm _ _ [(t1, _), (t2, _)] =
-      case decode_char (nibble_names naming) (t1, t2)
+      case decode_char naming (t1, t2)
        of SOME c => (Code_Printer.str o mk_char) c
         | NONE => Code_Printer.nerror thm "Illegal character expression";
   in (2, pretty) end;
@@ -3639,8 +3653,8 @@ fun pretty_message literals =
     val mk_char = Code_Printer.literal_char literals;
     val mk_string = Code_Printer.literal_string literals;
     fun pretty _ naming thm _ _ [(t, _)] =
-      case implode_list (list_names naming) t
-       of SOME ts => (case implode_string (char_name naming, nibble_names naming) mk_char mk_string ts
+      case implode_list naming t
+       of SOME ts => (case implode_string naming mk_char mk_string ts
            of SOME p => p
             | NONE => Code_Printer.nerror thm "Illegal message expression")
         | NONE => Code_Printer.nerror thm "Illegal message expression";

@@ -134,7 +134,7 @@ lemma partition_le: "partition(a,b) D ==> a \<le> b"
 apply (frule partition [THEN iffD1], safe)
 apply (drule_tac x = "psize D" and P="%n. psize D \<le> n --> ?P n" in spec, safe)
 apply (case_tac "psize D = 0")
-apply (drule_tac [2] n = "psize D - 1" in partition_lt, auto)
+apply (drule_tac [2] n = "psize D - Suc 0" in partition_lt, auto)
 done
 
 lemma partition_gt: "[|partition(a,b) D; n < (psize D)|] ==> D(n) < D(psize D)"
@@ -145,7 +145,7 @@ apply (frule partition [THEN iffD1], safe)
 apply (rotate_tac 2)
 apply (drule_tac x = "psize D" in spec)
 apply (rule ccontr)
-apply (drule_tac n = "psize D - 1" in partition_lt)
+apply (drule_tac n = "psize D - Suc 0" in partition_lt)
 apply auto
 done
 
@@ -557,8 +557,8 @@ apply (auto dest: partition_gt)
 apply (drule_tac n = m in partition_lt_gen, auto)
 apply (frule partition_eq_bound)
 apply (drule_tac [2] partition_gt, auto)
-apply (metis dense_linear_order_class.dlo_simps(8) not_less partition_rhs partition_rhs2)
-apply (metis le_less_trans dense_linear_order_class.dlo_simps(8) nat_le_linear partition_eq_bound partition_rhs2)
+apply (metis linear not_less partition_rhs partition_rhs2)
+apply (metis lemma_additivity1 order_less_trans partition_eq_bound partition_lb partition_rhs)
 done
 
 lemma lemma_additivity4_psize_eq:

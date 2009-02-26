@@ -1,10 +1,10 @@
-(*  Title:      HOL/ex/MIR.thy
+(*  Title:      HOL/Reflection/MIR.thy
     Author:     Amine Chaieb
 *)
 
 theory MIR
-imports Main RComplete Code_Integer Efficient_Nat
-uses ("mirtac.ML")
+imports Complex_Main Dense_Linear_Order Efficient_Nat
+uses ("mir_tac.ML")
 begin
 
 section {* Quantifier elimination for @{text "\<real> (0, 1, +, floor, <)"} *}
@@ -83,7 +83,7 @@ proof( auto)
   have "real (floor x) \<le> x" by simp 
   hence "real (floor x) < real (n + 1) " using ub by arith
   hence "floor x < n+1" by simp
-  moreover from lb have "n \<le> floor x" using floor_mono2[where x="real n" and y="x"] 
+  moreover from lb have "n \<le> floor x" using floor_mono[where x="real n" and y="x"] 
     by simp ultimately show "floor x = n" by simp
 qed
 
@@ -132,13 +132,13 @@ proof
   assume d: "real d rdvd t"
   from d int_rdvd_real have d2: "d dvd (floor t)" and ti: "real (floor t) = t" by auto
 
-  from iffD2[OF zdvd_abs1] d2 have "(abs d) dvd (floor t)" by blast
+  from iffD2[OF abs_dvd_iff] d2 have "(abs d) dvd (floor t)" by blast
   with ti int_rdvd_real[symmetric] have "real (abs d) rdvd t" by blast 
   thus "abs (real d) rdvd t" by simp
 next
   assume "abs (real d) rdvd t" hence "real (abs d) rdvd t" by simp
   with int_rdvd_real[where i="abs d" and x="t"] have d2: "abs d dvd floor t" and ti: "real (floor t) =t" by auto
-  from iffD1[OF zdvd_abs1] d2 have "d dvd floor t" by blast
+  from iffD1[OF abs_dvd_iff] d2 have "d dvd floor t" by blast
   with ti int_rdvd_real[symmetric] show "real d rdvd t" by blast
 qed
 
@@ -675,9 +675,9 @@ lemma dvdnumcoeff_trans:
   assumes gdg: "g dvd g'" and dgt':"dvdnumcoeff t g'"
   shows "dvdnumcoeff t g"
   using dgt' gdg 
-  by (induct t rule: dvdnumcoeff.induct, simp_all add: gdg zdvd_trans[OF gdg])
+  by (induct t rule: dvdnumcoeff.induct, simp_all add: gdg dvd_trans[OF gdg])
 
-declare zdvd_trans [trans add]
+declare dvd_trans [trans add]
 
 lemma natabs0: "(nat (abs x) = 0) = (x = 0)"
 by arith
@@ -1488,7 +1488,7 @@ lemma list_conj_qf: " \<forall>p\<in> set ps. qfree p \<Longrightarrow> qfree (l
 lemma list_conj_nb: " \<forall>p\<in> set ps. bound0 p \<Longrightarrow> bound0 (list_conj ps)"
   by (induct ps, auto simp add: list_conj_def)
 constdefs CJNB:: "(fm \<Rightarrow> fm) \<Rightarrow> fm \<Rightarrow> fm"
-  "CJNB f p \<equiv> (let cjs = conjuncts p ; (yes,no) = partition bound0 cjs
+  "CJNB f p \<equiv> (let cjs = conjuncts p ; (yes,no) = List.partition bound0 cjs
                    in conj (decr (list_conj yes)) (f (list_conj no)))"
 
 lemma CJNB_qe: 
@@ -1498,11 +1498,11 @@ proof(clarify)
   fix bs p
   assume qfp: "qfree p"
   let ?cjs = "conjuncts p"
-  let ?yes = "fst (partition bound0 ?cjs)"
-  let ?no = "snd (partition bound0 ?cjs)"
+  let ?yes = "fst (List.partition bound0 ?cjs)"
+  let ?no = "snd (List.partition bound0 ?cjs)"
   let ?cno = "list_conj ?no"
   let ?cyes = "list_conj ?yes"
-  have part: "partition bound0 ?cjs = (?yes,?no)" by simp
+  have part: "List.partition bound0 ?cjs = (?yes,?no)" by simp
   from partition_P[OF part] have "\<forall> q\<in> set ?yes. bound0 q" by blast 
   hence yes_nb: "bound0 ?cyes" by (simp add: list_conj_nb) 
   hence yes_qf: "qfree (decr ?cyes )" by (simp add: decr_qf)
@@ -1775,11 +1775,11 @@ lemma split_int_le_real:
   "(real (a::int) \<le> b) = (a \<le> floor b \<or> (a = floor b \<and> real (floor b) < b))"
 proof( auto)
   assume alb: "real a \<le> b" and agb: "\<not> a \<le> floor b"
-  from alb have "floor (real a) \<le> floor b " by (simp only: floor_mono2) 
+  from alb have "floor (real a) \<le> floor b " by (simp only: floor_mono) 
   hence "a \<le> floor b" by simp with agb show "False" by simp
 next
   assume alb: "a \<le> floor b"
-  hence "real a \<le> real (floor b)" by (simp only: floor_mono2)
+  hence "real a \<le> real (floor b)" by (simp only: floor_mono)
   also have "\<dots>\<le> b" by simp  finally show  "real a \<le> b" . 
 qed
 
@@ -2114,10 +2114,10 @@ lemma delta_mono:
   using lin ad d
 proof(induct p rule: iszlfm.induct)
   case (9 i c e)  thus ?case using d
-    by (simp add: zdvd_trans[where m="i" and n="d" and k="d'"])
+    by (simp add: dvd_trans[of "i" "d" "d'"])
 next
   case (10 i c e) thus ?case using d
-    by (simp add: zdvd_trans[where m="i" and n="d" and k="d'"])
+    by (simp add: dvd_trans[of "i" "d" "d'"])
 qed simp_all
 
 lemma \<delta> : assumes lin:"iszlfm p bs"
@@ -2496,7 +2496,7 @@ lemma d\<beta>_mono:
   and dr: "d\<beta> p l"
   and d: "l dvd l'"
   shows "d\<beta> p l'"
-using dr linp zdvd_trans[where n="l" and k="l'", simplified d]
+using dr linp dvd_trans[of _ "l" "l'", simplified d]
 by (induct p rule: iszlfm.induct) simp_all
 
 lemma \<alpha>_l: assumes lp: "iszlfm p (a#bs)"
@@ -2535,7 +2535,7 @@ proof (induct p rule: iszlfm.induct)
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(real l * real x + real (l div c) * Inum (real x # bs) e < (0\<Colon>real)) =
@@ -2553,7 +2553,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(real l * real x + real (l div c) * Inum (real x # bs) e \<le> (0\<Colon>real)) =
@@ -2571,7 +2571,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(real l * real x + real (l div c) * Inum (real x # bs) e > (0\<Colon>real)) =
@@ -2589,7 +2589,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(real l * real x + real (l div c) * Inum (real x # bs) e \<ge> (0\<Colon>real)) =
@@ -2607,7 +2607,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(real l * real x + real (l div c) * Inum (real x # bs) e = (0\<Colon>real)) =
@@ -2625,7 +2625,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(real l * real x + real (l div c) * Inum (real x # bs) e \<noteq> (0\<Colon>real)) =
@@ -2643,7 +2643,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(\<exists> (k::int). real l * real x + real (l div c) * Inum (real x # bs) e = (real (l div c) * real j) * real k) = (\<exists> (k::int). real (c * (l div c)) * real x + real (l div c) * Inum (real x # bs) e = (real (l div c) * real j) * real k)"  by simp
@@ -2660,7 +2660,7 @@ next
       by (simp add: zdiv_mono1[OF clel cp])
     then have ldcp:"0 < l div c" 
       by (simp add: zdiv_self[OF cnz])
-    have "c * (l div c) = c* (l div c) + l mod c" using d' zdvd_iff_zmod_eq_0[where m="c" and n="l"] by simp
+    have "c * (l div c) = c* (l div c) + l mod c" using d' dvd_eq_mod_eq_0[of "c" "l"] by simp
     hence cl:"c * (l div c) =l" using zmod_zdiv_equality[where a="l" and b="c", symmetric] 
       by simp
     hence "(\<exists> (k::int). real l * real x + real (l div c) * Inum (real x # bs) e = (real (l div c) * real j) * real k) = (\<exists> (k::int). real (c * (l div c)) * real x + real (l div c) * Inum (real x # bs) e = (real (l div c) * real j) * real k)"  by simp
@@ -3697,7 +3697,7 @@ lemma real_in_int_intervals:
   assumes xb: "real m \<le> x \<and> x < real ((n::int) + 1)"
   shows "\<exists> j\<in> {m.. n}. real j \<le> x \<and> x < real (j+1)" (is "\<exists> j\<in> ?N. ?P j")
 by (rule bexI[where P="?P" and x="floor x" and A="?N"]) 
-(auto simp add: floor_less_eq[where x="x" and a="n+1", simplified] xb[simplified] floor_mono2[where x="real m" and y="x", OF conjunct1[OF xb], simplified floor_real_of_int[where n="m"]])
+(auto simp add: floor_less_eq[where x="x" and a="n+1", simplified] xb[simplified] floor_mono[where x="real m" and y="x", OF conjunct1[OF xb], simplified floor_real_of_int[where n="m"]])
 
 lemma rsplit0_complete:
   assumes xp:"0 \<le> x" and x1:"x < 1"
@@ -5907,8 +5907,8 @@ in
 end;
 *}
 
-use "mirtac.ML"
-setup "MirTac.setup"
+use "mir_tac.ML"
+setup "Mir_Tac.setup"
 
 lemma "ALL (x::real). (\<lfloor>x\<rfloor> = \<lceil>x\<rceil> = (x = real \<lfloor>x\<rfloor>))"
 apply mir

@@ -147,6 +147,9 @@ qed
 
 end
 
+class cancel_comm_monoid_add = cancel_ab_semigroup_add + comm_monoid_add
+
+
 subsection {* Groups *}
 
 class group_add = minus + uminus + monoid_add +
@@ -251,6 +254,16 @@ by (simp add: diff_minus add_assoc)
 
 declare diff_minus[symmetric, algebra_simps]
 
+lemma eq_neg_iff_add_eq_0: "a = - b \<longleftrightarrow> a + b = 0"
+proof
+  assume "a = - b" then show "a + b = 0" by simp
+next
+  assume "a + b = 0"
+  moreover have "a + (b + - b) = (a + b) + - b"
+    by (simp only: add_assoc)
+  ultimately show "a = - b" by simp
+qed
+
 end
 
 class ab_group_add = minus + uminus + comm_monoid_add +
@@ -261,7 +274,7 @@ begin
 subclass group_add
   proof qed (simp_all add: ab_left_minus ab_diff_minus)
 
-subclass cancel_ab_semigroup_add
+subclass cancel_comm_monoid_add
 proof
   fix a b c :: 'a
   assume "a + b = a + c"
@@ -478,6 +491,26 @@ proof -
   then show ?thesis by simp
 qed
 
+lemma add_nonneg_eq_0_iff:
+  assumes x: "0 \<le> x" and y: "0 \<le> y"
+  shows "x + y = 0 \<longleftrightarrow> x = 0 \<and> y = 0"
+proof (intro iffI conjI)
+  have "x = x + 0" by simp
+  also have "x + 0 \<le> x + y" using y by (rule add_left_mono)
+  also assume "x + y = 0"
+  also have "0 \<le> x" using x .
+  finally show "x = 0" .
+next
+  have "y = 0 + y" by simp
+  also have "0 + y \<le> x + y" using x by (rule add_right_mono)
+  also assume "x + y = 0"
+  also have "0 \<le> y" using y .
+  finally show "y = 0" .
+next
+  assume "x = 0 \<and> y = 0"
+  then show "x + y = 0" by simp
+qed
+
 end
 
 class pordered_ab_group_add =
@@ -598,12 +631,12 @@ lemma le_iff_diff_le_0: "a \<le> b \<longleftrightarrow> a - b \<le> 0"
 by (simp add: algebra_simps)
 
 text{*Legacy - use @{text algebra_simps} *}
-lemmas group_simps = algebra_simps
+lemmas group_simps[noatp] = algebra_simps
 
 end
 
 text{*Legacy - use @{text algebra_simps} *}
-lemmas group_simps = algebra_simps
+lemmas group_simps[noatp] = algebra_simps
 
 class ordered_ab_semigroup_add =
   linorder + pordered_ab_semigroup_add
@@ -1310,9 +1343,9 @@ by (auto intro: add_strict_right_mono add_strict_left_mono
   add_less_le_mono add_le_less_mono add_strict_mono)
 
 text{*Simplification of @{term "x-y < 0"}, etc.*}
-lemmas diff_less_0_iff_less [simp] = less_iff_diff_less_0 [symmetric]
+lemmas diff_less_0_iff_less [simp, noatp] = less_iff_diff_less_0 [symmetric]
 lemmas diff_eq_0_iff_eq [simp, noatp] = eq_iff_diff_eq_0 [symmetric]
-lemmas diff_le_0_iff_le [simp] = le_iff_diff_le_0 [symmetric]
+lemmas diff_le_0_iff_le [simp, noatp] = le_iff_diff_le_0 [symmetric]
 
 ML {*
 structure ab_group_add_cancel = Abel_Cancel

@@ -3,8 +3,6 @@
 Miscellaneous examples for Higher-Order Logic.
 *)
 
-set Toplevel.timing;
-
 no_document use_thys [
   "State_Monad",
   "Efficient_Nat_examples",
@@ -12,13 +10,12 @@ no_document use_thys [
   "FuncSet",
   "Word",
   "Eval_Examples",
-  "Quickcheck",
+  "Quickcheck_Generators",
   "Term_Of_Syntax",
   "Codegenerator",
   "Codegenerator_Pretty",
   "NormalForm",
-  "../NumberTheory/Factorization",
-  "../Library/BigO"
+  "../NumberTheory/Factorization"
 ];
 
 use_thys [
@@ -64,16 +61,12 @@ use_thys [
   "Coherent",
   "Dense_Linear_Order_Ex",
   "PresburgerEx",
-  "Reflected_Presburger",
   "ReflectionEx",
   "BinEx",
   "Sqrt",
   "Sqrt_Script",
-  "BigO_Complex",
   "Arithmetic_Series_Complex",
   "HarmonicSeries",
-  "MIR",
-  "ReflectedFerrack",
   "Refute_Examples",
   "Quickcheck_Examples",
   "Formal_Power_Series_Examples"

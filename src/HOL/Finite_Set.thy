@@ -93,6 +93,20 @@ proof -
   qed
 qed
 
+text{* A finite choice principle. Does not need the SOME choice operator. *}
+lemma finite_set_choice:
+  "finite A \<Longrightarrow> ALL x:A. (EX y. P x y) \<Longrightarrow> EX f. ALL x:A. P x (f x)"
+proof (induct set: finite)
+  case empty thus ?case by simp
+next
+  case (insert a A)
+  then obtain f b where f: "ALL x:A. P x (f x)" and ab: "P a b" by auto
+  show ?case (is "EX f. ?P f")
+  proof
+    show "?P(%x. if x = a then b else f x)" using f ab by auto
+  qed
+qed
+
 
 text{* Finite sets are the images of initial segments of natural numbers: *}
 
@@ -140,12 +154,14 @@ lemma finite_conv_nat_seg_image:
   "finite A = (\<exists> (n::nat) f. A = f ` {i::nat. i<n})"
 by(blast intro: nat_seg_image_imp_finite dest: finite_imp_nat_seg_image_inj_on)
 
+lemma finite_Collect_less_nat[iff]: "finite{n::nat. n<k}"
+by(fastsimp simp: finite_conv_nat_seg_image)
+
 
 subsubsection{* Finiteness and set theoretic constructions *}
 
 lemma finite_UnI: "finite F ==> finite G ==> finite (F Un G)"
-  -- {* The union of two finite sets is finite. *}
-  by (induct set: finite) simp_all
+by (induct set: finite) simp_all
 
 lemma finite_subset: "A \<subseteq> B ==> finite B ==> finite A"
   -- {* Every subset of a finite set is finite. *}
@@ -174,15 +190,24 @@ proof -
   qed
 qed
 
-lemma finite_Collect_subset[simp]: "finite A \<Longrightarrow> finite{x \<in> A. P x}"
-using finite_subset[of "{x \<in> A. P x}" "A"] by blast
-
 lemma finite_Un [iff]: "finite (F Un G) = (finite F & finite G)"
-  by (blast intro: finite_subset [of _ "X Un Y", standard] finite_UnI)
+by (blast intro: finite_subset [of _ "X Un Y", standard] finite_UnI)
+
+lemma finite_Collect_disjI[simp]:
+  "finite{x. P x | Q x} = (finite{x. P x} & finite{x. Q x})"
+by(simp add:Collect_disj_eq)
 
 lemma finite_Int [simp, intro]: "finite F | finite G ==> finite (F Int G)"
   -- {* The converse obviously fails. *}
-  by (blast intro: finite_subset)
+by (blast intro: finite_subset)
+
+lemma finite_Collect_conjI [simp, intro]:
+  "finite{x. P x} | finite{x. Q x} ==> finite{x. P x & Q x}"
+  -- {* The converse obviously fails. *}
+by(simp add:Collect_conj_eq)
+
+lemma finite_Collect_le_nat[iff]: "finite{n::nat. n<=k}"
+by(simp add: le_eq_less_or_eq)
 
 lemma finite_insert [simp]: "finite (insert a A) = finite A"
   apply (subst insert_is_Un)
@@ -227,8 +252,24 @@ proof -
   then show ?thesis by simp
 qed
 
-lemma finite_Diff [simp]: "finite B ==> finite (B - Ba)"
-  by (rule Diff_subset [THEN finite_subset])
+lemma finite_Diff [simp]: "finite A ==> finite (A - B)"
+by (rule Diff_subset [THEN finite_subset])
+
+lemma finite_Diff2 [simp]:
+  assumes "finite B" shows "finite (A - B) = finite A"
+proof -
+  have "finite A \<longleftrightarrow> finite((A-B) Un (A Int B))" by(simp add: Un_Diff_Int)
+  also have "\<dots> \<longleftrightarrow> finite(A-B)" using `finite B` by(simp)
+  finally show ?thesis ..
+qed
+
+lemma finite_compl[simp]:
+  "finite(A::'a set) \<Longrightarrow> finite(-A) = finite(UNIV::'a set)"
+by(simp add:Compl_eq_Diff_UNIV)
+
+lemma finite_Collect_not[simp]:
+  "finite{x::'a. P x} \<Longrightarrow> finite{x. ~P x} = finite(UNIV::'a set)"
+by(simp add:Collect_neg_eq)
 
 lemma finite_Diff_insert [iff]: "finite (A - insert a B) = finite (A - B)"
   apply (subst Diff_insert)
@@ -236,9 +277,6 @@ lemma finite_Diff_insert [iff]: "finite (A - insert a B) = finite (A - B)"
    apply (rule finite_insert [symmetric, THEN trans])
    apply (subst insert_Diff, simp_all)
   done
-
-lemma finite_Diff_singleton [simp]: "finite (A - {a}) = finite A"
-  by simp
 
 
 text {* Image and Inverse Image over Finite Sets *}
@@ -307,8 +345,21 @@ text {*
   @{prop "finite C ==> ALL A B. (UNION A B) <= C --> finite {x. x:A & B x \<noteq> {}}"}
   by induction. *}
 
-lemma finite_UN [simp]: "finite A ==> finite (UNION A B) = (ALL x:A. finite (B x))"
-  by (blast intro: finite_UN_I finite_subset)
+lemma finite_UN [simp]:
+  "finite A ==> finite (UNION A B) = (ALL x:A. finite (B x))"
+by (blast intro: finite_UN_I finite_subset)
+
+lemma finite_Collect_bex[simp]: "finite A \<Longrightarrow>
+  finite{x. EX y:A. Q x y} = (ALL y:A. finite{x. Q x y})"
+apply(subgoal_tac "{x. EX y:A. Q x y} = UNION A (%y. {x. Q x y})")
+ apply auto
+done
+
+lemma finite_Collect_bounded_ex[simp]: "finite{y. P y} \<Longrightarrow>
+  finite{x. EX y. P y & Q x y} = (ALL y. P y \<longrightarrow> finite{x. Q x y})"
+apply(subgoal_tac "{x. EX y. P y & Q x y} = UNION {y. P y} (%y. {x. Q x y})")
+ apply auto
+done
 
 
 lemma finite_Plus: "[| finite A; finite B |] ==> finite (A <+> B)"
@@ -375,6 +426,9 @@ next
     by induct (simp_all add: finite_UnI finite_imageI Pow_insert)
 qed
 
+lemma finite_Collect_subsets[simp,intro]: "finite A \<Longrightarrow> finite{B. B \<subseteq> A}"
+by(simp add: Pow_def[symmetric])
+
 
 lemma finite_UnionD: "finite(\<Union>A) \<Longrightarrow> finite A"
 by(blast intro: finite_subset[OF subset_Pow_Union])
@@ -383,7 +437,7 @@ by(blast intro: finite_subset[OF subset_Pow_Union])
 subsection {* Class @{text finite}  *}
 
 setup {* Sign.add_path "finite" *} -- {*FIXME: name tweaking*}
-class finite = itself +
+class finite =
   assumes finite_UNIV: "finite (UNIV \<Colon> 'a set)"
 setup {* Sign.parent_path *}
 hide const finite
@@ -1655,6 +1709,42 @@ apply (rule setprod_cong, rule refl)
 apply (subst divide_inverse, auto)
 done
 
+lemma setprod_dvd_setprod [rule_format]: 
+    "(ALL x : A. f x dvd g x) \<longrightarrow> setprod f A dvd setprod g A"
+  apply (cases "finite A")
+  apply (induct set: finite)
+  apply (auto simp add: dvd_def)
+  apply (rule_tac x = "k * ka" in exI)
+  apply (simp add: algebra_simps)
+done
+
+lemma setprod_dvd_setprod_subset:
+  "finite B \<Longrightarrow> A <= B \<Longrightarrow> setprod f A dvd setprod f B"
+  apply (subgoal_tac "setprod f B = setprod f A * setprod f (B - A)")
+  apply (unfold dvd_def, blast)
+  apply (subst setprod_Un_disjoint [symmetric])
+  apply (auto elim: finite_subset intro: setprod_cong)
+done
+
+lemma setprod_dvd_setprod_subset2:
+  "finite B \<Longrightarrow> A <= B \<Longrightarrow> ALL x : A. (f x::'a::comm_semiring_1) dvd g x \<Longrightarrow> 
+      setprod f A dvd setprod g B"
+  apply (rule dvd_trans)
+  apply (rule setprod_dvd_setprod, erule (1) bspec)
+  apply (erule (1) setprod_dvd_setprod_subset)
+done
+
+lemma dvd_setprod: "finite A \<Longrightarrow> i:A \<Longrightarrow> 
+    (f i ::'a::comm_semiring_1) dvd setprod f A"
+by (induct set: finite) (auto intro: dvd_mult)
+
+lemma dvd_setsum [rule_format]: "(ALL i : A. d dvd f i) \<longrightarrow> 
+    (d::'a::comm_semiring_1) dvd (SUM x : A. f x)"
+  apply (cases "finite A")
+  apply (induct set: finite)
+  apply auto
+done
+
 
 subsection {* Finite cardinality *}
 
@@ -2029,6 +2119,19 @@ proof
   show False by simp (blast dest: Suc_neq_Zero surjD)
 qed
 
+lemma infinite_UNIV_char_0:
+  "\<not> finite (UNIV::'a::semiring_char_0 set)"
+proof
+  assume "finite (UNIV::'a set)"
+  with subset_UNIV have "finite (range of_nat::'a set)"
+    by (rule finite_subset)
+  moreover have "inj (of_nat::nat \<Rightarrow> 'a)"
+    by (simp add: inj_on_def)
+  ultimately have "finite (UNIV::nat set)"
+    by (rule finite_imageD)
+  then show "False"
+    by (simp add: infinite_UNIV_nat)
+qed
 
 subsection{* A fold functional for non-empty sets *}
 

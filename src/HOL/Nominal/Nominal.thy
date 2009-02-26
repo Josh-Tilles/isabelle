@@ -397,6 +397,18 @@ by (auto simp add: fresh_star_def fresh_prod)
 
 lemmas fresh_star_prod = fresh_star_prod_list fresh_star_prod_set
 
+text {* Normalization of freshness results; cf.\ @{text nominal_induct} *}
+
+lemma fresh_star_unit_elim: 
+  shows "((a::'a set)\<sharp>*() \<Longrightarrow> PROP C) \<equiv> PROP C"
+  and "((b::'a list)\<sharp>*() \<Longrightarrow> PROP C) \<equiv> PROP C"
+  by (simp_all add: fresh_star_def fresh_def supp_unit)
+
+lemma fresh_star_prod_elim: 
+  shows "((a::'a set)\<sharp>*(x,y) \<Longrightarrow> PROP C) \<equiv> (a\<sharp>*x \<Longrightarrow> a\<sharp>*y \<Longrightarrow> PROP C)"
+  and "((b::'a list)\<sharp>*(x,y) \<Longrightarrow> PROP C) \<equiv> (b\<sharp>*x \<Longrightarrow> b\<sharp>*y \<Longrightarrow> PROP C)"
+  by (rule, simp_all add: fresh_star_prod)+
+
 section {* Abstract Properties for Permutations and  Atoms *}
 (*=========================================================*)
 
@@ -558,12 +570,7 @@ lemma at_supp:
   fixes x :: "'x"
   assumes at: "at TYPE('x)"
   shows "supp x = {x}"
-proof (simp add: supp_def Collect_conj_eq Collect_imp_eq at_calc[OF at], auto)
-  assume f: "finite {b::'x. b \<noteq> x}"
-  have a1: "{b::'x. b \<noteq> x} = UNIV-{x}" by force
-  have a2: "infinite (UNIV::'x set)" by (rule at4[OF at])
-  from f a1 a2 show False by force
-qed
+by(auto simp: supp_def Collect_conj_eq Collect_imp_eq at_calc[OF at] at4[OF at])
 
 lemma at_fresh:
   fixes a :: "'x"
@@ -1650,6 +1657,31 @@ apply(rule pt)
 apply(rule at)
 done
 
+lemma pt_fresh_star_eqvt:
+  fixes  pi :: "'x prm"
+  and     x :: "'a"
+  and     a :: "'x set"
+  and     b :: "'x list"
+  assumes pt: "pt TYPE('a) TYPE('x)"
+  and     at: "at TYPE('x)"
+  shows "pi\<bullet>(a\<sharp>*x) = (pi\<bullet>a)\<sharp>*(pi\<bullet>x)"
+  and   "pi\<bullet>(b\<sharp>*x) = (pi\<bullet>b)\<sharp>*(pi\<bullet>x)"
+  by (simp_all add: perm_bool pt_fresh_star_bij[OF pt, OF at])
+
+lemma pt_fresh_star_eqvt_ineq:
+  fixes pi::"'x prm"
+  and   a::"'y set"
+  and   b::"'y list"
+  and   x::"'a"
+  assumes pta: "pt TYPE('a) TYPE('x)"
+  and     ptb: "pt TYPE('y) TYPE('x)"
+  and     at:  "at TYPE('x)"
+  and     cp:  "cp TYPE('a) TYPE('x) TYPE('y)"
+  and     dj:  "disjoint TYPE('y) TYPE('x)"
+  shows "pi\<bullet>(a\<sharp>*x) = (pi\<bullet>a)\<sharp>*(pi\<bullet>x)"
+  and   "pi\<bullet>(b\<sharp>*x) = (pi\<bullet>b)\<sharp>*(pi\<bullet>x)"
+  by (simp_all add: pt_fresh_star_bij_ineq[OF pta, OF ptb, OF at, OF cp] dj_perm_forget[OF dj] perm_bool)
+
 lemma pt_fresh_bij1:
   fixes  pi :: "'x prm"
   and     x :: "'a"
@@ -1791,8 +1823,8 @@ next
     by (simp add: finite_infinite[OF f3,OF at4[OF at], simplified])
   hence "infinite ({c. [(a,c)]\<bullet>x = x \<and> [(b,c)]\<bullet>x = x}-{a,b})" 
     by (force dest: Diff_infinite_finite)
-  hence "({c. [(a,c)]\<bullet>x = x \<and> [(b,c)]\<bullet>x = x}-{a,b}) \<noteq> {}" 
-    by (auto iff del: finite_Diff_insert Diff_eq_empty_iff)
+  hence "({c. [(a,c)]\<bullet>x = x \<and> [(b,c)]\<bullet>x = x}-{a,b}) \<noteq> {}"
+    by (metis Collect_def finite_set set_empty2)
   hence "\<exists>c. c\<in>({c. [(a,c)]\<bullet>x = x \<and> [(b,c)]\<bullet>x = x}-{a,b})" by (force)
   then obtain c 
     where eq1: "[(a,c)]\<bullet>x = x" 

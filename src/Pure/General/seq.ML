@@ -19,6 +19,7 @@ sig
   val hd: 'a seq -> 'a
   val tl: 'a seq -> 'a seq
   val chop: int -> 'a seq -> 'a list * 'a seq
+  val take: int -> 'a seq -> 'a seq
   val list_of: 'a seq -> 'a list
   val of_list: 'a list -> 'a seq
   val append: 'a seq -> 'a seq -> 'a seq
@@ -88,11 +89,17 @@ fun try f x =
 (*the list of the first n elements, paired with rest of sequence;
   if length of list is less than n, then sequence had less than n elements*)
 fun chop n xq =
-  if n <= (0: int) then ([], xq)
+  if n <= (0 : int) then ([], xq)
   else
     (case pull xq of
       NONE => ([], xq)
     | SOME (x, xq') => apfst (Basics.cons x) (chop (n - 1) xq'));
+
+(*truncate the sequence after n elements*)
+fun take n xq =
+  if n <= (0 : int) then empty
+  else make (fn () =>
+    (Option.map o apsnd) (take (n - 1)) (pull xq));
 
 (*conversion from sequence to list*)
 fun list_of xq =

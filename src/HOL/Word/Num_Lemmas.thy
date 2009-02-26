@@ -95,7 +95,7 @@ lemma z1pmod2:
 lemma z1pdiv2:
   "(2 * b + 1) div 2 = (b::int)" by arith
 
-lemmas zdiv_le_dividend = xtr3 [OF zdiv_1 [symmetric] zdiv_mono2,
+lemmas zdiv_le_dividend = xtr3 [OF div_by_1 [symmetric] zdiv_mono2,
   simplified int_one_le_iff_zero_less, simplified, standard]
   
 lemma axxbyy:
@@ -121,18 +121,18 @@ lemma zmod_uminus: "- ((a :: int) mod b) mod b = -a mod b"
 
 lemma zmod_zsub_distrib: "((a::int) - b) mod c = (a mod c - b mod c) mod c"
   apply (unfold diff_int_def)
-  apply (rule trans [OF _ zmod_zadd1_eq [symmetric]])
-  apply (simp add: zmod_uminus zmod_zadd1_eq [symmetric])
+  apply (rule trans [OF _ mod_add_eq [symmetric]])
+  apply (simp add: zmod_uminus mod_add_eq [symmetric])
   done
 
 lemma zmod_zsub_right_eq: "((a::int) - b) mod c = (a - b mod c) mod c"
   apply (unfold diff_int_def)
-  apply (rule trans [OF _ zmod_zadd_right_eq [symmetric]])
-  apply (simp add : zmod_uminus zmod_zadd_right_eq [symmetric])
+  apply (rule trans [OF _ mod_add_right_eq [symmetric]])
+  apply (simp add : zmod_uminus mod_add_right_eq [symmetric])
   done
 
 lemma zmod_zsub_left_eq: "((a::int) - b) mod c = (a mod c - b) mod c"
-  by (rule zmod_zadd_left_eq [where b = "- b", simplified diff_int_def [symmetric]])
+  by (rule mod_add_left_eq [where b = "- b", simplified diff_int_def [symmetric]])
 
 lemma zmod_zsub_self [simp]: 
   "((b :: int) - a) mod a = b mod a"
@@ -146,8 +146,8 @@ lemma zmod_zmult1_eq_rev:
   done
 
 lemmas rdmods [symmetric] = zmod_uminus [symmetric]
-  zmod_zsub_left_eq zmod_zsub_right_eq zmod_zadd_left_eq
-  zmod_zadd_right_eq zmod_zmult1_eq zmod_zmult1_eq_rev
+  zmod_zsub_left_eq zmod_zsub_right_eq mod_add_left_eq
+  mod_add_right_eq zmod_zmult1_eq zmod_zmult1_eq_rev
 
 lemma mod_plus_right:
   "((a + x) mod m = (b + x) mod m) = (a mod m = b mod (m :: nat))"
@@ -162,14 +162,15 @@ lemma nat_minus_mod: "(n - n mod m) mod m = (0 :: nat)"
 lemmas nat_minus_mod_plus_right = trans [OF nat_minus_mod mod_0 [symmetric],
   THEN mod_plus_right [THEN iffD2], standard, simplified]
 
-lemmas push_mods' = zmod_zadd1_eq [standard]
-  zmod_zmult_distrib [standard] zmod_zsub_distrib [standard]
+lemmas push_mods' = mod_add_eq [standard]
+  mod_mult_eq [standard] zmod_zsub_distrib [standard]
   zmod_uminus [symmetric, standard]
 
 lemmas push_mods = push_mods' [THEN eq_reflection, standard]
 lemmas pull_mods = push_mods [symmetric] rdmods [THEN eq_reflection, standard]
 lemmas mod_simps = 
-  zmod_zmult_self1 [THEN eq_reflection] zmod_zmult_self2 [THEN eq_reflection]
+  mod_mult_self2_is_0 [THEN eq_reflection]
+  mod_mult_self1_is_0 [THEN eq_reflection]
   mod_mod_trivial [THEN eq_reflection]
 
 lemma nat_mod_eq:
@@ -313,7 +314,7 @@ lemma mod_power_lem:
   "a > 1 ==> a ^ n mod a ^ m = (if m <= n then 0 else (a :: int) ^ n)"
   apply clarsimp
   apply safe
-   apply (simp add: zdvd_iff_zmod_eq_0 [symmetric])
+   apply (simp add: dvd_eq_mod_eq_0 [symmetric])
    apply (drule le_iff_add [THEN iffD1])
    apply (force simp: zpower_zadd_distrib)
   apply (rule mod_pos_pos_trivial)

@@ -273,7 +273,7 @@ proof -
   have x: "2^len_of TYPE('a) - i = -i + 2^len_of TYPE('a)" by simp
   show ?thesis
     apply (subst x)
-    apply (subst word_uint.Abs_norm [symmetric], subst zmod_zadd_self2)
+    apply (subst word_uint.Abs_norm [symmetric], subst mod_add_self2)
     apply simp
     done
 qed
@@ -293,9 +293,9 @@ lemma mod_plus_cong:
   shows "(x + y) mod b = z' mod b'"
 proof -
   from 1 2[symmetric] 3[symmetric] have "(x + y) mod b = (x' mod b' + y' mod b') mod b'"
-    by (simp add: zmod_zadd1_eq[symmetric])
+    by (simp add: mod_add_eq[symmetric])
   also have "\<dots> = (x' + y') mod b'"
-    by (simp add: zmod_zadd1_eq[symmetric])
+    by (simp add: mod_add_eq[symmetric])
   finally show ?thesis by (simp add: 4)
 qed
 

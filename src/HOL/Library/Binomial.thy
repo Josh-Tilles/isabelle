@@ -1,5 +1,4 @@
 (*  Title:      HOL/Binomial.thy
-    ID:         $Id$
     Author:     Lawrence C Paulson, Amine Chaieb
     Copyright   1997  University of Cambridge
 *)
@@ -13,11 +12,9 @@ begin
 text {* This development is based on the work of Andy Gordon and
   Florian Kammueller. *}
 
-consts
-  binomial :: "nat \<Rightarrow> nat \<Rightarrow> nat"      (infixl "choose" 65)
-primrec
+primrec binomial :: "nat \<Rightarrow> nat \<Rightarrow> nat" (infixl "choose" 65) where
   binomial_0: "(0 choose k) = (if k = 0 then 1 else 0)"
-  binomial_Suc: "(Suc n choose k) =
+  | binomial_Suc: "(Suc n choose k) =
                  (if k = 0 then 1 else (n choose (k - 1)) + (n choose k))"
 
 lemma binomial_n_0 [simp]: "(n choose 0) = 1"
@@ -106,6 +103,21 @@ lemma choose_deconstruct: "finite M ==> x \<notin> M
   apply (erule rev_mp, subst card_Diff_singleton)
   apply (auto intro: finite_subset)
   done
+(*
+lemma "finite(UN y. {x. P x y})"
+apply simp
+lemma Collect_ex_eq
+
+lemma "{x. EX y. P x y} = (UN y. {x. P x y})"
+apply blast
+*)
+
+lemma finite_bex_subset[simp]:
+  "finite B \<Longrightarrow> (!!A. A<=B \<Longrightarrow> finite{x. P x A}) \<Longrightarrow> finite{x. EX A<=B. P x A}"
+apply(subgoal_tac "{x. EX A<=B. P x A} = (UN A:Pow B. {x. P x A})")
+ apply simp
+apply blast
+done
 
 text{*There are as many subsets of @{term A} having cardinality @{term k}
  as there are sets obtained from the former by inserting a fixed element
@@ -114,14 +126,10 @@ lemma constr_bij:
    "[|finite A; x \<notin> A|] ==>
     card {B. EX C. C <= A & card(C) = k & B = insert x C} =
     card {B. B <= A & card(B) = k}"
-  apply (rule_tac f = "%s. s - {x}" and g = "insert x" in card_bij_eq)
-       apply (auto elim!: equalityE simp add: inj_on_def)
-    apply (subst Diff_insert0, auto)
-   txt {* finiteness of the two sets *}
-   apply (rule_tac [2] B = "Pow (A)" in finite_subset)
-   apply (rule_tac B = "Pow (insert x A)" in finite_subset)
-   apply fast+
-  done
+apply (rule_tac f = "%s. s - {x}" and g = "insert x" in card_bij_eq)
+     apply (auto elim!: equalityE simp add: inj_on_def)
+apply (subst Diff_insert0, auto)
+done
 
 text {*
   Main theorem: combinatorial statement about number of subsets of a set.
@@ -182,7 +190,7 @@ next
   finally show ?case by simp
 qed
 
-section{* Pochhammer's symbol : generalized raising factorial*}
+subsection{* Pochhammer's symbol : generalized raising factorial*}
 
 definition "pochhammer (a::'a::comm_semiring_1) n = (if n = 0 then 1 else setprod (\<lambda>n. a + of_nat n) {0 .. n - 1})"
 
@@ -285,7 +293,7 @@ lemma pochhammer_of_nat_eq_0_iff:
     pochhammer_of_nat_eq_0_lemma'[of k n, where ?'a = 'a]
   by (auto simp add: not_le[symmetric])
 
-section{* Generalized binomial coefficients *}
+subsection{* Generalized binomial coefficients *}
 
 definition gbinomial :: "'a::{field, recpower,ring_char_0} \<Rightarrow> nat \<Rightarrow> 'a" (infixl "gchoose" 65)
   where "a gchoose n = (if n = 0 then 1 else (setprod (\<lambda>i. a - of_nat i) {0 .. n - 1}) / of_nat (fact n))"

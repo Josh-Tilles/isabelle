@@ -1,5 +1,4 @@
 (*  Title:   HOL/Ring_and_Field.thy
-    ID:      $Id$
     Author:  Gertrud Bauer, Steven Obua, Tobias Nipkow, Lawrence C Paulson, and Markus Wenzel,
              with contributions by Jeremy Avigad
 *)
@@ -41,7 +40,7 @@ class mult_zero = times + zero +
 
 class semiring_0 = semiring + comm_monoid_add + mult_zero
 
-class semiring_0_cancel = semiring + comm_monoid_add + cancel_ab_semigroup_add
+class semiring_0_cancel = semiring + cancel_comm_monoid_add
 begin
 
 subclass semiring_0
@@ -80,7 +79,7 @@ subclass semiring_0 ..
 
 end
 
-class comm_semiring_0_cancel = comm_semiring + comm_monoid_add + cancel_ab_semigroup_add
+class comm_semiring_0_cancel = comm_semiring + cancel_comm_monoid_add
 begin
 
 subclass semiring_0_cancel ..
@@ -122,7 +121,7 @@ begin
 
 subclass semiring_1 ..
 
-lemma dvd_refl: "a dvd a"
+lemma dvd_refl[simp]: "a dvd a"
 proof
   show "a = a * 1" by simp
 qed
@@ -148,10 +147,10 @@ qed
 lemma one_dvd [simp]: "1 dvd a"
 by (auto intro!: dvdI)
 
-lemma dvd_mult: "a dvd c \<Longrightarrow> a dvd (b * c)"
+lemma dvd_mult[simp]: "a dvd c \<Longrightarrow> a dvd (b * c)"
 by (auto intro!: mult_left_commute dvdI elim!: dvdE)
 
-lemma dvd_mult2: "a dvd b \<Longrightarrow> a dvd (b * c)"
+lemma dvd_mult2[simp]: "a dvd b \<Longrightarrow> a dvd (b * c)"
   apply (subst mult_commute)
   apply (erule dvd_mult)
   done
@@ -163,12 +162,12 @@ lemma dvd_triv_left [simp]: "a dvd a * b"
 by (rule dvd_mult2) (rule dvd_refl)
 
 lemma mult_dvd_mono:
-  assumes ab: "a dvd b"
-    and "cd": "c dvd d"
+  assumes "a dvd b"
+    and "c dvd d"
   shows "a * c dvd b * d"
 proof -
-  from ab obtain b' where "b = a * b'" ..
-  moreover from "cd" obtain d' where "d = c * d'" ..
+  from `a dvd b` obtain b' where "b = a * b'" ..
+  moreover from `c dvd d` obtain d' where "d = c * d'" ..
   ultimately have "b * d = (a * c) * (b' * d')" by (simp add: mult_ac)
   then show ?thesis ..
 qed
@@ -182,24 +181,23 @@ lemma dvd_mult_right: "a * b dvd c \<Longrightarrow> b dvd c"
 lemma dvd_0_left: "0 dvd a \<Longrightarrow> a = 0"
 by simp
 
-lemma dvd_add:
-  assumes ab: "a dvd b"
-    and ac: "a dvd c"
-    shows "a dvd (b + c)"
+lemma dvd_add[simp]:
+  assumes "a dvd b" and "a dvd c" shows "a dvd (b + c)"
 proof -
-  from ab obtain b' where "b = a * b'" ..
-  moreover from ac obtain c' where "c = a * c'" ..
+  from `a dvd b` obtain b' where "b = a * b'" ..
+  moreover from `a dvd c` obtain c' where "c = a * c'" ..
   ultimately have "b + c = a * (b' + c')" by (simp add: right_distrib)
   then show ?thesis ..
 qed
 
 end
 
+
 class no_zero_divisors = zero + times +
   assumes no_zero_divisors: "a \<noteq> 0 \<Longrightarrow> b \<noteq> 0 \<Longrightarrow> a * b \<noteq> 0"
 
-class semiring_1_cancel = semiring + comm_monoid_add + zero_neq_one
-  + cancel_ab_semigroup_add + monoid_mult
+class semiring_1_cancel = semiring + cancel_comm_monoid_add
+  + zero_neq_one + monoid_mult
 begin
 
 subclass semiring_0_cancel ..
@@ -208,8 +206,8 @@ subclass semiring_1 ..
 
 end
 
-class comm_semiring_1_cancel = comm_semiring + comm_monoid_add + comm_monoid_mult
-  + zero_neq_one + cancel_ab_semigroup_add
+class comm_semiring_1_cancel = comm_semiring + cancel_comm_monoid_add
+  + zero_neq_one + comm_monoid_mult
 begin
 
 subclass semiring_1_cancel ..
@@ -232,8 +230,8 @@ lemma minus_mult_right: "- (a * b) = a * - b"
 by (rule equals_zero_I) (simp add: right_distrib [symmetric]) 
 
 text{*Extract signs from products*}
-lemmas mult_minus_left [simp] = minus_mult_left [symmetric]
-lemmas mult_minus_right [simp] = minus_mult_right [symmetric]
+lemmas mult_minus_left [simp, noatp] = minus_mult_left [symmetric]
+lemmas mult_minus_right [simp,noatp] = minus_mult_right [symmetric]
 
 lemma minus_mult_minus [simp]: "- a * - b = a * b"
 by simp
@@ -247,11 +245,11 @@ by (simp add: right_distrib diff_minus)
 lemma left_diff_distrib[algebra_simps]: "(a - b) * c = a * c - b * c"
 by (simp add: left_distrib diff_minus)
 
-lemmas ring_distribs =
+lemmas ring_distribs[noatp] =
   right_distrib left_distrib left_diff_distrib right_diff_distrib
 
 text{*Legacy - use @{text algebra_simps} *}
-lemmas ring_simps = algebra_simps
+lemmas ring_simps[noatp] = algebra_simps
 
 lemma eq_add_iff1:
   "a * e + c = b * e + d \<longleftrightarrow> (a - b) * e + c = d"
@@ -263,7 +261,7 @@ by (simp add: algebra_simps)
 
 end
 
-lemmas ring_distribs =
+lemmas ring_distribs[noatp] =
   right_distrib left_distrib left_diff_distrib right_diff_distrib
 
 class comm_ring = comm_semiring + ab_group_add
@@ -312,8 +310,8 @@ next
   then show "- x dvd y" ..
 qed
 
-lemma dvd_diff: "x dvd y \<Longrightarrow> x dvd z \<Longrightarrow> x dvd (y - z)"
-by (simp add: diff_minus dvd_add dvd_minus_iff)
+lemma dvd_diff[simp]: "x dvd y \<Longrightarrow> x dvd z \<Longrightarrow> x dvd (y - z)"
+by (simp add: diff_minus dvd_minus_iff)
 
 end
 
@@ -373,6 +371,38 @@ class idom = comm_ring_1 + no_zero_divisors
 begin
 
 subclass ring_1_no_zero_divisors ..
+
+lemma square_eq_iff: "a * a = b * b \<longleftrightarrow> (a = b \<or> a = - b)"
+proof
+  assume "a * a = b * b"
+  then have "(a - b) * (a + b) = 0"
+    by (simp add: algebra_simps)
+  then show "a = b \<or> a = - b"
+    by (simp add: right_minus_eq eq_neg_iff_add_eq_0)
+next
+  assume "a = b \<or> a = - b"
+  then show "a * a = b * b" by auto
+qed
+
+lemma dvd_mult_cancel_right [simp]:
+  "a * c dvd b * c \<longleftrightarrow> c = 0 \<or> a dvd b"
+proof -
+  have "a * c dvd b * c \<longleftrightarrow> (\<exists>k. b * c = (a * k) * c)"
+    unfolding dvd_def by (simp add: mult_ac)
+  also have "(\<exists>k. b * c = (a * k) * c) \<longleftrightarrow> c = 0 \<or> a dvd b"
+    unfolding dvd_def by simp
+  finally show ?thesis .
+qed
+
+lemma dvd_mult_cancel_left [simp]:
+  "c * a dvd c * b \<longleftrightarrow> c = 0 \<or> a dvd b"
+proof -
+  have "c * a dvd c * b \<longleftrightarrow> (\<exists>k. b * c = (a * k) * c)"
+    unfolding dvd_def by (simp add: mult_ac)
+  also have "(\<exists>k. b * c = (a * k) * c) \<longleftrightarrow> c = 0 \<or> a dvd b"
+    unfolding dvd_def by simp
+  finally show ?thesis .
+qed
 
 end
 
@@ -543,7 +573,7 @@ done
 end
 
 class pordered_cancel_semiring = mult_mono + pordered_ab_semigroup_add
-  + semiring + comm_monoid_add + cancel_ab_semigroup_add
+  + semiring + cancel_comm_monoid_add
 begin
 
 subclass semiring_0_cancel ..
@@ -751,7 +781,7 @@ begin
 subclass pordered_ab_group_add ..
 
 text{*Legacy - use @{text algebra_simps} *}
-lemmas ring_simps = algebra_simps
+lemmas ring_simps[noatp] = algebra_simps
 
 lemma less_add_iff1:
   "a * e + c < b * e + d \<longleftrightarrow> (a - b) * e + c < d"
@@ -960,7 +990,7 @@ by (simp add: not_less [symmetric] mult_less_cancel_left_disj)
 end
 
 text{*Legacy - use @{text algebra_simps} *}
-lemmas ring_simps = algebra_simps
+lemmas ring_simps[noatp] = algebra_simps
 
 
 class pordered_comm_ring = comm_ring + pordered_comm_semiring
@@ -1067,6 +1097,14 @@ lemma sgn_1_neg:
   "sgn a = - 1 \<longleftrightarrow> a < 0"
 unfolding sgn_if by (auto simp add: equal_neg_zero)
 
+lemma sgn_pos [simp]:
+  "0 < a \<Longrightarrow> sgn a = 1"
+unfolding sgn_1_pos .
+
+lemma sgn_neg [simp]:
+  "a < 0 \<Longrightarrow> sgn a = - 1"
+unfolding sgn_1_neg .
+
 lemma sgn_times:
   "sgn (a * b) = sgn a * sgn b"
 by (auto simp add: sgn_if zero_less_mult_iff)
@@ -1074,32 +1112,19 @@ by (auto simp add: sgn_if zero_less_mult_iff)
 lemma abs_sgn: "abs k = k * sgn k"
 unfolding sgn_if abs_if by auto
 
-(* The int instances are proved, these generic ones are tedious to prove here.
-And not very useful, as int seems to be the only instance.
-If needed, they should be proved later, when metis is available.
-lemma dvd_abs[simp]: "(abs m) dvd k \<longleftrightarrow> m dvd k"
-proof-
-  have "\<forall>k.\<exists>ka. - (m * k) = m * ka"
-    by(simp add: mult_minus_right[symmetric] del: mult_minus_right)
-  moreover
-  have "\<forall>k.\<exists>ka. m * k = - (m * ka)"
-    by(auto intro!: minus_minus[symmetric]
-         simp add: mult_minus_right[symmetric] simp del: mult_minus_right)
-  ultimately show ?thesis by (auto simp: abs_if dvd_def)
-qed
+lemma sgn_greater [simp]:
+  "0 < sgn a \<longleftrightarrow> 0 < a"
+  unfolding sgn_if by auto
 
-lemma dvd_abs2[simp]: "m dvd (abs k) \<longleftrightarrow> m dvd k"
-proof-
-  have "\<forall>k.\<exists>ka. - (m * k) = m * ka"
-    by(simp add: mult_minus_right[symmetric] del: mult_minus_right)
-  moreover
-  have "\<forall>k.\<exists>ka. - (m * ka) = m * k"
-    by(auto intro!: minus_minus
-         simp add: mult_minus_right[symmetric] simp del: mult_minus_right)
-  ultimately show ?thesis
-    by (auto simp add:abs_if dvd_def minus_equation_iff[of k])
-qed
-*)
+lemma sgn_less [simp]:
+  "sgn a < 0 \<longleftrightarrow> a < 0"
+  unfolding sgn_if by auto
+
+lemma abs_dvd_iff [simp]: "(abs m) dvd k \<longleftrightarrow> m dvd k"
+  by (simp add: abs_if)
+
+lemma dvd_abs_iff [simp]: "m dvd (abs k) \<longleftrightarrow> m dvd k"
+  by (simp add: abs_if)
 
 end
 
@@ -1107,7 +1132,7 @@ class ordered_field = field + ordered_idom
 
 text {* Simprules for comparisons where common factors can be cancelled. *}
 
-lemmas mult_compare_simps =
+lemmas mult_compare_simps[noatp] =
     mult_le_cancel_right mult_le_cancel_left
     mult_le_cancel_right1 mult_le_cancel_right2
     mult_le_cancel_left1 mult_le_cancel_left2
@@ -1219,7 +1244,7 @@ by (simp add: divide_inverse mult_assoc)
 lemma times_divide_eq_left: "(b/c) * a = (b*a) / (c::'a::field)"
 by (simp add: divide_inverse mult_ac)
 
-lemmas times_divide_eq = times_divide_eq_right times_divide_eq_left
+lemmas times_divide_eq[noatp] = times_divide_eq_right times_divide_eq_left
 
 lemma divide_divide_eq_right [simp,noatp]:
   "a / (b/c) = (a*c) / (b::'a::{field,division_by_zero})"
@@ -1297,8 +1322,8 @@ by (simp add: divide_inverse)
 
 
 text{*The effect is to extract signs from divisions*}
-lemmas divide_minus_left = minus_divide_left [symmetric]
-lemmas divide_minus_right = minus_divide_right [symmetric]
+lemmas divide_minus_left[noatp] = minus_divide_left [symmetric]
+lemmas divide_minus_right[noatp] = minus_divide_right [symmetric]
 declare divide_minus_left [simp]   divide_minus_right [simp]
 
 lemma minus_divide_divide [simp]:
@@ -1359,7 +1384,7 @@ lemma eq_divide_imp: "(c::'a::{division_by_zero,field}) ~= 0 ==>
 by (subst eq_divide_eq, simp)
 
 
-lemmas field_eq_simps = algebra_simps
+lemmas field_eq_simps[noatp] = algebra_simps
   (* pull / out*)
   add_divide_eq_iff divide_add_eq_iff
   diff_divide_eq_iff divide_diff_eq_iff
@@ -1720,7 +1745,7 @@ if they can be proved to be non-zero (for equations) or positive/negative
 (for inequations). Can be too aggressive and is therefore separate from the
 more benign @{text algebra_simps}. *}
 
-lemmas field_simps = field_eq_simps
+lemmas field_simps[noatp] = field_eq_simps
   (* multiply ineqn *)
   pos_divide_less_eq neg_divide_less_eq
   pos_less_divide_eq neg_less_divide_eq
@@ -1732,7 +1757,7 @@ of positivity/negativity needed for @{text field_simps}. Have not added @{text
 sign_simps} to @{text field_simps} because the former can lead to case
 explosions. *}
 
-lemmas sign_simps = group_simps
+lemmas sign_simps[noatp] = group_simps
   zero_less_mult_iff  mult_less_0_iff
 
 (* Only works once linear arithmetic is installed:
@@ -1856,9 +1881,9 @@ lemmas divide_less_0_1_iff = divide_less_0_iff [of 1, simplified]
 lemmas zero_le_divide_1_iff = zero_le_divide_iff [of 1, simplified]
 lemmas divide_le_0_1_iff = divide_le_0_iff [of 1, simplified]
 
-declare zero_less_divide_1_iff [simp]
+declare zero_less_divide_1_iff [simp,noatp]
 declare divide_less_0_1_iff [simp,noatp]
-declare zero_le_divide_1_iff [simp]
+declare zero_le_divide_1_iff [simp,noatp]
 declare divide_le_0_1_iff [simp,noatp]
 
 
@@ -2234,7 +2259,7 @@ proof -
   thus ?thesis by (simp add: ac cpos mult_strict_mono) 
 qed
 
-lemmas eq_minus_self_iff = equal_neg_zero
+lemmas eq_minus_self_iff[noatp] = equal_neg_zero
 
 lemma less_minus_self_iff: "(a < -a) = (a < (0::'a::ordered_idom))"
   unfolding order_less_le less_eq_neg_nonpos equal_neg_zero ..
