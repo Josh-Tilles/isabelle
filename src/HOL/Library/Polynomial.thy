@@ -611,6 +611,26 @@ lemma degree_1 [simp]: "degree 1 = 0"
   unfolding one_poly_def
   by (rule degree_pCons_0)
 
+text {* Lemmas about divisibility *}
+
+lemma dvd_smult: "p dvd q \<Longrightarrow> p dvd smult a q"
+proof -
+  assume "p dvd q"
+  then obtain k where "q = p * k" ..
+  then have "smult a q = p * smult a k" by simp
+  then show "p dvd smult a q" ..
+qed
+
+lemma dvd_smult_cancel:
+  fixes a :: "'a::field"
+  shows "p dvd smult a q \<Longrightarrow> a \<noteq> 0 \<Longrightarrow> p dvd q"
+  by (drule dvd_smult [where a="inverse a"]) simp
+
+lemma dvd_smult_iff:
+  fixes a :: "'a::field"
+  shows "a \<noteq> 0 \<Longrightarrow> p dvd smult a q \<longleftrightarrow> p dvd q"
+  by (safe elim!: dvd_smult dvd_smult_cancel)
+
 instantiation poly :: (comm_semiring_1) recpower
 begin
 
@@ -622,6 +642,9 @@ instance
   by default simp_all
 
 end
+
+lemma degree_power_le: "degree (p ^ n) \<le> degree p * n"
+by (induct n, simp, auto intro: order_trans degree_mult_le)
 
 instance poly :: (comm_ring) comm_ring ..
 
@@ -997,6 +1020,16 @@ lemma div_smult_left: "(smult a x) div y = smult a (x div y)"
 lemma mod_smult_left: "(smult a x) mod y = smult a (x mod y)"
   by (rule mod_poly_eq, rule pdivmod_rel_smult_left, rule pdivmod_rel)
 
+lemma poly_div_minus_left [simp]:
+  fixes x y :: "'a::field poly"
+  shows "(- x) div y = - (x div y)"
+  using div_smult_left [of "- 1::'a"] by simp
+
+lemma poly_mod_minus_left [simp]:
+  fixes x y :: "'a::field poly"
+  shows "(- x) mod y = - (x mod y)"
+  using mod_smult_left [of "- 1::'a"] by simp
+
 lemma pdivmod_rel_smult_right:
   "\<lbrakk>a \<noteq> 0; pdivmod_rel x y q r\<rbrakk>
     \<Longrightarrow> pdivmod_rel x (smult a y) (smult (inverse a) q) r"
@@ -1008,6 +1041,17 @@ lemma div_smult_right:
 
 lemma mod_smult_right: "a \<noteq> 0 \<Longrightarrow> x mod (smult a y) = x mod y"
   by (rule mod_poly_eq, erule pdivmod_rel_smult_right, rule pdivmod_rel)
+
+lemma poly_div_minus_right [simp]:
+  fixes x y :: "'a::field poly"
+  shows "x div (- y) = - (x div y)"
+  using div_smult_right [of "- 1::'a"]
+  by (simp add: nonzero_inverse_minus_eq)
+
+lemma poly_mod_minus_right [simp]:
+  fixes x y :: "'a::field poly"
+  shows "x mod (- y) = x mod y"
+  using mod_smult_right [of "- 1::'a"] by simp
 
 lemma pdivmod_rel_mult:
   "\<lbrakk>pdivmod_rel x y q r; pdivmod_rel q z q' r'\<rbrakk>
@@ -1096,6 +1140,11 @@ lemma poly_power [simp]:
 
 
 subsection {* Synthetic division *}
+
+text {*
+  Synthetic division is simply division by the
+  linear polynomial @{term "x - c"}.
+*}
 
 definition
   synthetic_divmod :: "'a::comm_semiring_0 poly \<Rightarrow> 'a \<Rightarrow> 'a poly \<times> 'a"
@@ -1207,6 +1256,114 @@ next
                del: mult_pCons_left)
   qed
 qed
+
+lemma poly_zero:
+  fixes p :: "'a::{idom,ring_char_0} poly"
+  shows "poly p = poly 0 \<longleftrightarrow> p = 0"
+apply (cases "p = 0", simp_all)
+apply (drule poly_roots_finite)
+apply (auto simp add: infinite_UNIV_char_0)
+done
+
+lemma poly_eq_iff:
+  fixes p q :: "'a::{idom,ring_char_0} poly"
+  shows "poly p = poly q \<longleftrightarrow> p = q"
+  using poly_zero [of "p - q"]
+  by (simp add: expand_fun_eq)
+
+
+subsection {* Composition of polynomials *}
+
+definition
+  pcompose :: "'a::comm_semiring_0 poly \<Rightarrow> 'a poly \<Rightarrow> 'a poly"
+where
+  "pcompose p q = poly_rec 0 (\<lambda>a _ c. [:a:] + q * c) p"
+
+lemma pcompose_0 [simp]: "pcompose 0 q = 0"
+  unfolding pcompose_def by (simp add: poly_rec_0)
+
+lemma pcompose_pCons:
+  "pcompose (pCons a p) q = [:a:] + q * pcompose p q"
+  unfolding pcompose_def by (simp add: poly_rec_pCons)
+
+lemma poly_pcompose: "poly (pcompose p q) x = poly p (poly q x)"
+  by (induct p) (simp_all add: pcompose_pCons)
+
+lemma degree_pcompose_le:
+  "degree (pcompose p q) \<le> degree p * degree q"
+apply (induct p, simp)
+apply (simp add: pcompose_pCons, clarify)
+apply (rule degree_add_le, simp)
+apply (rule order_trans [OF degree_mult_le], simp)
+done
+
+
+subsection {* Order of polynomial roots *}
+
+definition
+  order :: "'a::idom \<Rightarrow> 'a poly \<Rightarrow> nat"
+where
+  [code del]:
+  "order a p = (LEAST n. \<not> [:-a, 1:] ^ Suc n dvd p)"
+
+lemma coeff_linear_power:
+  fixes a :: "'a::comm_semiring_1"
+  shows "coeff ([:a, 1:] ^ n) n = 1"
+apply (induct n, simp_all)
+apply (subst coeff_eq_0)
+apply (auto intro: le_less_trans degree_power_le)
+done
+
+lemma degree_linear_power:
+  fixes a :: "'a::comm_semiring_1"
+  shows "degree ([:a, 1:] ^ n) = n"
+apply (rule order_antisym)
+apply (rule ord_le_eq_trans [OF degree_power_le], simp)
+apply (rule le_degree, simp add: coeff_linear_power)
+done
+
+lemma order_1: "[:-a, 1:] ^ order a p dvd p"
+apply (cases "p = 0", simp)
+apply (cases "order a p", simp)
+apply (subgoal_tac "nat < (LEAST n. \<not> [:-a, 1:] ^ Suc n dvd p)")
+apply (drule not_less_Least, simp)
+apply (fold order_def, simp)
+done
+
+lemma order_2: "p \<noteq> 0 \<Longrightarrow> \<not> [:-a, 1:] ^ Suc (order a p) dvd p"
+unfolding order_def
+apply (rule LeastI_ex)
+apply (rule_tac x="degree p" in exI)
+apply (rule notI)
+apply (drule (1) dvd_imp_degree_le)
+apply (simp only: degree_linear_power)
+done
+
+lemma order:
+  "p \<noteq> 0 \<Longrightarrow> [:-a, 1:] ^ order a p dvd p \<and> \<not> [:-a, 1:] ^ Suc (order a p) dvd p"
+by (rule conjI [OF order_1 order_2])
+
+lemma order_degree:
+  assumes p: "p \<noteq> 0"
+  shows "order a p \<le> degree p"
+proof -
+  have "order a p = degree ([:-a, 1:] ^ order a p)"
+    by (simp only: degree_linear_power)
+  also have "\<dots> \<le> degree p"
+    using order_1 p by (rule dvd_imp_degree_le)
+  finally show ?thesis .
+qed
+
+lemma order_root: "poly p a = 0 \<longleftrightarrow> p = 0 \<or> order a p \<noteq> 0"
+apply (cases "p = 0", simp_all)
+apply (rule iffI)
+apply (rule ccontr, simp)
+apply (frule order_2 [where a=a], simp)
+apply (simp add: poly_eq_0_iff_dvd)
+apply (simp add: poly_eq_0_iff_dvd)
+apply (simp only: order_def)
+apply (drule not_less_Least, simp)
+done
 
 
 subsection {* Configuration of the code generator *}

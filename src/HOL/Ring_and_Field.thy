@@ -1,5 +1,4 @@
 (*  Title:   HOL/Ring_and_Field.thy
-    ID:      $Id$
     Author:  Gertrud Bauer, Steven Obua, Tobias Nipkow, Lawrence C Paulson, and Markus Wenzel,
              with contributions by Jeremy Avigad
 *)
@@ -148,10 +147,10 @@ qed
 lemma one_dvd [simp]: "1 dvd a"
 by (auto intro!: dvdI)
 
-lemma dvd_mult: "a dvd c \<Longrightarrow> a dvd (b * c)"
+lemma dvd_mult[simp]: "a dvd c \<Longrightarrow> a dvd (b * c)"
 by (auto intro!: mult_left_commute dvdI elim!: dvdE)
 
-lemma dvd_mult2: "a dvd b \<Longrightarrow> a dvd (b * c)"
+lemma dvd_mult2[simp]: "a dvd b \<Longrightarrow> a dvd (b * c)"
   apply (subst mult_commute)
   apply (erule dvd_mult)
   done
@@ -163,12 +162,12 @@ lemma dvd_triv_left [simp]: "a dvd a * b"
 by (rule dvd_mult2) (rule dvd_refl)
 
 lemma mult_dvd_mono:
-  assumes ab: "a dvd b"
-    and "cd": "c dvd d"
+  assumes "a dvd b"
+    and "c dvd d"
   shows "a * c dvd b * d"
 proof -
-  from ab obtain b' where "b = a * b'" ..
-  moreover from "cd" obtain d' where "d = c * d'" ..
+  from `a dvd b` obtain b' where "b = a * b'" ..
+  moreover from `c dvd d` obtain d' where "d = c * d'" ..
   ultimately have "b * d = (a * c) * (b' * d')" by (simp add: mult_ac)
   then show ?thesis ..
 qed
@@ -311,8 +310,8 @@ next
   then show "- x dvd y" ..
 qed
 
-lemma dvd_diff: "x dvd y \<Longrightarrow> x dvd z \<Longrightarrow> x dvd (y - z)"
-by (simp add: diff_minus dvd_add dvd_minus_iff)
+lemma dvd_diff[simp]: "x dvd y \<Longrightarrow> x dvd z \<Longrightarrow> x dvd (y - z)"
+by (simp add: diff_minus dvd_minus_iff)
 
 end
 
@@ -383,6 +382,26 @@ proof
 next
   assume "a = b \<or> a = - b"
   then show "a * a = b * b" by auto
+qed
+
+lemma dvd_mult_cancel_right [simp]:
+  "a * c dvd b * c \<longleftrightarrow> c = 0 \<or> a dvd b"
+proof -
+  have "a * c dvd b * c \<longleftrightarrow> (\<exists>k. b * c = (a * k) * c)"
+    unfolding dvd_def by (simp add: mult_ac)
+  also have "(\<exists>k. b * c = (a * k) * c) \<longleftrightarrow> c = 0 \<or> a dvd b"
+    unfolding dvd_def by simp
+  finally show ?thesis .
+qed
+
+lemma dvd_mult_cancel_left [simp]:
+  "c * a dvd c * b \<longleftrightarrow> c = 0 \<or> a dvd b"
+proof -
+  have "c * a dvd c * b \<longleftrightarrow> (\<exists>k. b * c = (a * k) * c)"
+    unfolding dvd_def by (simp add: mult_ac)
+  also have "(\<exists>k. b * c = (a * k) * c) \<longleftrightarrow> c = 0 \<or> a dvd b"
+    unfolding dvd_def by simp
+  finally show ?thesis .
 qed
 
 end
@@ -1078,6 +1097,14 @@ lemma sgn_1_neg:
   "sgn a = - 1 \<longleftrightarrow> a < 0"
 unfolding sgn_if by (auto simp add: equal_neg_zero)
 
+lemma sgn_pos [simp]:
+  "0 < a \<Longrightarrow> sgn a = 1"
+unfolding sgn_1_pos .
+
+lemma sgn_neg [simp]:
+  "a < 0 \<Longrightarrow> sgn a = - 1"
+unfolding sgn_1_neg .
+
 lemma sgn_times:
   "sgn (a * b) = sgn a * sgn b"
 by (auto simp add: sgn_if zero_less_mult_iff)
@@ -1085,32 +1112,19 @@ by (auto simp add: sgn_if zero_less_mult_iff)
 lemma abs_sgn: "abs k = k * sgn k"
 unfolding sgn_if abs_if by auto
 
-(* The int instances are proved, these generic ones are tedious to prove here.
-And not very useful, as int seems to be the only instance.
-If needed, they should be proved later, when metis is available.
-lemma dvd_abs[simp]: "(abs m) dvd k \<longleftrightarrow> m dvd k"
-proof-
-  have "\<forall>k.\<exists>ka. - (m * k) = m * ka"
-    by(simp add: mult_minus_right[symmetric] del: mult_minus_right)
-  moreover
-  have "\<forall>k.\<exists>ka. m * k = - (m * ka)"
-    by(auto intro!: minus_minus[symmetric]
-         simp add: mult_minus_right[symmetric] simp del: mult_minus_right)
-  ultimately show ?thesis by (auto simp: abs_if dvd_def)
-qed
+lemma sgn_greater [simp]:
+  "0 < sgn a \<longleftrightarrow> 0 < a"
+  unfolding sgn_if by auto
 
-lemma dvd_abs2[simp]: "m dvd (abs k) \<longleftrightarrow> m dvd k"
-proof-
-  have "\<forall>k.\<exists>ka. - (m * k) = m * ka"
-    by(simp add: mult_minus_right[symmetric] del: mult_minus_right)
-  moreover
-  have "\<forall>k.\<exists>ka. - (m * ka) = m * k"
-    by(auto intro!: minus_minus
-         simp add: mult_minus_right[symmetric] simp del: mult_minus_right)
-  ultimately show ?thesis
-    by (auto simp add:abs_if dvd_def minus_equation_iff[of k])
-qed
-*)
+lemma sgn_less [simp]:
+  "sgn a < 0 \<longleftrightarrow> a < 0"
+  unfolding sgn_if by auto
+
+lemma abs_dvd_iff [simp]: "(abs m) dvd k \<longleftrightarrow> m dvd k"
+  by (simp add: abs_if)
+
+lemma dvd_abs_iff [simp]: "m dvd (abs k) \<longleftrightarrow> m dvd k"
+  by (simp add: abs_if)
 
 end
 

@@ -1,7 +1,10 @@
 (* Title:    HOL/Library/Float.thy
  * Author:   Steven Obua 2008
- *           Johannes HÃ¶lzl, TU Muenchen <hoelzl@in.tum.de> 2008 / 2009
+ *           Johannes HÃ\<paragraph>lzl, TU Muenchen <hoelzl@in.tum.de> 2008 / 2009
  *)
+
+header {* Floating-Point Numbers *}
+
 theory Float
 imports Complex_Main
 begin
@@ -792,7 +795,7 @@ proof -
     have "x \<noteq> y"
     proof (rule ccontr)
       assume "\<not> x \<noteq> y" hence "x = y" by auto
-      have "?X mod y = 0" unfolding `x = y` using zmod_zmult_self2 by auto
+      have "?X mod y = 0" unfolding `x = y` using mod_mult_self1_is_0 by auto
       thus False using False by auto
     qed
     hence "x < y" using `x \<le> y` by auto

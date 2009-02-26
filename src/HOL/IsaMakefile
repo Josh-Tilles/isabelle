@@ -86,7 +86,7 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   Tools/simpdata.ML \
   $(SRC)/Tools/atomize_elim.ML \
   $(SRC)/Tools/code/code_funcgr.ML \
-  $(SRC)/Tools/code/code_funcgr.ML \
+  $(SRC)/Tools/code/code_wellsorted.ML \
   $(SRC)/Tools/code/code_name.ML \
   $(SRC)/Tools/code/code_printer.ML \
   $(SRC)/Tools/code/code_target.ML \
@@ -267,11 +267,11 @@ $(OUT)/HOL-Main: main.ML $(MAIN_DEPENDENCIES)
 	@$(ISABELLE_TOOL) usedir -b -f main.ML -g true $(OUT)/Pure HOL-Main
 
 $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
+  Archimedean_Field.thy \
   Complex_Main.thy \
   Complex.thy \
   Deriv.thy \
   Fact.thy \
-  FrechetDeriv.thy \
   Integration.thy \
   Lim.thy \
   Ln.thy \
@@ -285,7 +285,6 @@ $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
   GCD.thy \
   Parity.thy \
   Lubs.thy \
-  Polynomial.thy \
   PReal.thy \
   Rational.thy \
   RComplete.thy \
@@ -314,8 +313,11 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Euclidean_Space.thy Library/Glbs.thy Library/normarith.ML \
   Library/Executable_Set.thy Library/Infinite_Set.thy			\
   Library/FuncSet.thy Library/Permutations.thy Library/Determinants.thy\
+  Library/Bit.thy \
   Library/Finite_Cartesian_Product.thy \
+  Library/FrechetDeriv.thy \
   Library/Fundamental_Theorem_Algebra.thy \
+  Library/Inner_Product.thy \
   Library/Library.thy Library/List_Prefix.thy Library/State_Monad.thy	\
   Library/Nat_Int_Bij.thy Library/Multiset.thy Library/Permutation.thy	\
   Library/Primes.thy Library/Pocklington.thy Library/Quotient.thy	\
@@ -336,6 +338,10 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Boolean_Algebra.thy Library/Countable.thy	\
   Library/RBT.thy	Library/Univ_Poly.thy	\
   Library/Random.thy	Library/Quickcheck.thy	\
+  Library/Poly_Deriv.thy \
+  Library/Polynomial.thy \
+  Library/Product_plus.thy \
+  Library/Product_Vector.thy \
   Library/Enum.thy Library/Float.thy $(SRC)/Tools/float.ML $(SRC)/HOL/Tools/float_arith.ML \
   Library/reify_data.ML Library/reflection.ML
 	@cd Library; $(ISABELLE_TOOL) usedir $(OUT)/HOL Library
