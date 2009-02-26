@@ -1,41 +1,37 @@
+theory Isar
+imports Base
+begin
 
-(* $Id$ *)
+chapter {* Isar language elements *}
 
-theory isar imports base begin
+text {*
+  The primary Isar language consists of three main categories of
+  language elements:
 
-chapter {* Isar proof texts *}
+  \begin{enumerate}
 
-section {* Proof context *}
+  \item Proof commands
+
+  \item Proof methods
+
+  \item Attributes
+
+  \end{enumerate}
+*}
+
+
+section {* Proof commands *}
 
 text FIXME
 
-
-section {* Proof state \label{sec:isar-proof-state} *}
-
-text {*
-  FIXME
-
-\glossary{Proof state}{The whole configuration of a structured proof,
-consisting of a \seeglossary{proof context} and an optional
-\seeglossary{structured goal}.  Internally, an Isar proof state is
-organized as a stack to accomodate block structure of proof texts.
-For historical reasons, a low-level \seeglossary{tactical goal} is
-occasionally called ``proof state'' as well.}
-
-\glossary{Structured goal}{FIXME}
-
-\glossary{Goal}{See \seeglossary{tactical goal} or \seeglossary{structured goal}. \norefpage}
-
-
-*}
 
 section {* Proof methods *}
 
 text FIXME
 
+
 section {* Attributes *}
 
-text "FIXME ?!"
-
+text FIXME
 
 end
