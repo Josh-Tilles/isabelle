@@ -1,10 +1,12 @@
-theory logic imports base begin
+theory Logic
+imports Base
+begin
 
 chapter {* Primitive logic \label{ch:logic} *}
 
 text {*
   The logical foundations of Isabelle/Isar are that of the Pure logic,
-  which has been introduced as a natural-deduction framework in
+  which has been introduced as a Natural Deduction framework in
   \cite{paulson700}.  This is essentially the same logic as ``@{text
   "\<lambda>HOL"}'' in the more abstract setting of Pure Type Systems (PTS)
   \cite{Barendregt-Geuvers:2001}, although there are some key
@@ -184,17 +186,14 @@ text %mlref {*
 *}
 
 
-
 section {* Terms \label{sec:terms} *}
 
 text {*
-  \glossary{Term}{FIXME}
-
   The language of terms is that of simply-typed @{text "\<lambda>"}-calculus
   with de-Bruijn indices for bound variables (cf.\ \cite{debruijn72}
-  or \cite{paulson-ml2}), with the types being determined determined
-  by the corresponding binders.  In contrast, free variables and
-  constants are have an explicit name and type in each occurrence.
+  or \cite{paulson-ml2}), with the types being determined by the
+  corresponding binders.  In contrast, free variables and constants
+  are have an explicit name and type in each occurrence.
 
   \medskip A \emph{bound variable} is a natural number @{text "b"},
   which accounts for the number of intermediate binders between the
@@ -390,49 +389,14 @@ text %mlref {*
 section {* Theorems \label{sec:thms} *}
 
 text {*
-  \glossary{Proposition}{FIXME A \seeglossary{term} of
-  \seeglossary{type} @{text "prop"}.  Internally, there is nothing
-  special about propositions apart from their type, but the concrete
-  syntax enforces a clear distinction.  Propositions are structured
-  via implication @{text "A \<Longrightarrow> B"} or universal quantification @{text
-  "\<And>x. B x"} --- anything else is considered atomic.  The canonical
-  form for propositions is that of a \seeglossary{Hereditary Harrop
-  Formula}. FIXME}
-
-  \glossary{Theorem}{A proven proposition within a certain theory and
-  proof context, formally @{text "\<Gamma> \<turnstile>\<^sub>\<Theta> \<phi>"}; both contexts are
-  rarely spelled out explicitly.  Theorems are usually normalized
-  according to the \seeglossary{HHF} format. FIXME}
-
-  \glossary{Fact}{Sometimes used interchangeably for
-  \seeglossary{theorem}.  Strictly speaking, a list of theorems,
-  essentially an extra-logical conjunction.  Facts emerge either as
-  local assumptions, or as results of local goal statements --- both
-  may be simultaneous, hence the list representation. FIXME}
-
-  \glossary{Schematic variable}{FIXME}
-
-  \glossary{Fixed variable}{A variable that is bound within a certain
-  proof context; an arbitrary-but-fixed entity within a portion of
-  proof text. FIXME}
-
-  \glossary{Free variable}{Synonymous for \seeglossary{fixed
-  variable}. FIXME}
-
-  \glossary{Bound variable}{FIXME}
-
-  \glossary{Variable}{See \seeglossary{schematic variable},
-  \seeglossary{fixed variable}, \seeglossary{bound variable}, or
-  \seeglossary{type variable}.  The distinguishing feature of
-  different variables is their binding scope. FIXME}
-
   A \emph{proposition} is a well-typed term of type @{text "prop"}, a
   \emph{theorem} is a proven proposition (depending on a context of
   hypotheses and the background theory).  Primitive inferences include
-  plain natural deduction rules for the primary connectives @{text
+  plain Natural Deduction rules for the primary connectives @{text
   "\<And>"} and @{text "\<Longrightarrow>"} of the framework.  There is also a builtin
   notion of equality/equivalence @{text "\<equiv>"}.
 *}
+
 
 subsection {* Primitive connectives and rules \label{sec:prim-rules} *}
 
@@ -549,7 +513,7 @@ text {*
   fly.  Logically, this is an instance of the @{text "axiom"} rule
   (\figref{fig:prim-rules}), but there is an operational difference.
   The system always records oracle invocations within derivations of
-  theorems.  Tracing plain axioms (and named theorems) is optional.
+  theorems by a unique tag.
 
   Axiomatizations should be limited to the bare minimum, typically as
   part of the initial logical basis of an object-logic formalization.
@@ -609,10 +573,10 @@ text %mlref {*
   well-typedness) checks, relative to the declarations of type
   constructors, constants etc. in the theory.
 
-  \item @{ML ctyp_of}~@{text "thy \<tau>"} and @{ML cterm_of}~@{text "thy
-  t"} explicitly checks types and terms, respectively.  This also
-  involves some basic normalizations, such expansion of type and term
-  abbreviations from the theory context.
+  \item @{ML Thm.ctyp_of}~@{text "thy \<tau>"} and @{ML
+  Thm.cterm_of}~@{text "thy t"} explicitly checks types and terms,
+  respectively.  This also involves some basic normalizations, such
+  expansion of type and term abbreviations from the theory context.
 
   Re-certification is relatively slow and should be avoided in tight
   reasoning loops.  There are separate operations to decompose
@@ -625,9 +589,10 @@ text %mlref {*
   enclosing theory, cf.\ \secref{sec:context-theory}.
 
   \item @{ML proofs} determines the detail of proof recording within
-  @{ML_type thm} values: @{ML 0} records only oracles, @{ML 1} records
-  oracles, axioms and named theorems, @{ML 2} records full proof
-  terms.
+  @{ML_type thm} values: @{ML 0} records only the names of oracles,
+  @{ML 1} records oracle names and propositions, @{ML 2} additionally
+  records full proof terms.  Officially named theorems that contribute
+  to a result are always recorded.
 
   \item @{ML Thm.assume}, @{ML Thm.forall_intr}, @{ML
   Thm.forall_elim}, @{ML Thm.implies_intr}, and @{ML Thm.implies_elim}
@@ -761,80 +726,142 @@ text %mlref {*
 
 section {* Object-level rules \label{sec:obj-rules} *}
 
-text %FIXME {*
-
-FIXME
-
-  A \emph{rule} is any Pure theorem in HHF normal form; there is a
-  separate calculus for rule composition, which is modeled after
-  Gentzen's Natural Deduction \cite{Gentzen:1935}, but allows
-  rules to be nested arbitrarily, similar to \cite{extensions91}.
-
-  Normally, all theorems accessible to the user are proper rules.
-  Low-level inferences are occasional required internally, but the
-  result should be always presented in canonical form.  The higher
-  interfaces of Isabelle/Isar will always produce proper rules.  It is
-  important to maintain this invariant in add-on applications!
-
-  There are two main principles of rule composition: @{text
-  "resolution"} (i.e.\ backchaining of rules) and @{text
-  "by-assumption"} (i.e.\ closing a branch); both principles are
-  combined in the variants of @{text "elim-resolution"} and @{text
-  "dest-resolution"}.  Raw @{text "composition"} is occasionally
-  useful as well, also it is strictly speaking outside of the proper
-  rule calculus.
-
-  Rules are treated modulo general higher-order unification, which is
-  unification modulo the equational theory of @{text "\<alpha>\<beta>\<eta>"}-conversion
-  on @{text "\<lambda>"}-terms.  Moreover, propositions are understood modulo
-  the (derived) equivalence @{text "(A \<Longrightarrow> (\<And>x. B x)) \<equiv> (\<And>x. A \<Longrightarrow> B x)"}.
-
-  This means that any operations within the rule calculus may be
-  subject to spontaneous @{text "\<alpha>\<beta>\<eta>"}-HHF conversions.  It is common
-  practice not to contract or expand unnecessarily.  Some mechanisms
-  prefer an one form, others the opposite, so there is a potential
-  danger to produce some oscillation!
-
-  Only few operations really work \emph{modulo} HHF conversion, but
-  expect a normal form: quantifiers @{text "\<And>"} before implications
-  @{text "\<Longrightarrow>"} at each level of nesting.
-
-\glossary{Hereditary Harrop Formula}{The set of propositions in HHF
-format is defined inductively as @{text "H = (\<And>x\<^sup>*. H\<^sup>* \<Longrightarrow>
-A)"}, for variables @{text "x"} and atomic propositions @{text "A"}.
-Any proposition may be put into HHF form by normalizing with the rule
-@{text "(A \<Longrightarrow> (\<And>x. B x)) \<equiv> (\<And>x. A \<Longrightarrow> B x)"}.  In Isabelle, the outermost
-quantifier prefix is represented via \seeglossary{schematic
-variables}, such that the top-level structure is merely that of a
-\seeglossary{Horn Clause}}.
-
-\glossary{HHF}{See \seeglossary{Hereditary Harrop Formula}.}
+text {*
+  The primitive inferences covered so far mostly serve foundational
+  purposes.  User-level reasoning usually works via object-level rules
+  that are represented as theorems of Pure.  Composition of rules
+  involves \emph{backchaining}, \emph{higher-order unification} modulo
+  @{text "\<alpha>\<beta>\<eta>"}-conversion of @{text "\<lambda>"}-terms, and so-called
+  \emph{lifting} of rules into a context of @{text "\<And>"} and @{text
+  "\<Longrightarrow>"} connectives.  Thus the full power of higher-order Natural
+  Deduction in Isabelle/Pure becomes readily available.
+*}
 
 
+subsection {* Hereditary Harrop Formulae *}
+
+text {*
+  The idea of object-level rules is to model Natural Deduction
+  inferences in the style of Gentzen \cite{Gentzen:1935}, but we allow
+  arbitrary nesting similar to \cite{extensions91}.  The most basic
+  rule format is that of a \emph{Horn Clause}:
   \[
-  \infer[@{text "(assumption)"}]{@{text "C\<vartheta>"}}
-  {@{text "(\<And>\<^vec>x. \<^vec>H \<^vec>x \<Longrightarrow> A \<^vec>x) \<Longrightarrow> C"} & @{text "A\<vartheta> = H\<^sub>i\<vartheta>"}~~\text{(for some~@{text i})}}
+  \infer{@{text "A"}}{@{text "A\<^sub>1"} & @{text "\<dots>"} & @{text "A\<^sub>n"}}
+  \]
+  where @{text "A, A\<^sub>1, \<dots>, A\<^sub>n"} are atomic propositions
+  of the framework, usually of the form @{text "Trueprop B"}, where
+  @{text "B"} is a (compound) object-level statement.  This
+  object-level inference corresponds to an iterated implication in
+  Pure like this:
+  \[
+  @{text "A\<^sub>1 \<Longrightarrow> \<dots> A\<^sub>n \<Longrightarrow> A"}
+  \]
+  As an example consider conjunction introduction: @{text "A \<Longrightarrow> B \<Longrightarrow> A \<and>
+  B"}.  Any parameters occurring in such rule statements are
+  conceptionally treated as arbitrary:
+  \[
+  @{text "\<And>x\<^sub>1 \<dots> x\<^sub>m. A\<^sub>1 x\<^sub>1 \<dots> x\<^sub>m \<Longrightarrow> \<dots> A\<^sub>n x\<^sub>1 \<dots> x\<^sub>m \<Longrightarrow> A x\<^sub>1 \<dots> x\<^sub>m"}
   \]
 
+  Nesting of rules means that the positions of @{text "A\<^sub>i"} may
+  again hold compound rules, not just atomic propositions.
+  Propositions of this format are called \emph{Hereditary Harrop
+  Formulae} in the literature \cite{Miller:1991}.  Here we give an
+  inductive characterization as follows:
 
+  \medskip
+  \begin{tabular}{ll}
+  @{text "\<^bold>x"} & set of variables \\
+  @{text "\<^bold>A"} & set of atomic propositions \\
+  @{text "\<^bold>H  =  \<And>\<^bold>x\<^sup>*. \<^bold>H\<^sup>* \<Longrightarrow> \<^bold>A"} & set of Hereditary Harrop Formulas \\
+  \end{tabular}
+  \medskip
+
+  \noindent Thus we essentially impose nesting levels on propositions
+  formed from @{text "\<And>"} and @{text "\<Longrightarrow>"}.  At each level there is a
+  prefix of parameters and compound premises, concluding an atomic
+  proposition.  Typical examples are @{text "\<longrightarrow>"}-introduction @{text
+  "(A \<Longrightarrow> B) \<Longrightarrow> A \<longrightarrow> B"} or mathematical induction @{text "P 0 \<Longrightarrow> (\<And>n. P n
+  \<Longrightarrow> P (Suc n)) \<Longrightarrow> P n"}.  Even deeper nesting occurs in well-founded
+  induction @{text "(\<And>x. (\<And>y. y \<prec> x \<Longrightarrow> P y) \<Longrightarrow> P x) \<Longrightarrow> P x"}, but this
+  already marks the limit of rule complexity seen in practice.
+
+  \medskip Regular user-level inferences in Isabelle/Pure always
+  maintain the following canonical form of results:
+
+  \begin{itemize}
+
+  \item Normalization by @{text "(A \<Longrightarrow> (\<And>x. B x)) \<equiv> (\<And>x. A \<Longrightarrow> B x)"},
+  which is a theorem of Pure, means that quantifiers are pushed in
+  front of implication at each level of nesting.  The normal form is a
+  Hereditary Harrop Formula.
+
+  \item The outermost prefix of parameters is represented via
+  schematic variables: instead of @{text "\<And>\<^vec>x. \<^vec>H \<^vec>x
+  \<Longrightarrow> A \<^vec>x"} we have @{text "\<^vec>H ?\<^vec>x \<Longrightarrow> A ?\<^vec>x"}.
+  Note that this representation looses information about the order of
+  parameters, and vacuous quantifiers vanish automatically.
+
+  \end{itemize}
+*}
+
+text %mlref {*
+  \begin{mldecls}
+  @{index_ML MetaSimplifier.norm_hhf: "thm -> thm"} \\
+  \end{mldecls}
+
+  \begin{description}
+
+  \item @{ML MetaSimplifier.norm_hhf}~@{text thm} normalizes the given
+  theorem according to the canonical form specified above.  This is
+  occasionally helpful to repair some low-level tools that do not
+  handle Hereditary Harrop Formulae properly.
+
+  \end{description}
+*}
+
+
+subsection {* Rule composition *}
+
+text {*
+  The rule calculus of Isabelle/Pure provides two main inferences:
+  @{inference resolution} (i.e.\ back-chaining of rules) and
+  @{inference assumption} (i.e.\ closing a branch), both modulo
+  higher-order unification.  There are also combined variants, notably
+  @{inference elim_resolution} and @{inference dest_resolution}.
+
+  To understand the all-important @{inference resolution} principle,
+  we first consider raw @{inference_def composition} (modulo
+  higher-order unification with substitution @{text "\<vartheta>"}):
   \[
-  \infer[@{text "(compose)"}]{@{text "\<^vec>A\<vartheta> \<Longrightarrow> C\<vartheta>"}}
+  \infer[(@{inference_def composition})]{@{text "\<^vec>A\<vartheta> \<Longrightarrow> C\<vartheta>"}}
   {@{text "\<^vec>A \<Longrightarrow> B"} & @{text "B' \<Longrightarrow> C"} & @{text "B\<vartheta> = B'\<vartheta>"}}
   \]
+  Here the conclusion of the first rule is unified with the premise of
+  the second; the resulting rule instance inherits the premises of the
+  first and conclusion of the second.  Note that @{text "C"} can again
+  consist of iterated implications.  We can also permute the premises
+  of the second rule back-and-forth in order to compose with @{text
+  "B'"} in any position (subsequently we shall always refer to
+  position 1 w.l.o.g.).
 
-
+  In @{inference composition} the internal structure of the common
+  part @{text "B"} and @{text "B'"} is not taken into account.  For
+  proper @{inference resolution} we require @{text "B"} to be atomic,
+  and explicitly observe the structure @{text "\<And>\<^vec>x. \<^vec>H
+  \<^vec>x \<Longrightarrow> B' \<^vec>x"} of the premise of the second rule.  The
+  idea is to adapt the first rule by ``lifting'' it into this context,
+  by means of iterated application of the following inferences:
   \[
-  \infer[@{text "(\<And>_lift)"}]{@{text "(\<And>\<^vec>x. \<^vec>A (?\<^vec>a \<^vec>x)) \<Longrightarrow> (\<And>\<^vec>x. B (?\<^vec>a \<^vec>x))"}}{@{text "\<^vec>A ?\<^vec>a \<Longrightarrow> B ?\<^vec>a"}}
+  \infer[(@{inference_def imp_lift})]{@{text "(\<^vec>H \<Longrightarrow> \<^vec>A) \<Longrightarrow> (\<^vec>H \<Longrightarrow> B)"}}{@{text "\<^vec>A \<Longrightarrow> B"}}
   \]
   \[
-  \infer[@{text "(\<Longrightarrow>_lift)"}]{@{text "(\<^vec>H \<Longrightarrow> \<^vec>A) \<Longrightarrow> (\<^vec>H \<Longrightarrow> B)"}}{@{text "\<^vec>A \<Longrightarrow> B"}}
+  \infer[(@{inference_def all_lift})]{@{text "(\<And>\<^vec>x. \<^vec>A (?\<^vec>a \<^vec>x)) \<Longrightarrow> (\<And>\<^vec>x. B (?\<^vec>a \<^vec>x))"}}{@{text "\<^vec>A ?\<^vec>a \<Longrightarrow> B ?\<^vec>a"}}
   \]
-
-  The @{text resolve} scheme is now acquired from @{text "\<And>_lift"},
-  @{text "\<Longrightarrow>_lift"}, and @{text compose}.
-
+  By combining raw composition with lifting, we get full @{inference
+  resolution} as follows:
   \[
-  \infer[@{text "(resolution)"}]
+  \infer[(@{inference_def resolution})]
   {@{text "(\<And>\<^vec>x. \<^vec>H \<^vec>x \<Longrightarrow> \<^vec>A (?\<^vec>a \<^vec>x))\<vartheta> \<Longrightarrow> C\<vartheta>"}}
   {\begin{tabular}{l}
     @{text "\<^vec>A ?\<^vec>a \<Longrightarrow> B ?\<^vec>a"} \\
@@ -843,9 +870,40 @@ variables}, such that the top-level structure is merely that of a
    \end{tabular}}
   \]
 
+  Continued resolution of rules allows to back-chain a problem towards
+  more and sub-problems.  Branches are closed either by resolving with
+  a rule of 0 premises, or by producing a ``short-circuit'' within a
+  solved situation (again modulo unification):
+  \[
+  \infer[(@{inference_def assumption})]{@{text "C\<vartheta>"}}
+  {@{text "(\<And>\<^vec>x. \<^vec>H \<^vec>x \<Longrightarrow> A \<^vec>x) \<Longrightarrow> C"} & @{text "A\<vartheta> = H\<^sub>i\<vartheta>"}~~\text{(for some~@{text i})}}
+  \]
 
-  FIXME @{text "elim_resolution"}, @{text "dest_resolution"}
+  FIXME @{inference_def elim_resolution}, @{inference_def dest_resolution}
 *}
 
+text %mlref {*
+  \begin{mldecls}
+  @{index_ML "op RS": "thm * thm -> thm"} \\
+  @{index_ML "op OF": "thm * thm list -> thm"} \\
+  \end{mldecls}
+
+  \begin{description}
+
+  \item @{text "rule\<^sub>1 RS rule\<^sub>2"} resolves @{text
+  "rule\<^sub>1"} with @{text "rule\<^sub>2"} according to the
+  @{inference resolution} principle explained above.  Note that the
+  corresponding attribute in the Isar language is called @{attribute
+  THEN}.
+
+  \item @{text "rule OF rules"} resolves a list of rules with the
+  first rule, addressing its premises @{text "1, \<dots>, length rules"}
+  (operating from last to first).  This means the newly emerging
+  premises are all concatenated, without interfering.  Also note that
+  compared to @{text "RS"}, the rule argument order is swapped: @{text
+  "rule\<^sub>1 RS rule\<^sub>2 = rule\<^sub>2 OF [rule\<^sub>1]"}.
+
+  \end{description}
+*}
 
 end
