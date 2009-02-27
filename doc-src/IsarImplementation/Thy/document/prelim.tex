@@ -1,17 +1,16 @@
 %
 \begin{isabellebody}%
-\def\isabellecontext{prelim}%
+\def\isabellecontext{Prelim}%
 %
 \isadelimtheory
-\isanewline
-\isanewline
-\isanewline
 %
 \endisadelimtheory
 %
 \isatagtheory
 \isacommand{theory}\isamarkupfalse%
-\ prelim\ \isakeyword{imports}\ base\ \isakeyword{begin}%
+\ Prelim\isanewline
+\isakeyword{imports}\ Base\isanewline
+\isakeyword{begin}%
 \endisatagtheory
 {\isafoldtheory}%
 %
@@ -94,9 +93,7 @@ A logical context represents the background that is required for
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-\glossary{Theory}{FIXME}
-
-  A \emph{theory} is a data container with explicit named and unique
+A \emph{theory} is a data container with explicit name and unique
   identifier.  Theories are related by a (nominal) sub-theory
   relation, which corresponds to the dependency graph of the original
   construction; each theory is derived from a certain sub-graph of
@@ -173,16 +170,16 @@ A logical context represents the background that is required for
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexmltype{theory}\verb|type theory| \\
-  \indexml{Theory.subthy}\verb|Theory.subthy: theory * theory -> bool| \\
-  \indexml{Theory.merge}\verb|Theory.merge: theory * theory -> theory| \\
-  \indexml{Theory.checkpoint}\verb|Theory.checkpoint: theory -> theory| \\
-  \indexml{Theory.copy}\verb|Theory.copy: theory -> theory| \\
+  \indexdef{}{ML type}{theory}\verb|type theory| \\
+  \indexdef{}{ML}{Theory.subthy}\verb|Theory.subthy: theory * theory -> bool| \\
+  \indexdef{}{ML}{Theory.merge}\verb|Theory.merge: theory * theory -> theory| \\
+  \indexdef{}{ML}{Theory.checkpoint}\verb|Theory.checkpoint: theory -> theory| \\
+  \indexdef{}{ML}{Theory.copy}\verb|Theory.copy: theory -> theory| \\
   \end{mldecls}
   \begin{mldecls}
-  \indexmltype{theory\_ref}\verb|type theory_ref| \\
-  \indexml{Theory.deref}\verb|Theory.deref: theory_ref -> theory| \\
-  \indexml{Theory.check\_thy}\verb|Theory.check_thy: theory -> theory_ref| \\
+  \indexdef{}{ML type}{theory\_ref}\verb|type theory_ref| \\
+  \indexdef{}{ML}{Theory.deref}\verb|Theory.deref: theory_ref -> theory| \\
+  \indexdef{}{ML}{Theory.check\_thy}\verb|Theory.check_thy: theory -> theory_ref| \\
   \end{mldecls}
 
   \begin{description}
@@ -205,7 +202,7 @@ A logical context represents the background that is required for
   update will result in two related, valid theories.
 
   \item \verb|Theory.copy|~\isa{thy} produces a variant of \isa{thy} that holds a copy of the same data.  The result is not
-  related to the original; the original is unchanched.
+  related to the original; the original is unchanged.
 
   \item \verb|theory_ref| represents a sliding reference to an
   always valid theory; updates on the original are propagated
@@ -232,14 +229,7 @@ A logical context represents the background that is required for
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-\glossary{Proof context}{The static context of a structured proof,
-  acts like a local ``theory'' of the current portion of Isar proof
-  text, generalizes the idea of local hypotheses \isa{{\isasymGamma}} in
-  judgments \isa{{\isasymGamma}\ {\isasymturnstile}\ {\isasymphi}} of natural deduction calculi.  There is a
-  generic notion of introducing and discharging hypotheses.
-  Arbritrary auxiliary context data may be adjoined.}
-
-  A proof context is a container for pure data with a back-reference
+A proof context is a container for pure data with a back-reference
   to the theory it belongs to.  The \isa{init} operation creates a
   proof context from a given theory.  Modifications to draft theories
   are propagated to the proof context as usual, but there is also an
@@ -253,7 +243,7 @@ A logical context represents the background that is required for
   identification as for theories.  For example, hypotheses used in
   primitive derivations (cf.\ \secref{sec:thms}) are recorded
   separately within the sequent \isa{{\isasymGamma}\ {\isasymturnstile}\ {\isasymphi}}, just to make double
-  sure.  Results could still leak into an alien proof context do to
+  sure.  Results could still leak into an alien proof context due to
   programming errors, but Isabelle/Isar includes some extra validity
   checks in critical positions, notably at the end of a sub-proof.
 
@@ -262,7 +252,7 @@ A logical context represents the background that is required for
   context is extended consecutively, and results are exported back
   into the original context.  Note that the Isar proof states model
   block-structured reasoning explicitly, using a stack of proof
-  contexts internally, cf.\ \secref{sec:isar-proof-state}.%
+  contexts internally.%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -274,10 +264,10 @@ A logical context represents the background that is required for
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexmltype{Proof.context}\verb|type Proof.context| \\
-  \indexml{ProofContext.init}\verb|ProofContext.init: theory -> Proof.context| \\
-  \indexml{ProofContext.theory\_of}\verb|ProofContext.theory_of: Proof.context -> theory| \\
-  \indexml{ProofContext.transfer}\verb|ProofContext.transfer: theory -> Proof.context -> Proof.context| \\
+  \indexdef{}{ML type}{Proof.context}\verb|type Proof.context| \\
+  \indexdef{}{ML}{ProofContext.init}\verb|ProofContext.init: theory -> Proof.context| \\
+  \indexdef{}{ML}{ProofContext.theory\_of}\verb|ProofContext.theory_of: Proof.context -> theory| \\
+  \indexdef{}{ML}{ProofContext.transfer}\verb|ProofContext.transfer: theory -> Proof.context -> Proof.context| \\
   \end{mldecls}
 
   \begin{description}
@@ -333,9 +323,9 @@ A generic context is the disjoint sum of either a theory or proof
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexmltype{Context.generic}\verb|type Context.generic| \\
-  \indexml{Context.theory\_of}\verb|Context.theory_of: Context.generic -> theory| \\
-  \indexml{Context.proof\_of}\verb|Context.proof_of: Context.generic -> Proof.context| \\
+  \indexdef{}{ML type}{Context.generic}\verb|type Context.generic| \\
+  \indexdef{}{ML}{Context.theory\_of}\verb|Context.theory_of: Context.generic -> theory| \\
+  \indexdef{}{ML}{Context.proof\_of}\verb|Context.proof_of: Context.generic -> Proof.context| \\
   \end{mldecls}
 
   \begin{description}
@@ -419,7 +409,7 @@ The main purpose of theory and proof contexts is to manage arbitrary
 
   \medskip
   \begin{tabular}{ll}
-  \isa{init{\isacharcolon}\ theory\ {\isasymrightarrow}\ theory} \\
+  \isa{init{\isacharcolon}\ theory\ {\isasymrightarrow}\ T} \\
   \isa{get{\isacharcolon}\ context\ {\isasymrightarrow}\ T} \\
   \isa{put{\isacharcolon}\ T\ {\isasymrightarrow}\ context\ {\isasymrightarrow}\ context} \\
   \isa{map{\isacharcolon}\ {\isacharparenleft}T\ {\isasymrightarrow}\ T{\isacharparenright}\ {\isasymrightarrow}\ context\ {\isasymrightarrow}\ context} \\
@@ -445,9 +435,9 @@ The main purpose of theory and proof contexts is to manage arbitrary
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexmlfunctor{TheoryDataFun}\verb|functor TheoryDataFun| \\
-  \indexmlfunctor{ProofDataFun}\verb|functor ProofDataFun| \\
-  \indexmlfunctor{GenericDataFun}\verb|functor GenericDataFun| \\
+  \indexdef{}{ML functor}{TheoryDataFun}\verb|functor TheoryDataFun| \\
+  \indexdef{}{ML functor}{ProofDataFun}\verb|functor ProofDataFun| \\
+  \indexdef{}{ML functor}{GenericDataFun}\verb|functor GenericDataFun| \\
   \end{mldecls}
 
   \begin{description}
@@ -492,11 +482,7 @@ In principle, a name is just a string, but there are various
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-\glossary{Symbol}{The smallest unit of text in Isabelle, subsumes
-  plain ASCII characters as well as an infinite collection of named
-  symbols (for greek, math etc.).}
-
-  A \emph{symbol} constitutes the smallest textual unit in Isabelle
+A \emph{symbol} constitutes the smallest textual unit in Isabelle
   --- raw characters are normally not encountered at all.  Isabelle
   strings consist of a sequence of symbols, represented as a packed
   string or a list of strings.  Each symbol is in itself a small
@@ -536,8 +522,8 @@ In principle, a name is just a string, but there are various
   link to the standard collection of Isabelle.
 
   \medskip Output of Isabelle symbols depends on the print mode
-  (\secref{FIXME}).  For example, the standard {\LaTeX} setup of the
-  Isabelle document preparation system would present
+  (\secref{print-mode}).  For example, the standard {\LaTeX} setup of
+  the Isabelle document preparation system would present
   ``\verb,\,\verb,<alpha>,'' as \isa{{\isasymalpha}}, and
   ``\verb,\,\verb,<^bold>,\verb,\,\verb,<alpha>,'' as \isa{\isactrlbold {\isasymalpha}}.%
 \end{isamarkuptext}%
@@ -551,16 +537,16 @@ In principle, a name is just a string, but there are various
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexmltype{Symbol.symbol}\verb|type Symbol.symbol| \\
-  \indexml{Symbol.explode}\verb|Symbol.explode: string -> Symbol.symbol list| \\
-  \indexml{Symbol.is\_letter}\verb|Symbol.is_letter: Symbol.symbol -> bool| \\
-  \indexml{Symbol.is\_digit}\verb|Symbol.is_digit: Symbol.symbol -> bool| \\
-  \indexml{Symbol.is\_quasi}\verb|Symbol.is_quasi: Symbol.symbol -> bool| \\
-  \indexml{Symbol.is\_blank}\verb|Symbol.is_blank: Symbol.symbol -> bool| \\
+  \indexdef{}{ML type}{Symbol.symbol}\verb|type Symbol.symbol| \\
+  \indexdef{}{ML}{Symbol.explode}\verb|Symbol.explode: string -> Symbol.symbol list| \\
+  \indexdef{}{ML}{Symbol.is\_letter}\verb|Symbol.is_letter: Symbol.symbol -> bool| \\
+  \indexdef{}{ML}{Symbol.is\_digit}\verb|Symbol.is_digit: Symbol.symbol -> bool| \\
+  \indexdef{}{ML}{Symbol.is\_quasi}\verb|Symbol.is_quasi: Symbol.symbol -> bool| \\
+  \indexdef{}{ML}{Symbol.is\_blank}\verb|Symbol.is_blank: Symbol.symbol -> bool| \\
   \end{mldecls}
   \begin{mldecls}
-  \indexmltype{Symbol.sym}\verb|type Symbol.sym| \\
-  \indexml{Symbol.decode}\verb|Symbol.decode: Symbol.symbol -> Symbol.sym| \\
+  \indexdef{}{ML type}{Symbol.sym}\verb|type Symbol.sym| \\
+  \indexdef{}{ML}{Symbol.decode}\verb|Symbol.decode: Symbol.symbol -> Symbol.sym| \\
   \end{mldecls}
 
   \begin{description}
@@ -600,10 +586,9 @@ In principle, a name is just a string, but there are various
 \begin{isamarkuptext}%
 A \emph{basic name} essentially consists of a single Isabelle
   identifier.  There are conventions to mark separate classes of basic
-  names, by attaching a suffix of underscores (\isa{{\isacharunderscore}}): one
-  underscore means \emph{internal name}, two underscores means
-  \emph{Skolem name}, three underscores means \emph{internal Skolem
-  name}.
+  names, by attaching a suffix of underscores: one underscore means
+  \emph{internal name}, two underscores means \emph{Skolem name},
+  three underscores means \emph{internal Skolem name}.
 
   For example, the basic name \isa{foo} has the internal version
   \isa{foo{\isacharunderscore}}, with Skolem versions \isa{foo{\isacharunderscore}{\isacharunderscore}} and \isa{foo{\isacharunderscore}{\isacharunderscore}{\isacharunderscore}}, respectively.
@@ -636,15 +621,15 @@ A \emph{basic name} essentially consists of a single Isabelle
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexml{Name.internal}\verb|Name.internal: string -> string| \\
-  \indexml{Name.skolem}\verb|Name.skolem: string -> string| \\
+  \indexdef{}{ML}{Name.internal}\verb|Name.internal: string -> string| \\
+  \indexdef{}{ML}{Name.skolem}\verb|Name.skolem: string -> string| \\
   \end{mldecls}
   \begin{mldecls}
-  \indexmltype{Name.context}\verb|type Name.context| \\
-  \indexml{Name.context}\verb|Name.context: Name.context| \\
-  \indexml{Name.declare}\verb|Name.declare: string -> Name.context -> Name.context| \\
-  \indexml{Name.invents}\verb|Name.invents: Name.context -> string -> int -> string list| \\
-  \indexml{Name.variants}\verb|Name.variants: string list -> Name.context -> string list * Name.context| \\
+  \indexdef{}{ML type}{Name.context}\verb|type Name.context| \\
+  \indexdef{}{ML}{Name.context}\verb|Name.context: Name.context| \\
+  \indexdef{}{ML}{Name.declare}\verb|Name.declare: string -> Name.context -> Name.context| \\
+  \indexdef{}{ML}{Name.invents}\verb|Name.invents: Name.context -> string -> int -> string list| \\
+  \indexdef{}{ML}{Name.variants}\verb|Name.variants: string list -> Name.context -> string list * Name.context| \\
   \end{mldecls}
 
   \begin{description}
@@ -664,7 +649,7 @@ A \emph{basic name} essentially consists of a single Isabelle
   \item \verb|Name.invents|~\isa{context\ name\ n} produces \isa{n} fresh names derived from \isa{name}.
 
   \item \verb|Name.variants|~\isa{names\ context} produces fresh
-  varians of \isa{names}; the result is entered into the context.
+  variants of \isa{names}; the result is entered into the context.
 
   \end{description}%
 \end{isamarkuptext}%
@@ -724,7 +709,7 @@ An \emph{indexed name} (or \isa{indexname}) is a pair of a basic
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexmltype{indexname}\verb|type indexname| \\
+  \indexdef{}{ML type}{indexname}\verb|type indexname| \\
   \end{mldecls}
 
   \begin{description}
@@ -806,25 +791,25 @@ A \emph{qualified name} consists of a non-empty sequence of basic
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexml{NameSpace.base}\verb|NameSpace.base: string -> string| \\
-  \indexml{NameSpace.qualifier}\verb|NameSpace.qualifier: string -> string| \\
-  \indexml{NameSpace.append}\verb|NameSpace.append: string -> string -> string| \\
-  \indexml{NameSpace.implode}\verb|NameSpace.implode: string list -> string| \\
-  \indexml{NameSpace.explode}\verb|NameSpace.explode: string -> string list| \\
+  \indexdef{}{ML}{NameSpace.base}\verb|NameSpace.base: string -> string| \\
+  \indexdef{}{ML}{NameSpace.qualifier}\verb|NameSpace.qualifier: string -> string| \\
+  \indexdef{}{ML}{NameSpace.append}\verb|NameSpace.append: string -> string -> string| \\
+  \indexdef{}{ML}{NameSpace.implode}\verb|NameSpace.implode: string list -> string| \\
+  \indexdef{}{ML}{NameSpace.explode}\verb|NameSpace.explode: string -> string list| \\
   \end{mldecls}
   \begin{mldecls}
-  \indexmltype{NameSpace.naming}\verb|type NameSpace.naming| \\
-  \indexml{NameSpace.default\_naming}\verb|NameSpace.default_naming: NameSpace.naming| \\
-  \indexml{NameSpace.add\_path}\verb|NameSpace.add_path: string -> NameSpace.naming -> NameSpace.naming| \\
-  \indexml{NameSpace.full\_name}\verb|NameSpace.full_name: NameSpace.naming -> binding -> string| \\
+  \indexdef{}{ML type}{NameSpace.naming}\verb|type NameSpace.naming| \\
+  \indexdef{}{ML}{NameSpace.default\_naming}\verb|NameSpace.default_naming: NameSpace.naming| \\
+  \indexdef{}{ML}{NameSpace.add\_path}\verb|NameSpace.add_path: string -> NameSpace.naming -> NameSpace.naming| \\
+  \indexdef{}{ML}{NameSpace.full\_name}\verb|NameSpace.full_name: NameSpace.naming -> binding -> string| \\
   \end{mldecls}
   \begin{mldecls}
-  \indexmltype{NameSpace.T}\verb|type NameSpace.T| \\
-  \indexml{NameSpace.empty}\verb|NameSpace.empty: NameSpace.T| \\
-  \indexml{NameSpace.merge}\verb|NameSpace.merge: NameSpace.T * NameSpace.T -> NameSpace.T| \\
-  \indexml{NameSpace.declare}\verb|NameSpace.declare: NameSpace.naming -> binding -> NameSpace.T -> string * NameSpace.T| \\
-  \indexml{NameSpace.intern}\verb|NameSpace.intern: NameSpace.T -> string -> string| \\
-  \indexml{NameSpace.extern}\verb|NameSpace.extern: NameSpace.T -> string -> string| \\
+  \indexdef{}{ML type}{NameSpace.T}\verb|type NameSpace.T| \\
+  \indexdef{}{ML}{NameSpace.empty}\verb|NameSpace.empty: NameSpace.T| \\
+  \indexdef{}{ML}{NameSpace.merge}\verb|NameSpace.merge: NameSpace.T * NameSpace.T -> NameSpace.T| \\
+  \indexdef{}{ML}{NameSpace.declare}\verb|NameSpace.declare: NameSpace.naming -> binding -> NameSpace.T -> string * NameSpace.T| \\
+  \indexdef{}{ML}{NameSpace.intern}\verb|NameSpace.intern: NameSpace.T -> string -> string| \\
+  \indexdef{}{ML}{NameSpace.extern}\verb|NameSpace.extern: NameSpace.T -> string -> string| \\
   \end{mldecls}
 
   \begin{description}
