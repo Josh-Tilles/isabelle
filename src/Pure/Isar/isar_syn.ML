@@ -693,7 +693,7 @@ val _ =
 val _ =
   OuterSyntax.command "finally" "combine calculation and current facts, exhibit result"
     (K.tag_proof K.prf_chain)
-    (calc_args >> (Toplevel.proofs' o Calculation.finally_));
+    (calc_args >> (Toplevel.proofs' o Calculation.finally));
 
 val _ =
   OuterSyntax.command "moreover" "augment calculation by current facts"
@@ -727,39 +727,6 @@ val _ =
         [tr] => Scan.succeed (K tr)
       | _ => Scan.fail_with (K "exactly one command expected"))
       handle ERROR msg => Scan.fail_with (K msg)));
-
-
-(* global history commands *)
-
-val _ =
-  OuterSyntax.improper_command "init_toplevel" "init toplevel point-of-interest" K.control
-    (Scan.succeed (Toplevel.no_timing o Toplevel.imperative Isar.init));
-
-val _ =
-  OuterSyntax.improper_command "linear_undo" "undo commands" K.control
-    (Scan.optional P.nat 1 >>
-      (fn n => Toplevel.no_timing o Toplevel.imperative (fn () => Isar.linear_undo n)));
-
-val _ =
-  OuterSyntax.improper_command "undo" "undo commands (skipping closed proofs)" K.control
-    (Scan.optional P.nat 1 >>
-      (fn n => Toplevel.no_timing o Toplevel.imperative (fn () => Isar.undo n)));
-
-val _ =
-  OuterSyntax.improper_command "undos_proof" "undo commands (skipping closed proofs)" K.control
-    (Scan.optional P.nat 1 >> (fn n => Toplevel.no_timing o
-      Toplevel.keep (fn state =>
-        if Toplevel.is_proof state then (Isar.undo n; Isar.print ()) else raise Toplevel.UNDEF)));
-
-val _ =
-  OuterSyntax.improper_command "cannot_undo" "partial undo -- Proof General legacy" K.control
-    (P.name >>
-      (fn "end" => Toplevel.no_timing o Toplevel.imperative (fn () => Isar.undo 1)
-        | txt => Toplevel.imperative (fn () => error ("Cannot undo " ^ quote txt))));
-
-val _ =
-  OuterSyntax.improper_command "kill" "kill partial proof or theory development" K.control
-    (Scan.succeed (Toplevel.no_timing o Toplevel.imperative Isar.kill));
 
 
 
@@ -973,10 +940,6 @@ val _ =
 val _ =
   OuterSyntax.improper_command "exit" "exit Isar loop" K.control
     (Scan.succeed (Toplevel.no_timing o IsarCmd.exit));
-
-val _ =
-  OuterSyntax.improper_command "welcome" "print welcome message" K.diag
-    (Scan.succeed (Toplevel.no_timing o IsarCmd.welcome));
 
 end;
 
