@@ -44,10 +44,10 @@ lemma div_mod_equality2: "(b * (a div b) + a mod b) + c = a + c"
 by (simp add: mod_div_equality2)
 
 lemma mod_by_0 [simp]: "a mod 0 = a"
-  using mod_div_equality [of a zero] by simp
+using mod_div_equality [of a zero] by simp
 
 lemma mod_0 [simp]: "0 mod a = 0"
-  using mod_div_equality [of zero a] div_0 by simp 
+using mod_div_equality [of zero a] div_0 by simp
 
 lemma div_mult_self2 [simp]:
   assumes "b \<noteq> 0"
@@ -341,6 +341,25 @@ lemma mod_diff_cong:
   shows "(a - b) mod c = (a' - b') mod c"
   unfolding diff_minus using assms
   by (intro mod_add_cong mod_minus_cong)
+
+lemma dvd_neg_div: "y dvd x \<Longrightarrow> -x div y = - (x div y)"
+apply (case_tac "y = 0") apply simp
+apply (auto simp add: dvd_def)
+apply (subgoal_tac "-(y * k) = y * - k")
+ apply (erule ssubst)
+ apply (erule div_mult_self1_is_id)
+apply simp
+done
+
+lemma dvd_div_neg: "y dvd x \<Longrightarrow> x div -y = - (x div y)"
+apply (case_tac "y = 0") apply simp
+apply (auto simp add: dvd_def)
+apply (subgoal_tac "y * k = -y * -k")
+ apply (erule ssubst)
+ apply (rule div_mult_self1_is_id)
+ apply simp
+apply simp
+done
 
 end
 
@@ -665,16 +684,6 @@ apply (cases "c = 0", simp)
 apply (blast intro: divmod_rel [THEN divmod_rel_mult1_eq, THEN div_eq])
 done
 
-lemma mod_mult1_eq: "(a*b) mod c = a*(b mod c) mod (c::nat)"
-by (rule mod_mult_right_eq)
-
-lemma mod_mult1_eq': "(a*b) mod (c::nat) = ((a mod c) * b) mod c"
-by (rule mod_mult_left_eq)
-
-lemma mod_mult_distrib_mod:
-  "(a*b) mod (c::nat) = ((a mod c) * (b mod c)) mod c"
-by (rule mod_mult_eq)
-
 lemma divmod_rel_add1_eq:
   "[| divmod_rel a c aq ar; divmod_rel b c bq br;  c > 0 |]
    ==> divmod_rel (a + b) c (aq + bq + (ar+br) div c) ((ar + br) mod c)"
@@ -686,9 +695,6 @@ lemma div_add1_eq:
 apply (cases "c = 0", simp)
 apply (blast intro: divmod_rel_add1_eq [THEN div_eq] divmod_rel)
 done
-
-lemma mod_add1_eq: "(a+b) mod (c::nat) = (a mod c + b mod c) mod c"
-by (rule mod_add_eq)
 
 lemma mod_lemma: "[| (0::nat) < c; r < b |] ==> b * (q mod c) + r < b * c"
   apply (cut_tac m = q and n = c in mod_less_divisor)

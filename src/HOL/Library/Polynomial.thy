@@ -106,6 +106,7 @@ syntax
 translations
   "[:x, xs:]" == "CONST pCons x [:xs:]"
   "[:x:]" == "CONST pCons x 0"
+  "[:x:]" <= "CONST pCons x (_constrain 0 t)"
 
 lemma Poly_nat_case: "f \<in> Poly \<Longrightarrow> nat_case a f \<in> Poly"
   unfolding Poly_def by (auto split: nat.split)
@@ -635,11 +636,13 @@ instantiation poly :: (comm_semiring_1) recpower
 begin
 
 primrec power_poly where
-  power_poly_0: "(p::'a poly) ^ 0 = 1"
-| power_poly_Suc: "(p::'a poly) ^ (Suc n) = p * p ^ n"
+  "(p::'a poly) ^ 0 = 1"
+| "(p::'a poly) ^ (Suc n) = p * p ^ n"
 
 instance
   by default simp_all
+
+declare power_poly.simps [simp del]
 
 end
 

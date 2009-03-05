@@ -77,7 +77,7 @@ lemma intrel_iff [simp]: "(((x,y),(u,v)) \<in> intrel) = (x+v = u+y)"
 by (simp add: intrel_def)
 
 lemma equiv_intrel: "equiv UNIV intrel"
-by (simp add: intrel_def equiv_def refl_def sym_def trans_def)
+by (simp add: intrel_def equiv_def refl_on_def sym_def trans_def)
 
 text{*Reduces equality of equivalence classes to the @{term intrel} relation:
   @{term "(intrel `` {x} = intrel `` {y}) = ((x,y) \<in> intrel)"} *}
@@ -1870,6 +1870,8 @@ instance proof
   show "z ^ Suc n = z * (z ^ n)" by simp
 qed
 
+declare power_int.simps [simp del]
+
 end
 
 lemma zpower_zadd_distrib: "x ^ (y + z) = ((x ^ y) * (x ^ z)::int)"
@@ -1887,7 +1889,7 @@ lemma zero_le_zpower_abs [simp]: "(0::int) \<le> abs x ^ n"
 
 lemma of_int_power:
   "of_int (z ^ n) = (of_int z ^ n :: 'a::{recpower, ring_1})"
-  by (induct n) (simp_all add: power_Suc)
+  by (induct n) simp_all
 
 lemma int_power: "int (m^n) = (int m) ^ n"
   by (rule of_nat_power)

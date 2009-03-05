@@ -1438,10 +1438,10 @@ apply (induct xs arbitrary: n)
 apply (auto split:nat.split)
 done
 
-lemma last_conv_nth: "xs\<noteq>[] \<Longrightarrow> last xs = xs!(length xs - Suc 0)"
+lemma last_conv_nth: "xs\<noteq>[] \<Longrightarrow> last xs = xs!(length xs - 1)"
 by(induct xs)(auto simp:neq_Nil_conv)
 
-lemma butlast_conv_take: "butlast xs = take (length xs - Suc 0) xs"
+lemma butlast_conv_take: "butlast xs = take (length xs - 1) xs"
 by (induct xs, simp, case_tac xs, simp_all)
 
 
@@ -1460,6 +1460,12 @@ lemma drop_Suc_Cons [simp]: "drop (Suc n) (x # xs) = drop n xs"
 by simp
 
 declare take_Cons [simp del] and drop_Cons [simp del]
+
+lemma take_1_Cons [simp]: "take 1 (x # xs) = [x]"
+  unfolding One_nat_def by simp
+
+lemma drop_1_Cons [simp]: "drop 1 (x # xs) = xs"
+  unfolding One_nat_def by simp
 
 lemma take_Suc: "xs ~= [] ==> take (Suc n) xs = hd xs # take n (tl xs)"
 by(clarsimp simp add:neq_Nil_conv)
@@ -1588,17 +1594,17 @@ apply (case_tac xs, auto)
 done
 
 lemma butlast_take:
-  "n <= length xs ==> butlast (take n xs) = take (n - Suc 0) xs"
+  "n <= length xs ==> butlast (take n xs) = take (n - 1) xs"
 by (simp add: butlast_conv_take min_max.inf_absorb1 min_max.inf_absorb2)
 
 lemma butlast_drop: "butlast (drop n xs) = drop n (butlast xs)"
-by (simp add: butlast_conv_take drop_take)
+by (simp add: butlast_conv_take drop_take add_ac)
 
 lemma take_butlast: "n < length xs ==> take n (butlast xs) = take n xs"
 by (simp add: butlast_conv_take min_max.inf_absorb1)
 
 lemma drop_butlast: "drop n (butlast xs) = butlast (drop n xs)"
-by (simp add: butlast_conv_take drop_take)
+by (simp add: butlast_conv_take drop_take add_ac)
 
 lemma hd_drop_conv_nth: "\<lbrakk> xs \<noteq> []; n < length xs \<rbrakk> \<Longrightarrow> hd(drop n xs) = xs!n"
 by(simp add: hd_conv_nth)
@@ -2458,7 +2464,7 @@ apply blast
 done
 
 lemma length_remove1:
-  "length(remove1 x xs) = (if x : set xs then length xs - Suc 0 else length xs)"
+  "length(remove1 x xs) = (if x : set xs then length xs - 1 else length xs)"
 apply (induct xs)
  apply (auto dest!:length_pos_if_in_set)
 done
@@ -3220,7 +3226,7 @@ by (unfold lenlex_def) blast
 lemma lenlex_conv:
     "lenlex r = {(xs,ys). length xs < length ys |
                  length xs = length ys \<and> (xs, ys) : lex r}"
-by (simp add: lenlex_def diag_def lex_prod_def inv_image_def)
+by (simp add: lenlex_def Id_on_def lex_prod_def inv_image_def)
 
 lemma Nil_notin_lex [iff]: "([], ys) \<notin> lex r"
 by (simp add: lex_conv)
@@ -3386,8 +3392,8 @@ apply clarify
 apply (erule listrel.induct, auto) 
 done
 
-lemma listrel_refl: "refl A r \<Longrightarrow> refl (lists A) (listrel r)" 
-apply (simp add: refl_def listrel_subset Ball_def)
+lemma listrel_refl_on: "refl_on A r \<Longrightarrow> refl_on (lists A) (listrel r)" 
+apply (simp add: refl_on_def listrel_subset Ball_def)
 apply (rule allI) 
 apply (induct_tac x) 
 apply (auto intro: listrel.intros)
@@ -3408,7 +3414,7 @@ apply (blast intro: listrel.intros)+
 done
 
 theorem equiv_listrel: "equiv A r \<Longrightarrow> equiv (lists A) (listrel r)"
-by (simp add: equiv_def listrel_refl listrel_sym listrel_trans) 
+by (simp add: equiv_def listrel_refl_on listrel_sym listrel_trans) 
 
 lemma listrel_Nil [simp]: "listrel r `` {[]} = {[]}"
 by (blast intro: listrel.intros)

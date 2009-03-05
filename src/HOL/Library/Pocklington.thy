@@ -142,10 +142,10 @@ lemma cong_mult: assumes xx': "[x = x'] (mod n)" and yy':"[y = y'] (mod n)"
   shows "[x * y = x' * y'] (mod n)"
 proof-
   have "(x * y) mod n = (x mod n) * (y mod n) mod n"  
-    by (simp add: mod_mult1_eq'[of x y n] mod_mult1_eq[of "x mod n" y n])
+    by (simp add: mod_mult_left_eq[of x y n] mod_mult_right_eq[of "x mod n" y n])
   also have "\<dots> = (x' mod n) * (y' mod n) mod n" using xx'[unfolded modeq_def] yy'[unfolded modeq_def] by simp  
   also have "\<dots> = (x' * y') mod n"
-    by (simp add: mod_mult1_eq'[of x' y' n] mod_mult1_eq[of "x' mod n" y' n])
+    by (simp add: mod_mult_left_eq[of x' y' n] mod_mult_right_eq[of "x' mod n" y' n])
   finally show ?thesis unfolding modeq_def . 
 qed
 
@@ -296,7 +296,7 @@ proof-
   from cong_solve[OF an] obtain x where x: "[a*x = b] (mod n)" by blast
   let ?x = "x mod n"
   from x have th: "[a * ?x = b] (mod n)"
-    by (simp add: modeq_def mod_mult1_eq[of a x n])
+    by (simp add: modeq_def mod_mult_right_eq[of a x n])
   from mod_less_divisor[ of n x] nz th have Px: "?P ?x" by simp
   {fix y assume Py: "y < n" "[a * y = b] (mod n)"
     from Py(2) th have "[a * y = a*?x] (mod n)" by (simp add: modeq_def)
@@ -554,12 +554,6 @@ qed
 
 (* Fermat's Little theorem / Fermat-Euler theorem.                           *)
 
-lemma (in comm_monoid_mult) fold_image_related: 
-  assumes Re: "R e e" 
-  and Rop: "\<forall>x1 y1 x2 y2. R x1 x2 \<and> R y1 y2 \<longrightarrow> R (x1 * y1) (x2 * y2)" 
-  and fS: "finite S" and Rfg: "\<forall>x\<in>S. R (h x) (g x)"
-  shows "R (fold_image (op *) h e S) (fold_image (op *) g e S)"
-  using fS by (rule finite_subset_induct) (insert assms, auto)
 
 lemma nproduct_mod:
   assumes fS: "finite S" and n0: "n \<noteq> 0"
@@ -584,26 +578,6 @@ lemma coprime_nproduct:
   shows "coprime n (setprod a S)"
   using fS unfolding setprod_def by (rule finite_subset_induct)
     (insert Sn, auto simp add: coprime_mul)
-
-lemma (in comm_monoid_mult) 
-  fold_image_eq_general:
-  assumes fS: "finite S"
-  and h: "\<forall>y\<in>S'. \<exists>!x. x\<in> S \<and> h(x) = y" 
-  and f12:  "\<forall>x\<in>S. h x \<in> S' \<and> f2(h x) = f1 x"
-  shows "fold_image (op *) f1 e S = fold_image (op *) f2 e S'"
-proof-
-  from h f12 have hS: "h ` S = S'" by auto
-  {fix x y assume H: "x \<in> S" "y \<in> S" "h x = h y"
-    from f12 h H  have "x = y" by auto }
-  hence hinj: "inj_on h S" unfolding inj_on_def Ex1_def by blast
-  from f12 have th: "\<And>x. x \<in> S \<Longrightarrow> (f2 \<circ> h) x = f1 x" by auto 
-  from hS have "fold_image (op *) f2 e S' = fold_image (op *) f2 e (h ` S)" by simp
-  also have "\<dots> = fold_image (op *) (f2 o h) e S" 
-    using fold_image_reindex[OF fS hinj, of f2 e] .
-  also have "\<dots> = fold_image (op *) f1 e S " using th fold_image_cong[OF fS, of "f2 o h" f1 e]
-    by blast
-  finally show ?thesis ..
-qed
 
 lemma fermat_little: assumes an: "coprime a n"
   shows "[a ^ (\<phi> n) = 1] (mod n)"
@@ -753,10 +727,10 @@ proof(induct n)
 next
   case (Suc n) 
   have "(x mod m)^(Suc n) mod m = ((x mod m) * (((x mod m) ^ n) mod m)) mod m" 
-    by (simp add: mod_mult1_eq[symmetric])
+    by (simp add: mod_mult_right_eq[symmetric])
   also have "\<dots> = ((x mod m) * (x^n mod m)) mod m" using Suc.hyps by simp
   also have "\<dots> = x^(Suc n) mod m"
-    by (simp add: mod_mult1_eq'[symmetric] mod_mult1_eq[symmetric])
+    by (simp add: mod_mult_left_eq[symmetric] mod_mult_right_eq[symmetric])
   finally show ?case .
 qed
 
@@ -891,9 +865,9 @@ next
     hence "[(a^?o)^?q * (a^?r) = 1] (mod n)" 
       by (simp add: modeq_def power_mult[symmetric] power_add[symmetric])
     hence th: "[a^?r = 1] (mod n)"
-      using eqo mod_mult1_eq'[of "(a^?o)^?q" "a^?r" n]
+      using eqo mod_mult_left_eq[of "(a^?o)^?q" "a^?r" n]
       apply (simp add: modeq_def del: One_nat_def)
-      by (simp add: mod_mult1_eq'[symmetric])
+      by (simp add: mod_mult_left_eq[symmetric])
     {assume r: "?r = 0" hence ?rhs by (simp add: dvd_eq_mod_eq_0)}
     moreover
     {assume r: "?r \<noteq> 0" 
@@ -1286,6 +1260,5 @@ proof-
   with pocklington[OF n qrn[symmetric] nq2 an1]
   show ?thesis by blast    
 qed
-
 
 end
