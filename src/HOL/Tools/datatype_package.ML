@@ -174,9 +174,9 @@ fun dt_recs (DtTFree _) = []
 
 fun dt_cases (descr: descr) (_, args, constrs) =
   let
-    fun the_bname i = Sign.base_name (#1 (the (AList.lookup (op =) descr i)));
+    fun the_bname i = NameSpace.base_name (#1 (the (AList.lookup (op =) descr i)));
     val bnames = map the_bname (distinct (op =) (maps dt_recs args));
-  in map (fn (c, _) => space_implode "_" (Sign.base_name c :: bnames)) constrs end;
+  in map (fn (c, _) => space_implode "_" (NameSpace.base_name c :: bnames)) constrs end;
 
 
 fun induct_cases descr =
@@ -519,7 +519,7 @@ fun gen_rep_datatype prep_term after_qed alt_names raw_ts thy =
     val cs = map (apsnd (map norm_constr)) raw_cs;
     val dtyps_of_typ = map (dtyp_of_typ (map (rpair (map fst vs) o fst) cs))
       o fst o strip_type;
-    val new_type_names = map NameSpace.base (the_default (map fst cs) alt_names);
+    val new_type_names = map NameSpace.base_name (the_default (map fst cs) alt_names);
 
     fun mk_spec (i, (tyco, constr)) = (i, (tyco,
       map (DtTFree o fst) vs,
@@ -629,14 +629,6 @@ val add_datatype_cmd = gen_add_datatype read_typ true;
 
 (** a datatype antiquotation **)
 
-local
-
-val sym_datatype = Pretty.command "datatype";
-val sym_binder = Pretty.str "\\ {\\isacharequal}"; (*FIXME use proper symbol*)
-val sym_sep = Pretty.str "{\\isacharbar}\\ ";
-
-in
-
 fun args_datatype (ctxt, args) =
   let
     val (tyco, (ctxt', args')) = Args.tyname (ctxt, args);
@@ -654,26 +646,19 @@ fun pretty_datatype ctxt (dtco, (vs, cos)) =
       in if member (op =) s " " then Pretty.enclose "(" ")" [p]
         else p
       end;
-    fun pretty_constr (co, []) =
-          Syntax.pretty_term ctxt (Const (co, ty))
-      | pretty_constr (co, [ty']) =
-          (Pretty.block o Pretty.breaks)
-            [Syntax.pretty_term ctxt (Const (co, ty' --> ty)),
-              pretty_typ_br ty']
-      | pretty_constr (co, tys) =
-          (Pretty.block o Pretty.breaks)
-            (Syntax.pretty_term ctxt (Const (co, tys ---> ty)) ::
-              map pretty_typ_br tys);
+    fun pretty_constr (co, tys) =
+      (Pretty.block o Pretty.breaks)
+        (Syntax.pretty_term ctxt (Const (co, tys ---> ty)) ::
+          map pretty_typ_br tys);
   in
     Pretty.block
-      (sym_datatype :: Pretty.brk 1 ::
+      (Pretty.command "datatype" :: Pretty.brk 1 ::
        Syntax.pretty_typ ctxt ty ::
-       sym_binder :: Pretty.brk 1 ::
-       flat (separate [Pretty.brk 1, sym_sep]
+       Pretty.str " =" :: Pretty.brk 1 ::
+       flat (separate [Pretty.brk 1, Pretty.str "| "]
          (map (single o pretty_constr) cos)))
   end
 
-end;
 
 (** package setup **)
 

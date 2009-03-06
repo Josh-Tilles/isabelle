@@ -25,9 +25,9 @@ sig
   val explode: string -> string list
   val append: string -> string -> string
   val qualified: string -> string -> string
-  val base: string -> string
+  val base_name: string -> string
   val qualifier: string -> string
-  val map_base: (string -> string) -> string -> string
+  val map_base_name: (string -> string) -> string -> string
   type T
   val empty: T
   val intern: T -> xstring -> string
@@ -78,14 +78,14 @@ fun qualified path name =
   if path = "" orelse name = "" then name
   else path ^ separator ^ name;
 
-fun base "" = ""
-  | base name = List.last (explode_name name);
+fun base_name "" = ""
+  | base_name name = List.last (explode_name name);
 
 fun qualifier "" = ""
   | qualifier name = implode_name (#1 (split_last (explode_name name)));
 
-fun map_base _ "" = ""
-  | map_base f name =
+fun map_base_name _ "" = ""
+  | map_base_name f name =
       let val names = explode_name name
       in implode_name (nth_map (length names - 1) f names) end;
 
@@ -123,7 +123,7 @@ fun suffixes_prefixes_split i k list =
 datatype T =
   NameSpace of
     (string list * string list) Symtab.table *   (*internals, hidden internals*)
-    string list Symtab.table;                    (*externals*)
+    xstring list Symtab.table;                   (*externals*)
 
 val empty = NameSpace (Symtab.empty, Symtab.empty);
 
@@ -153,15 +153,15 @@ fun intern space xname = #1 (lookup space xname);
 
 fun extern_flags {long_names, short_names, unique_names} space name =
   let
-    fun valid unique xname =
-      let val (name', uniq) = lookup space xname
-      in name = name' andalso (uniq orelse not unique) end;
+    fun valid require_unique xname =
+      let val (name', is_unique) = lookup space xname
+      in name = name' andalso (not require_unique orelse is_unique) end;
 
     fun ext [] = if valid false name then name else hidden name
       | ext (nm :: nms) = if valid unique_names nm then nm else ext nms;
   in
     if long_names then name
-    else if short_names then base name
+    else if short_names then base_name name
     else ext (get_accesses space name)
   end;
 
@@ -204,7 +204,7 @@ fun hide fully name space =
     let val names = valid_accesses space name in
       space
       |> add_name' name name
-      |> fold (del_name name) (if fully then names else names inter_string [base name])
+      |> fold (del_name name) (if fully then names else names inter_string [base_name name])
       |> fold (del_name_extra name) (get_accesses space name)
     end;
 
@@ -278,8 +278,8 @@ fun full (Naming (path, (qualify, _))) = qualify path;
 
 fun full_name naming binding =
   let
-    val (prefix, qualifier, bname) = Binding.dest binding;
-    val naming' = apply_prefix (prefix @ qualifier) naming;
+    val (prfx, bname) = Binding.dest binding;
+    val naming' = apply_prefix prfx naming;
   in full naming' bname end;
 
 
@@ -287,8 +287,8 @@ fun full_name naming binding =
 
 fun declare naming binding space =
   let
-    val (prefix, qualifier, bname) = Binding.dest binding;
-    val naming' = apply_prefix (prefix @ qualifier) naming;
+    val (prfx, bname) = Binding.dest binding;
+    val naming' = apply_prefix prfx naming;
     val name = full naming' bname;
     val names = explode_name name;
 

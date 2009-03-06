@@ -188,7 +188,7 @@ fun locale_const (Target {target, is_class, ...}) (prmode as (mode, _)) tags ((b
     val arg = (b', Term.close_schematic_term rhs');
     val similar_body = Type.similar_types (rhs, rhs');
     (* FIXME workaround based on educated guess *)
-    val (prefix', _, _) = Binding.dest b';
+    val prefix' = Binding.prefix_of b';
     val class_global = Binding.name_of b = Binding.name_of b'
       andalso not (null prefix')
       andalso (fst o snd o split_last) prefix' = Class_Target.class_prefix target;
@@ -330,7 +330,7 @@ fun init_ctxt (Target {target, is_locale, is_class, instantiation, overloading})
 
 fun init_lthy (ta as Target {target, instantiation, overloading, ...}) =
   Data.put ta #>
-  LocalTheory.init (NameSpace.base target)
+  LocalTheory.init (NameSpace.base_name target)
    {pretty = pretty ta,
     abbrev = abbrev ta,
     define = define ta,

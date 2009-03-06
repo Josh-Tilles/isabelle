@@ -15,8 +15,6 @@ sig
   val expand_defs_tac: thm -> tactic
   val combinators: thm -> thm
   val neg_conjecture_clauses: thm -> int -> thm list * (string * typ) list
-  val claset_rules_of: Proof.context -> (string * thm) list   (*FIXME DELETE*)
-  val simpset_rules_of: Proof.context -> (string * thm) list  (*FIXME DELETE*)
   val atpset_rules_of: Proof.context -> (string * thm) list
   val suppress_endtheory: bool ref     (*for emergency use where endtheory causes problems*)
   val setup: theory -> theory
@@ -342,7 +340,7 @@ fun name_or_string th =
 
 (*Skolemize a named theorem, with Skolem functions as additional premises.*)
 fun skolem_thm (s, th) =
-  if member (op =) multi_base_blacklist (Sign.base_name s) orelse bad_for_atp th then []
+  if member (op =) multi_base_blacklist (NameSpace.base_name s) orelse bad_for_atp th then []
   else
     let
       val ctxt0 = Variable.thm_context th
@@ -378,23 +376,9 @@ fun cnf_axiom thy th0 =
   end;
 
 
-(**** Extract and Clausify theorems from a theory's claset and simpset ****)
+(**** Rules from the context ****)
 
 fun pairname th = (Thm.get_name_hint th, th);
-
-fun rules_of_claset cs =
-  let val {safeIs,safeEs,hazIs,hazEs,...} = rep_cs cs
-      val intros = safeIs @ hazIs
-      val elims  = map Classical.classical_rule (safeEs @ hazEs)
-  in map pairname (intros @ elims) end;
-
-fun rules_of_simpset ss =
-  let val ({rules,...}, _) = rep_ss ss
-      val simps = Net.entries rules
-  in map (fn r => (#name r, #thm r)) simps end;
-
-fun claset_rules_of ctxt = rules_of_claset (local_claset_of ctxt);
-fun simpset_rules_of ctxt = rules_of_simpset (local_simpset_of ctxt);
 
 fun atpset_rules_of ctxt = map pairname (ResAtpset.get ctxt);
 
@@ -444,7 +428,7 @@ fun saturate_skolem_cache thy =
     val new_facts = (PureThy.facts_of thy, []) |-> Facts.fold_static (fn (name, ths) =>
       if already_seen thy name then I else cons (name, ths));
     val new_thms = (new_facts, []) |-> fold (fn (name, ths) =>
-      if member (op =) multi_base_blacklist (Sign.base_name name) then I
+      if member (op =) multi_base_blacklist (NameSpace.base_name name) then I
       else fold_index (fn (i, th) =>
         if bad_for_atp th orelse is_some (lookup_cache thy th) then I
         else cons (name ^ "_" ^ string_of_int (i + 1), Thm.transfer thy th)) ths);

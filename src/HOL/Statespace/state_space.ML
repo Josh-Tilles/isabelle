@@ -236,14 +236,14 @@ fun distinctTree_tac ctxt
   | distinctTree_tac _ _ = no_tac;
 
 val distinctNameSolver = mk_solver' "distinctNameSolver"
-     (fn ss => case #context (#1 (rep_ss ss)) of
+     (fn ss => case try Simplifier.the_context ss of
                  SOME ctxt => SUBGOAL (distinctTree_tac ctxt)
                 | NONE => fn i => no_tac)
 
 val distinct_simproc =
   Simplifier.simproc @{theory HOL} "StateSpace.distinct_simproc" ["x = y"]
     (fn thy => fn ss => (fn (Const ("op =",_)$(x as Free _)$(y as Free _)) =>
-        (case #context (#1 (rep_ss ss)) of
+        (case try Simplifier.the_context ss of
           SOME ctxt => Option.map (fn neq => DistinctTreeProver.neq_to_eq_False OF [neq])
                        (neq_x_y ctxt x y)
         | NONE => NONE)
@@ -611,7 +611,7 @@ fun gen_lookup_tr ctxt s n =
            Syntax.const "StateFun.lookup"$Syntax.free (project_name T)$Syntax.free n$s
        | NONE =>
            if get_silent (Context.Proof ctxt)
-	   then Syntax.const "StateFun.lookup"$Syntax.const "arbitrary"$Syntax.free n$s
+	   then Syntax.const "StateFun.lookup" $ Syntax.const "undefined" $ Syntax.free n $ s
            else raise TERM ("StateSpace.gen_lookup_tr: component " ^ n ^ " not defined",[]));
 
 fun lookup_tr ctxt [s,Free (n,_)] = gen_lookup_tr ctxt s n;
@@ -637,15 +637,15 @@ fun gen_update_tr id ctxt n v s =
       | NONE =>
          if get_silent (Context.Proof ctxt)
          then Syntax.const "StateFun.update"$
-                   Syntax.const "arbitrary"$Syntax.const "arbitrary"$
-                   Syntax.free n$(Syntax.const KN $ v)$s
+                   Syntax.const "undefined" $ Syntax.const "undefined" $
+                   Syntax.free n $ (Syntax.const KN $ v) $ s
          else raise TERM ("StateSpace.gen_update_tr: component " ^ n ^ " not defined",[]))
    end;
 
 fun update_tr ctxt [s,Free (n,_),v] = gen_update_tr false ctxt n v s;
 
 fun update_tr' ctxt [_$Free (prj,_),_$Free (inj,_),n as (_$Free (name,_)),(Const (k,_)$v),s] =
-     if NameSpace.base k = NameSpace.base KN then
+     if NameSpace.base_name k = NameSpace.base_name KN then
         (case get_comp (Context.Proof ctxt) name of
           SOME (T,_) => if inj=inject_name T andalso prj=project_name T then
                            Syntax.const "_statespace_update" $ s $ n $ v
