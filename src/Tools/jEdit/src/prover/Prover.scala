@@ -12,16 +12,25 @@ package isabelle.prover
 import scala.collection.mutable
 import scala.collection.immutable.{TreeSet}
 
+import scala.actors.Actor
+import scala.actors.Actor._
+
 import org.gjt.sp.util.Log
 
 import isabelle.jedit.Isabelle
 import isabelle.proofdocument.{StructureChange, ProofDocument, Text, Token}
 import isabelle.IsarDocument
 
+object ProverEvents {
+  case class Activate
+  case class SetEventBus(bus: EventBus[StructureChange])
+  case class SetIsCommandKeyword(is_command_keyword: String => Boolean)
+}
 
-class Prover(isabelle_system: IsabelleSystem, logic: String)
+class Prover(isabelle_system: IsabelleSystem, logic: String) extends Actor
 {
   /* prover process */
+
 
   private val process =
   {
@@ -40,8 +49,10 @@ class Prover(isabelle_system: IsabelleSystem, logic: String)
   private val commands = new mutable.HashMap[IsarDocument.Command_ID, Command] with
     mutable.SynchronizedMap[IsarDocument.Command_ID, Command]
   private val document_id0 = Isabelle.plugin.id()
-  private var document_id = document_id0
-  private var document_versions = Set(document_id)
+  private var document_versions = List((document_id0, ProofDocument.empty))
+
+  def document_id = document_versions.head._1
+  def document = document_versions.head._2
 
   private var initialized = false
 
@@ -83,14 +94,12 @@ class Prover(isabelle_system: IsabelleSystem, logic: String)
   /* event handling */
 
   val activated = new EventBus[Unit]
-  val command_info = new EventBus[Command]
   val output_info = new EventBus[String]
-  var document: ProofDocument = null
-
-
-  private def handle_result(result: IsabelleProcess.Result): Unit = Swing.now
+  var change_receiver = null: Actor
+  
+  private def handle_result(result: IsabelleProcess.Result)
   {
-    def command_change(c: Command) = command_info.event(c)
+    def command_change(c: Command) = this ! c
     val (running, command) =
       result.props.find(p => p._1 == Markup.ID) match {
         case None => (false, null)
@@ -104,21 +113,21 @@ class Prover(isabelle_system: IsabelleSystem, logic: String)
       output_info.event(result.toString)
     else if (result.kind == IsabelleProcess.Kind.WRITELN && !initialized) {  // FIXME !?
       initialized = true
-      if (document != null) {
-        document.activate()
-        activated.event(())
-      }
+      Swing.now { this ! ProverEvents.Activate }
     }
     else {
       result.kind match {
 
         case IsabelleProcess.Kind.WRITELN | IsabelleProcess.Kind.PRIORITY
-          | IsabelleProcess.Kind.WARNING | IsabelleProcess.Kind.ERROR
-        if command != null =>
-          if (result.kind == IsabelleProcess.Kind.ERROR)
-            command.status = Command.Status.FAILED
-          command.add_result(running, process.parse_message(result))
-          command_change(command)
+          | IsabelleProcess.Kind.WARNING | IsabelleProcess.Kind.ERROR =>
+          if (command != null) {
+            if (result.kind == IsabelleProcess.Kind.ERROR)
+              command.status = Command.Status.FAILED
+            command.add_result(running, process.parse_message(result))
+            command_change(command)
+          } else {
+            output_info.event(result.toString)
+          }
 
         case IsabelleProcess.Kind.STATUS =>
           //{{{ handle all kinds of status messages here
@@ -145,13 +154,13 @@ class Prover(isabelle_system: IsabelleSystem, logic: String)
                       if (commands.contains(cmd_id)) {
                         val cmd = commands(cmd_id)
                         if (cmd.state_id != null) states -= cmd.state_id
-                        states(state_id) = cmd
+                        states(cmd_id) = cmd
                         cmd.state_id = state_id
                         cmd.status = Command.Status.UNPROCESSED
                         command_change(cmd)
                       }
-                    }
 
+                    }
                   // command status
                   case XML.Elem(Markup.UNPROCESSED, _, _)
                   if command != null =>
@@ -181,9 +190,10 @@ class Prover(isabelle_system: IsabelleSystem, logic: String)
                       if (command == null) commands.getOrElse(markup_id, null)
                       // inner syntax: id from props
                       else command
-                    if (cmd != null)
+                    if (cmd != null) {
                       cmd.root_node.insert(cmd.node_from(kind, begin, end))
-
+                      command_change(cmd)
+                    }
                   case _ =>
                   //}}}
                 }
@@ -197,36 +207,58 @@ class Prover(isabelle_system: IsabelleSystem, logic: String)
     }
   }
 
-  def set_document(text: Text, path: String): Unit = Swing.now
-  {
-    document = new ProofDocument(text, command_decls.contains(_))
-    process.ML("()")  // FIXME force initial writeln
-    process.begin_document(document_id0, path)
-    document.structural_changes += edit_document
-    // FIXME !?
-    if (initialized) {
-      document.activate()
-      activated.event(())
+  def act() {
+    import ProverEvents._
+    loop {
+      react {
+        case Activate => {
+            val (doc, structure_change) = document.activate
+            val old_id = document_id
+            val doc_id = Isabelle.plugin.id()
+            document_versions ::= (doc_id, doc)
+            edit_document(old_id, doc_id, structure_change)
+        }
+        case SetIsCommandKeyword(f) => {
+            val old_id = document_id
+            val doc_id = Isabelle.plugin.id()
+            document_versions ::= (doc_id, document.set_command_keyword(f))
+            edit_document(old_id, doc_id, StructureChange(None, Nil, Nil))
+        }
+        case change: Text.Change => {
+            val (doc, structure_change) = document.text_changed(change)
+            val old_id = document_id
+            val doc_id = Isabelle.plugin.id()
+            document_versions ::= (doc_id, doc)
+            edit_document(old_id, doc_id, structure_change)
+        }
+        case command: Command => {
+            //state of command has changed
+            change_receiver ! command
+        }
+      }
     }
   }
+  
+  def set_document(change_receiver: Actor, path: String) {
+    this.change_receiver = change_receiver
+    this ! ProverEvents.SetIsCommandKeyword(command_decls.contains)
+    process.ML("()")  // FIXME force initial writeln
+    process.begin_document(document_id0, path)
+  }
 
-  private def edit_document(changes: StructureChange) = Swing.now
+  private def edit_document(old_id: String, document_id: String, changes: StructureChange) = Swing.now
   {
-    val old_id = document_id
-    document_id = Isabelle.plugin.id()
-    document_versions += document_id
-
     val removes =
       for (cmd <- changes.removed_commands) yield {
         commands -= cmd.id
         if (cmd.state_id != null) states -= cmd.state_id
-        (if (cmd.prev == null) document_id0 else cmd.prev.id) -> None
+        (document.commands.prev(cmd).map(_.id).getOrElse(document_id0)) -> None
       }
     val inserts =
       for (cmd <- changes.added_commands) yield {
         commands += (cmd.id -> cmd)
         process.define_command(cmd.id, isabelle_system.symbols.encode(cmd.content))
-        (if (cmd.prev == null) document_id0 else cmd.prev.id) -> Some(cmd.id)
+        (document.commands.prev(cmd).map(_.id).getOrElse(document_id0)) -> Some(cmd.id)
       }
     process.edit_document(old_id, document_id, removes.reverse ++ inserts)
   }

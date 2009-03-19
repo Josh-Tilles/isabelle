@@ -10,7 +10,6 @@ package isabelle.jedit
 import isabelle.prover.{Prover, Command}
 import isabelle.renderer.UserAgent
 
-
 import org.w3c.dom.Document
 
 import org.gjt.sp.jedit.{jEdit, EBMessage, EBPlugin, Buffer, EditPane, View}
@@ -35,12 +34,12 @@ class ProverSetup(buffer: JEditBuffer)
 
   def activate(view: View) {
     prover = new Prover(Isabelle.system, Isabelle.default_logic)
-
+    prover.start() //start actor
     val buffer = view.getBuffer
     val path = buffer.getPath
 
-    theory_view = new TheoryView(view.getTextArea)
-    prover.set_document(theory_view,
+    theory_view = new TheoryView(view.getTextArea, prover)
+    prover.set_document(theory_view.change_receiver,
       if (path.startsWith(Isabelle.VFS_PREFIX)) path.substring(Isabelle.VFS_PREFIX.length) else path)
     theory_view.activate
 
