@@ -148,17 +148,17 @@ val modes = ref ([]: string list);
 fun eval_antiquote lex state (txt, pos) =
   let
     fun expand (Antiquote.Text ss) = Symbol_Pos.content ss
-      | expand (Antiquote.Antiq x) =
-          let val (opts, src) = T.read_antiq lex antiq x in
+      | expand (Antiquote.Antiq (ss, (pos, _))) =
+          let val (opts, src) = T.read_antiq lex antiq (ss, pos) in
             options opts (fn () => command src state) ();  (*preview errors!*)
             PrintMode.with_modes (! modes @ Latex.modes)
               (Output.no_warnings (options opts (fn () => command src state))) ()
           end
       | expand (Antiquote.Open _) = ""
       | expand (Antiquote.Close _) = "";
-    val ants = Antiquote.read Antiquote.scan_text (Symbol_Pos.explode (txt, pos), pos);
+    val ants = Antiquote.read (Symbol_Pos.explode (txt, pos), pos);
   in
-    if Toplevel.is_toplevel state andalso exists Antiquote.is_antiq ants then
+    if Toplevel.is_toplevel state andalso not (forall Antiquote.is_text ants) then
       error ("Unknown context -- cannot expand document antiquotations" ^ Position.str_of pos)
     else implode (map expand ants)
   end;

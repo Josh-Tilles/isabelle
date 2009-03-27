@@ -295,28 +295,28 @@ val _ =
 
 (* use ML text *)
 
-fun inherit_env (context as Context.Proof lthy) =
+fun propagate_env (context as Context.Proof lthy) =
       Context.Proof (LocalTheory.map_contexts (ML_Context.inherit_env context) lthy)
-  | inherit_env context = context;
+  | propagate_env context = context;
 
-fun inherit_env_prf prf = Proof.map_contexts
+fun propagate_env_prf prf = Proof.map_contexts
   (Context.proof_map (ML_Context.inherit_env (Context.Proof (Proof.context_of prf)))) prf;
 
 val _ =
   OuterSyntax.command "use" "ML text from file" (K.tag_ml K.thy_decl)
-    (P.path >> (fn path => Toplevel.generic_theory (ThyInfo.exec_file false path #> inherit_env)));
+    (P.path >> (fn path => Toplevel.generic_theory (ThyInfo.exec_file false path #> propagate_env)));
 
 val _ =
   OuterSyntax.command "ML" "ML text within theory or local theory" (K.tag_ml K.thy_decl)
     (P.ML_source >> (fn (txt, pos) =>
       Toplevel.generic_theory
-        (ML_Context.exec (fn () => ML_Context.eval true pos txt) #> inherit_env)));
+        (ML_Context.exec (fn () => ML_Context.eval true pos txt) #> propagate_env)));
 
 val _ =
   OuterSyntax.command "ML_prf" "ML text within proof" (K.tag_proof K.prf_decl)
     (P.ML_source >> (fn (txt, pos) =>
       Toplevel.proof (Proof.map_context (Context.proof_map
-        (ML_Context.exec (fn () => ML_Context.eval true pos txt))) #> inherit_env_prf)));
+        (ML_Context.exec (fn () => ML_Context.eval true pos txt))) #> propagate_env_prf)));
 
 val _ =
   OuterSyntax.command "ML_val" "diagnostic ML text" (K.tag_ml K.diag)
@@ -404,7 +404,7 @@ val _ =
 (* locales *)
 
 val locale_val =
-  SpecParse.locale_expression --
+  SpecParse.locale_expression false --
     Scan.optional (P.$$$ "+" |-- P.!!! (Scan.repeat1 SpecParse.context_element)) [] ||
   Scan.repeat1 SpecParse.context_element >> pair ([], []);
 
@@ -418,25 +418,24 @@ val _ =
 val _ =
   OuterSyntax.command "sublocale"
     "prove sublocale relation between a locale and a locale expression" K.thy_goal
-    (P.xname --| (P.$$$ "\\<subseteq>" || P.$$$ "<") -- P.!!! SpecParse.locale_expression
+    (P.xname --| (P.$$$ "\\<subseteq>" || P.$$$ "<") -- P.!!! (SpecParse.locale_expression false)
       >> (fn (loc, expr) =>
-        Toplevel.print o (Toplevel.theory_to_proof (Expression.sublocale_cmd loc expr))));
+          Toplevel.print o Toplevel.theory_to_proof (Expression.sublocale_cmd loc expr)));
 
 val _ =
   OuterSyntax.command "interpretation"
     "prove interpretation of locale expression in theory" K.thy_goal
-    (P.!!! SpecParse.locale_expression --
-      Scan.optional (P.$$$ "where" |-- P.and_list1 (SpecParse.opt_thm_name ":" -- P.prop)) []
-        >> (fn (expr, equations) => Toplevel.print o
-            Toplevel.theory_to_proof (Expression.interpretation_cmd expr equations)));
+    (P.!!! (SpecParse.locale_expression true) --
+      Scan.optional (P.where_ |-- P.and_list1 (SpecParse.opt_thm_name ":" -- P.prop)) []
+      >> (fn (expr, equations) => Toplevel.print o
+          Toplevel.theory_to_proof (Expression.interpretation_cmd expr equations)));
 
 val _ =
   OuterSyntax.command "interpret"
     "prove interpretation of locale expression in proof context"
     (K.tag_proof K.prf_goal)
-    (P.!!! SpecParse.locale_expression
-        >> (fn expr => Toplevel.print o
-            Toplevel.proof' (fn int => Expression.interpret_cmd expr int)));
+    (P.!!! (SpecParse.locale_expression true)
+      >> (fn expr => Toplevel.print o Toplevel.proof' (Expression.interpret_cmd expr)));
 
 
 (* classes *)
