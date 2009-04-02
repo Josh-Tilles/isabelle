@@ -1084,10 +1084,8 @@ proof-
 qed
 
 lemma setsum_mono_zero_right: 
-  assumes fT: "finite T" and ST: "S \<subseteq> T"
-  and z: "\<forall>i \<in> T - S. f i = 0"
-  shows "setsum f T = setsum f S"
-using setsum_mono_zero_left[OF fT ST z] by simp
+  "finite T \<Longrightarrow> S \<subseteq> T \<Longrightarrow> \<forall>i \<in> T - S. f i = 0 \<Longrightarrow> setsum f T = setsum f S"
+by(blast intro!: setsum_mono_zero_left[symmetric])
 
 lemma setsum_mono_zero_cong_left: 
   assumes fT: "finite T" and ST: "S \<subseteq> T"
@@ -1645,7 +1643,7 @@ lemma setprod_cong:
   "A = B ==> (!!x. x:B ==> f x = g x) ==> setprod f A = setprod g B"
 by(fastsimp simp: setprod_def intro: fold_image_cong)
 
-lemma strong_setprod_cong:
+lemma strong_setprod_cong[cong]:
   "A = B ==> (!!x. x:B =simp=> f x = g x) ==> setprod f A = setprod g B"
 by(fastsimp simp: simp_implies_def setprod_def intro: fold_image_cong)
 
@@ -1662,7 +1660,7 @@ proof-
     then show ?thesis apply simp
       apply (rule setprod_cong)
       apply simp
-      by (erule eq[symmetric])
+      by (simp add: eq)
 qed
 
 lemma setprod_Un_one:  
@@ -1693,6 +1691,20 @@ by(simp add: setprod_def fold_image_Un_Int[symmetric])
 lemma setprod_Un_disjoint: "finite A ==> finite B
   ==> A Int B = {} ==> setprod g (A Un B) = setprod g A * setprod g B"
 by (subst setprod_Un_Int [symmetric], auto)
+
+lemma setprod_mono_one_left: 
+  assumes fT: "finite T" and ST: "S \<subseteq> T"
+  and z: "\<forall>i \<in> T - S. f i = 1"
+  shows "setprod f S = setprod f T"
+proof-
+  have eq: "T = S \<union> (T - S)" using ST by blast
+  have d: "S \<inter> (T - S) = {}" using ST by blast
+  from fT ST have f: "finite S" "finite (T - S)" by (auto intro: finite_subset)
+  show ?thesis
+  by (simp add: setprod_Un_disjoint[OF f d, unfolded eq[symmetric]] setprod_1'[OF z])
+qed
+
+lemmas setprod_mono_one_right = setprod_mono_one_left [THEN sym]
 
 lemma setprod_delta: 
   assumes fS: "finite S"
@@ -1776,49 +1788,26 @@ apply (erule disjE, auto)
 done
 
 lemma setprod_nonneg [rule_format]:
-   "(ALL x: A. (0::'a::ordered_idom) \<le> f x) --> 0 \<le> setprod f A"
-apply (case_tac "finite A")
-apply (induct set: finite, force, clarsimp)
-apply (subgoal_tac "0 * 0 \<le> f x * setprod f F", force)
-apply (rule mult_mono, assumption+)
-apply (auto simp add: setprod_def)
-done
+   "(ALL x: A. (0::'a::ordered_semidom) \<le> f x) --> 0 \<le> setprod f A"
+by (cases "finite A", induct set: finite, simp_all add: mult_nonneg_nonneg)
 
-lemma setprod_pos [rule_format]: "(ALL x: A. (0::'a::ordered_idom) < f x)
+lemma setprod_pos [rule_format]: "(ALL x: A. (0::'a::ordered_semidom) < f x)
   --> 0 < setprod f A"
-apply (case_tac "finite A")
-apply (induct set: finite, force, clarsimp)
-apply (subgoal_tac "0 * 0 < f x * setprod f F", force)
-apply (rule mult_strict_mono, assumption+)
-apply (auto simp add: setprod_def)
-done
+by (cases "finite A", induct set: finite, simp_all add: mult_pos_pos)
 
-lemma setprod_nonzero [rule_format]:
-  "(ALL x y. (x::'a::comm_semiring_1) * y = 0 --> x = 0 | y = 0) ==>
-    finite A ==> (ALL x: A. f x \<noteq> (0::'a)) --> setprod f A \<noteq> 0"
-by (erule finite_induct, auto)
+lemma setprod_zero_iff[simp]: "finite A ==> 
+  (setprod f A = (0::'a::{comm_semiring_1,no_zero_divisors})) =
+  (EX x: A. f x = 0)"
+by (erule finite_induct, auto simp:no_zero_divisors)
 
-lemma setprod_zero_eq:
-    "(ALL x y. (x::'a::comm_semiring_1) * y = 0 --> x = 0 | y = 0) ==>
-     finite A ==> (setprod f A = (0::'a)) = (EX x: A. f x = 0)"
-by (insert setprod_zero [of A f] setprod_nonzero [of A f], blast)
-
-lemma setprod_nonzero_field:
-    "finite A ==> (ALL x: A. f x \<noteq> (0::'a::idom)) ==> setprod f A \<noteq> 0"
-by (rule setprod_nonzero, auto)
-
-lemma setprod_zero_eq_field:
-    "finite A ==> (setprod f A = (0::'a::idom)) = (EX x: A. f x = 0)"
-by (rule setprod_zero_eq, auto)
+lemma setprod_pos_nat:
+  "finite S ==> (ALL x : S. f x > (0::nat)) ==> setprod f S > 0"
+using setprod_zero_iff by(simp del:neq0_conv add:neq0_conv[symmetric])
 
 lemma setprod_Un: "finite A ==> finite B ==> (ALL x: A Int B. f x \<noteq> 0) ==>
   (setprod f (A Un B) :: 'a ::{field})
    = setprod f A * setprod f B / setprod f (A Int B)"
-apply (subst setprod_Un_Int [symmetric], auto)
-apply (subgoal_tac "finite (A Int B)")
-apply (frule setprod_nonzero_field [of "A Int B" f], assumption)
-apply (subst times_divide_eq_right [THEN sym], auto)
-done
+by (subst setprod_Un_Int [symmetric], auto)
 
 lemma setprod_diff1: "finite A ==> f a \<noteq> 0 ==>
   (setprod f (A - {a}) :: 'a :: {field}) =
