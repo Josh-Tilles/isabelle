@@ -8,7 +8,14 @@ Proof generator for domain command.
 
 val HOLCF_ss = @{simpset};
 
-structure Domain_Theorems = struct
+signature DOMAIN_THEOREMS =
+sig
+  val theorems: Domain_Library.eq * Domain_Library.eq list -> theory -> thm list * theory;
+  val comp_theorems: bstring * Domain_Library.eq list -> theory -> thm list * theory;
+end;
+
+structure Domain_Theorems : DOMAIN_THEOREMS =
+struct
 
 val quiet_mode = ref false;
 val trace_domain = ref false;
@@ -608,23 +615,22 @@ val copy_rews = copy_strict :: copy_apps @ copy_stricts;
 in
   thy
     |> Sign.add_path (Long_Name.base_name dname)
-    |> (snd o PureThy.add_thmss [
-        ((Binding.name "iso_rews" , iso_rews  ), [Simplifier.simp_add]),
-        ((Binding.name "exhaust"  , [exhaust] ), []),
-        ((Binding.name "casedist" , [casedist]), [Induct.cases_type dname]),
-        ((Binding.name "when_rews", when_rews ), [Simplifier.simp_add]),
-        ((Binding.name "compacts", con_compacts), [Simplifier.simp_add]),
-        ((Binding.name "con_rews", con_rews), [Simplifier.simp_add]),
-        ((Binding.name "sel_rews", sel_rews), [Simplifier.simp_add]),
-        ((Binding.name "dis_rews", dis_rews), [Simplifier.simp_add]),
-        ((Binding.name "pat_rews", pat_rews), [Simplifier.simp_add]),
-        ((Binding.name "dist_les", dist_les), [Simplifier.simp_add]),
-        ((Binding.name "dist_eqs", dist_eqs), [Simplifier.simp_add]),
-        ((Binding.name "inverts" , inverts ), [Simplifier.simp_add]),
-        ((Binding.name "injects" , injects ), [Simplifier.simp_add]),
-        ((Binding.name "copy_rews", copy_rews), [Simplifier.simp_add]),
-        ((Binding.name "match_rews", mat_rews), [Simplifier.simp_add])
-       ])
+    |> snd o PureThy.add_thmss [
+        ((Binding.name "iso_rews"  , iso_rews    ), [Simplifier.simp_add]),
+        ((Binding.name "exhaust"   , [exhaust]   ), []),
+        ((Binding.name "casedist"  , [casedist]  ), [Induct.cases_type dname]),
+        ((Binding.name "when_rews" , when_rews   ), [Simplifier.simp_add]),
+        ((Binding.name "compacts"  , con_compacts), [Simplifier.simp_add]),
+        ((Binding.name "con_rews"  , con_rews    ), [Simplifier.simp_add]),
+        ((Binding.name "sel_rews"  , sel_rews    ), [Simplifier.simp_add]),
+        ((Binding.name "dis_rews"  , dis_rews    ), [Simplifier.simp_add]),
+        ((Binding.name "pat_rews"  , pat_rews    ), [Simplifier.simp_add]),
+        ((Binding.name "dist_les"  , dist_les    ), [Simplifier.simp_add]),
+        ((Binding.name "dist_eqs"  , dist_eqs    ), [Simplifier.simp_add]),
+        ((Binding.name "inverts"   , inverts     ), [Simplifier.simp_add]),
+        ((Binding.name "injects"   , injects     ), [Simplifier.simp_add]),
+        ((Binding.name "copy_rews" , copy_rews   ), [Simplifier.simp_add]),
+        ((Binding.name "match_rews", mat_rews    ), [Simplifier.simp_add])]
     |> Sign.parent_path
     |> pair (iso_rews @ when_rews @ con_rews @ sel_rews @ dis_rews @
         pat_rews @ dist_les @ dist_eqs @ copy_rews)
@@ -1004,14 +1010,14 @@ val inducts = ProjectRule.projections (ProofContext.init thy) ind;
 fun ind_rule (dname, rule) = ((Binding.empty, [rule]), [Induct.induct_type dname]);
 
 in thy |> Sign.add_path comp_dnam
-       |> (snd o (PureThy.add_thmss (map (Thm.no_attributes o apfst Binding.name) [
-		("take_rews"  , take_rews  ),
-		("take_lemmas", take_lemmas),
-		("finites"    , finites    ),
-		("finite_ind", [finite_ind]),
-		("ind"       , [ind       ]),
-		("coind"     , [coind     ])])))
-       |> (snd o (PureThy.add_thmss (map ind_rule (dnames ~~ inducts))))
+       |> snd o PureThy.add_thmss [
+           ((Binding.name "take_rews"  , take_rews   ), [Simplifier.simp_add]),
+           ((Binding.name "take_lemmas", take_lemmas ), []),
+           ((Binding.name "finites"    , finites     ), []),
+           ((Binding.name "finite_ind" , [finite_ind]), []),
+           ((Binding.name "ind"        , [ind]       ), []),
+           ((Binding.name "coind"      , [coind]     ), [])]
+       |> snd o PureThy.add_thmss (map ind_rule (dnames ~~ inducts))
        |> Sign.parent_path |> pair take_rews
 end; (* let *)
 end; (* local *)
