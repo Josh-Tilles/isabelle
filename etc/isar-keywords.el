@@ -35,6 +35,7 @@
     "atp_info"
     "atp_kill"
     "atp_messages"
+    "atp_minimize"
     "attribute_setup"
     "automaton"
     "ax_specification"
@@ -167,6 +168,7 @@
     "print_cases"
     "print_claset"
     "print_classes"
+    "print_codeproc"
     "print_codesetup"
     "print_commands"
     "print_configs"
@@ -249,6 +251,7 @@
     "use_thy"
     "using"
     "value"
+    "values"
     "welcome"
     "with"
     "{"
@@ -340,6 +343,7 @@
     "atp_info"
     "atp_kill"
     "atp_messages"
+    "atp_minimize"
     "cd"
     "class_deps"
     "code_deps"
@@ -367,6 +371,7 @@
     "print_cases"
     "print_claset"
     "print_classes"
+    "print_codeproc"
     "print_codesetup"
     "print_commands"
     "print_configs"
@@ -400,6 +405,7 @@
     "unused_thms"
     "use_thy"
     "value"
+    "values"
     "welcome"))
 
 (defconst isar-keywords-theory-begin

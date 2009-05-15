@@ -6,7 +6,6 @@ header {* Rational numbers *}
 
 theory Rational
 imports GCD Archimedean_Field
-uses ("Tools/rat_arith.ML")
 begin
 
 subsection {* Rational numbers as quotient *}
@@ -90,7 +89,7 @@ lemma eq_rat:
   and "\<And>a c. Fract 0 a = Fract 0 c"
   by (simp_all add: Fract_def)
 
-instantiation rat :: "{comm_ring_1, recpower}"
+instantiation rat :: comm_ring_1
 begin
 
 definition
@@ -156,11 +155,6 @@ proof -
   then show ?thesis by (simp add: mult_rat [symmetric])
 qed
 
-primrec power_rat
-where
-  "q ^ 0 = (1\<Colon>rat)"
-| "q ^ Suc n = (q\<Colon>rat) * (q ^ n)"
-
 instance proof
   fix q r s :: rat show "(q * r) * s = q * (r * s)" 
     by (cases q, cases r, cases s) (simp add: eq_rat)
@@ -190,17 +184,7 @@ next
     by (cases q, cases r, cases s) (simp add: eq_rat algebra_simps)
 next
   show "(0::rat) \<noteq> 1" by (simp add: Zero_rat_def One_rat_def eq_rat)
-next
-  fix q :: rat show "q * 1 = q"
-    by (cases q) (simp add: One_rat_def eq_rat)
-next
-  fix q :: rat
-  fix n :: nat
-  show "q ^ 0 = 1" by simp
-  show "q ^ (Suc n) = q * (q ^ n)" by simp
 qed
-
-declare power_rat.simps [simp del]
 
 end
 
@@ -222,7 +206,8 @@ begin
 definition
   rat_number_of_def [code del]: "number_of w = Fract w 1"
 
-instance by intro_classes (simp add: rat_number_of_def of_int_rat)
+instance proof
+qed (simp add: rat_number_of_def of_int_rat)
 
 end
 
@@ -596,10 +581,25 @@ lemma floor_Fract:
   by (simp add: floor_unique)
 
 
-subsection {* Arithmetic setup *}
+subsection {* Linear arithmetic setup *}
 
-use "Tools/rat_arith.ML"
-declaration {* K rat_arith_setup *}
+declaration {*
+  K (Lin_Arith.add_inj_thms [@{thm of_nat_le_iff} RS iffD2, @{thm of_nat_eq_iff} RS iffD2]
+    (* not needed because x < (y::nat) can be rewritten as Suc x <= y: of_nat_less_iff RS iffD2 *)
+  #> Lin_Arith.add_inj_thms [@{thm of_int_le_iff} RS iffD2, @{thm of_int_eq_iff} RS iffD2]
+    (* not needed because x < (y::int) can be rewritten as x + 1 <= y: of_int_less_iff RS iffD2 *)
+  #> Lin_Arith.add_simps [@{thm neg_less_iff_less},
+      @{thm True_implies_equals},
+      read_instantiate @{context} [(("a", 0), "(number_of ?v)")] @{thm right_distrib},
+      @{thm divide_1}, @{thm divide_zero_left},
+      @{thm times_divide_eq_right}, @{thm times_divide_eq_left},
+      @{thm minus_divide_left} RS sym, @{thm minus_divide_right} RS sym,
+      @{thm of_int_minus}, @{thm of_int_diff},
+      @{thm of_int_of_nat_eq}]
+  #> Lin_Arith.add_simprocs Numeral_Simprocs.field_cancel_numeral_factors
+  #> Lin_Arith.add_inj_const (@{const_name of_nat}, @{typ "nat => rat"})
+  #> Lin_Arith.add_inj_const (@{const_name of_int}, @{typ "int => rat"}))
+*}
 
 
 subsection {* Embedding from Rationals to other Fields *}
@@ -667,7 +667,7 @@ lemma of_rat_divide:
 by (cases "b = 0") (simp_all add: nonzero_of_rat_divide)
 
 lemma of_rat_power:
-  "(of_rat (a ^ n)::'a::{field_char_0,recpower}) = of_rat a ^ n"
+  "(of_rat (a ^ n)::'a::field_char_0) = of_rat a ^ n"
 by (induct n) (simp_all add: of_rat_mult)
 
 lemma of_rat_eq_iff [simp]: "(of_rat a = of_rat b) = (a = b)"
@@ -827,7 +827,7 @@ apply (rule of_rat_divide [symmetric])
 done
 
 lemma Rats_power [simp]:
-  fixes a :: "'a::{field_char_0,recpower}"
+  fixes a :: "'a::field_char_0"
   shows "a \<in> Rats \<Longrightarrow> a ^ n \<in> Rats"
 apply (auto simp add: Rats_def)
 apply (rule range_eqI)

@@ -20,6 +20,9 @@ text{*Although it may appear that both of these equalities are helpful
 only when applied to assumptions, in practice it seems better to give
 them the uniform iff attribute. *}
 
+lemma inj_Some [simp]: "inj_on Some A"
+by (rule inj_onI) simp
+
 lemma option_caseE:
   assumes c: "(case x of None => P | Some y => Q y)"
   obtains
@@ -27,14 +30,15 @@ lemma option_caseE:
   | (Some) y where "x = Some y" and "Q y"
   using c by (cases x) simp_all
 
-lemma insert_None_conv_UNIV: "insert None (range Some) = UNIV"
-  by (rule set_ext, case_tac x) auto
+lemma UNIV_option_conv: "UNIV = insert None (range Some)"
+by(auto intro: classical)
+
+lemma finite_option_UNIV[simp]:
+  "finite (UNIV :: 'a option set) = finite (UNIV :: 'a set)"
+by(auto simp add: UNIV_option_conv elim: finite_imageD intro: inj_Some)
 
 instance option :: (finite) finite proof
-qed (simp add: insert_None_conv_UNIV [symmetric])
-
-lemma inj_Some [simp]: "inj_on Some A"
-  by (rule inj_onI) simp
+qed (simp add: UNIV_option_conv)
 
 
 subsubsection {* Operations *}
@@ -59,10 +63,8 @@ lemma elem_set [iff]: "(x : set xo) = (xo = Some x)"
 lemma set_empty_eq [simp]: "(set xo = {}) = (xo = None)"
   by (cases xo) auto
 
-definition
-  map :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a option \<Rightarrow> 'b option"
-where
-  [code del]: "map = (%f y. case y of None => None | Some x => Some (f x))"
+definition map :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a option \<Rightarrow> 'b option" where
+  "map = (%f y. case y of None => None | Some x => Some (f x))"
 
 lemma option_map_None [simp, code]: "map f None = None"
   by (simp add: map_def)
@@ -91,14 +93,21 @@ hide (open) const set map
 
 subsubsection {* Code generator setup *}
 
-definition
-  is_none :: "'a option \<Rightarrow> bool" where
-  is_none_none [code post, symmetric, code inline]: "is_none x \<longleftrightarrow> x = None"
+definition is_none :: "'a option \<Rightarrow> bool" where
+  [code post]: "is_none x \<longleftrightarrow> x = None"
 
 lemma is_none_code [code]:
   shows "is_none None \<longleftrightarrow> True"
     and "is_none (Some x) \<longleftrightarrow> False"
-  unfolding is_none_none [symmetric] by simp_all
+  unfolding is_none_def by simp_all
+
+lemma is_none_none:
+  "is_none x \<longleftrightarrow> x = None"
+  by (simp add: is_none_def)
+
+lemma [code inline]:
+  "eq_class.eq x None \<longleftrightarrow> is_none x"
+  by (simp add: eq is_none_none)
 
 hide (open) const is_none
 
