@@ -70,6 +70,7 @@ sig
   val assumptionK: string
   val definitionK: string
   val theoremK: string
+  val generatedK : string
   val lemmaK: string
   val corollaryK: string
   val internalK: string
@@ -388,6 +389,7 @@ val axiomK = "axiom";
 val assumptionK = "assumption";
 val definitionK = "definition";
 val theoremK = "theorem";
+val generatedK = "generatedK"
 val lemmaK = "lemma";
 val corollaryK = "corollary";
 val internalK = Markup.internalK;

@@ -119,6 +119,11 @@ sig
   val message_stringT: typ
   val mk_message_string: string -> term
   val dest_message_string: term -> string
+  val mk_typerep: typ -> term
+  val mk_term_of: typ -> term -> term
+  val reflect_term: term -> term
+  val mk_return: typ -> typ -> term -> term
+  val mk_ST: ((term * typ) * (string * typ) option)  list -> term -> typ -> typ option * typ -> term
 end;
 
 structure HOLogic: HOLOGIC =
@@ -590,5 +595,42 @@ fun mk_message_string s = Const ("String.message_string.STR", stringT --> messag
 fun dest_message_string (Const ("String.message_string.STR", _) $ t) =
       dest_string t
   | dest_message_string t = raise TERM ("dest_message_string", [t]);
+
+
+(* typerep and term *)
+
+val typerepT = Type ("Typerep.typerep", []);
+
+fun mk_typerep T = Const ("Typerep.typerep_class.typerep",
+  Term.itselfT T --> typerepT) $ Logic.mk_type T;
+
+val termT = Type ("Code_Eval.term", []);
+
+fun mk_term_of T t = Const ("Code_Eval.term_of_class.term_of", T --> termT) $ t;
+
+fun reflect_term (Const (c, T)) =
+      Const ("Code_Eval.Const", message_stringT --> typerepT --> termT)
+        $ mk_message_string c $ mk_typerep T
+  | reflect_term (t1 $ t2) =
+      Const ("Code_Eval.App", termT --> termT --> termT)
+        $ reflect_term t1 $ reflect_term t2
+  | reflect_term (Abs (v, _, t)) = Abs (v, termT, reflect_term t)
+  | reflect_term t = t;
+
+
+(* open state monads *)
+
+fun mk_return T U x = pair_const T U $ x;
+
+fun mk_ST clauses t U (someT, V) =
+  let
+    val R = case someT of SOME T => mk_prodT (T, V) | NONE => V
+    fun mk_clause ((t, U), SOME (v, T)) (t', U') =
+          (Const ("Product_Type.scomp", (U --> mk_prodT (T, U')) --> (T --> U' --> R) --> U --> R)
+            $ t $ lambda (Free (v, T)) t', U)
+      | mk_clause ((t, U), NONE) (t', U') =
+          (Const ("Product_Type.fcomp", (U --> U') --> (U' --> R) --> U --> R)
+            $ t $ t', U)
+  in fold_rev mk_clause clauses (t, U) |> fst end;
 
 end;
