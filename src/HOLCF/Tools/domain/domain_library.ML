@@ -78,6 +78,8 @@ sig
   val UU : term;
   val TT : term;
   val FF : term;
+  val ID : term;
+  val oo : term * term -> term;
   val mk_up : term -> term;
   val mk_sinl : term -> term;
   val mk_sinr : term -> term;
@@ -89,7 +91,9 @@ sig
   val mk_return : term -> term;
   val cproj : term -> 'a list -> int -> term;
   val list_ccomb : term * term list -> term;
+(*
   val con_app : string -> ('a * 'b * string) list -> term;
+*)
   val con_app2 : string -> ('a -> term) -> 'a list -> term;
   val proj : term -> 'a list -> int -> term;
   val prj : ('a -> 'b -> 'a) -> ('a -> 'b -> 'a) -> 'a -> 'b list -> int -> 'a;
@@ -123,11 +127,13 @@ sig
   val mk_All : string * term -> term;
 
   (* Domain specifications *)
-  type arg = (bool * int * DatatypeAux.dtyp) * string option * string;
+  eqtype arg;
   type cons = string * arg list;
   type eq = (string * typ list) * cons list;
+  val mk_arg : (bool * DatatypeAux.dtyp) * string option * string -> arg;
   val is_lazy : arg -> bool;
   val rec_of : arg -> int;
+  val dtyp_of : arg -> DatatypeAux.dtyp;
   val sel_of : arg -> string option;
   val vname : arg -> string;
   val upd_vname : (string -> string) -> arg -> arg;
@@ -142,6 +148,9 @@ sig
   val bound_arg : ''a list -> ''a -> term; (* ''a = arg or string *)
   val idx_name : 'a list -> string -> int -> string;
   val app_rec_arg : (int -> term) -> arg -> term;
+  val con_app : string -> arg list -> term;
+  val dtyp_of_eq : eq -> DatatypeAux.dtyp;
+
 
   (* Name mangling *)
   val strip_esc : string -> string;
@@ -198,7 +207,7 @@ fun string_of_typ sg = Syntax.string_of_typ_global sg o Sign.certify_typ sg;
 (* ----- constructor list handling ----- *)
 
 type arg =
-  (bool * int * DatatypeAux.dtyp) *	(*  (lazy,recursive element or ~1) *)
+  (bool * DatatypeAux.dtyp) *           (*  (lazy, recursive element) *)
   string option *			(*   selector name    *)
   string;				(*   argument name    *)
 
@@ -211,8 +220,14 @@ type eq =
    typ list) *		(* arguments of abstracted type *)
   cons list;		(* represented type, as a constructor list *)
 
-fun rec_of arg  = second (first arg);
-fun is_lazy arg = first (first arg);
+val mk_arg = I;
+
+fun rec_of ((_,dtyp),_,_) =
+  case dtyp of DatatypeAux.DtRec i => i | _ => ~1;
+(* FIXME: what about indirect recursion? *)
+
+fun is_lazy arg = fst (first arg);
+fun dtyp_of arg = snd (first arg);
 val sel_of    =       second;
 val     vname =       third;
 val upd_vname =   upd_third;
@@ -220,6 +235,25 @@ fun is_rec         arg = rec_of arg >=0;
 fun is_nonlazy_rec arg = is_rec arg andalso not (is_lazy arg);
 fun nonlazy     args   = map vname (filter_out is_lazy    args);
 fun nonlazy_rec args   = map vname (List.filter is_nonlazy_rec args);
+
+
+(* ----- combinators for making dtyps ----- *)
+
+fun mk_uD T = DatatypeAux.DtType(@{type_name "u"}, [T]);
+fun mk_sprodD (T, U) = DatatypeAux.DtType(@{type_name "**"}, [T, U]);
+fun mk_ssumD (T, U) = DatatypeAux.DtType(@{type_name "++"}, [T, U]);
+fun mk_liftD T = DatatypeAux.DtType(@{type_name "lift"}, [T]);
+val unitD = DatatypeAux.DtType(@{type_name "unit"}, []);
+val boolD = DatatypeAux.DtType(@{type_name "bool"}, []);
+val oneD = mk_liftD unitD;
+val trD = mk_liftD boolD;
+fun big_sprodD ds = case ds of [] => oneD | _ => foldr1 mk_sprodD ds;
+fun big_ssumD ds = case ds of [] => unitD | _ => foldr1 mk_ssumD ds;
+
+fun dtyp_of_arg ((lazy, D), _, _) = if lazy then mk_uD D else D;
+fun dtyp_of_cons (_, args) = big_sprodD (map dtyp_of_arg args);
+fun dtyp_of_eq (_, cons) = big_ssumD (map dtyp_of_cons cons);
+
 
 (* ----- support for type and mixfix expressions ----- *)
 

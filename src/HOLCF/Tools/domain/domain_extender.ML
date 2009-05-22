@@ -122,8 +122,7 @@ fun gen_add_domain
       | typid (TVar ((id,_),_)) = hd (tl (Symbol.explode id));
     fun one_con (con,args,mx) =
 	((Syntax.const_name mx (Binding.name_of con)),
-	 ListPair.map (fn ((lazy,sel,tp),vn) => ((lazy,
-					find_index_eq tp dts,
+	 ListPair.map (fn ((lazy,sel,tp),vn) => mk_arg ((lazy,
 					DatatypeAux.dtyp_of_typ new_dts tp),
 					Option.map Binding.name_of sel,vn))
 	     (args,(mk_var_names(map (typid o third) args)))
