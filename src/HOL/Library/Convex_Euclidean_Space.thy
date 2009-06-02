@@ -1,6 +1,6 @@
-(* Title:      Convex
-   ID:         $Id: 
-   Author:     Robert Himmelmann, TU Muenchen*)
+(*  Title:      HOL/Library/Convex_Euclidean_Space.thy
+    Author:     Robert Himmelmann, TU Muenchen
+*)
 
 header {* Convex sets, functions and related things. *}
 
@@ -615,7 +615,7 @@ qed
 
 subsection {* One rather trivial consequence. *}
 
-lemma connected_UNIV: "connected UNIV"
+lemma connected_UNIV: "connected (UNIV :: (real ^ _) set)"
   by(simp add: convex_connected convex_UNIV)
 
 subsection {* Convex functions into the reals. *}
@@ -763,10 +763,10 @@ proof(auto simp add: convex_def Ball_def mem_cball)
   thus "dist x (u *s y + v *s z) \<le> e" using real_convex_bound_le[OF yz uv] by auto 
 qed
 
-lemma connected_ball: "connected(ball x e)"
+lemma connected_ball: "connected(ball (x::real^_) e)" (* FIXME: generalize *)
   using convex_connected convex_ball by auto
 
-lemma connected_cball: "connected(cball x e)"
+lemma connected_cball: "connected(cball (x::real^_) e)" (* FIXME: generalize *)
   using convex_connected convex_cball by auto
 
 subsection {* Convex hull. *}
@@ -2186,13 +2186,15 @@ lemma is_interval_convex: assumes "is_interval s" shows "convex s"
   ultimately show "u *s x + v *s y \<in> s" apply- apply(rule assms[unfolded is_interval_def, rule_format, OF as(1,2)])
     using as(3-) dimindex_ge_1 apply- by(auto simp add: vector_component) qed
 
-lemma is_interval_connected: "is_interval s \<Longrightarrow> connected s"
+lemma is_interval_connected:
+  fixes s :: "(real ^ _) set"
+  shows "is_interval s \<Longrightarrow> connected s"
   using is_interval_convex convex_connected by auto
 
 lemma convex_interval: "convex {a .. b}" "convex {a<..<b::real^'n::finite}"
   apply(rule_tac[!] is_interval_convex) using is_interval_interval by auto
 
-subsection {* On real^1, is_interval, convex and connected are all equivalent. *}
+subsection {* On @{text "real^1"}, @{text "is_interval"}, @{text "convex"} and @{text "connected"} are all equivalent. *}
 
 lemma is_interval_1:
   "is_interval s \<longleftrightarrow> (\<forall>a\<in>s. \<forall>b\<in>s. \<forall> x. dest_vec1 a \<le> dest_vec1 x \<and> dest_vec1 x \<le> dest_vec1 b \<longrightarrow> x \<in> s)"
@@ -2988,7 +2990,9 @@ lemma path_image_shiftpath:
 
 subsection {* Special case of straight-line paths. *}
 
-definition "linepath a b = (\<lambda>x. (1 - dest_vec1 x) *s a + dest_vec1 x *s b)"
+definition
+  linepath :: "real ^ 'n::finite \<Rightarrow> real ^ 'n \<Rightarrow> real ^ 1 \<Rightarrow> real ^ 'n" where
+  "linepath a b = (\<lambda>x. (1 - dest_vec1 x) *s a + dest_vec1 x *s b)"
 
 lemma pathstart_linepath[simp]: "pathstart(linepath a b) = a"
   unfolding pathstart_def linepath_def by auto
