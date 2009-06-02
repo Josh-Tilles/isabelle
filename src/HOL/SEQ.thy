@@ -9,8 +9,12 @@
 header {* Sequences and Convergence *}
 
 theory SEQ
-imports RealVector RComplete
+imports Limits
 begin
+
+definition
+  sequentially :: "nat filter" where
+  [code del]: "sequentially = Abs_filter (\<lambda>P. \<exists>N. \<forall>n\<ge>N. P n)"
 
 definition
   Zseq :: "[nat \<Rightarrow> 'a::real_normed_vector] \<Rightarrow> bool" where
@@ -18,18 +22,18 @@ definition
   [code del]: "Zseq X = (\<forall>r>0. \<exists>no. \<forall>n\<ge>no. norm (X n) < r)"
 
 definition
-  LIMSEQ :: "[nat => 'a::real_normed_vector, 'a] => bool"
+  LIMSEQ :: "[nat \<Rightarrow> 'a::metric_space, 'a] \<Rightarrow> bool"
     ("((_)/ ----> (_))" [60, 60] 60) where
     --{*Standard definition of convergence of sequence*}
-  [code del]: "X ----> L = (\<forall>r. 0 < r --> (\<exists>no. \<forall>n. no \<le> n --> norm (X n - L) < r))"
+  [code del]: "X ----> L = (\<forall>r>0. \<exists>no. \<forall>n\<ge>no. dist (X n) L < r)"
 
 definition
-  lim :: "(nat => 'a::real_normed_vector) => 'a" where
+  lim :: "(nat \<Rightarrow> 'a::real_normed_vector) \<Rightarrow> 'a" where
     --{*Standard definition of limit using choice operator*}
   "lim X = (THE L. X ----> L)"
 
 definition
-  convergent :: "(nat => 'a::real_normed_vector) => bool" where
+  convergent :: "(nat \<Rightarrow> 'a::metric_space) \<Rightarrow> bool" where
     --{*Standard definition of convergence*}
   "convergent X = (\<exists>L. X ----> L)"
 
@@ -62,10 +66,28 @@ definition
   [code del]:   "subseq f = (\<forall>m. \<forall>n>m. (f m) < (f n))"
 
 definition
-  Cauchy :: "(nat => 'a::real_normed_vector) => bool" where
+  Cauchy :: "(nat \<Rightarrow> 'a::metric_space) \<Rightarrow> bool" where
     --{*Standard definition of the Cauchy condition*}
-  [code del]: "Cauchy X = (\<forall>e>0. \<exists>M. \<forall>m \<ge> M. \<forall>n \<ge> M. norm (X m - X n) < e)"
+  [code del]: "Cauchy X = (\<forall>e>0. \<exists>M. \<forall>m \<ge> M. \<forall>n \<ge> M. dist (X m) (X n) < e)"
 
+
+subsection {* Sequentially *}
+
+lemma eventually_sequentially:
+  "eventually P sequentially \<longleftrightarrow> (\<exists>N. \<forall>n\<ge>N. P n)"
+unfolding sequentially_def
+apply (rule eventually_Abs_filter)
+apply simp
+apply (clarify, rule_tac x=N in exI, simp)
+apply (clarify, rename_tac M N)
+apply (rule_tac x="max M N" in exI, simp)
+done
+
+lemma Zseq_conv_Zfun: "Zseq X \<longleftrightarrow> Zfun X sequentially"
+unfolding Zseq_def Zfun_def eventually_sequentially ..
+
+lemma LIMSEQ_conv_tendsto: "(X ----> L) \<longleftrightarrow> tendsto X L sequentially"
+unfolding LIMSEQ_def tendsto_def eventually_sequentially ..
 
 subsection {* Bounded Sequences *}
 
@@ -110,6 +132,13 @@ apply clarify
 apply (drule_tac x="n - k" in spec, simp)
 done
 
+lemma Bseq_conv_Bfun: "Bseq X \<longleftrightarrow> Bfun X sequentially"
+unfolding Bfun_def eventually_sequentially
+apply (rule iffI)
+apply (simp add: Bseq_def, fast)
+apply (fast intro: BseqI2')
+done
+
 
 subsection {* Sequences That Converge to Zero *}
 
@@ -134,61 +163,15 @@ lemma Zseq_imp_Zseq:
   assumes X: "Zseq X"
   assumes Y: "\<And>n. norm (Y n) \<le> norm (X n) * K"
   shows "Zseq (\<lambda>n. Y n)"
-proof (cases)
-  assume K: "0 < K"
-  show ?thesis
-  proof (rule ZseqI)
-    fix r::real assume "0 < r"
-    hence "0 < r / K"
-      using K by (rule divide_pos_pos)
-    then obtain N where "\<forall>n\<ge>N. norm (X n) < r / K"
-      using ZseqD [OF X] by fast
-    hence "\<forall>n\<ge>N. norm (X n) * K < r"
-      by (simp add: pos_less_divide_eq K)
-    hence "\<forall>n\<ge>N. norm (Y n) < r"
-      by (simp add: order_le_less_trans [OF Y])
-    thus "\<exists>N. \<forall>n\<ge>N. norm (Y n) < r" ..
-  qed
-next
-  assume "\<not> 0 < K"
-  hence K: "K \<le> 0" by (simp only: linorder_not_less)
-  {
-    fix n::nat
-    have "norm (Y n) \<le> norm (X n) * K" by (rule Y)
-    also have "\<dots> \<le> norm (X n) * 0"
-      using K norm_ge_zero by (rule mult_left_mono)
-    finally have "norm (Y n) = 0" by simp
-  }
-  thus ?thesis by (simp add: Zseq_zero)
-qed
+using X Y Zfun_imp_Zfun [of X sequentially Y K]
+unfolding Zseq_conv_Zfun by simp
 
 lemma Zseq_le: "\<lbrakk>Zseq Y; \<forall>n. norm (X n) \<le> norm (Y n)\<rbrakk> \<Longrightarrow> Zseq X"
 by (erule_tac K="1" in Zseq_imp_Zseq, simp)
 
 lemma Zseq_add:
-  assumes X: "Zseq X"
-  assumes Y: "Zseq Y"
-  shows "Zseq (\<lambda>n. X n + Y n)"
-proof (rule ZseqI)
-  fix r::real assume "0 < r"
-  hence r: "0 < r / 2" by simp
-  obtain M where M: "\<forall>n\<ge>M. norm (X n) < r/2"
-    using ZseqD [OF X r] by fast
-  obtain N where N: "\<forall>n\<ge>N. norm (Y n) < r/2"
-    using ZseqD [OF Y r] by fast
-  show "\<exists>N. \<forall>n\<ge>N. norm (X n + Y n) < r"
-  proof (intro exI allI impI)
-    fix n assume n: "max M N \<le> n"
-    have "norm (X n + Y n) \<le> norm (X n) + norm (Y n)"
-      by (rule norm_triangle_ineq)
-    also have "\<dots> < r/2 + r/2"
-    proof (rule add_strict_mono)
-      from M n show "norm (X n) < r/2" by simp
-      from N n show "norm (Y n) < r/2" by simp
-    qed
-    finally show "norm (X n + Y n) < r" by simp
-  qed
-qed
+  "Zseq X \<Longrightarrow> Zseq Y \<Longrightarrow> Zseq (\<lambda>n. X n + Y n)"
+unfolding Zseq_conv_Zfun by (rule Zfun_add)
 
 lemma Zseq_minus: "Zseq X \<Longrightarrow> Zseq (\<lambda>n. - X n)"
 unfolding Zseq_def by simp
@@ -197,94 +180,22 @@ lemma Zseq_diff: "\<lbrakk>Zseq X; Zseq Y\<rbrakk> \<Longrightarrow> Zseq (\<lam
 by (simp only: diff_minus Zseq_add Zseq_minus)
 
 lemma (in bounded_linear) Zseq:
-  assumes X: "Zseq X"
-  shows "Zseq (\<lambda>n. f (X n))"
-proof -
-  obtain K where "\<And>x. norm (f x) \<le> norm x * K"
-    using bounded by fast
-  with X show ?thesis
-    by (rule Zseq_imp_Zseq)
-qed
+  "Zseq X \<Longrightarrow> Zseq (\<lambda>n. f (X n))"
+unfolding Zseq_conv_Zfun by (rule Zfun)
 
 lemma (in bounded_bilinear) Zseq:
-  assumes X: "Zseq X"
-  assumes Y: "Zseq Y"
-  shows "Zseq (\<lambda>n. X n ** Y n)"
-proof (rule ZseqI)
-  fix r::real assume r: "0 < r"
-  obtain K where K: "0 < K"
-    and norm_le: "\<And>x y. norm (x ** y) \<le> norm x * norm y * K"
-    using pos_bounded by fast
-  from K have K': "0 < inverse K"
-    by (rule positive_imp_inverse_positive)
-  obtain M where M: "\<forall>n\<ge>M. norm (X n) < r"
-    using ZseqD [OF X r] by fast
-  obtain N where N: "\<forall>n\<ge>N. norm (Y n) < inverse K"
-    using ZseqD [OF Y K'] by fast
-  show "\<exists>N. \<forall>n\<ge>N. norm (X n ** Y n) < r"
-  proof (intro exI allI impI)
-    fix n assume n: "max M N \<le> n"
-    have "norm (X n ** Y n) \<le> norm (X n) * norm (Y n) * K"
-      by (rule norm_le)
-    also have "norm (X n) * norm (Y n) * K < r * inverse K * K"
-    proof (intro mult_strict_right_mono mult_strict_mono' norm_ge_zero K)
-      from M n show Xn: "norm (X n) < r" by simp
-      from N n show Yn: "norm (Y n) < inverse K" by simp
-    qed
-    also from K have "r * inverse K * K = r" by simp
-    finally show "norm (X n ** Y n) < r" .
-  qed
-qed
+  "Zseq X \<Longrightarrow> Zseq Y \<Longrightarrow> Zseq (\<lambda>n. X n ** Y n)"
+unfolding Zseq_conv_Zfun by (rule Zfun)
 
 lemma (in bounded_bilinear) Zseq_prod_Bseq:
-  assumes X: "Zseq X"
-  assumes Y: "Bseq Y"
-  shows "Zseq (\<lambda>n. X n ** Y n)"
-proof -
-  obtain K where K: "0 \<le> K"
-    and norm_le: "\<And>x y. norm (x ** y) \<le> norm x * norm y * K"
-    using nonneg_bounded by fast
-  obtain B where B: "0 < B"
-    and norm_Y: "\<And>n. norm (Y n) \<le> B"
-    using Y [unfolded Bseq_def] by fast
-  from X show ?thesis
-  proof (rule Zseq_imp_Zseq)
-    fix n::nat
-    have "norm (X n ** Y n) \<le> norm (X n) * norm (Y n) * K"
-      by (rule norm_le)
-    also have "\<dots> \<le> norm (X n) * B * K"
-      by (intro mult_mono' order_refl norm_Y norm_ge_zero
-                mult_nonneg_nonneg K)
-    also have "\<dots> = norm (X n) * (B * K)"
-      by (rule mult_assoc)
-    finally show "norm (X n ** Y n) \<le> norm (X n) * (B * K)" .
-  qed
-qed
+  "Zseq X \<Longrightarrow> Bseq Y \<Longrightarrow> Zseq (\<lambda>n. X n ** Y n)"
+unfolding Zseq_conv_Zfun Bseq_conv_Bfun
+by (rule Zfun_prod_Bfun)
 
 lemma (in bounded_bilinear) Bseq_prod_Zseq:
-  assumes X: "Bseq X"
-  assumes Y: "Zseq Y"
-  shows "Zseq (\<lambda>n. X n ** Y n)"
-proof -
-  obtain K where K: "0 \<le> K"
-    and norm_le: "\<And>x y. norm (x ** y) \<le> norm x * norm y * K"
-    using nonneg_bounded by fast
-  obtain B where B: "0 < B"
-    and norm_X: "\<And>n. norm (X n) \<le> B"
-    using X [unfolded Bseq_def] by fast
-  from Y show ?thesis
-  proof (rule Zseq_imp_Zseq)
-    fix n::nat
-    have "norm (X n ** Y n) \<le> norm (X n) * norm (Y n) * K"
-      by (rule norm_le)
-    also have "\<dots> \<le> B * norm (Y n) * K"
-      by (intro mult_mono' order_refl norm_X norm_ge_zero
-                mult_nonneg_nonneg K)
-    also have "\<dots> = norm (Y n) * (B * K)"
-      by (simp only: mult_ac)
-    finally show "norm (X n ** Y n) \<le> norm (Y n) * (B * K)" .
-  qed
-qed
+  "Bseq X \<Longrightarrow> Zseq Y \<Longrightarrow> Zseq (\<lambda>n. X n ** Y n)"
+unfolding Zseq_conv_Zfun Bseq_conv_Bfun
+by (rule Bfun_prod_Zfun)
 
 lemma (in bounded_bilinear) Zseq_left:
   "Zseq X \<Longrightarrow> Zseq (\<lambda>n. X n ** a)"
@@ -302,38 +213,51 @@ lemmas Zseq_mult_left = mult.Zseq_left
 subsection {* Limits of Sequences *}
 
 lemma LIMSEQ_iff:
-      "(X ----> L) = (\<forall>r>0. \<exists>no. \<forall>n \<ge> no. norm (X n - L) < r)"
-by (rule LIMSEQ_def)
+  fixes L :: "'a::real_normed_vector"
+  shows "(X ----> L) = (\<forall>r>0. \<exists>no. \<forall>n \<ge> no. norm (X n - L) < r)"
+unfolding LIMSEQ_def dist_norm ..
 
 lemma LIMSEQ_Zseq_iff: "((\<lambda>n. X n) ----> L) = Zseq (\<lambda>n. X n - L)"
-by (simp only: LIMSEQ_def Zseq_def)
+by (simp only: LIMSEQ_iff Zseq_def)
+
+lemma metric_LIMSEQ_I:
+  "(\<And>r. 0 < r \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. dist (X n) L < r) \<Longrightarrow> X ----> L"
+by (simp add: LIMSEQ_def)
+
+lemma metric_LIMSEQ_D:
+  "\<lbrakk>X ----> L; 0 < r\<rbrakk> \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. dist (X n) L < r"
+by (simp add: LIMSEQ_def)
 
 lemma LIMSEQ_I:
-  "(\<And>r. 0 < r \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. norm (X n - L) < r) \<Longrightarrow> X ----> L"
-by (simp add: LIMSEQ_def)
+  fixes L :: "'a::real_normed_vector"
+  shows "(\<And>r. 0 < r \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. norm (X n - L) < r) \<Longrightarrow> X ----> L"
+by (simp add: LIMSEQ_iff)
 
 lemma LIMSEQ_D:
-  "\<lbrakk>X ----> L; 0 < r\<rbrakk> \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. norm (X n - L) < r"
-by (simp add: LIMSEQ_def)
+  fixes L :: "'a::real_normed_vector"
+  shows "\<lbrakk>X ----> L; 0 < r\<rbrakk> \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. norm (X n - L) < r"
+by (simp add: LIMSEQ_iff)
 
 lemma LIMSEQ_const: "(\<lambda>n. k) ----> k"
 by (simp add: LIMSEQ_def)
 
-lemma LIMSEQ_const_iff: "(\<lambda>n. k) ----> l = (k = l)"
-by (simp add: LIMSEQ_Zseq_iff Zseq_const_iff)
-
-lemma LIMSEQ_norm: "X ----> a \<Longrightarrow> (\<lambda>n. norm (X n)) ----> norm a"
-apply (simp add: LIMSEQ_def, safe)
-apply (drule_tac x="r" in spec, safe)
-apply (rule_tac x="no" in exI, safe)
-apply (drule_tac x="n" in spec, safe)
-apply (erule order_le_less_trans [OF norm_triangle_ineq3])
+lemma LIMSEQ_const_iff: "(\<lambda>n. k) ----> l \<longleftrightarrow> k = l"
+apply (safe intro!: LIMSEQ_const)
+apply (rule ccontr)
+apply (drule_tac r="dist k l" in metric_LIMSEQ_D)
+apply (simp add: zero_less_dist_iff)
+apply auto
 done
+
+lemma LIMSEQ_norm:
+  fixes a :: "'a::real_normed_vector"
+  shows "X ----> a \<Longrightarrow> (\<lambda>n. norm (X n)) ----> norm a"
+unfolding LIMSEQ_conv_tendsto by (rule tendsto_norm)
 
 lemma LIMSEQ_ignore_initial_segment:
   "f ----> a \<Longrightarrow> (\<lambda>n. f (n + k)) ----> a"
-apply (rule LIMSEQ_I)
-apply (drule (1) LIMSEQ_D)
+apply (rule metric_LIMSEQ_I)
+apply (drule (1) metric_LIMSEQ_D)
 apply (erule exE, rename_tac N)
 apply (rule_tac x=N in exI)
 apply simp
@@ -341,8 +265,8 @@ done
 
 lemma LIMSEQ_offset:
   "(\<lambda>n. f (n + k)) ----> a \<Longrightarrow> f ----> a"
-apply (rule LIMSEQ_I)
-apply (drule (1) LIMSEQ_D)
+apply (rule metric_LIMSEQ_I)
+apply (drule (1) metric_LIMSEQ_D)
 apply (erule exE, rename_tac N)
 apply (rule_tac x="N + k" in exI)
 apply clarify
@@ -363,50 +287,49 @@ lemma LIMSEQ_linear: "\<lbrakk> X ----> x ; l > 0 \<rbrakk> \<Longrightarrow> (\
   unfolding LIMSEQ_def
   by (metis div_le_dividend div_mult_self1_is_m le_trans nat_mult_commute)
 
+lemma LIMSEQ_add:
+  fixes a b :: "'a::real_normed_vector"
+  shows "\<lbrakk>X ----> a; Y ----> b\<rbrakk> \<Longrightarrow> (\<lambda>n. X n + Y n) ----> a + b"
+unfolding LIMSEQ_conv_tendsto by (rule tendsto_add)
 
-lemma add_diff_add:
-  fixes a b c d :: "'a::ab_group_add"
-  shows "(a + c) - (b + d) = (a - b) + (c - d)"
-by simp
+lemma LIMSEQ_minus:
+  fixes a :: "'a::real_normed_vector"
+  shows "X ----> a \<Longrightarrow> (\<lambda>n. - X n) ----> - a"
+unfolding LIMSEQ_conv_tendsto by (rule tendsto_minus)
 
-lemma minus_diff_minus:
-  fixes a b :: "'a::ab_group_add"
-  shows "(- a) - (- b) = - (a - b)"
-by simp
-
-lemma LIMSEQ_add: "\<lbrakk>X ----> a; Y ----> b\<rbrakk> \<Longrightarrow> (\<lambda>n. X n + Y n) ----> a + b"
-by (simp only: LIMSEQ_Zseq_iff add_diff_add Zseq_add)
-
-lemma LIMSEQ_minus: "X ----> a \<Longrightarrow> (\<lambda>n. - X n) ----> - a"
-by (simp only: LIMSEQ_Zseq_iff minus_diff_minus Zseq_minus)
-
-lemma LIMSEQ_minus_cancel: "(\<lambda>n. - X n) ----> - a \<Longrightarrow> X ----> a"
+lemma LIMSEQ_minus_cancel:
+  fixes a :: "'a::real_normed_vector"
+  shows "(\<lambda>n. - X n) ----> - a \<Longrightarrow> X ----> a"
 by (drule LIMSEQ_minus, simp)
 
-lemma LIMSEQ_diff: "\<lbrakk>X ----> a; Y ----> b\<rbrakk> \<Longrightarrow> (\<lambda>n. X n - Y n) ----> a - b"
-by (simp add: diff_minus LIMSEQ_add LIMSEQ_minus)
+lemma LIMSEQ_diff:
+  fixes a b :: "'a::real_normed_vector"
+  shows "\<lbrakk>X ----> a; Y ----> b\<rbrakk> \<Longrightarrow> (\<lambda>n. X n - Y n) ----> a - b"
+unfolding LIMSEQ_conv_tendsto by (rule tendsto_diff)
 
 lemma LIMSEQ_unique: "\<lbrakk>X ----> a; X ----> b\<rbrakk> \<Longrightarrow> a = b"
-by (drule (1) LIMSEQ_diff, simp add: LIMSEQ_const_iff)
+apply (rule ccontr)
+apply (drule_tac r="dist a b / 2" in metric_LIMSEQ_D, simp add: zero_less_dist_iff)
+apply (drule_tac r="dist a b / 2" in metric_LIMSEQ_D, simp add: zero_less_dist_iff)
+apply (clarify, rename_tac M N)
+apply (subgoal_tac "dist a b < dist a b / 2 + dist a b / 2", simp)
+apply (subgoal_tac "dist a b \<le> dist (X (max M N)) a + dist (X (max M N)) b")
+apply (erule le_less_trans, rule add_strict_mono, simp, simp)
+apply (subst dist_commute, rule dist_triangle)
+done
 
 lemma (in bounded_linear) LIMSEQ:
   "X ----> a \<Longrightarrow> (\<lambda>n. f (X n)) ----> f a"
-by (simp only: LIMSEQ_Zseq_iff diff [symmetric] Zseq)
+unfolding LIMSEQ_conv_tendsto by (rule tendsto)
 
 lemma (in bounded_bilinear) LIMSEQ:
   "\<lbrakk>X ----> a; Y ----> b\<rbrakk> \<Longrightarrow> (\<lambda>n. X n ** Y n) ----> a ** b"
-by (simp only: LIMSEQ_Zseq_iff prod_diff_prod
-               Zseq_add Zseq Zseq_left Zseq_right)
+unfolding LIMSEQ_conv_tendsto by (rule tendsto)
 
 lemma LIMSEQ_mult:
   fixes a b :: "'a::real_normed_algebra"
   shows "[| X ----> a; Y ----> b |] ==> (%n. X n * Y n) ----> a * b"
 by (rule mult.LIMSEQ)
-
-lemma inverse_diff_inverse:
-  "\<lbrakk>(a::'a::division_ring) \<noteq> 0; b \<noteq> 0\<rbrakk>
-   \<Longrightarrow> inverse a - inverse b = - (inverse a * (a - b) * inverse b)"
-by (simp add: algebra_simps)
 
 lemma Bseq_inverse_lemma:
   fixes x :: "'a::real_normed_div_algebra"
@@ -417,69 +340,15 @@ done
 
 lemma Bseq_inverse:
   fixes a :: "'a::real_normed_div_algebra"
-  assumes X: "X ----> a"
-  assumes a: "a \<noteq> 0"
-  shows "Bseq (\<lambda>n. inverse (X n))"
-proof -
-  from a have "0 < norm a" by simp
-  hence "\<exists>r>0. r < norm a" by (rule dense)
-  then obtain r where r1: "0 < r" and r2: "r < norm a" by fast
-  obtain N where N: "\<And>n. N \<le> n \<Longrightarrow> norm (X n - a) < r"
-    using LIMSEQ_D [OF X r1] by fast
-  show ?thesis
-  proof (rule BseqI2' [rule_format])
-    fix n assume n: "N \<le> n"
-    hence 1: "norm (X n - a) < r" by (rule N)
-    hence 2: "X n \<noteq> 0" using r2 by auto
-    hence "norm (inverse (X n)) = inverse (norm (X n))"
-      by (rule nonzero_norm_inverse)
-    also have "\<dots> \<le> inverse (norm a - r)"
-    proof (rule le_imp_inverse_le)
-      show "0 < norm a - r" using r2 by simp
-    next
-      have "norm a - norm (X n) \<le> norm (a - X n)"
-        by (rule norm_triangle_ineq2)
-      also have "\<dots> = norm (X n - a)"
-        by (rule norm_minus_commute)
-      also have "\<dots> < r" using 1 .
-      finally show "norm a - r \<le> norm (X n)" by simp
-    qed
-    finally show "norm (inverse (X n)) \<le> inverse (norm a - r)" .
-  qed
-qed
-
-lemma LIMSEQ_inverse_lemma:
-  fixes a :: "'a::real_normed_div_algebra"
-  shows "\<lbrakk>X ----> a; a \<noteq> 0; \<forall>n. X n \<noteq> 0\<rbrakk>
-         \<Longrightarrow> (\<lambda>n. inverse (X n)) ----> inverse a"
-apply (subst LIMSEQ_Zseq_iff)
-apply (simp add: inverse_diff_inverse nonzero_imp_inverse_nonzero)
-apply (rule Zseq_minus)
-apply (rule Zseq_mult_left)
-apply (rule mult.Bseq_prod_Zseq)
-apply (erule (1) Bseq_inverse)
-apply (simp add: LIMSEQ_Zseq_iff)
-done
+  shows "\<lbrakk>X ----> a; a \<noteq> 0\<rbrakk> \<Longrightarrow> Bseq (\<lambda>n. inverse (X n))"
+unfolding LIMSEQ_conv_tendsto Bseq_conv_Bfun
+by (rule Bfun_inverse)
 
 lemma LIMSEQ_inverse:
   fixes a :: "'a::real_normed_div_algebra"
-  assumes X: "X ----> a"
-  assumes a: "a \<noteq> 0"
-  shows "(\<lambda>n. inverse (X n)) ----> inverse a"
-proof -
-  from a have "0 < norm a" by simp
-  then obtain k where "\<forall>n\<ge>k. norm (X n - a) < norm a"
-    using LIMSEQ_D [OF X] by fast
-  hence "\<forall>n\<ge>k. X n \<noteq> 0" by auto
-  hence k: "\<forall>n. X (n + k) \<noteq> 0" by simp
-
-  from X have "(\<lambda>n. X (n + k)) ----> a"
-    by (rule LIMSEQ_ignore_initial_segment)
-  hence "(\<lambda>n. inverse (X (n + k))) ----> inverse a"
-    using a k by (rule LIMSEQ_inverse_lemma)
-  thus "(\<lambda>n. inverse (X n)) ----> inverse a"
-    by (rule LIMSEQ_offset)
-qed
+  shows "\<lbrakk>X ----> a; a \<noteq> 0\<rbrakk> \<Longrightarrow> (\<lambda>n. inverse (X n)) ----> inverse a"
+unfolding LIMSEQ_conv_tendsto
+by (rule tendsto_inverse)
 
 lemma LIMSEQ_divide:
   fixes a b :: "'a::real_normed_field"
@@ -492,6 +361,7 @@ lemma LIMSEQ_pow:
 by (induct m) (simp_all add: LIMSEQ_const LIMSEQ_mult)
 
 lemma LIMSEQ_setsum:
+  fixes L :: "'a \<Rightarrow> 'b::real_normed_vector"
   assumes n: "\<And>n. n \<in> S \<Longrightarrow> X n ----> L n"
   shows "(\<lambda>m. \<Sum>n\<in>S. X n m) ----> (\<Sum>n\<in>S. L n)"
 proof (cases "finite S")
@@ -534,39 +404,40 @@ next
     by (simp add: setprod_def LIMSEQ_const)
 qed
 
-lemma LIMSEQ_add_const: "f ----> a ==> (%n.(f n + b)) ----> a + b"
+lemma LIMSEQ_add_const:
+  fixes a :: "'a::real_normed_vector"
+  shows "f ----> a ==> (%n.(f n + b)) ----> a + b"
 by (simp add: LIMSEQ_add LIMSEQ_const)
 
 (* FIXME: delete *)
 lemma LIMSEQ_add_minus:
-     "[| X ----> a; Y ----> b |] ==> (%n. X n + -Y n) ----> a + -b"
+  fixes a b :: "'a::real_normed_vector"
+  shows "[| X ----> a; Y ----> b |] ==> (%n. X n + -Y n) ----> a + -b"
 by (simp only: LIMSEQ_add LIMSEQ_minus)
 
-lemma LIMSEQ_diff_const: "f ----> a ==> (%n.(f n  - b)) ----> a - b"
+lemma LIMSEQ_diff_const:
+  fixes a b :: "'a::real_normed_vector"
+  shows "f ----> a ==> (%n.(f n  - b)) ----> a - b"
 by (simp add: LIMSEQ_diff LIMSEQ_const)
 
-lemma LIMSEQ_diff_approach_zero: 
-  "g ----> L ==> (%x. f x - g x) ----> 0  ==>
-     f ----> L"
-  apply (drule LIMSEQ_add)
-  apply assumption
-  apply simp
-done
+lemma LIMSEQ_diff_approach_zero:
+  fixes L :: "'a::real_normed_vector"
+  shows "g ----> L ==> (%x. f x - g x) ----> 0 ==> f ----> L"
+by (drule (1) LIMSEQ_add, simp)
 
-lemma LIMSEQ_diff_approach_zero2: 
-  "f ----> L ==> (%x. f x - g x) ----> 0  ==>
-     g ----> L";
-  apply (drule LIMSEQ_diff)
-  apply assumption
-  apply simp
-done
+lemma LIMSEQ_diff_approach_zero2:
+  fixes L :: "'a::real_normed_vector"
+  shows "f ----> L ==> (%x. f x - g x) ----> 0 ==> g ----> L";
+by (drule (1) LIMSEQ_diff, simp)
 
 text{*A sequence tends to zero iff its abs does*}
-lemma LIMSEQ_norm_zero: "((\<lambda>n. norm (X n)) ----> 0) = (X ----> 0)"
-by (simp add: LIMSEQ_def)
+lemma LIMSEQ_norm_zero:
+  fixes X :: "nat \<Rightarrow> 'a::real_normed_vector"
+  shows "((\<lambda>n. norm (X n)) ----> 0) \<longleftrightarrow> (X ----> 0)"
+by (simp add: LIMSEQ_iff)
 
 lemma LIMSEQ_rabs_zero: "((%n. \<bar>f n\<bar>) ----> 0) = (f ----> (0::real))"
-by (simp add: LIMSEQ_def)
+by (simp add: LIMSEQ_iff)
 
 lemma LIMSEQ_imp_rabs: "f ----> (l::real) ==> (%n. \<bar>f n\<bar>) ----> \<bar>l\<bar>"
 by (drule LIMSEQ_norm, simp)
@@ -653,7 +524,9 @@ by (auto simp add: convergent_def)
 lemma convergent_LIMSEQ_iff: "convergent X = (X ----> lim X)"
 by (auto intro: theI LIMSEQ_unique simp add: convergent_def lim_def)
 
-lemma convergent_minus_iff: "(convergent X) = (convergent (%n. -(X n)))"
+lemma convergent_minus_iff:
+  fixes X :: "nat \<Rightarrow> 'a::real_normed_vector"
+  shows "convergent X \<longleftrightarrow> convergent (\<lambda>n. - X n)"
 apply (simp add: convergent_def)
 apply (auto dest: LIMSEQ_minus)
 apply (drule LIMSEQ_minus, auto)
@@ -1119,20 +992,35 @@ done
 
 subsection {* Cauchy Sequences *}
 
-lemma CauchyI:
-  "(\<And>e. 0 < e \<Longrightarrow> \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. norm (X m - X n) < e) \<Longrightarrow> Cauchy X"
+lemma metric_CauchyI:
+  "(\<And>e. 0 < e \<Longrightarrow> \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. dist (X m) (X n) < e) \<Longrightarrow> Cauchy X"
 by (simp add: Cauchy_def)
 
-lemma CauchyD:
-  "\<lbrakk>Cauchy X; 0 < e\<rbrakk> \<Longrightarrow> \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. norm (X m - X n) < e"
+lemma metric_CauchyD:
+  "\<lbrakk>Cauchy X; 0 < e\<rbrakk> \<Longrightarrow> \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. dist (X m) (X n) < e"
 by (simp add: Cauchy_def)
+
+lemma Cauchy_iff:
+  fixes X :: "nat \<Rightarrow> 'a::real_normed_vector"
+  shows "Cauchy X \<longleftrightarrow> (\<forall>e>0. \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. norm (X m - X n) < e)"
+unfolding Cauchy_def dist_norm ..
+
+lemma CauchyI:
+  fixes X :: "nat \<Rightarrow> 'a::real_normed_vector"
+  shows "(\<And>e. 0 < e \<Longrightarrow> \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. norm (X m - X n) < e) \<Longrightarrow> Cauchy X"
+by (simp add: Cauchy_iff)
+
+lemma CauchyD:
+  fixes X :: "nat \<Rightarrow> 'a::real_normed_vector"
+  shows "\<lbrakk>Cauchy X; 0 < e\<rbrakk> \<Longrightarrow> \<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. norm (X m - X n) < e"
+by (simp add: Cauchy_iff)
 
 lemma Cauchy_subseq_Cauchy:
   "\<lbrakk> Cauchy X; subseq f \<rbrakk> \<Longrightarrow> Cauchy (X o f)"
-apply (auto simp add: Cauchy_def) 
-apply (drule_tac x=e in spec, clarify)  
-apply (rule_tac x=M in exI, clarify) 
-apply (blast intro: seq_suble le_trans dest!: spec) 
+apply (auto simp add: Cauchy_def)
+apply (drule_tac x=e in spec, clarify)
+apply (rule_tac x=M in exI, clarify)
+apply (blast intro: le_trans [OF _ seq_suble] dest!: spec)
 done
 
 subsubsection {* Cauchy Sequences are Bounded *}
@@ -1149,7 +1037,7 @@ apply simp
 done
 
 lemma Cauchy_Bseq: "Cauchy X ==> Bseq X"
-apply (simp add: Cauchy_def)
+apply (simp add: Cauchy_iff)
 apply (drule spec, drule mp, rule zero_less_one, safe)
 apply (drule_tac x="M" in spec, simp)
 apply (drule lemmaCauchy)
@@ -1167,22 +1055,21 @@ axclass banach \<subseteq> real_normed_vector
 
 theorem LIMSEQ_imp_Cauchy:
   assumes X: "X ----> a" shows "Cauchy X"
-proof (rule CauchyI)
+proof (rule metric_CauchyI)
   fix e::real assume "0 < e"
   hence "0 < e/2" by simp
-  with X have "\<exists>N. \<forall>n\<ge>N. norm (X n - a) < e/2" by (rule LIMSEQ_D)
-  then obtain N where N: "\<forall>n\<ge>N. norm (X n - a) < e/2" ..
-  show "\<exists>N. \<forall>m\<ge>N. \<forall>n\<ge>N. norm (X m - X n) < e"
+  with X have "\<exists>N. \<forall>n\<ge>N. dist (X n) a < e/2" by (rule metric_LIMSEQ_D)
+  then obtain N where N: "\<forall>n\<ge>N. dist (X n) a < e/2" ..
+  show "\<exists>N. \<forall>m\<ge>N. \<forall>n\<ge>N. dist (X m) (X n) < e"
   proof (intro exI allI impI)
     fix m assume "N \<le> m"
-    hence m: "norm (X m - a) < e/2" using N by fast
+    hence m: "dist (X m) a < e/2" using N by fast
     fix n assume "N \<le> n"
-    hence n: "norm (X n - a) < e/2" using N by fast
-    have "norm (X m - X n) = norm ((X m - a) - (X n - a))" by simp
-    also have "\<dots> \<le> norm (X m - a) + norm (X n - a)"
-      by (rule norm_triangle_ineq4)
-    also from m n have "\<dots> < e" by(simp add:field_simps)
-    finally show "norm (X m - X n) < e" .
+    hence n: "dist (X n) a < e/2" using N by fast
+    have "dist (X m) (X n) \<le> dist (X m) a + dist (X n) a"
+      by (rule dist_triangle2)
+    also from m n have "\<dots> < e" by simp
+    finally show "dist (X m) (X n) < e" .
   qed
 qed
 
@@ -1311,7 +1198,7 @@ by (fast intro: Cauchy_convergent convergent_Cauchy)
 lemma convergent_subseq_convergent:
   fixes X :: "nat \<Rightarrow> 'a::banach"
   shows "\<lbrakk> convergent X; subseq f \<rbrakk> \<Longrightarrow> convergent (X o f)"
-  by (simp add: Cauchy_subseq_Cauchy Cauchy_convergent_iff [symmetric]) 
+  by (simp add: Cauchy_subseq_Cauchy Cauchy_convergent_iff [symmetric])
 
 
 subsection {* Power Sequences *}
