@@ -169,6 +169,11 @@ lemmas scaleR_right_imp_eq = real_vector.scale_right_imp_eq
 lemmas scaleR_cancel_left = real_vector.scale_cancel_left
 lemmas scaleR_cancel_right = real_vector.scale_cancel_right
 
+lemma scaleR_minus1_left [simp]:
+  fixes x :: "'a::real_vector"
+  shows "scaleR (-1) x = - x"
+  using scaleR_minus_left [of 1 x] by simp
+
 class real_algebra = real_vector + ring +
   assumes mult_scaleR_left [simp]: "scaleR a x * y = scaleR a (x * y)"
   and mult_scaleR_right [simp]: "x * scaleR a y = scaleR a (x * y)"
@@ -411,6 +416,45 @@ lemma Reals_induct [case_names of_real, induct set: Reals]:
   by (rule Reals_cases) auto
 
 
+subsection {* Metric spaces *}
+
+class dist =
+  fixes dist :: "'a \<Rightarrow> 'a \<Rightarrow> real"
+
+class metric_space = dist +
+  assumes dist_eq_0_iff [simp]: "dist x y = 0 \<longleftrightarrow> x = y"
+  assumes dist_triangle2: "dist x y \<le> dist x z + dist y z"
+begin
+
+lemma dist_self [simp]: "dist x x = 0"
+by simp
+
+lemma zero_le_dist [simp]: "0 \<le> dist x y"
+using dist_triangle2 [of x x y] by simp
+
+lemma zero_less_dist_iff: "0 < dist x y \<longleftrightarrow> x \<noteq> y"
+by (simp add: less_le)
+
+lemma dist_not_less_zero [simp]: "\<not> dist x y < 0"
+by (simp add: not_less)
+
+lemma dist_le_zero_iff [simp]: "dist x y \<le> 0 \<longleftrightarrow> x = y"
+by (simp add: le_less)
+
+lemma dist_commute: "dist x y = dist y x"
+proof (rule order_antisym)
+  show "dist x y \<le> dist y x"
+    using dist_triangle2 [of x y x] by simp
+  show "dist y x \<le> dist x y"
+    using dist_triangle2 [of y x y] by simp
+qed
+
+lemma dist_triangle: "dist x z \<le> dist x y + dist y z"
+using dist_triangle2 [of x z y] by (simp add: dist_commute)
+
+end
+
+
 subsection {* Real normed vector spaces *}
 
 class norm =
@@ -419,7 +463,10 @@ class norm =
 class sgn_div_norm = scaleR + norm + sgn +
   assumes sgn_div_norm: "sgn x = x /\<^sub>R norm x"
 
-class real_normed_vector = real_vector + sgn_div_norm +
+class dist_norm = dist + norm + minus +
+  assumes dist_norm: "dist x y = norm (x - y)"
+
+class real_normed_vector = real_vector + sgn_div_norm + dist_norm +
   assumes norm_ge_zero [simp]: "0 \<le> norm x"
   and norm_eq_zero [simp]: "norm x = 0 \<longleftrightarrow> x = 0"
   and norm_triangle_ineq: "norm (x + y) \<le> norm x + norm y"
@@ -453,8 +500,12 @@ begin
 definition
   real_norm_def [simp]: "norm r = \<bar>r\<bar>"
 
+definition
+  dist_real_def: "dist x y = \<bar>x - y\<bar>"
+
 instance
 apply (intro_classes, unfold real_norm_def real_scaleR_def)
+apply (rule dist_real_def)
 apply (simp add: real_sgn_def)
 apply (rule abs_ge_zero)
 apply (rule abs_eq_0)
@@ -631,6 +682,18 @@ lemma norm_power:
   fixes x :: "'a::{real_normed_div_algebra}"
   shows "norm (x ^ n) = norm x ^ n"
 by (induct n) (simp_all add: norm_mult)
+
+text {* Every normed vector space is a metric space. *}
+
+instance real_normed_vector < metric_space
+proof
+  fix x y :: 'a show "dist x y = 0 \<longleftrightarrow> x = y"
+    unfolding dist_norm by simp
+next
+  fix x y z :: 'a show "dist x y \<le> dist x z + dist y z"
+    unfolding dist_norm
+    using norm_triangle_ineq4 [of "x - z" "y - z"] by simp
+qed
 
 
 subsection {* Sign function *}

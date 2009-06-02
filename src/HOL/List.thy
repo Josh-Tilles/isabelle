@@ -1365,6 +1365,13 @@ lemma list_update_length [simp]:
  "(xs @ x # ys)[length xs := y] = (xs @ y # ys)"
 by (induct xs, auto)
 
+lemma map_update: "map f (xs[k:= y]) = (map f xs)[k := f y]"
+by(induct xs arbitrary: k)(auto split:nat.splits)
+
+lemma rev_update:
+  "k < length xs \<Longrightarrow> rev (xs[k:= y]) = (rev xs)[length xs - k - 1 := y]"
+by (induct xs arbitrary: k) (auto simp: list_update_append split:nat.splits)
+
 lemma update_zip:
   "(zip xs ys)[i:=xy] = zip (xs[i:=fst xy]) (ys[i:=snd xy])"
 by (induct ys arbitrary: i xy xs) (auto, case_tac xs, auto split: nat.split)
@@ -2211,6 +2218,36 @@ lemma uminus_listsum_map:
   fixes f :: "'a \<Rightarrow> 'b\<Colon>ab_group_add"
   shows "- listsum (map f xs) = (listsum (map (uminus o f) xs))"
 by (induct xs) simp_all
+
+lemma listsum_addf:
+  fixes f g :: "'a \<Rightarrow> 'b::comm_monoid_add"
+  shows "(\<Sum>x\<leftarrow>xs. f x + g x) = listsum (map f xs) + listsum (map g xs)"
+by (induct xs) (simp_all add: algebra_simps)
+
+lemma listsum_subtractf:
+  fixes f g :: "'a \<Rightarrow> 'b::ab_group_add"
+  shows "(\<Sum>x\<leftarrow>xs. f x - g x) = listsum (map f xs) - listsum (map g xs)"
+by (induct xs) simp_all
+
+lemma listsum_const_mult:
+  fixes f :: "'a \<Rightarrow> 'b::semiring_0"
+  shows "(\<Sum>x\<leftarrow>xs. c * f x) = c * (\<Sum>x\<leftarrow>xs. f x)"
+by (induct xs, simp_all add: algebra_simps)
+
+lemma listsum_mult_const:
+  fixes f :: "'a \<Rightarrow> 'b::semiring_0"
+  shows "(\<Sum>x\<leftarrow>xs. f x * c) = (\<Sum>x\<leftarrow>xs. f x) * c"
+by (induct xs, simp_all add: algebra_simps)
+
+lemma listsum_abs:
+  fixes xs :: "'a::pordered_ab_group_add_abs list"
+  shows "\<bar>listsum xs\<bar> \<le> listsum (map abs xs)"
+by (induct xs, simp, simp add: order_trans [OF abs_triangle_ineq])
+
+lemma listsum_mono:
+  fixes f g :: "'a \<Rightarrow> 'b::{comm_monoid_add, pordered_ab_semigroup_add}"
+  shows "(\<And>x. x \<in> set xs \<Longrightarrow> f x \<le> g x) \<Longrightarrow> (\<Sum>x\<leftarrow>xs. f x) \<le> (\<Sum>x\<leftarrow>xs. g x)"
+by (induct xs, simp, simp add: add_mono)
 
 
 subsubsection {* @{text upt} *}
