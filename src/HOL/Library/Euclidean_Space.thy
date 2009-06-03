@@ -522,6 +522,119 @@ qed
 
 end
 
+lemma dist_nth_le: "dist (x $ i) (y $ i) \<le> dist x y"
+unfolding dist_vector_def
+by (rule member_le_setL2) simp_all
+
+lemma tendsto_Cart_nth:
+  fixes X :: "'a \<Rightarrow> 'b::metric_space ^ 'n::finite"
+  assumes "tendsto (\<lambda>n. X n) a net"
+  shows "tendsto (\<lambda>n. X n $ i) (a $ i) net"
+proof (rule tendstoI)
+  fix e :: real assume "0 < e"
+  with assms have "eventually (\<lambda>n. dist (X n) a < e) net"
+    by (rule tendstoD)
+  thus "eventually (\<lambda>n. dist (X n $ i) (a $ i) < e) net"
+  proof (rule eventually_elim1)
+    fix n :: 'a
+    have "dist (X n $ i) (a $ i) \<le> dist (X n) a"
+      by (rule dist_nth_le)
+    also assume "dist (X n) a < e"
+    finally show "dist (X n $ i) (a $ i) < e" .
+  qed
+qed
+
+lemma LIMSEQ_Cart_nth:
+  "(X ----> a) \<Longrightarrow> (\<lambda>n. X n $ i) ----> a $ i"
+unfolding LIMSEQ_conv_tendsto by (rule tendsto_Cart_nth)
+
+lemma LIM_Cart_nth:
+  "(f -- x --> y) \<Longrightarrow> (\<lambda>x. f x $ i) -- x --> y $ i"
+unfolding LIM_conv_tendsto by (rule tendsto_Cart_nth)
+
+lemma Cauchy_Cart_nth:
+  "Cauchy (\<lambda>n. X n) \<Longrightarrow> Cauchy (\<lambda>n. X n $ i)"
+unfolding Cauchy_def by (fast intro: le_less_trans [OF dist_nth_le])
+
+lemma LIMSEQ_vector:
+  fixes X :: "nat \<Rightarrow> 'a::metric_space ^ 'n::finite"
+  assumes X: "\<And>i. (\<lambda>n. X n $ i) ----> (a $ i)"
+  shows "X ----> a"
+proof (rule metric_LIMSEQ_I)
+  fix r :: real assume "0 < r"
+  then have "0 < r / of_nat CARD('n)" (is "0 < ?s")
+    by (simp add: divide_pos_pos)
+  def N \<equiv> "\<lambda>i. LEAST N. \<forall>n\<ge>N. dist (X n $ i) (a $ i) < ?s"
+  def M \<equiv> "Max (range N)"
+  have "\<And>i. \<exists>N. \<forall>n\<ge>N. dist (X n $ i) (a $ i) < ?s"
+    using X `0 < ?s` by (rule metric_LIMSEQ_D)
+  hence "\<And>i. \<forall>n\<ge>N i. dist (X n $ i) (a $ i) < ?s"
+    unfolding N_def by (rule LeastI_ex)
+  hence M: "\<And>i. \<forall>n\<ge>M. dist (X n $ i) (a $ i) < ?s"
+    unfolding M_def by simp
+  {
+    fix n :: nat assume "M \<le> n"
+    have "dist (X n) a = setL2 (\<lambda>i. dist (X n $ i) (a $ i)) UNIV"
+      unfolding dist_vector_def ..
+    also have "\<dots> \<le> setsum (\<lambda>i. dist (X n $ i) (a $ i)) UNIV"
+      by (rule setL2_le_setsum [OF zero_le_dist])
+    also have "\<dots> < setsum (\<lambda>i::'n. ?s) UNIV"
+      by (rule setsum_strict_mono, simp_all add: M `M \<le> n`)
+    also have "\<dots> = r"
+      by simp
+    finally have "dist (X n) a < r" .
+  }
+  hence "\<forall>n\<ge>M. dist (X n) a < r"
+    by simp
+  then show "\<exists>M. \<forall>n\<ge>M. dist (X n) a < r" ..
+qed
+
+lemma Cauchy_vector:
+  fixes X :: "nat \<Rightarrow> 'a::metric_space ^ 'n::finite"
+  assumes X: "\<And>i. Cauchy (\<lambda>n. X n $ i)"
+  shows "Cauchy (\<lambda>n. X n)"
+proof (rule metric_CauchyI)
+  fix r :: real assume "0 < r"
+  then have "0 < r / of_nat CARD('n)" (is "0 < ?s")
+    by (simp add: divide_pos_pos)
+  def N \<equiv> "\<lambda>i. LEAST N. \<forall>m\<ge>N. \<forall>n\<ge>N. dist (X m $ i) (X n $ i) < ?s"
+  def M \<equiv> "Max (range N)"
+  have "\<And>i. \<exists>N. \<forall>m\<ge>N. \<forall>n\<ge>N. dist (X m $ i) (X n $ i) < ?s"
+    using X `0 < ?s` by (rule metric_CauchyD)
+  hence "\<And>i. \<forall>m\<ge>N i. \<forall>n\<ge>N i. dist (X m $ i) (X n $ i) < ?s"
+    unfolding N_def by (rule LeastI_ex)
+  hence M: "\<And>i. \<forall>m\<ge>M. \<forall>n\<ge>M. dist (X m $ i) (X n $ i) < ?s"
+    unfolding M_def by simp
+  {
+    fix m n :: nat
+    assume "M \<le> m" "M \<le> n"
+    have "dist (X m) (X n) = setL2 (\<lambda>i. dist (X m $ i) (X n $ i)) UNIV"
+      unfolding dist_vector_def ..
+    also have "\<dots> \<le> setsum (\<lambda>i. dist (X m $ i) (X n $ i)) UNIV"
+      by (rule setL2_le_setsum [OF zero_le_dist])
+    also have "\<dots> < setsum (\<lambda>i::'n. ?s) UNIV"
+      by (rule setsum_strict_mono, simp_all add: M `M \<le> m` `M \<le> n`)
+    also have "\<dots> = r"
+      by simp
+    finally have "dist (X m) (X n) < r" .
+  }
+  hence "\<forall>m\<ge>M. \<forall>n\<ge>M. dist (X m) (X n) < r"
+    by simp
+  then show "\<exists>M. \<forall>m\<ge>M. \<forall>n\<ge>M. dist (X m) (X n) < r" ..
+qed
+
+instance "^" :: (complete_space, finite) complete_space
+proof
+  fix X :: "nat \<Rightarrow> 'a ^ 'b" assume "Cauchy X"
+  have "\<And>i. (\<lambda>n. X n $ i) ----> lim (\<lambda>n. X n $ i)"
+    using Cauchy_Cart_nth [OF `Cauchy X`]
+    by (simp add: Cauchy_convergent_iff convergent_LIMSEQ_iff)
+  hence "X ----> Cart_lambda (\<lambda>i. lim (\<lambda>n. X n $ i))"
+    by (simp add: LIMSEQ_vector)
+  then show "convergent X"
+    by (rule convergentI)
+qed
+
 subsection {* Norms *}
 
 instantiation "^" :: (real_normed_vector, finite) real_normed_vector
@@ -557,6 +670,19 @@ instance proof
 qed
 
 end
+
+lemma norm_nth_le: "norm (x $ i) \<le> norm x"
+unfolding vector_norm_def
+by (rule member_le_setL2) simp_all
+
+interpretation Cart_nth: bounded_linear "\<lambda>x. x $ i"
+apply default
+apply (rule vector_add_component)
+apply (rule vector_scaleR_component)
+apply (rule_tac x="1" in exI, simp add: norm_nth_le)
+done
+
+instance "^" :: (banach, finite) banach ..
 
 subsection {* Inner products *}
 
@@ -809,8 +935,11 @@ lemma norm_cauchy_schwarz_abs:
   using norm_cauchy_schwarz[of x y] norm_cauchy_schwarz[of x "-y"]
   by (simp add: real_abs_def dot_rneg)
 
-lemma norm_triangle_sub: "norm (x::real ^'n::finite) <= norm(y) + norm(x - y)"
+lemma norm_triangle_sub:
+  fixes x y :: "'a::real_normed_vector"
+  shows "norm x \<le> norm y  + norm (x - y)"
   using norm_triangle_ineq[of "y" "x - y"] by (simp add: ring_simps)
+
 lemma norm_triangle_le: "norm(x::real ^'n::finite) + norm y <= e ==> norm(x + y) <= e"
   by (metis order_trans norm_triangle_ineq)
 lemma norm_triangle_lt: "norm(x::real ^'n::finite) + norm(y) < e ==> norm(x + y) < e"
@@ -2613,17 +2742,19 @@ lemma dist_sndcart: "dist(sndcart (x::real^_)) (sndcart y) <= dist x y"
 lemma dot_pastecart: "(pastecart (x1::'a::{times,comm_monoid_add}^'n::finite) (x2::'a::{times,comm_monoid_add}^'m::finite)) \<bullet> (pastecart y1 y2) =  x1 \<bullet> y1 + x2 \<bullet> y2"
   by (simp add: dot_def setsum_UNIV_sum pastecart_def)
 
-lemma norm_pastecart: "norm(pastecart x y) <= norm(x :: real ^ 'm::finite) + norm(y::real^'n::finite)"
-  unfolding real_vector_norm_def dot_pastecart real_sqrt_le_iff id_def
-  apply (rule power2_le_imp_le)
-  apply (simp add: real_sqrt_pow2[OF add_nonneg_nonneg[OF dot_pos_le[of x] dot_pos_le[of y]]])
-  apply (auto simp add: power2_eq_square ring_simps)
-  apply (simp add: power2_eq_square[symmetric])
-  apply (rule mult_nonneg_nonneg)
-  apply (simp_all add: real_sqrt_pow2[OF dot_pos_le])
-  apply (rule add_nonneg_nonneg)
-  apply (simp_all add: real_sqrt_pow2[OF dot_pos_le])
-  done
+text {* TODO: move to NthRoot *}
+lemma sqrt_add_le_add_sqrt:
+  assumes x: "0 \<le> x" and y: "0 \<le> y"
+  shows "sqrt (x + y) \<le> sqrt x + sqrt y"
+apply (rule power2_le_imp_le)
+apply (simp add: real_sum_squared_expand add_nonneg_nonneg x y)
+apply (simp add: mult_nonneg_nonneg x y)
+apply (simp add: add_nonneg_nonneg x y)
+done
+
+lemma norm_pastecart: "norm (pastecart x y) <= norm x + norm y"
+  unfolding vector_norm_def setL2_def setsum_UNIV_sum
+  by (simp add: sqrt_add_le_add_sqrt setsum_nonneg)
 
 subsection {* A generic notion of "hull" (convex, affine, conic hull and closure). *}
 

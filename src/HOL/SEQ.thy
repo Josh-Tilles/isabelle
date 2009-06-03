@@ -13,10 +13,6 @@ imports Limits
 begin
 
 definition
-  sequentially :: "nat filter" where
-  [code del]: "sequentially = Abs_filter (\<lambda>P. \<exists>N. \<forall>n\<ge>N. P n)"
-
-definition
   Zseq :: "[nat \<Rightarrow> 'a::real_normed_vector] \<Rightarrow> bool" where
     --{*Standard definition of sequence converging to zero*}
   [code del]: "Zseq X = (\<forall>r>0. \<exists>no. \<forall>n\<ge>no. norm (X n) < r)"
@@ -28,7 +24,7 @@ definition
   [code del]: "X ----> L = (\<forall>r>0. \<exists>no. \<forall>n\<ge>no. dist (X n) L < r)"
 
 definition
-  lim :: "(nat \<Rightarrow> 'a::real_normed_vector) \<Rightarrow> 'a" where
+  lim :: "(nat \<Rightarrow> 'a::metric_space) \<Rightarrow> 'a" where
     --{*Standard definition of limit using choice operator*}
   "lim X = (THE L. X ----> L)"
 
@@ -70,24 +66,6 @@ definition
     --{*Standard definition of the Cauchy condition*}
   [code del]: "Cauchy X = (\<forall>e>0. \<exists>M. \<forall>m \<ge> M. \<forall>n \<ge> M. dist (X m) (X n) < e)"
 
-
-subsection {* Sequentially *}
-
-lemma eventually_sequentially:
-  "eventually P sequentially \<longleftrightarrow> (\<exists>N. \<forall>n\<ge>N. P n)"
-unfolding sequentially_def
-apply (rule eventually_Abs_filter)
-apply simp
-apply (clarify, rule_tac x=N in exI, simp)
-apply (clarify, rename_tac M N)
-apply (rule_tac x="max M N" in exI, simp)
-done
-
-lemma Zseq_conv_Zfun: "Zseq X \<longleftrightarrow> Zfun X sequentially"
-unfolding Zseq_def Zfun_def eventually_sequentially ..
-
-lemma LIMSEQ_conv_tendsto: "(X ----> L) \<longleftrightarrow> tendsto X L sequentially"
-unfolding LIMSEQ_def tendsto_def eventually_sequentially ..
 
 subsection {* Bounded Sequences *}
 
@@ -150,6 +128,9 @@ lemma ZseqD:
   "\<lbrakk>Zseq X; 0 < r\<rbrakk> \<Longrightarrow> \<exists>no. \<forall>n\<ge>no. norm (X n) < r"
 unfolding Zseq_def by simp
 
+lemma Zseq_conv_Zfun: "Zseq X \<longleftrightarrow> Zfun X sequentially"
+unfolding Zseq_def Zfun_def eventually_sequentially ..
+
 lemma Zseq_zero: "Zseq (\<lambda>n. 0)"
 unfolding Zseq_def by simp
 
@@ -211,6 +192,9 @@ lemmas Zseq_mult_left = mult.Zseq_left
 
 
 subsection {* Limits of Sequences *}
+
+lemma LIMSEQ_conv_tendsto: "(X ----> L) \<longleftrightarrow> tendsto X L sequentially"
+unfolding LIMSEQ_def tendsto_def eventually_sequentially ..
 
 lemma LIMSEQ_iff:
   fixes L :: "'a::real_normed_vector"
@@ -1050,8 +1034,10 @@ done
 
 subsubsection {* Cauchy Sequences are Convergent *}
 
-axclass banach \<subseteq> real_normed_vector
+axclass complete_space \<subseteq> metric_space
   Cauchy_convergent: "Cauchy X \<Longrightarrow> convergent X"
+
+axclass banach \<subseteq> real_normed_vector, complete_space
 
 theorem LIMSEQ_imp_Cauchy:
   assumes X: "X ----> a" shows "Cauchy X"
@@ -1076,6 +1062,16 @@ qed
 lemma convergent_Cauchy: "convergent X \<Longrightarrow> Cauchy X"
 unfolding convergent_def
 by (erule exE, erule LIMSEQ_imp_Cauchy)
+
+lemma Cauchy_convergent_iff:
+  fixes X :: "nat \<Rightarrow> 'a::complete_space"
+  shows "Cauchy X = convergent X"
+by (fast intro: Cauchy_convergent convergent_Cauchy)
+
+lemma convergent_subseq_convergent:
+  fixes X :: "nat \<Rightarrow> 'a::complete_space"
+  shows "\<lbrakk> convergent X; subseq f \<rbrakk> \<Longrightarrow> convergent (X o f)"
+  by (simp add: Cauchy_subseq_Cauchy Cauchy_convergent_iff [symmetric])
 
 text {*
 Proof that Cauchy sequences converge based on the one from
@@ -1189,16 +1185,6 @@ by (rule real_Cauchy.LIMSEQ_ex)
 
 instance real :: banach
 by intro_classes (rule real_Cauchy_convergent)
-
-lemma Cauchy_convergent_iff:
-  fixes X :: "nat \<Rightarrow> 'a::banach"
-  shows "Cauchy X = convergent X"
-by (fast intro: Cauchy_convergent convergent_Cauchy)
-
-lemma convergent_subseq_convergent:
-  fixes X :: "nat \<Rightarrow> 'a::banach"
-  shows "\<lbrakk> convergent X; subseq f \<rbrakk> \<Longrightarrow> convergent (X o f)"
-  by (simp add: Cauchy_subseq_Cauchy Cauchy_convergent_iff [symmetric])
 
 
 subsection {* Power Sequences *}
