@@ -268,26 +268,28 @@ subsection {* Vector Norm *}
 instantiation complex :: real_normed_field
 begin
 
-definition
-  complex_norm_def: "norm z = sqrt ((Re z)\<twosuperior> + (Im z)\<twosuperior>)"
+definition complex_norm_def:
+  "norm z = sqrt ((Re z)\<twosuperior> + (Im z)\<twosuperior>)"
 
 abbreviation
   cmod :: "complex \<Rightarrow> real" where
   "cmod \<equiv> norm"
 
-definition
-  complex_sgn_def: "sgn x = x /\<^sub>R cmod x"
+definition complex_sgn_def:
+  "sgn x = x /\<^sub>R cmod x"
 
-definition
-  dist_complex_def: "dist x y = cmod (x - y)"
+definition dist_complex_def:
+  "dist x y = cmod (x - y)"
+
+definition topo_complex_def [code del]:
+  "topo = {S::complex set. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
 
 lemmas cmod_def = complex_norm_def
 
 lemma complex_norm [simp]: "cmod (Complex x y) = sqrt (x\<twosuperior> + y\<twosuperior>)"
   by (simp add: complex_norm_def)
 
-instance
-proof
+instance proof
   fix r :: real and x y :: complex
   show "0 \<le> norm x"
     by (induct x) simp
@@ -306,6 +308,8 @@ proof
     by (rule complex_sgn_def)
   show "dist x y = cmod (x - y)"
     by (rule dist_complex_def)
+  show "topo = {S::complex set. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
+    by (rule topo_complex_def)
 qed
 
 end

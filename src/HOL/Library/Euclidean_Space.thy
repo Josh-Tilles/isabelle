@@ -506,6 +506,9 @@ begin
 definition dist_vector_def:
   "dist (x::'a^'b) (y::'a^'b) = setL2 (\<lambda>i. dist (x$i) (y$i)) UNIV"
 
+definition topo_vector_def:
+  "topo = {S::('a ^ 'b) set. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
+
 instance proof
   fix x y :: "'a ^ 'b"
   show "dist x y = 0 \<longleftrightarrow> x = y"
@@ -518,6 +521,9 @@ next
     apply (rule order_trans [OF _ setL2_triangle_ineq])
     apply (simp add: setL2_mono dist_triangle2)
     done
+next
+  show "topo = {S::('a ^ 'b) set. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
+    by (rule topo_vector_def)
 qed
 
 end

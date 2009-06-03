@@ -416,12 +416,26 @@ lemma Reals_induct [case_names of_real, induct set: Reals]:
   by (rule Reals_cases) auto
 
 
+subsection {* Topological spaces *}
+
+class topo =
+  fixes topo :: "'a set set"
+
+class topological_space = topo +
+  assumes topo_UNIV: "UNIV \<in> topo"
+  assumes topo_Int: "A \<in> topo \<Longrightarrow> B \<in> topo \<Longrightarrow> A \<inter> B \<in> topo"
+  assumes topo_Union: "T \<subseteq> topo \<Longrightarrow> \<Union>T \<in> topo"
+
+
 subsection {* Metric spaces *}
 
 class dist =
   fixes dist :: "'a \<Rightarrow> 'a \<Rightarrow> real"
 
-class metric_space = dist +
+class topo_dist = topo + dist +
+  assumes topo_dist: "topo = {S. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
+
+class metric_space = topo_dist +
   assumes dist_eq_0_iff [simp]: "dist x y = 0 \<longleftrightarrow> x = y"
   assumes dist_triangle2: "dist x y \<le> dist x z + dist y z"
 begin
@@ -452,6 +466,26 @@ qed
 lemma dist_triangle: "dist x z \<le> dist x y + dist y z"
 using dist_triangle2 [of x z y] by (simp add: dist_commute)
 
+subclass topological_space
+proof
+  have "\<exists>e::real. 0 < e"
+    by (fast intro: zero_less_one)
+  then show "UNIV \<in> topo"
+    unfolding topo_dist by simp
+next
+  fix A B assume "A \<in> topo" "B \<in> topo"
+  then show "A \<inter> B \<in> topo"
+    unfolding topo_dist
+    apply clarify
+    apply (drule (1) bspec)+
+    apply (clarify, rename_tac r s)
+    apply (rule_tac x="min r s" in exI, simp)
+    done
+next
+  fix T assume "T \<subseteq> topo" thus "\<Union>T \<in> topo"
+    unfolding topo_dist by fast
+qed
+
 end
 
 
@@ -466,7 +500,7 @@ class sgn_div_norm = scaleR + norm + sgn +
 class dist_norm = dist + norm + minus +
   assumes dist_norm: "dist x y = norm (x - y)"
 
-class real_normed_vector = real_vector + sgn_div_norm + dist_norm +
+class real_normed_vector = real_vector + sgn_div_norm + dist_norm + topo_dist +
   assumes norm_ge_zero [simp]: "0 \<le> norm x"
   and norm_eq_zero [simp]: "norm x = 0 \<longleftrightarrow> x = 0"
   and norm_triangle_ineq: "norm (x + y) \<le> norm x + norm y"
@@ -497,16 +531,20 @@ qed
 instantiation real :: real_normed_field
 begin
 
-definition
-  real_norm_def [simp]: "norm r = \<bar>r\<bar>"
+definition real_norm_def [simp]:
+  "norm r = \<bar>r\<bar>"
 
-definition
-  dist_real_def: "dist x y = \<bar>x - y\<bar>"
+definition dist_real_def:
+  "dist x y = \<bar>x - y\<bar>"
+
+definition topo_real_def [code del]:
+  "topo = {S::real set. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
 
 instance
 apply (intro_classes, unfold real_norm_def real_scaleR_def)
 apply (rule dist_real_def)
 apply (simp add: real_sgn_def)
+apply (rule topo_real_def)
 apply (rule abs_ge_zero)
 apply (rule abs_eq_0)
 apply (rule abs_triangle_ineq)
