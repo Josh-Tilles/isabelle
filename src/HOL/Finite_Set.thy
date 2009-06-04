@@ -457,6 +457,18 @@ lemma finite_UnionD: "finite(\<Union>A) \<Longrightarrow> finite A"
 by(blast intro: finite_subset[OF subset_Pow_Union])
 
 
+lemma finite_subset_image:
+  assumes "finite B"
+  shows "B \<subseteq> f ` A \<Longrightarrow> \<exists>C\<subseteq>A. finite C \<and> B = f ` C"
+using assms proof(induct)
+  case empty thus ?case by simp
+next
+  case insert thus ?case
+    by (clarsimp simp del: image_insert simp add: image_insert[symmetric])
+       blast
+qed
+
+
 subsection {* Class @{text finite}  *}
 
 setup {* Sign.add_path "finite" *} -- {*FIXME: name tweaking*}
@@ -1332,6 +1344,10 @@ lemma setsum_diff1'[rule_format]:
 apply (erule finite_induct[where F=A and P="% A. (a \<in> A \<longrightarrow> (\<Sum> x \<in> A. f x) = f a + (\<Sum> x \<in> (A - {a}). f x))"])
 apply (auto simp add: insert_Diff_if add_ac)
 done
+
+lemma setsum_diff1_ring: assumes "finite A" "a \<in> A"
+  shows "setsum f (A - {a}) = setsum f A - (f a::'a::ring)"
+unfolding setsum_diff1'[OF assms] by auto
 
 (* By Jeremy Siek: *)
 
