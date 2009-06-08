@@ -418,13 +418,77 @@ lemma Reals_induct [case_names of_real, induct set: Reals]:
 
 subsection {* Topological spaces *}
 
-class topo =
-  fixes topo :: "'a set set"
+class "open" =
+  fixes "open" :: "'a set \<Rightarrow> bool"
 
-class topological_space = topo +
-  assumes topo_UNIV: "UNIV \<in> topo"
-  assumes topo_Int: "A \<in> topo \<Longrightarrow> B \<in> topo \<Longrightarrow> A \<inter> B \<in> topo"
-  assumes topo_Union: "T \<subseteq> topo \<Longrightarrow> \<Union>T \<in> topo"
+class topological_space = "open" +
+  assumes open_UNIV [simp, intro]: "open UNIV"
+  assumes open_Int [intro]: "open S \<Longrightarrow> open T \<Longrightarrow> open (S \<inter> T)"
+  assumes open_Union [intro]: "\<forall>S\<in>K. open S \<Longrightarrow> open (\<Union> K)"
+begin
+
+definition
+  closed :: "'a set \<Rightarrow> bool" where
+  "closed S \<longleftrightarrow> open (- S)"
+
+lemma open_empty [intro, simp]: "open {}"
+  using open_Union [of "{}"] by simp
+
+lemma open_Un [intro]: "open S \<Longrightarrow> open T \<Longrightarrow> open (S \<union> T)"
+  using open_Union [of "{S, T}"] by simp
+
+lemma open_UN [intro]: "\<forall>x\<in>A. open (B x) \<Longrightarrow> open (\<Union>x\<in>A. B x)"
+  unfolding UN_eq by (rule open_Union) auto
+
+lemma open_INT [intro]: "finite A \<Longrightarrow> \<forall>x\<in>A. open (B x) \<Longrightarrow> open (\<Inter>x\<in>A. B x)"
+  by (induct set: finite) auto
+
+lemma open_Inter [intro]: "finite S \<Longrightarrow> \<forall>T\<in>S. open T \<Longrightarrow> open (\<Inter>S)"
+  unfolding Inter_def by (rule open_INT)
+
+lemma closed_empty [intro, simp]:  "closed {}"
+  unfolding closed_def by simp
+
+lemma closed_Un [intro]: "closed S \<Longrightarrow> closed T \<Longrightarrow> closed (S \<union> T)"
+  unfolding closed_def by auto
+
+lemma closed_Inter [intro]: "\<forall>S\<in>K. closed S \<Longrightarrow> closed (\<Inter> K)"
+  unfolding closed_def Inter_def by auto
+
+lemma closed_UNIV [intro, simp]: "closed UNIV"
+  unfolding closed_def by simp
+
+lemma closed_Int [intro]: "closed S \<Longrightarrow> closed T \<Longrightarrow> closed (S \<inter> T)"
+  unfolding closed_def by auto
+
+lemma closed_INT [intro]: "\<forall>x\<in>A. closed (B x) \<Longrightarrow> closed (\<Inter>x\<in>A. B x)"
+  unfolding closed_def by auto
+
+lemma closed_UN [intro]: "finite A \<Longrightarrow> \<forall>x\<in>A. closed (B x) \<Longrightarrow> closed (\<Union>x\<in>A. B x)"
+  by (induct set: finite) auto
+
+lemma closed_Union [intro]: "finite S \<Longrightarrow> \<forall>T\<in>S. closed T \<Longrightarrow> closed (\<Union>S)"
+  unfolding Union_def by (rule closed_UN)
+
+lemma open_closed: "open S \<longleftrightarrow> closed (- S)"
+  unfolding closed_def by simp
+
+lemma closed_open: "closed S \<longleftrightarrow> open (- S)"
+  unfolding closed_def by simp
+
+lemma open_Diff [intro]: "open S \<Longrightarrow> closed T \<Longrightarrow> open (S - T)"
+  unfolding closed_open Diff_eq by (rule open_Int)
+
+lemma closed_Diff [intro]: "closed S \<Longrightarrow> open T \<Longrightarrow> closed (S - T)"
+  unfolding open_closed Diff_eq by (rule closed_Int)
+
+lemma open_Compl [intro]: "closed S \<Longrightarrow> open (- S)"
+  unfolding closed_open .
+
+lemma closed_Compl [intro]: "open S \<Longrightarrow> closed (- S)"
+  unfolding open_closed .
+
+end
 
 
 subsection {* Metric spaces *}
@@ -432,10 +496,10 @@ subsection {* Metric spaces *}
 class dist =
   fixes dist :: "'a \<Rightarrow> 'a \<Rightarrow> real"
 
-class topo_dist = topo + dist +
-  assumes topo_dist: "topo = {S. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
+class open_dist = "open" + dist +
+  assumes open_dist: "open S \<longleftrightarrow> (\<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S)"
 
-class metric_space = topo_dist +
+class metric_space = open_dist +
   assumes dist_eq_0_iff [simp]: "dist x y = 0 \<longleftrightarrow> x = y"
   assumes dist_triangle2: "dist x y \<le> dist x z + dist y z"
 begin
@@ -470,20 +534,20 @@ subclass topological_space
 proof
   have "\<exists>e::real. 0 < e"
     by (fast intro: zero_less_one)
-  then show "UNIV \<in> topo"
-    unfolding topo_dist by simp
+  then show "open UNIV"
+    unfolding open_dist by simp
 next
-  fix A B assume "A \<in> topo" "B \<in> topo"
-  then show "A \<inter> B \<in> topo"
-    unfolding topo_dist
+  fix S T assume "open S" "open T"
+  then show "open (S \<inter> T)"
+    unfolding open_dist
     apply clarify
     apply (drule (1) bspec)+
     apply (clarify, rename_tac r s)
     apply (rule_tac x="min r s" in exI, simp)
     done
 next
-  fix T assume "T \<subseteq> topo" thus "\<Union>T \<in> topo"
-    unfolding topo_dist by fast
+  fix K assume "\<forall>S\<in>K. open S" thus "open (\<Union>K)"
+    unfolding open_dist by fast
 qed
 
 end
@@ -500,7 +564,7 @@ class sgn_div_norm = scaleR + norm + sgn +
 class dist_norm = dist + norm + minus +
   assumes dist_norm: "dist x y = norm (x - y)"
 
-class real_normed_vector = real_vector + sgn_div_norm + dist_norm + topo_dist +
+class real_normed_vector = real_vector + sgn_div_norm + dist_norm + open_dist +
   assumes norm_ge_zero [simp]: "0 \<le> norm x"
   and norm_eq_zero [simp]: "norm x = 0 \<longleftrightarrow> x = 0"
   and norm_triangle_ineq: "norm (x + y) \<le> norm x + norm y"
@@ -537,14 +601,14 @@ definition real_norm_def [simp]:
 definition dist_real_def:
   "dist x y = \<bar>x - y\<bar>"
 
-definition topo_real_def [code del]:
-  "topo = {S::real set. \<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S}"
+definition open_real_def [code del]:
+  "open (S :: real set) \<longleftrightarrow> (\<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S)"
 
 instance
 apply (intro_classes, unfold real_norm_def real_scaleR_def)
 apply (rule dist_real_def)
+apply (rule open_real_def)
 apply (simp add: real_sgn_def)
-apply (rule topo_real_def)
 apply (rule abs_ge_zero)
 apply (rule abs_eq_0)
 apply (rule abs_triangle_ineq)
@@ -734,6 +798,11 @@ next
 qed
 
 subsection {* Extra type constraints *}
+
+text {* Only allow @{term "open"} in class @{text topological_space}. *}
+
+setup {* Sign.add_const_constraint
+  (@{const_name "open"}, SOME @{typ "'a::topological_space set \<Rightarrow> bool"}) *}
 
 text {* Only allow @{term dist} in class @{text metric_space}. *}
 
