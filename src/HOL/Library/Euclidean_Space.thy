@@ -1412,51 +1412,6 @@ qed
 (* FIXME : Problem thm setsum_vmul[of _ "f:: 'a \<Rightarrow> real ^'n"]  ---
  Get rid of *s and use real_vector instead! Also prove that ^ creates a real_vector !! *)
 
-lemma setsum_add_split: assumes mn: "(m::nat) \<le> n + 1"
-  shows "setsum f {m..n + p} = setsum f {m..n} + setsum f {n + 1..n + p}"
-proof-
-  let ?A = "{m .. n}"
-  let ?B = "{n + 1 .. n + p}"
-  have eq: "{m .. n+p} = ?A \<union> ?B" using mn by auto
-  have d: "?A \<inter> ?B = {}" by auto
-  from setsum_Un_disjoint[of "?A" "?B" f] eq d show ?thesis by auto
-qed
-
-lemma setsum_natinterval_left:
-  assumes mn: "(m::nat) <= n"
-  shows "setsum f {m..n} = f m + setsum f {m + 1..n}"
-proof-
-  from mn have "{m .. n} = insert m {m+1 .. n}" by auto
-  then show ?thesis by auto
-qed
-
-lemma setsum_natinterval_difff:
-  fixes f:: "nat \<Rightarrow> ('a::ab_group_add)"
-  shows  "setsum (\<lambda>k. f k - f(k + 1)) {(m::nat) .. n} =
-          (if m <= n then f m - f(n + 1) else 0)"
-by (induct n, auto simp add: ring_simps not_le le_Suc_eq)
-
-lemmas setsum_restrict_set' = setsum_restrict_set[unfolded Int_def]
-
-lemma setsum_setsum_restrict:
-  "finite S \<Longrightarrow> finite T \<Longrightarrow> setsum (\<lambda>x. setsum (\<lambda>y. f x y) {y. y\<in> T \<and> R x y}) S = setsum (\<lambda>y. setsum (\<lambda>x. f x y) {x. x \<in> S \<and> R x y}) T"
-  apply (simp add: setsum_restrict_set'[unfolded mem_def] mem_def)
-  by (rule setsum_commute)
-
-lemma setsum_image_gen: assumes fS: "finite S"
-  shows "setsum g S = setsum (\<lambda>y. setsum g {x. x \<in> S \<and> f x = y}) (f ` S)"
-proof-
-  {fix x assume "x \<in> S" then have "{y. y\<in> f`S \<and> f x = y} = {f x}" by auto}
-  note th0 = this
-  have "setsum g S = setsum (\<lambda>x. setsum (\<lambda>y. g x) {y. y\<in> f`S \<and> f x = y}) S"
-    apply (rule setsum_cong2)
-    by (simp add: th0)
-  also have "\<dots> = setsum (\<lambda>y. setsum g {x. x \<in> S \<and> f x = y}) (f ` S)"
-    apply (rule setsum_setsum_restrict[OF fS])
-    by (rule finite_imageI[OF fS])
-  finally show ?thesis .
-qed
-
     (* FIXME: Here too need stupid finiteness assumption on T!!! *)
 lemma setsum_group:
   assumes fS: "finite S" and fT: "finite T" and fST: "f ` S \<subseteq> T"
@@ -1828,6 +1783,36 @@ proof-
   then show ?thesis using Kp by blast
 qed
 
+lemma smult_conv_scaleR: "c *s x = scaleR c x"
+  unfolding vector_scalar_mult_def vector_scaleR_def by simp
+
+lemma linear_conv_bounded_linear:
+  fixes f :: "real ^ _ \<Rightarrow> real ^ _"
+  shows "linear f \<longleftrightarrow> bounded_linear f"
+proof
+  assume "linear f"
+  show "bounded_linear f"
+  proof
+    fix x y show "f (x + y) = f x + f y"
+      using `linear f` unfolding linear_def by simp
+  next
+    fix r x show "f (scaleR r x) = scaleR r (f x)"
+      using `linear f` unfolding linear_def
+      by (simp add: smult_conv_scaleR)
+  next
+    have "\<exists>B. \<forall>x. norm (f x) \<le> B * norm x"
+      using `linear f` by (rule linear_bounded)
+    thus "\<exists>K. \<forall>x. norm (f x) \<le> norm x * K"
+      by (simp add: mult_commute)
+  qed
+next
+  assume "bounded_linear f"
+  then interpret f: bounded_linear f .
+  show "linear f"
+    unfolding linear_def smult_conv_scaleR
+    by (simp add: f.add f.scaleR)
+qed
+
 subsection{* Bilinear functions. *}
 
 definition "bilinear f \<longleftrightarrow> (\<forall>x. linear(\<lambda>y. f x y)) \<and> (\<forall>y. linear(\<lambda>x. f x y))"
@@ -1929,6 +1914,41 @@ proof-
     then have "norm (h x y) \<le> ?K * norm x * norm y"
       using B[rule_format, of x y] by simp}
   with Kp show ?thesis by blast
+qed
+
+lemma bilinear_conv_bounded_bilinear:
+  fixes h :: "real ^ _ \<Rightarrow> real ^ _ \<Rightarrow> real ^ _"
+  shows "bilinear h \<longleftrightarrow> bounded_bilinear h"
+proof
+  assume "bilinear h"
+  show "bounded_bilinear h"
+  proof
+    fix x y z show "h (x + y) z = h x z + h y z"
+      using `bilinear h` unfolding bilinear_def linear_def by simp
+  next
+    fix x y z show "h x (y + z) = h x y + h x z"
+      using `bilinear h` unfolding bilinear_def linear_def by simp
+  next
+    fix r x y show "h (scaleR r x) y = scaleR r (h x y)"
+      using `bilinear h` unfolding bilinear_def linear_def
+      by (simp add: smult_conv_scaleR)
+  next
+    fix r x y show "h x (scaleR r y) = scaleR r (h x y)"
+      using `bilinear h` unfolding bilinear_def linear_def
+      by (simp add: smult_conv_scaleR)
+  next
+    have "\<exists>B. \<forall>x y. norm (h x y) \<le> B * norm x * norm y"
+      using `bilinear h` by (rule bilinear_bounded)
+    thus "\<exists>K. \<forall>x y. norm (h x y) \<le> norm x * norm y * K"
+      by (simp add: mult_ac)
+  qed
+next
+  assume "bounded_bilinear h"
+  then interpret h: bounded_bilinear h .
+  show "bilinear h"
+    unfolding bilinear_def linear_conv_bounded_linear
+    using h.bounded_linear_left h.bounded_linear_right
+    by simp
 qed
 
 subsection{* Adjoints. *}
