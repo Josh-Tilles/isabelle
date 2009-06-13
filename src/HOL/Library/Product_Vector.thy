@@ -347,7 +347,7 @@ instance proof
     done
   show "norm (scaleR r x) = \<bar>r\<bar> * norm x"
     unfolding norm_prod_def
-    apply (simp add: norm_scaleR power_mult_distrib)
+    apply (simp add: power_mult_distrib)
     apply (simp add: right_distrib [symmetric])
     apply (simp add: real_sqrt_mult_distrib)
     done
@@ -381,10 +381,10 @@ instance proof
     by (simp add: inner_commute)
   show "inner (x + y) z = inner x z + inner y z"
     unfolding inner_prod_def
-    by (simp add: inner_left_distrib)
+    by (simp add: inner_add_left)
   show "inner (scaleR r x) y = r * inner x y"
     unfolding inner_prod_def
-    by (simp add: inner_scaleR_left right_distrib)
+    by (simp add: right_distrib)
   show "0 \<le> inner x x"
     unfolding inner_prod_def
     by (intro add_nonneg_nonneg inner_ge_zero)
