@@ -331,17 +331,22 @@ lemma mod_mult_mult2:
   "(a * c) mod (b * c) = (a mod b) * c"
   using mod_mult_mult1 [of c a b] by (simp add: mult_commute)
 
-end
+lemma dvd_mod: "k dvd m \<Longrightarrow> k dvd n \<Longrightarrow> k dvd (m mod n)"
+  unfolding dvd_def by (auto simp add: mod_mult_mult1)
+
+lemma dvd_mod_iff: "k dvd n \<Longrightarrow> k dvd (m mod n) \<longleftrightarrow> k dvd m"
+by (blast intro: dvd_mod_imp_dvd dvd_mod)
 
 lemma div_power:
-  "(y::'a::{semiring_div,no_zero_divisors,power}) dvd x \<Longrightarrow>
-    (x div y) ^ n = x ^ n div y ^ n"
+  "y dvd x \<Longrightarrow> (x div y) ^ n = x ^ n div y ^ n"
 apply (induct n)
  apply simp
 apply(simp add: div_mult_div_if_dvd dvd_power_same)
 done
 
-class ring_div = semiring_div + comm_ring_1
+end
+
+class ring_div = semiring_div + idom
 begin
 
 text {* Negation respects modular equivalence. *}
@@ -904,15 +909,6 @@ lemma dvd_reduce: "(k dvd n + k) = (k dvd (n::nat))"
   apply (erule nat_dvd_diff)
   apply (rule dvd_refl)
   done
-
-lemma dvd_mod: "!!n::nat. [| f dvd m; f dvd n |] ==> f dvd m mod n"
-  unfolding dvd_def
-  apply (case_tac "n = 0", auto)
-  apply (blast intro: mod_mult_distrib2 [symmetric])
-  done
-
-lemma dvd_mod_iff: "k dvd n ==> ((k::nat) dvd m mod n) = (k dvd m)"
-by (blast intro: dvd_mod_imp_dvd dvd_mod)
 
 lemma dvd_mult_cancel: "!!k::nat. [| k*m dvd k*n; 0<k |] ==> m dvd n"
   unfolding dvd_def
