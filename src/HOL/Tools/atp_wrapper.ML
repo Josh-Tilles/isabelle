@@ -23,8 +23,9 @@ sig
   val eprover_full: AtpManager.prover
   val spass_opts: int -> bool  -> AtpManager.prover
   val spass: AtpManager.prover
-  val remote_prover_opts: int -> bool -> string -> AtpManager.prover
-  val remote_prover: string -> AtpManager.prover
+  val remote_prover_opts: int -> bool -> string -> string -> AtpManager.prover
+  val remote_prover: string -> string -> AtpManager.prover
+  val refresh_systems: unit -> unit
 end;
 
 structure AtpWrapper: ATP_WRAPPER =
@@ -74,20 +75,16 @@ fun external_prover relevance_filter preparer writer (cmd, args) find_failure pr
 
     (* write out problem file and call prover *)
     val probfile = prob_pathname subgoalno
-    val fname = File.platform_path probfile
-    val _ = writer fname clauses
-    val cmdline =
-      if File.exists cmd then "exec " ^ File.shell_path cmd ^ " " ^ args
-      else error ("Bad executable: " ^ Path.implode cmd)
-    val (proof, rc) = system_out (cmdline ^ " " ^ fname)
+    val conj_pos = writer probfile clauses
+    val (proof, rc) = system_out (
+      if File.exists cmd then
+        space_implode " " ["exec", File.shell_path cmd, args, File.platform_path probfile]
+      else error ("Bad executable: " ^ Path.implode cmd))
 
     (* if problemfile has not been exported, delete problemfile; otherwise export proof, too *)
     val _ =
-      if destdir' = "" then OS.FileSys.remove fname
-      else
-        let val out = TextIO.openOut (fname ^ "_proof")
-        val _ = TextIO.output (out, proof)
-        in TextIO.closeOut out end
+      if destdir' = "" then File.rm probfile
+      else File.write (Path.explode (Path.implode probfile ^ "_proof")) proof
     
     (* check for success and print out some information on failure *)
     val failure = find_failure proof
@@ -95,7 +92,8 @@ fun external_prover relevance_filter preparer writer (cmd, args) find_failure pr
     val message =
       if is_some failure then "External prover failed."
       else if rc <> 0 then "External prover failed: " ^ proof
-      else "Try this command: " ^ produce_answer name (proof, thm_names, ctxt, th, subgoalno)
+      else "Try this command: " ^
+        produce_answer name (proof, thm_names, conj_pos, ctxt, th, subgoalno)
     val _ = Output.debug (fn () => "Sledgehammer response (rc = " ^ string_of_int rc ^ "):\n" ^ proof)
   in (success, message, proof, thm_names, the_filtered_clauses) end;
 
@@ -112,7 +110,7 @@ fun tptp_prover_opts_full max_new theory_const full command timeout ax_clauses f
   (ResHolClause.tptp_write_file (AtpManager.get_full_types()))
   command
   ResReconstruct.find_failure
-  (if full then ResReconstruct.structured_proof else ResReconstruct.lemma_list_tstp)
+  (if full then ResReconstruct.structured_proof else ResReconstruct.lemma_list false)
   timeout ax_clauses fcls name n goal;
 
 (*arbitrary ATP with TPTP input/output and problemfile as last argument*)
@@ -146,7 +144,7 @@ fun vampire_opts_full max_new theory_const timeout = full_prover_opts
                ("--output_syntax tptp --mode casc -t " ^ string_of_int timeout))
   timeout;
 
-val vampire_full = vampire_opts 60 false;
+val vampire_full = vampire_opts_full 60 false;
 
 
 (* E prover *)
@@ -177,7 +175,7 @@ fun spass_opts max_new theory_const timeout ax_clauses fcls name n goal = extern
   (Path.explode "$SPASS_HOME/SPASS",
     "-Auto -SOS=1 -PGiven=0 -PProblem=0 -Splits=0 -FullRed=0 -DocProof -TimeLimit=" ^ string_of_int timeout)
   ResReconstruct.find_failure
-  ResReconstruct.lemma_list_dfg
+  (ResReconstruct.lemma_list true)
   timeout ax_clauses fcls name n goal;
 
 val spass = spass_opts 40 true;
@@ -185,10 +183,32 @@ val spass = spass_opts 40 true;
 
 (* remote prover invocation via SystemOnTPTP *)
 
-fun remote_prover_opts max_new theory_const args timeout =
-  tptp_prover_opts max_new theory_const
-  (Path.explode "$ISABELLE_HOME/lib/scripts/SystemOnTPTP", args ^ " -t " ^ string_of_int timeout)
-  timeout;
+val systems =
+  Synchronized.var "atp_wrapper_systems" ([]: string list);
+
+fun get_systems () =
+  let
+    val (answer, rc) = system_out (("$ISABELLE_HOME/lib/scripts/SystemOnTPTP" |>
+      Path.explode |> File.shell_path) ^ " -w")
+  in
+    if rc <> 0 then error ("Get available systems from SystemOnTPTP:\n" ^ answer)
+    else split_lines answer
+  end;
+
+fun refresh_systems () = Synchronized.change systems (fn _ =>
+  get_systems());
+
+fun get_system prefix = Synchronized.change_result systems (fn systems =>
+  let val systems = if null systems then get_systems() else systems
+  in (find_first (String.isPrefix prefix) systems, systems) end);
+
+fun remote_prover_opts max_new theory_const args prover_prefix timeout =
+  let val sys = case get_system prover_prefix of
+      NONE => error ("No system like " ^ quote prover_prefix ^ " at SystemOnTPTP")
+    | SOME sys => sys
+  in tptp_prover_opts max_new theory_const
+    (Path.explode "$ISABELLE_HOME/lib/scripts/SystemOnTPTP",
+      args ^ " -t " ^ string_of_int timeout ^ " -s " ^ sys) timeout end;
 
 val remote_prover = remote_prover_opts 60 false;
 
