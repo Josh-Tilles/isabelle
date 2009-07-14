@@ -18,6 +18,16 @@ are formally declared.  INCOMPATIBILITY.
 
 *** HOL ***
 
+* Code generator attributes follow the usual underscore convention:
+    code_unfold     replaces    code unfold
+    code_post       replaces    code post
+    etc.
+  INCOMPATIBILITY.
+
+* New quickcheck implementation using new code generator.
+
+* New type class boolean_algebra.
+
 * Refinements to lattices classes:
   - added boolean_algebra type class
   - less default intro/elim rules in locale variant, more default
