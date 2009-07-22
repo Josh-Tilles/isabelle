@@ -34,7 +34,7 @@ val In0_not_In1 = thm "In0_not_In1";
 val In1_not_In0 = thm "In1_not_In0";
 val Un_assoc = thm "Un_assoc";
 val Collect_disj_eq = thm "Collect_disj_eq";
-val empty_def = thm "empty_def";
+val Collect_False_empty = @{thm empty_def [THEN sym, THEN eq_reflection]};
 val empty_iff = thm "empty_iff";
 
 open DatatypeAux;
@@ -815,7 +815,7 @@ fun gen_add_nominal_datatype prep_typ config new_type_names dts thy =
         val (thy', defs', eqns') = Library.foldl (make_constr_def tname T T')
           ((Sign.add_path tname thy, defs, []), constrs ~~ constrs' ~~ constr_syntax)
       in
-        (parent_path (#flat_names config) thy', defs', eqns @ [eqns'], dist_lemmas @ [dist])
+        (Sign.parent_path thy', defs', eqns @ [eqns'], dist_lemmas @ [dist])
       end;
 
     val (thy8, constr_defs, constr_rep_eqns, dist_lemmas) = Library.foldl dt_constr_defs
@@ -1017,7 +1017,7 @@ fun gen_add_nominal_datatype prep_typ config new_type_names dts thy =
             (fn _ =>
               simp_tac (HOL_basic_ss addsimps (supp_def ::
                  Un_assoc :: de_Morgan_conj :: Collect_disj_eq :: finite_Un ::
-                 symmetric empty_def :: finite_emptyI :: simp_thms @
+                 Collect_False_empty :: finite_emptyI :: simp_thms @
                  abs_perm @ abs_fresh @ inject_thms' @ perm_thms')) 1)
         in
           (supp_thm,
