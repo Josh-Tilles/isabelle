@@ -19,7 +19,7 @@ fun name_of_thm thm =
   (case Proofterm.fold_proof_atoms false (fn PThm (_, ((name, _, _), _)) => cons name | _ => I)
       [Thm.proof_of thm] [] of
     [name] => name
-  | _ => error ("name_of_thm: bad proof of theorem\n" ^ Display.string_of_thm thm));
+  | _ => error ("name_of_thm: bad proof of theorem\n" ^ Display.string_of_thm_without_context thm));
 
 val all_simps = map (symmetric o mk_meta_eq) (thms "HOL.all_simps");
 
@@ -308,7 +308,7 @@ fun add_ind_realizer rsets intrs induct raw_induct elims (thy, vs) =
     val ((dummies, some_dt_names), thy2) =
       thy1
       |> add_dummies (Datatype.add_datatype
-           { strict = false, flat_names = false, quiet = false } (map (Binding.name_of o #2) dts))
+           { strict = false, quiet = false } (map (Binding.name_of o #2) dts))
            (map (pair false) dts) []
       ||> Extraction.add_typeof_eqns_i ty_eqs
       ||> Extraction.add_realizes_eqns_i rlz_eqs;

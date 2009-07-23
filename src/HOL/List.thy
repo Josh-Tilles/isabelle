@@ -679,7 +679,7 @@ fun list_eq ss (F as (eq as Const(_,eqT)) $ lhs $ rhs) =
 in
 
 val list_eq_simproc =
-  Simplifier.simproc (the_context ()) "list_eq" ["(xs::'a list) = ys"] (K list_eq);
+  Simplifier.simproc @{theory} "list_eq" ["(xs::'a list) = ys"] (K list_eq);
 
 end;
 
@@ -2268,6 +2268,8 @@ lemma upt_rec[code]: "[i..<j] = (if i<j then i#[Suc i..<j] else [])"
 -- {* simp does not terminate! *}
 by (induct j) auto
 
+lemmas upt_rec_number_of[simp] = upt_rec[of "number_of m" "number_of n", standard]
+
 lemma upt_conv_Nil [simp]: "j <= i ==> [i..<j] = []"
 by (subst upt_rec) simp
 
@@ -3188,7 +3190,7 @@ instantiation int:: finite_intvl_succ
 begin
 
 definition
-successor_int_def: "successor = (%i\<Colon>int. i+1)"
+successor_int_def[simp]: "successor = (%i\<Colon>int. i+1)"
 
 instance
 by intro_classes (simp_all add: successor_int_def)
@@ -3201,6 +3203,8 @@ hide (open) const successor
 
 lemma upto_rec2_int: "(i::int) \<le> j \<Longrightarrow> [i..j+1] = [i..j] @ [j+1]"
 by(rule upto_rec2[where 'a = int, simplified successor_int_def])
+
+lemmas upto_rec_number_of_int[simp] = upto_rec[of "number_of m :: int" "number_of n", standard]
 
 
 subsubsection {* @{text lists}: the list-forming operator over sets *}
@@ -3756,7 +3760,7 @@ lemma empty_null:
   "xs = [] \<longleftrightarrow> null xs"
 by (cases xs) simp_all
 
-lemma [code_inline]:
+lemma [code_unfold]:
   "eq_class.eq xs [] \<longleftrightarrow> null xs"
 by (simp add: eq empty_null)
 
@@ -3804,7 +3808,7 @@ lemma map_filter_conv [simp]:
   "map_filter f P xs = map f (filter P xs)"
 by (induct xs) auto
 
-lemma length_remdups_length_unique [code_inline]:
+lemma length_remdups_length_unique [code_unfold]:
   "length (remdups xs) = length_unique xs"
   by (induct xs) simp_all
 

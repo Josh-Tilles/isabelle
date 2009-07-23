@@ -36,7 +36,7 @@ termination by (relation "measure (\<lambda>(a, b). nat (- a - b))") auto
 
 text{*algorithm for the general case @{term "b\<noteq>0"}*}
 definition negateSnd :: "int \<times> int \<Rightarrow> int \<times> int" where
-  [code_inline]: "negateSnd = apsnd uminus"
+  [code_unfold]: "negateSnd = apsnd uminus"
 
 definition divmod :: "int \<Rightarrow> int \<Rightarrow> int \<times> int" where
     --{*The full division algorithm considers all possible signs for a, b
@@ -266,7 +266,7 @@ end)
 
 in
 
-val cancel_div_mod_int_proc = Simplifier.simproc (the_context ())
+val cancel_div_mod_int_proc = Simplifier.simproc @{theory}
   "cancel_zdiv_zmod" ["(k::int) + l"] (K CancelDivMod.proc);
 
 val _ = Addsimprocs [cancel_div_mod_int_proc];

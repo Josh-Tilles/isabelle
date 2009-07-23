@@ -48,9 +48,9 @@ fun map_congs f = map_hints (fn (simps, congs, wfs) => (simps, f congs, wfs));
 fun map_wfs f = map_hints (fn (simps, congs, wfs) => (simps, congs, f wfs));
 
 fun pretty_hints ({simps, congs, wfs}: hints) =
- [Pretty.big_list "recdef simp hints:" (map Display.pretty_thm simps),
-  Pretty.big_list "recdef cong hints:" (map Display.pretty_thm (map snd congs)),
-  Pretty.big_list "recdef wf hints:" (map Display.pretty_thm wfs)];
+ [Pretty.big_list "recdef simp hints:" (map Display.pretty_thm_without_context simps),
+  Pretty.big_list "recdef cong hints:" (map Display.pretty_thm_without_context (map snd congs)),
+  Pretty.big_list "recdef wf hints:" (map Display.pretty_thm_without_context wfs)];
 
 
 (* congruence rules *)
@@ -172,15 +172,15 @@ fun prepare_hints thy opt_src =
         NONE => ctxt0
       | SOME src => #2 (Method.syntax (Method.sections recdef_modifiers) src ctxt0));
     val {simps, congs, wfs} = get_hints ctxt;
-    val cs = local_claset_of ctxt;
-    val ss = local_simpset_of ctxt addsimps simps;
+    val cs = claset_of ctxt;
+    val ss = simpset_of ctxt addsimps simps;
   in (cs, ss, rev (map snd congs), wfs) end;
 
 fun prepare_hints_i thy () =
   let
     val ctxt0 = ProofContext.init thy;
     val {simps, congs, wfs} = get_global_hints thy;
-  in (local_claset_of ctxt0, local_simpset_of ctxt0 addsimps simps, rev (map snd congs), wfs) end;
+  in (claset_of ctxt0, simpset_of ctxt0 addsimps simps, rev (map snd congs), wfs) end;
 
 
 

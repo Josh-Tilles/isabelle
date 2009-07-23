@@ -27,6 +27,10 @@ done
 lemma eq_diff_eq': "(x = y - z) = (y = x + (z::real))"
 by arith
 
+lemma fact_diff_Suc [rule_format]:
+  "n < Suc m ==> fact (Suc m - n) = (Suc m - n) * fact (m - n)"
+  by (subst fact_reduce_nat, auto)
+
 lemma Maclaurin_lemma2:
   assumes diff: "\<forall>m t. m < n \<and> 0\<le>t \<and> t\<le>h \<longrightarrow> DERIV (diff m) t :> diff (Suc m) t"
   assumes n: "n = Suc k"
@@ -47,7 +51,9 @@ unfolding difg
    apply (rule_tac [2] DERIV_quotient)
      apply (rule_tac [3] DERIV_const)
     apply (rule_tac [2] DERIV_pow)
-   prefer 3 apply (simp add: fact_diff_Suc)
+   prefer 3 
+
+apply (simp add: fact_diff_Suc)
   prefer 2 apply simp
  apply (frule less_iff_Suc_add [THEN iffD1], clarify)
  apply (simp del: setsum_op_ivl_Suc)

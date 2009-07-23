@@ -856,6 +856,8 @@ fun prove_simple_subgoals_tac (cs, ss) i =
   Abstraction over i is ESSENTIAL: it delays the dereferencing of claset
   DEPENDS UPON "X" REFERRING TO THE FRADULENT MESSAGE *)
 
+fun impOfSubs th = th RSN (2, @{thm rev_subsetD})
+
 (*Apply rules to break down assumptions of the form
   Y \<in> parts(insert X H)  and  Y \<in> analz(insert X H)
 *)
@@ -937,15 +939,15 @@ done
 lemmas Fake_parts_sing_imp_Un = Fake_parts_sing [THEN [2] rev_subsetD]
 
 method_setup spy_analz = {*
-    Scan.succeed (SIMPLE_METHOD' o Message.spy_analz_tac o local_clasimpset_of) *}
+    Scan.succeed (SIMPLE_METHOD' o Message.spy_analz_tac o clasimpset_of) *}
     "for proving the Fake case when analz is involved"
 
 method_setup atomic_spy_analz = {*
-    Scan.succeed (SIMPLE_METHOD' o Message.atomic_spy_analz_tac o local_clasimpset_of) *}
+    Scan.succeed (SIMPLE_METHOD' o Message.atomic_spy_analz_tac o clasimpset_of) *}
     "for debugging spy_analz"
 
 method_setup Fake_insert_simp = {*
-    Scan.succeed (SIMPLE_METHOD' o Message.Fake_insert_simp_tac o local_simpset_of) *}
+    Scan.succeed (SIMPLE_METHOD' o Message.Fake_insert_simp_tac o simpset_of) *}
     "for debugging spy_analz"
 
 end

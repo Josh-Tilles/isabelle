@@ -69,8 +69,8 @@ sig
   val appSWrappers      : claset -> wrapper
   val appWrappers       : claset -> wrapper
 
-  val claset_of: theory -> claset
-  val local_claset_of   : Proof.context -> claset
+  val global_claset_of  : theory -> claset
+  val claset_of         : Proof.context -> claset
 
   val fast_tac          : claset -> int -> tactic
   val slow_tac          : claset -> int -> tactic
@@ -256,7 +256,7 @@ val empty_cs =
      xtra_netpair  = empty_netpair};
 
 fun print_cs (CS {safeIs, safeEs, hazIs, hazEs, swrappers, uwrappers, ...}) =
-  let val pretty_thms = map Display.pretty_thm in
+  let val pretty_thms = map Display.pretty_thm_without_context in
     [Pretty.big_list "safe introduction rules (intro!):" (pretty_thms safeIs),
       Pretty.big_list "introduction rules (intro):" (pretty_thms hazIs),
       Pretty.big_list "safe elimination rules (elim!):" (pretty_thms safeEs),
@@ -313,14 +313,18 @@ and rem_thm = remove Thm.eq_thm_prop;
 (*Warn if the rule is already present ELSEWHERE in the claset.  The addition
   is still allowed.*)
 fun warn_dup th (CS{safeIs, safeEs, hazIs, hazEs, ...}) =
-       if mem_thm safeIs th then
-         warning ("Rule already declared as safe introduction (intro!)\n" ^ Display.string_of_thm th)
+  if mem_thm safeIs th then
+    warning ("Rule already declared as safe introduction (intro!)\n" ^
+      Display.string_of_thm_without_context th)
   else if mem_thm safeEs th then
-         warning ("Rule already declared as safe elimination (elim!)\n" ^ Display.string_of_thm th)
+    warning ("Rule already declared as safe elimination (elim!)\n" ^
+      Display.string_of_thm_without_context th)
   else if mem_thm hazIs th then
-         warning ("Rule already declared as introduction (intro)\n" ^ Display.string_of_thm th)
+    warning ("Rule already declared as introduction (intro)\n" ^
+      Display.string_of_thm_without_context th)
   else if mem_thm hazEs th then
-         warning ("Rule already declared as elimination (elim)\n" ^ Display.string_of_thm th)
+    warning ("Rule already declared as elimination (elim)\n" ^
+      Display.string_of_thm_without_context th)
   else ();
 
 
@@ -330,8 +334,8 @@ fun addSI w th
   (cs as CS {safeIs, safeEs, hazIs, hazEs, swrappers, uwrappers,
              safe0_netpair, safep_netpair, haz_netpair, dup_netpair, xtra_netpair}) =
   if mem_thm safeIs th then
-         (warning ("Ignoring duplicate safe introduction (intro!)\n" ^ Display.string_of_thm th);
-          cs)
+    (warning ("Ignoring duplicate safe introduction (intro!)\n" ^
+      Display.string_of_thm_without_context th); cs)
   else
   let val th' = flat_rule th
       val (safe0_rls, safep_rls) = (*0 subgoals vs 1 or more*)
@@ -356,10 +360,10 @@ fun addSE w th
   (cs as CS {safeIs, safeEs, hazIs, hazEs, swrappers, uwrappers,
              safe0_netpair, safep_netpair, haz_netpair, dup_netpair, xtra_netpair}) =
   if mem_thm safeEs th then
-         (warning ("Ignoring duplicate safe elimination (elim!)\n" ^ Display.string_of_thm th);
-          cs)
+    (warning ("Ignoring duplicate safe elimination (elim!)\n" ^
+        Display.string_of_thm_without_context th); cs)
   else if has_fewer_prems 1 th then
-    	error("Ill-formed elimination rule\n" ^ Display.string_of_thm th)
+    	error ("Ill-formed elimination rule\n" ^ Display.string_of_thm_without_context th)
   else
   let
       val th' = classical_rule (flat_rule th)
@@ -386,7 +390,7 @@ fun cs addSEs ths = fold_rev (addSE NONE) ths cs;
 
 fun make_elim th =
     if has_fewer_prems 1 th then
-    	error("Ill-formed destruction rule\n" ^ Display.string_of_thm th)
+    	  error ("Ill-formed destruction rule\n" ^ Display.string_of_thm_without_context th)
     else Tactic.make_elim th;
 
 fun cs addSDs ths = cs addSEs (map make_elim ths);
@@ -398,8 +402,8 @@ fun addI w th
   (cs as CS {safeIs, safeEs, hazIs, hazEs, swrappers, uwrappers,
              safe0_netpair, safep_netpair, haz_netpair, dup_netpair, xtra_netpair}) =
   if mem_thm hazIs th then
-         (warning ("Ignoring duplicate introduction (intro)\n" ^ Display.string_of_thm th);
-          cs)
+    (warning ("Ignoring duplicate introduction (intro)\n" ^
+        Display.string_of_thm_without_context th); cs)
   else
   let val th' = flat_rule th
       val nI = length hazIs + 1
@@ -418,16 +422,16 @@ fun addI w th
         xtra_netpair = insert' (the_default 1 w) (nI,nE) ([th], []) xtra_netpair}
   end
   handle THM("RSN: no unifiers",_,_) => (*from dup_intr*)
-         error ("Ill-formed introduction rule\n" ^ Display.string_of_thm th);
+    error ("Ill-formed introduction rule\n" ^ Display.string_of_thm_without_context th);
 
 fun addE w th
   (cs as CS {safeIs, safeEs, hazIs, hazEs, swrappers, uwrappers,
             safe0_netpair, safep_netpair, haz_netpair, dup_netpair, xtra_netpair}) =
   if mem_thm hazEs th then
-         (warning ("Ignoring duplicate elimination (elim)\n" ^ Display.string_of_thm th);
-          cs)
+    (warning ("Ignoring duplicate elimination (elim)\n" ^
+        Display.string_of_thm_without_context th); cs)
   else if has_fewer_prems 1 th then
-    	error("Ill-formed elimination rule\n" ^ Display.string_of_thm th)
+    	error("Ill-formed elimination rule\n" ^ Display.string_of_thm_without_context th)
   else
   let
       val th' = classical_rule (flat_rule th)
@@ -519,7 +523,7 @@ fun delI th
     end
  else cs
  handle THM("RSN: no unifiers",_,_) => (*from dup_intr*)
-        error ("Ill-formed introduction rule\n" ^ Display.string_of_thm th);
+   error ("Ill-formed introduction rule\n" ^ Display.string_of_thm_without_context th);
 
 
 fun delE th
@@ -548,7 +552,7 @@ fun delrule th (cs as CS {safeIs, safeEs, hazIs, hazEs, ...}) =
       mem_thm hazIs th orelse mem_thm hazEs th orelse
       mem_thm safeEs th' orelse mem_thm hazEs th'
     then delSI th (delSE th (delI th (delE th (delSE th' (delE th' cs)))))
-    else (warning ("Undeclared classical rule\n" ^ Display.string_of_thm th); cs)
+    else (warning ("Undeclared classical rule\n" ^ Display.string_of_thm_without_context th); cs)
   end;
 
 fun cs delrules ths = fold delrule ths cs;
@@ -848,7 +852,7 @@ val get_context_cs = #2 o GlobalClaset.get o ProofContext.theory_of;
 fun map_context_cs f = GlobalClaset.map (apsnd
   (fn ContextCS {swrappers, uwrappers} => make_context_cs (f (swrappers, uwrappers))));
 
-fun claset_of thy =
+fun global_claset_of thy =
   let val (cs, ctxt_cs) = GlobalClaset.get thy
   in context_cs (ProofContext.init thy) cs (ctxt_cs) end;
 
@@ -870,13 +874,13 @@ structure LocalClaset = ProofDataFun
   val init = get_claset;
 );
 
-fun local_claset_of ctxt =
+fun claset_of ctxt =
   context_cs ctxt (LocalClaset.get ctxt) (get_context_cs ctxt);
 
 
 (* generic clasets *)
 
-val get_cs = Context.cases claset_of local_claset_of;
+val get_cs = Context.cases global_claset_of claset_of;
 fun map_cs f = Context.mapping (map_claset f) (LocalClaset.map f);
 
 
@@ -926,7 +930,7 @@ local
 fun some_rule_tac ctxt facts = SUBGOAL (fn (goal, i) =>
   let
     val [rules1, rules2, rules4] = ContextRules.find_rules false facts goal ctxt;
-    val CS {xtra_netpair, ...} = local_claset_of ctxt;
+    val CS {xtra_netpair, ...} = claset_of ctxt;
     val rules3 = ContextRules.find_rules_netpair true facts goal xtra_netpair;
     val rules = rules1 @ rules2 @ rules3 @ rules4;
     val ruleq = Drule.multi_resolves facts rules;
@@ -965,10 +969,10 @@ val cla_modifiers =
   Args.del -- Args.colon >> K (I, rule_del)];
 
 fun cla_meth tac prems ctxt = METHOD (fn facts =>
-  ALLGOALS (Method.insert_tac (prems @ facts)) THEN tac (local_claset_of ctxt));
+  ALLGOALS (Method.insert_tac (prems @ facts)) THEN tac (claset_of ctxt));
 
 fun cla_meth' tac prems ctxt = METHOD (fn facts =>
-  HEADGOAL (Method.insert_tac (prems @ facts) THEN' tac (local_claset_of ctxt)));
+  HEADGOAL (Method.insert_tac (prems @ facts) THEN' tac (claset_of ctxt)));
 
 fun cla_method tac = Args.bang_facts --| Method.sections cla_modifiers >> (cla_meth tac);
 fun cla_method' tac = Args.bang_facts --| Method.sections cla_modifiers >> (cla_meth' tac);
@@ -1010,6 +1014,6 @@ val _ =
   OuterSyntax.improper_command "print_claset" "print context of Classical Reasoner"
     OuterKeyword.diag
     (Scan.succeed (Toplevel.no_timing o Toplevel.unknown_context o
-      Toplevel.keep (print_cs o local_claset_of o Toplevel.context_of)));
+      Toplevel.keep (print_cs o claset_of o Toplevel.context_of)));
 
 end;

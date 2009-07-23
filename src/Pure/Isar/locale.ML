@@ -68,10 +68,9 @@ sig
   val intro_locales_tac: bool -> Proof.context -> thm list -> tactic
 
   (* Registrations and dependencies *)
-  val add_registration: string * (morphism * morphism) -> theory -> theory
+  val add_registration_eqs: string * morphism -> thm list -> morphism -> theory -> theory
   val amend_registration: morphism -> string * morphism -> theory -> theory
-  val add_dependencies: string -> ((string * morphism) * Element.witness list) list ->
-    morphism  -> theory -> theory
+  val add_dependency: string -> string * morphism -> morphism -> theory -> theory
 
   (* Diagnostic *)
   val print_locales: theory -> unit
@@ -295,8 +294,7 @@ fun activate_all name thy activ_elem transfer (marked, input) =
 fun activate_declarations dep = Context.proof_map (fn context =>
   let
     val thy = Context.theory_of context;
-    val context' = roundup thy activate_decls dep (get_idents context, context) |-> put_idents;
-  in context' end);
+  in roundup thy activate_decls dep (get_idents context, context) |-> put_idents end);
 
 fun activate_facts dep context =
   let
@@ -346,11 +344,6 @@ fun these_registrations thy name = Registrations.get thy
 fun all_registrations thy = Registrations.get thy
   |> map reg_morph;
 
-fun add_registration (name, (base_morph, export)) thy =
-  roundup thy (fn (name', morph') => Registrations.map (cons ((name', (morph', export)), stamp ())))
-    (name, base_morph) (get_idents (Context.Theory thy), thy)
-  (* FIXME |-> (Context.theory_map o put_idents_diag)*) |> snd;
-
 fun amend_registration morph (name, base_morph) thy =
   let
     val regs = map #1 (Registrations.get thy);
@@ -368,14 +361,24 @@ fun amend_registration morph (name, base_morph) thy =
       (fn ((name, (base, export)), stamp) => ((name, (base $> morph, export)), stamp))) thy
   end;
 
+fun add_registration_eqs (dep, proto_morph) eqns export thy =
+  let
+    val morph = if null eqns then proto_morph
+      else proto_morph $> Element.eq_morphism thy eqns;
+  in
+    (get_idents (Context.Theory thy), thy)
+    |> roundup thy (fn (dep', morph') =>
+        Registrations.map (cons ((dep', (morph', export)), stamp ()))) (dep, morph)
+    |> snd
+    |> Context.theory_map (activate_facts (dep, morph $> export))
+  end;
+
 
 (*** Dependencies ***)
 
-fun add_dependencies loc deps_witss export thy =
+fun add_dependency loc (dep, morph) export thy =
   thy
-  |> fold (fn ((dep, morph), wits) => (change_locale loc o apsnd)
-      (cons ((dep, morph $> Element.satisfy_morphism wits $> export), stamp ())))
-        deps_witss
+  |> (change_locale loc o apsnd) (cons ((dep, morph $> export), stamp ()))
   |> (fn thy => fold_rev (Context.theory_map o activate_facts)
       (all_registrations thy) thy);
 

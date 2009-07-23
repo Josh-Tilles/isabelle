@@ -100,7 +100,7 @@ fun analyze_eqs ctxt defname fs eqs =
         val (caTss, resultTs) = split_list (map curried_types fs)
         val argTs = map (foldr1 HOLogic.mk_prodT) caTss
 
-        val dresultTs = distinct (Type.eq_type Vartab.empty) resultTs
+        val dresultTs = distinct (op =) resultTs
         val n' = length dresultTs
 
         val RST = BalancedTree.make (uncurry SumTree.mk_sumT) dresultTs
@@ -114,7 +114,7 @@ fun analyze_eqs ctxt defname fs eqs =
         fun define (fvar as (n, T)) caTs resultT i =
             let
                 val vars = map_index (fn (j,T) => Free ("x" ^ string_of_int j, T)) caTs (* FIXME: Bind xs properly *)
-                val i' = find_index (fn Ta => Type.eq_type Vartab.empty (Ta, resultT)) dresultTs + 1 
+                val i' = find_index (fn Ta => Ta = resultT) dresultTs + 1 
 
                 val f_exp = SumTree.mk_proj RST n' i' (Free fsum_var $ SumTree.mk_inj ST num i (foldr1 HOLogic.mk_prod vars))
                 val def = Term.abstract_over (Free fsum_var, fold_rev lambda vars f_exp)
@@ -206,7 +206,7 @@ fun recover_mutual_psimp all_orig_fdefs parts ctxt (fname, _, _, args, rhs) impo
                  (HOLogic.Trueprop $ HOLogic.mk_eq (list_comb (f, args), rhs))
                  (fn _ => (LocalDefs.unfold_tac ctxt all_orig_fdefs)
                           THEN EqSubst.eqsubst_tac ctxt [0] [simp] 1
-                          THEN (simp_tac (local_simpset_of ctxt addsimps SumTree.proj_in_rules)) 1)
+                          THEN (simp_tac (simpset_of ctxt addsimps SumTree.proj_in_rules)) 1)
         |> restore_cond 
         |> export
     end

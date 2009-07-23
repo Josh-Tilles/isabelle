@@ -621,19 +621,19 @@ qed
 
 subsection{* Some properties of factorials *}
 
-lemma real_of_nat_fact_not_zero [simp]: "real (fact n) \<noteq> 0"
+lemma real_of_nat_fact_not_zero [simp]: "real (fact (n::nat)) \<noteq> 0"
 by auto
 
-lemma real_of_nat_fact_gt_zero [simp]: "0 < real(fact n)"
+lemma real_of_nat_fact_gt_zero [simp]: "0 < real(fact (n::nat))"
 by auto
 
-lemma real_of_nat_fact_ge_zero [simp]: "0 \<le> real(fact n)"
+lemma real_of_nat_fact_ge_zero [simp]: "0 \<le> real(fact (n::nat))"
 by simp
 
-lemma inv_real_of_nat_fact_gt_zero [simp]: "0 < inverse (real (fact n))"
+lemma inv_real_of_nat_fact_gt_zero [simp]: "0 < inverse (real (fact (n::nat)))"
 by (auto simp add: positive_imp_inverse_positive)
 
-lemma inv_real_of_nat_fact_ge_zero [simp]: "0 \<le> inverse (real (fact n))"
+lemma inv_real_of_nat_fact_ge_zero [simp]: "0 \<le> inverse (real (fact (n::nat)))"
 by (auto intro: order_less_imp_le)
 
 subsection {* Derivability of power series *}
@@ -1670,7 +1670,7 @@ apply (frule sums_unique, auto)
 apply (rule_tac y =
  "\<Sum>n=0..< Suc(Suc(Suc 0)). - (-1 ^ n / (real(fact (2*n))) * 2 ^ (2*n))"
        in order_less_trans)
-apply (simp (no_asm) add: fact_num_eq_if realpow_num_eq_if del: fact_Suc)
+apply (simp (no_asm) add: fact_num_eq_if_nat realpow_num_eq_if del: fact_Suc)
 apply (simp (no_asm) add: mult_assoc del: setsum_op_ivl_Suc)
 apply (rule sumr_pos_lt_pair)
 apply (erule sums_summable, safe)
@@ -1687,7 +1687,7 @@ apply (rule mult_strict_mono, force)
   apply (rule_tac [3] real_of_nat_ge_zero)
  prefer 2 apply force
 apply (rule real_of_nat_less_iff [THEN iffD2])
-apply (rule fact_less_mono, auto)
+apply (rule fact_less_mono_nat, auto)
 done
 
 lemmas cos_two_neq_zero [simp] = cos_two_less_zero [THEN less_imp_neq]

@@ -129,8 +129,8 @@ fun mk_casesplit_goal_thm sgn (vstr,ty) gt =
           | _ => error "not a valid case thm";
       val type_cinsts = map (fn (ixn, (S, T)) => (ctypify (TVar (ixn, S)), ctypify T))
         (Vartab.dest type_insts);
-      val cPv = ctermify (Envir.subst_TVars type_insts Pv);
-      val cDv = ctermify (Envir.subst_TVars type_insts Dv);
+      val cPv = ctermify (Envir.subst_term_types type_insts Pv);
+      val cDv = ctermify (Envir.subst_term_types type_insts Dv);
     in
       (beta_eta_contract
          (case_thm
@@ -269,9 +269,9 @@ fun splitto splitths genth =
       fun split th =
           (case find_thms_split splitths 1 th of
              NONE =>
-             (writeln "th:";
-              Display.print_thm th; writeln "split ths:";
-              Display.print_thms splitths; writeln "\n--";
+             (writeln (cat_lines
+              (["th:", Display.string_of_thm_without_context th, "split ths:"] @
+                map Display.string_of_thm_without_context splitths @ ["\n--"]));
               error "splitto: cannot find variable to split on")
             | SOME v =>
              let

@@ -158,7 +158,7 @@ structure Clasimp = ClasimpFun
 open Clasimp;
 
 val _ = ML_Antiquote.value "clasimpset"
-  (Scan.succeed "Clasimp.local_clasimpset_of (ML_Context.the_local_context ())");
+  (Scan.succeed "Clasimp.clasimpset_of (ML_Context.the_local_context ())");
 
 val mksimps_pairs =
   [("op -->", [@{thm mp}]), ("op &", [@{thm conjunct1}, @{thm conjunct2}]),
@@ -181,11 +181,11 @@ fun unfold_tac ths =
   in fn ss => ALLGOALS (full_simp_tac (Simplifier.inherit_context ss ss0)) end;
 
 val defALL_regroup =
-  Simplifier.simproc (the_context ())
+  Simplifier.simproc @{theory}
     "defined ALL" ["ALL x. P x"] Quantifier1.rearrange_all;
 
 val defEX_regroup =
-  Simplifier.simproc (the_context ())
+  Simplifier.simproc @{theory}
     "defined EX" ["EX x. P x"] Quantifier1.rearrange_ex;
 
 

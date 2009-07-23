@@ -147,7 +147,7 @@ fun inst_params thy (vs, p) th cts =
   let val env = Pattern.first_order_match thy (p, prop_of th)
     (Vartab.empty, Vartab.empty)
   in Thm.instantiate ([],
-    map (Envir.subst_vars env #> cterm_of thy) vs ~~ cts) th
+    map (Envir.subst_term env #> cterm_of thy) vs ~~ cts) th
   end;
 
 fun prove_strong_ind s avoids ctxt =
@@ -196,7 +196,7 @@ fun prove_strong_ind s avoids ctxt =
           | add_set (t, T) ((u, U) :: ps) =
               if T = U then
                 let val S = HOLogic.mk_setT T
-                in (Const (@{const_name "Un"}, S --> S --> S) $ u $ t, T) :: ps
+                in (Const (@{const_name union}, S --> S --> S) $ u $ t, T) :: ps
                 end
               else (u, U) :: add_set (t, T) ps
       in
@@ -438,7 +438,7 @@ fun prove_strong_ind s avoids ctxt =
           cut_facts_tac [th] 1 THEN REPEAT (etac conjE 1) THEN
           REPEAT (REPEAT (resolve_tac [conjI, impI] 1) THEN
             etac impE 1 THEN atac 1 THEN REPEAT (etac @{thm allE_Nil} 1) THEN
-            asm_full_simp_tac (simpset_of thy) 1)
+            asm_full_simp_tac (simpset_of ctxt) 1)
         end) |>
         fresh_postprocess |>
         singleton (ProofContext.export ctxt' ctxt);

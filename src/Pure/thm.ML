@@ -141,12 +141,11 @@ sig
   val bicompose: bool -> bool * thm * int -> int -> thm -> thm Seq.seq
   val biresolution: bool -> (bool * thm) list -> int -> thm -> thm Seq.seq
   val rename_boundvars: term -> term -> thm -> thm
-  val future: thm future -> cterm -> thm
-  val pending_groups: thm -> Task_Queue.group list -> Task_Queue.group list
-  val status_of: thm -> {oracle: bool, unfinished: bool, failed: bool}
+  val join_proofs: thm list -> unit
   val proof_body_of: thm -> proof_body
   val proof_of: thm -> proof
-  val join_proof: thm -> unit
+  val status_of: thm -> {oracle: bool, unfinished: bool, failed: bool}
+  val future: thm future -> cterm -> thm
   val get_name: thm -> string
   val put_name: string -> thm -> thm
   val extern_oracles: theory -> xstring list
@@ -317,7 +316,7 @@ fun gen_match match
       (Ctyp {T = TVar ((a, i), S), thy_ref = Theory.check_thy thy, maxidx = i, sorts = sorts},
        Ctyp {T = T, thy_ref = Theory.check_thy thy, maxidx = maxidx2, sorts = sorts});
     fun mk_ctinst ((x, i), (T, t)) =
-      let val T = Envir.typ_subst_TVars Tinsts T in
+      let val T = Envir.subst_type Tinsts T in
         (Cterm {t = Var ((x, i), T), T = T, thy_ref = Theory.check_thy thy,
           maxidx = i, sorts = sorts},
          Cterm {t = t, T = T, thy_ref = Theory.check_thy thy, maxidx = maxidx2, sorts = sorts})
@@ -345,9 +344,7 @@ datatype thm = Thm of
   tpairs: (term * term) list,                   (*flex-flex pairs*)
   prop: term}                                   (*conclusion*)
 and deriv = Deriv of
- {max_promise: serial,
-  open_promises: (serial * thm future) OrdList.T,
-  promises: (serial * thm future) OrdList.T,
+ {promises: (serial * thm future) OrdList.T,
   body: Pt.proof_body};
 
 type conv = cterm -> thm;
@@ -504,11 +501,10 @@ fun extra_shyps (th as Thm (_, {shyps, ...})) =
 
 (** derivations **)
 
-fun make_deriv max_promise open_promises promises oracles thms proof =
-  Deriv {max_promise = max_promise, open_promises = open_promises, promises = promises,
-    body = PBody {oracles = oracles, thms = thms, proof = proof}};
+fun make_deriv promises oracles thms proof =
+  Deriv {promises = promises, body = PBody {oracles = oracles, thms = thms, proof = proof}};
 
-val empty_deriv = make_deriv ~1 [] [] [] [] Pt.MinProof;
+val empty_deriv = make_deriv [] [] [] Pt.MinProof;
 
 
 (* inference rules *)
@@ -516,13 +512,9 @@ val empty_deriv = make_deriv ~1 [] [] [] [] Pt.MinProof;
 fun promise_ord ((i, _), (j, _)) = int_ord (j, i);
 
 fun deriv_rule2 f
-    (Deriv {max_promise = max1, open_promises = open_ps1, promises = ps1,
-      body = PBody {oracles = oras1, thms = thms1, proof = prf1}})
-    (Deriv {max_promise = max2, open_promises = open_ps2, promises = ps2,
-      body = PBody {oracles = oras2, thms = thms2, proof = prf2}}) =
+    (Deriv {promises = ps1, body = PBody {oracles = oras1, thms = thms1, proof = prf1}})
+    (Deriv {promises = ps2, body = PBody {oracles = oras2, thms = thms2, proof = prf2}}) =
   let
-    val max = Int.max (max1, max2);
-    val open_ps = OrdList.union promise_ord open_ps1 open_ps2;
     val ps = OrdList.union promise_ord ps1 ps2;
     val oras = Pt.merge_oracles oras1 oras2;
     val thms = Pt.merge_thms thms1 thms2;
@@ -532,10 +524,10 @@ fun deriv_rule2 f
       | 1 => MinProof
       | 0 => MinProof
       | i => error ("Illegal level of detail for proof objects: " ^ string_of_int i));
-  in make_deriv max open_ps ps oras thms prf end;
+  in make_deriv ps oras thms prf end;
 
 fun deriv_rule1 f = deriv_rule2 (K f) empty_deriv;
-fun deriv_rule0 prf = deriv_rule1 I (make_deriv ~1 [] [] [] [] prf);
+fun deriv_rule0 prf = deriv_rule1 I (make_deriv [] [] [] prf);
 
 
 
@@ -1232,7 +1224,7 @@ fun incr_indexes i (thm as Thm (der, {thy_ref, maxidx, shyps, hyps, tpairs, prop
   if i < 0 then raise THM ("negative increment", 0, [thm])
   else if i = 0 then thm
   else
-    Thm (deriv_rule1 (Pt.map_proof_terms (Logic.incr_indexes ([], i)) (Logic.incr_tvar i)) der,
+    Thm (deriv_rule1 (Pt.incr_indexes i) der,
      {thy_ref = thy_ref,
       tags = [],
       maxidx = maxidx + i,
@@ -1247,12 +1239,12 @@ fun assumption i state =
     val Thm (der, {thy_ref, maxidx, shyps, hyps, prop, ...}) = state;
     val thy = Theory.deref thy_ref;
     val (tpairs, Bs, Bi, C) = dest_state (state, i);
-    fun newth n (env as Envir.Envir {maxidx, ...}, tpairs) =
+    fun newth n (env, tpairs) =
       Thm (deriv_rule1
           ((if Envir.is_empty env then I else (Pt.norm_proof' env)) o
             Pt.assumption_proof Bs Bi n) der,
        {tags = [],
-        maxidx = maxidx,
+        maxidx = Envir.maxidx_of env,
         shyps = Envir.insert_sorts env shyps,
         hyps = hyps,
         tpairs =
@@ -1465,15 +1457,15 @@ fun strip_assums2 (Const("==>", _) $ _ $ B1,
 
 (*Faster normalization: skip assumptions that were lifted over*)
 fun norm_term_skip env 0 t = Envir.norm_term env t
-  | norm_term_skip env n (Const("all",_)$Abs(a,T,t)) =
-        let val Envir.Envir{iTs, ...} = env
-            val T' = Envir.typ_subst_TVars iTs T
-            (*Must instantiate types of parameters because they are flattened;
-              this could be a NEW parameter*)
-        in Term.all T' $ Abs(a, T', norm_term_skip env n t)  end
-  | norm_term_skip env n (Const("==>", _) $ A $ B) =
-        Logic.mk_implies (A, norm_term_skip env (n-1) B)
-  | norm_term_skip env n t = error"norm_term_skip: too few assumptions??";
+  | norm_term_skip env n (Const ("all", _) $ Abs (a, T, t)) =
+      let
+        val T' = Envir.subst_type (Envir.type_env env) T
+        (*Must instantiate types of parameters because they are flattened;
+          this could be a NEW parameter*)
+      in Term.all T' $ Abs (a, T', norm_term_skip env n t) end
+  | norm_term_skip env n (Const ("==>", _) $ A $ B) =
+      Logic.mk_implies (A, norm_term_skip env (n - 1) B)
+  | norm_term_skip env n t = error "norm_term_skip: too few assumptions??";
 
 
 (*Composition of object rule r=(A1...Am/B) with proof state s=(B1...Bn/C)
@@ -1495,7 +1487,7 @@ fun bicompose_aux flatten match (state, (stpairs, Bs, Bi, C), lifted)
      and nlift = Logic.count_prems (strip_all_body Bi) + (if eres_flg then ~1 else 0)
      val thy = Theory.deref (merge_thys2 state orule);
      (** Add new theorem with prop = '[| Bs; As |] ==> C' to thq **)
-     fun addth A (As, oldAs, rder', n) ((env as Envir.Envir {maxidx, ...}, tpairs), thq) =
+     fun addth A (As, oldAs, rder', n) ((env, tpairs), thq) =
        let val normt = Envir.norm_term env;
            (*perform minimal copying here by examining env*)
            val (ntpairs, normp) =
@@ -1520,7 +1512,7 @@ fun bicompose_aux flatten match (state, (stpairs, Bs, Bi, C), lifted)
                        curry op oo (Pt.norm_proof' env))
                     (Pt.bicompose_proof flatten Bs oldAs As A n (nlift+1))) rder' sder,
                 {tags = [],
-                 maxidx = maxidx,
+                 maxidx = Envir.maxidx_of env,
                  shyps = Envir.insert_sorts env (Sorts.union rshyps sshyps),
                  hyps = union_hyps rhyps shyps,
                  tpairs = ntpairs,
@@ -1614,6 +1606,36 @@ fun biresolution match brules i state =
 
 (*** Future theorems -- proofs with promises ***)
 
+(* fulfilled proofs *)
+
+fun raw_body (Thm (Deriv {body, ...}, _)) = body;
+
+fun fulfill_body (Thm (Deriv {promises, body}, {thy_ref, ...})) =
+  Pt.fulfill_proof (Theory.deref thy_ref)
+    (map #1 promises ~~ fulfill_bodies (map #2 promises)) body
+and fulfill_bodies futures = map fulfill_body (Exn.release_all (Future.join_results futures));
+
+val join_proofs = Pt.join_bodies o map fulfill_body;
+
+fun proof_body_of thm = (Pt.join_bodies [raw_body thm]; fulfill_body thm);
+val proof_of = Pt.proof_of o proof_body_of;
+
+
+(* derivation status *)
+
+fun status_of (Thm (Deriv {promises, body}, _)) =
+  let
+    val ps = map (Future.peek o snd) promises;
+    val bodies = body ::
+      map_filter (fn SOME (Exn.Result th) => SOME (raw_body th) | _ => NONE) ps;
+    val {oracle, unfinished, failed} = Pt.status_of bodies;
+  in
+   {oracle = oracle,
+    unfinished = unfinished orelse exists is_none ps,
+    failed = failed orelse exists (fn SOME (Exn.Exn _) => true | _ => false) ps}
+  end;
+
+
 (* future rule *)
 
 fun future_result i orig_thy orig_shyps orig_prop raw_thm =
@@ -1623,12 +1645,13 @@ fun future_result i orig_thy orig_shyps orig_prop raw_thm =
     val _ = Theory.check_thy orig_thy;
     fun err msg = raise THM ("future_result: " ^ msg, 0, [thm]);
 
-    val Thm (Deriv {max_promise, ...}, {shyps, hyps, tpairs, prop, ...}) = thm;
+    val Thm (Deriv {promises, ...}, {shyps, hyps, tpairs, prop, ...}) = thm;
     val _ = prop aconv orig_prop orelse err "bad prop";
     val _ = null tpairs orelse err "bad tpairs";
     val _ = null hyps orelse err "bad hyps";
     val _ = Sorts.subset (shyps, orig_shyps) orelse err "bad shyps";
-    val _ = max_promise < i orelse err "bad dependencies";
+    val _ = forall (fn (j, _) => i <> j) promises orelse err "bad dependencies";
+    val _ = fulfill_bodies (map #2 promises);
   in thm end;
 
 fun future future_thm ct =
@@ -1639,9 +1662,8 @@ fun future future_thm ct =
 
     val i = serial ();
     val future = future_thm |> Future.map (future_result i thy sorts prop);
-    val promise = (i, future);
   in
-    Thm (make_deriv i [promise] [promise] [] [] (Pt.promise_proof thy i prop),
+    Thm (make_deriv [(i, future)] [] [] (Pt.promise_proof thy i prop),
      {thy_ref = thy_ref,
       tags = [],
       maxidx = maxidx,
@@ -1652,57 +1674,21 @@ fun future future_thm ct =
   end;
 
 
-(* derivation status *)
-
-fun raw_proof_body_of (Thm (Deriv {body, ...}, _)) = body;
-val raw_proof_of = Proofterm.proof_of o raw_proof_body_of;
-
-fun pending_groups (Thm (Deriv {open_promises, ...}, _)) =
-  fold (insert Task_Queue.eq_group o Future.group_of o #2) open_promises;
-
-fun status_of (Thm (Deriv {promises, body, ...}, _)) =
-  let
-    val ps = map (Future.peek o snd) promises;
-    val bodies = body ::
-      map_filter (fn SOME (Exn.Result th) => SOME (raw_proof_body_of th) | _ => NONE) ps;
-    val {oracle, unfinished, failed} = Pt.status_of bodies;
-  in
-   {oracle = oracle,
-    unfinished = unfinished orelse exists is_none ps,
-    failed = failed orelse exists (fn SOME (Exn.Exn _) => true | _ => false) ps}
-  end;
-
-
-(* fulfilled proofs *)
-
-fun proof_body_of (Thm (Deriv {open_promises, promises, body, ...}, {thy_ref, ...})) =
-  let
-    val _ = Exn.release_all (map (Future.join_result o #2) (rev open_promises));
-    val ps = map (apsnd (raw_proof_body_of o Future.join)) promises;
-  in Pt.fulfill_proof (Theory.deref thy_ref) ps body end;
-
-val proof_of = Proofterm.proof_of o proof_body_of;
-val join_proof = ignore o proof_body_of;
-
-
 (* closed derivations with official name *)
 
 fun get_name thm =
-  Pt.get_name (hyps_of thm) (prop_of thm) (raw_proof_of thm);
+  Pt.get_name (hyps_of thm) (prop_of thm) (Pt.proof_of (raw_body thm));
 
 fun put_name name (thm as Thm (der, args)) =
   let
-    val Deriv {max_promise, open_promises, promises, body, ...} = der;
+    val Deriv {promises, body} = der;
     val {thy_ref, hyps, prop, tpairs, ...} = args;
     val _ = null tpairs orelse raise THM ("put_name: unsolved flex-flex constraints", 0, [thm]);
 
     val ps = map (apsnd (Future.map proof_body_of)) promises;
     val thy = Theory.deref thy_ref;
     val (pthm, proof) = Pt.thm_proof thy name hyps prop ps body;
-
-    val open_promises' = open_promises |> filter (fn (_, p) =>
-      (case Future.peek p of SOME (Exn.Result _) => false | _ => true));
-    val der' = make_deriv max_promise open_promises' [] [] [pthm] proof;
+    val der' = make_deriv [] [] [pthm] proof;
     val _ = Theory.check_thy thy;
   in Thm (der', args) end;
 
@@ -1718,7 +1704,7 @@ fun invoke_oracle thy_ref1 name oracle arg =
       raise THM ("Oracle's result must have type prop: " ^ name, 0, [])
     else
       let val (ora, prf) = Pt.oracle_proof name prop in
-        Thm (make_deriv ~1 [] [] [ora] [] prf,
+        Thm (make_deriv [] [ora] [] prf,
          {thy_ref = Theory.merge_refs (thy_ref1, thy_ref2),
           tags = [],
           maxidx = maxidx,
@@ -1756,5 +1742,5 @@ fun add_oracle (b, oracle) thy =
 
 end;
 
-structure BasicThm: BASIC_THM = Thm;
-open BasicThm;
+structure Basic_Thm: BASIC_THM = Thm;
+open Basic_Thm;

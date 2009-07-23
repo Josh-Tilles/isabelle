@@ -318,11 +318,9 @@ fun get_goal state =
 val show_main_goal = ref false;
 val verbose = ProofContext.verbose;
 
-val pretty_goals_local = Display.pretty_goals_aux o Syntax.pp;
-
 fun pretty_facts _ _ NONE = []
   | pretty_facts s ctxt (SOME ths) =
-      [Pretty.big_list (s ^ "this:") (map (ProofContext.pretty_thm ctxt) ths), Pretty.str ""];
+      [Pretty.big_list (s ^ "this:") (map (Display.pretty_thm ctxt) ths), Pretty.str ""];
 
 fun pretty_state nr state =
   let
@@ -346,7 +344,7 @@ fun pretty_state nr state =
             (if mode <> Backward orelse null using then NONE else SOME using) @
           [Pretty.str ("goal" ^
             description [levels_up (i div 2), subgoals (Thm.nprems_of goal)] ^ ":")] @
-          pretty_goals_local ctxt Markup.subgoal
+          Display_Goal.pretty_goals ctxt Markup.subgoal
             (true, ! show_main_goal) (! Display.goals_limit) goal @
           (map (fn msg => Position.setmp_thread_data pos msg ()) (rev messages))
       | prt_goal NONE = [];
@@ -368,7 +366,7 @@ fun pretty_state nr state =
 
 fun pretty_goals main state =
   let val (ctxt, (_, goal)) = get_goal state
-  in pretty_goals_local ctxt Markup.none (false, main) (! Display.goals_limit) goal end;
+  in Display_Goal.pretty_goals ctxt Markup.none (false, main) (! Display.goals_limit) goal end;
 
 
 
@@ -470,11 +468,12 @@ fun conclude_goal ctxt goal propss =
   let
     val thy = ProofContext.theory_of ctxt;
     val string_of_term = Syntax.string_of_term ctxt;
-    val string_of_thm = ProofContext.string_of_thm ctxt;
+    val string_of_thm = Display.string_of_thm ctxt;
 
     val ngoals = Thm.nprems_of goal;
     val _ = ngoals = 0 orelse error (Pretty.string_of (Pretty.chunks
-      (pretty_goals_local ctxt Markup.none (true, ! show_main_goal) (! Display.goals_limit) goal @
+      (Display_Goal.pretty_goals ctxt Markup.none
+          (true, ! show_main_goal) (! Display.goals_limit) goal @
         [Pretty.str (string_of_int ngoals ^ " unsolved goal(s)!")])));
 
     val extra_hyps = Assumption.extra_hyps ctxt goal;
@@ -1002,6 +1001,7 @@ fun future_proof done get_context fork_proof state =
     val _ = assert_backward state;
     val (goal_ctxt, (_, goal)) = find_goal state;
     val {statement as (kind, propss, prop), messages, using, goal, before_qed, after_qed} = goal;
+    val goal_txt = prop :: map Thm.term_of (Assumption.all_assms_of goal_ctxt);
 
     val _ = is_relevant state andalso error "Cannot fork relevant proof";
 
@@ -1017,13 +1017,13 @@ fun future_proof done get_context fork_proof state =
 
     val result_ctxt =
       state
-      |> map_contexts (Variable.declare_term prop)
+      |> map_contexts (fold Variable.declare_term goal_txt)
       |> map_goal I (K (statement', messages, using, goal', before_qed, after_qed'))
       |> fork_proof;
 
     val future_thm = result_ctxt |> Future.map (fn (_, x) =>
       ProofContext.get_fact_single (get_context x) (Facts.named this_name));
-    val finished_goal = exception_trace (fn () => Goal.future_result goal_ctxt future_thm prop');
+    val finished_goal = Goal.future_result goal_ctxt future_thm prop';
     val state' =
       state
       |> map_goal I (K (statement, messages, using, finished_goal, NONE, after_qed))
@@ -1043,9 +1043,9 @@ end;
 local
 
 fun future_terminal_proof proof1 proof2 meths int state =
-  if int orelse is_relevant state orelse not (Goal.future_enabled ())
+  if int orelse is_relevant state orelse not (Goal.local_future_enabled ())
   then proof1 meths state
-  else snd (state |> proof2 (fn state' => Future.fork_pri ~1 (fn () => ((), proof1 meths state'))));
+  else snd (proof2 (fn state' => Future.fork_pri ~1 (fn () => ((), proof1 meths state'))) state);
 
 in
 

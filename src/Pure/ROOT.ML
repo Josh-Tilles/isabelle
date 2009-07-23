@@ -33,11 +33,12 @@ use "General/antiquote.ML";
 use "ML/ml_lex.ML";
 use "ML/ml_parse.ML";
 use "General/secure.ML";
-(*----- basic ML bootstrap finished -----*)
+(*^^^^^ end of basic ML bootstrap ^^^^^*)
 use "General/integer.ML";
 use "General/stack.ML";
 use "General/queue.ML";
 use "General/heap.ML";
+use "General/same.ML";
 use "General/ord_list.ML";
 use "General/balanced_tree.ML";
 use "General/graph.ML";
@@ -114,17 +115,18 @@ use "thm.ML";
 use "more_thm.ML";
 use "facts.ML";
 use "pure_thy.ML";
-use "display.ML";
 use "drule.ML";
 use "morphism.ML";
 use "variable.ML";
 use "conv.ML";
+use "display_goal.ML";
 use "tctical.ML";
 use "search.ML";
 use "tactic.ML";
 use "meta_simplifier.ML";
 use "conjunction.ML";
 use "assumption.ML";
+use "display.ML";
 use "goal.ML";
 use "axclass.ML";
 

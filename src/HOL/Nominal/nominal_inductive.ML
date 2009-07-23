@@ -342,7 +342,7 @@ fun prove_strong_ind s avoids ctxt =
                  val env = Pattern.first_order_match thy (ihypt, prop_of ihyp)
                    (Vartab.empty, Vartab.empty);
                  val ihyp' = Thm.instantiate ([], map (pairself (cterm_of thy))
-                   (map (Envir.subst_vars env) vs ~~
+                   (map (Envir.subst_term env) vs ~~
                     map (fold_rev (NominalDatatype.mk_perm [])
                       (rev pis' @ pis)) params' @ [z])) ihyp;
                  fun mk_pi th =
@@ -403,7 +403,7 @@ fun prove_strong_ind s avoids ctxt =
           cut_facts_tac [th] 1 THEN REPEAT (etac conjE 1) THEN
           REPEAT (REPEAT (resolve_tac [conjI, impI] 1) THEN
             etac impE 1 THEN atac 1 THEN REPEAT (etac @{thm allE_Nil} 1) THEN
-            asm_full_simp_tac (simpset_of thy) 1)
+            asm_full_simp_tac (simpset_of ctxt) 1)
         end) |> singleton (ProofContext.export ctxt' ctxt);
 
     (** strong case analysis rule **)

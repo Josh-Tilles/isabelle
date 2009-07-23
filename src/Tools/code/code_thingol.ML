@@ -82,10 +82,10 @@ sig
   val read_const_exprs: theory -> string list -> string list * string list
   val consts_program: theory -> string list -> string list * (naming * program)
   val cached_program: theory -> naming * program
-  val eval_conv: theory -> (sort -> sort)
+  val eval_conv: theory
     -> (naming -> program -> ((string * sort) list * typscheme) * iterm -> string list -> cterm -> thm)
     -> cterm -> thm
-  val eval: theory -> (sort -> sort) -> ((term -> term) -> 'a -> 'a)
+  val eval: theory -> ((term -> term) -> 'a -> 'a)
     -> (naming -> program -> ((string * sort) list * typscheme) * iterm -> string list -> 'a)
     -> term -> 'a
 end;
@@ -469,7 +469,7 @@ fun not_wellsorted thy thm ty sort e =
   let
     val err_class = Sorts.class_error (Syntax.pp_global thy) e;
     val err_thm = case thm
-     of SOME thm => "\n(in code equation " ^ Display.string_of_thm thm ^ ")" | NONE => "";
+     of SOME thm => "\n(in code equation " ^ Display.string_of_thm_global thy thm ^ ")" | NONE => "";
     val err_typ = "Type " ^ Syntax.string_of_typ_global thy ty ^ " not of sort "
       ^ Syntax.string_of_sort_global thy sort;
   in error ("Wellsortedness error" ^ err_thm ^ ":\n" ^ err_typ ^ "\n" ^ err_class) end;
@@ -803,8 +803,8 @@ fun base_evaluator thy evaluator algebra funcgr vs t =
     val vs'' = map (fn (v, _) => (v, (the o AList.lookup (op =) vs o prefix "'") v)) vs';
   in evaluator naming program ((vs'', (vs', ty')), t') deps end;
 
-fun eval_conv thy prep_sort = Code_Preproc.eval_conv thy prep_sort o base_evaluator thy;
-fun eval thy prep_sort postproc = Code_Preproc.eval thy prep_sort postproc o base_evaluator thy;
+fun eval_conv thy = Code_Preproc.eval_conv thy o base_evaluator thy;
+fun eval thy postproc = Code_Preproc.eval thy postproc o base_evaluator thy;
 
 
 (** diagnostic commands **)

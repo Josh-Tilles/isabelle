@@ -2528,8 +2528,8 @@ proof-
       apply (induct n)
       apply simp
       unfolding th
-      using fact_gt_zero
-      apply (simp add: field_simps del: of_nat_Suc fact.simps)
+      using fact_gt_zero_nat
+      apply (simp add: field_simps del: of_nat_Suc fact_Suc)
       apply (drule sym)
       by (simp add: ring_simps of_nat_mult power_Suc)}
   note th' = this
@@ -3040,9 +3040,6 @@ proof-
     by (auto simp add: fps_eq_iff numeral_2_eq_2 fps_mult_nth fps_cos_def fps_sin_def)
   finally show ?thesis .
 qed
-
-lemma fact_1 [simp]: "fact 1 = 1"
-unfolding One_nat_def fact_Suc by simp
 
 lemma divide_eq_iff: "a \<noteq> (0::'a::field) \<Longrightarrow> x / a = y \<longleftrightarrow> x = y * a"
 by auto

@@ -140,7 +140,7 @@ fun prove_row (Less less_thm :: _) =
 fun pr_table table = writeln (cat_lines (map (fn r => concat (map pr_cell r)) table))
 
 fun pr_goals ctxt st =
-    Display.pretty_goals_aux (Syntax.pp ctxt) Markup.none (true, false) (Thm.nprems_of st) st
+    Display_Goal.pretty_goals ctxt Markup.none (true, false) (Thm.nprems_of st) st
      |> Pretty.chunks
      |> Pretty.string_of
 
@@ -217,7 +217,7 @@ fun lex_order_tac ctxt solve_tac (st: thm) =
 fun lexicographic_order_tac ctxt =
   TRY (FundefCommon.apply_termination_rule ctxt 1)
   THEN lex_order_tac ctxt
-    (auto_tac (local_clasimpset_of ctxt addsimps2 FundefCommon.Termination_Simps.get ctxt))
+    (auto_tac (clasimpset_of ctxt addsimps2 FundefCommon.Termination_Simps.get ctxt))
 
 val lexicographic_order = SIMPLE_METHOD o lexicographic_order_tac
 

@@ -85,11 +85,11 @@ struct
 end);
 
 val defEX_regroup =
-  Simplifier.simproc (the_context ())
+  Simplifier.simproc @{theory}
     "defined EX" ["EX x. P(x)"] Quantifier1.rearrange_ex;
 
 val defALL_regroup =
-  Simplifier.simproc (the_context ())
+  Simplifier.simproc @{theory}
     "defined ALL" ["ALL x. P(x)"] Quantifier1.rearrange_all;
 
 
@@ -164,6 +164,6 @@ structure Clasimp = ClasimpFun
 open Clasimp;
 
 ML_Antiquote.value "clasimpset"
-  (Scan.succeed "Clasimp.local_clasimpset_of (ML_Context.the_local_context ())");
+  (Scan.succeed "Clasimp.clasimpset_of (ML_Context.the_local_context ())");
 
 val FOL_css = (FOL_cs, FOL_ss);

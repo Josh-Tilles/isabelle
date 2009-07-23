@@ -1,5 +1,4 @@
-(*  Title:      HOLCF/Tools/domain/domain_theorems.ML
-    ID:         $Id$
+(*  Title:      HOLCF/Tools/Domain/domain_theorems.ML
     Author:     David von Oheimb
                 New proofs/tactics by Brian Huffman
 
@@ -686,7 +685,7 @@ val n_eqs = length eqs;
 (* ----- theorems concerning finite approximation and finite induction ------ *)
 
 local
-  val iterate_Cprod_ss = simpset_of @{theory Fix};
+  val iterate_Cprod_ss = global_simpset_of @{theory Fix};
   val copy_con_rews  = copy_rews @ con_rews;
   val copy_take_defs =
     (if n_eqs = 1 then [] else [ax_copy2_def]) @ axs_take_def;

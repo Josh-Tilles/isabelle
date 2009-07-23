@@ -20,6 +20,9 @@ of results to "Primes" and "GCD". IntPrimes also defined and developed
 the congruence relations on the integers. The notion was extended to
 the natural numbers by Chiaeb.
 
+Jeremy Avigad combined all of these, made everything uniform for the
+natural numbers and the integers, and added a number of new theorems.
+
 Tobias Nipkow cleaned up a lot.
 *)
 
@@ -27,7 +30,7 @@ Tobias Nipkow cleaned up a lot.
 header {* GCD *}
 
 theory GCD
-imports NatTransfer
+imports Fact
 begin
 
 declare One_nat_def [simp del]
@@ -157,7 +160,6 @@ lemma transfer_int_nat_gcd_closures:
 
 declare TransferMorphism_int_nat[transfer add return:
     transfer_int_nat_gcd transfer_int_nat_gcd_closures]
-
 
 
 subsection {* GCD *}
@@ -1505,6 +1507,252 @@ by (metis gcd_1_nat lcm_unique_nat nat_mult_1 prod_gcd_lcm_nat)
 lemma lcm_1_iff_int[simp]: "lcm (m::int) n = 1 \<longleftrightarrow> (m=1 \<or> m = -1) \<and> (n=1 \<or> n = -1)"
 by (auto simp add: abs_mult_self trans [OF lcm_unique_int eq_commute, symmetric] zmult_eq_1_iff)
 
+subsubsection {* The complete divisibility lattice *}
+
+
+interpretation gcd_semilattice_nat: lower_semilattice "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" gcd
+proof
+  case goal3 thus ?case by(metis gcd_unique_nat)
+qed auto
+
+interpretation lcm_semilattice_nat: upper_semilattice "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" lcm
+proof
+  case goal3 thus ?case by(metis lcm_unique_nat)
+qed auto
+
+interpretation gcd_lcm_lattice_nat: lattice "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" gcd lcm ..
+
+text{* Lifting gcd and lcm to finite (Gcd/Lcm) and infinite sets (GCD/LCM).
+GCD is defined via LCM to facilitate the proof that we have a complete lattice.
+Later on we show that GCD and Gcd coincide on finite sets.
+*}
+context gcd
+begin
+
+definition Gcd :: "'a set \<Rightarrow> 'a"
+where "Gcd = fold gcd 0"
+
+definition Lcm :: "'a set \<Rightarrow> 'a"
+where "Lcm = fold lcm 1"
+
+definition LCM :: "'a set \<Rightarrow> 'a" where
+"LCM M = (if finite M then Lcm M else 0)"
+
+definition GCD :: "'a set \<Rightarrow> 'a" where
+"GCD M = LCM(INT m:M. {d. d dvd m})"
+
+end
+
+lemma Gcd_empty[simp]: "Gcd {} = 0"
+by(simp add:Gcd_def)
+
+lemma Lcm_empty[simp]: "Lcm {} = 1"
+by(simp add:Lcm_def)
+
+lemma GCD_empty_nat[simp]: "GCD {} = (0::nat)"
+by(simp add:GCD_def LCM_def)
+
+lemma LCM_eq_Lcm[simp]: "finite M \<Longrightarrow> LCM M = Lcm M"
+by(simp add:LCM_def)
+
+lemma Lcm_insert_nat [simp]:
+  assumes "finite N"
+  shows "Lcm (insert (n::nat) N) = lcm n (Lcm N)"
+proof -
+  interpret fun_left_comm_idem "lcm::nat\<Rightarrow>nat\<Rightarrow>nat"
+    by (rule fun_left_comm_idem_lcm_nat)
+  from assms show ?thesis by(simp add: Lcm_def)
+qed
+
+lemma Lcm_insert_int [simp]:
+  assumes "finite N"
+  shows "Lcm (insert (n::int) N) = lcm n (Lcm N)"
+proof -
+  interpret fun_left_comm_idem "lcm::int\<Rightarrow>int\<Rightarrow>int"
+    by (rule fun_left_comm_idem_lcm_int)
+  from assms show ?thesis by(simp add: Lcm_def)
+qed
+
+lemma Gcd_insert_nat [simp]:
+  assumes "finite N"
+  shows "Gcd (insert (n::nat) N) = gcd n (Gcd N)"
+proof -
+  interpret fun_left_comm_idem "gcd::nat\<Rightarrow>nat\<Rightarrow>nat"
+    by (rule fun_left_comm_idem_gcd_nat)
+  from assms show ?thesis by(simp add: Gcd_def)
+qed
+
+lemma Gcd_insert_int [simp]:
+  assumes "finite N"
+  shows "Gcd (insert (n::int) N) = gcd n (Gcd N)"
+proof -
+  interpret fun_left_comm_idem "gcd::int\<Rightarrow>int\<Rightarrow>int"
+    by (rule fun_left_comm_idem_gcd_int)
+  from assms show ?thesis by(simp add: Gcd_def)
+qed
+
+lemma Lcm0_iff[simp]: "finite (M::nat set) \<Longrightarrow> M \<noteq> {} \<Longrightarrow> Lcm M = 0 \<longleftrightarrow> 0 : M"
+by(induct rule:finite_ne_induct) auto
+
+lemma Lcm_eq_0[simp]: "finite (M::nat set) \<Longrightarrow> 0 : M \<Longrightarrow> Lcm M = 0"
+by (metis Lcm0_iff empty_iff)
+
+lemma Gcd_dvd_nat [simp]:
+  assumes "finite M" and "(m::nat) \<in> M"
+  shows "Gcd M dvd m"
+proof -
+  show ?thesis using gcd_semilattice_nat.fold_inf_le_inf[OF assms, of 0] by (simp add: Gcd_def)
+qed
+
+lemma dvd_Gcd_nat[simp]:
+  assumes "finite M" and "ALL (m::nat) : M. n dvd m"
+  shows "n dvd Gcd M"
+proof -
+  show ?thesis using gcd_semilattice_nat.inf_le_fold_inf[OF assms, of 0] by (simp add: Gcd_def)
+qed
+
+lemma dvd_Lcm_nat [simp]:
+  assumes "finite M" and "(m::nat) \<in> M"
+  shows "m dvd Lcm M"
+proof -
+  show ?thesis using lcm_semilattice_nat.sup_le_fold_sup[OF assms, of 1] by (simp add: Lcm_def)
+qed
+
+lemma Lcm_dvd_nat[simp]:
+  assumes "finite M" and "ALL (m::nat) : M. m dvd n"
+  shows "Lcm M dvd n"
+proof -
+  show ?thesis using lcm_semilattice_nat.fold_sup_le_sup[OF assms, of 1] by (simp add: Lcm_def)
+qed
+
+interpretation gcd_lcm_complete_lattice_nat:
+  complete_lattice "op dvd" "%m n::nat. m dvd n & ~ n dvd m" gcd lcm 1 0 GCD LCM
+proof
+  case goal1 show ?case by simp
+next
+  case goal2 show ?case by simp
+next
+  case goal5 thus ?case by (auto simp: LCM_def)
+next
+  case goal6 thus ?case
+    by(auto simp: LCM_def)(metis finite_nat_set_iff_bounded_le gcd_proj2_if_dvd_nat gcd_le1_nat)
+next
+  case goal3 thus ?case by (auto simp: GCD_def LCM_def)(metis finite_INT finite_divisors_nat)
+next
+  case goal4 thus ?case by(auto simp: LCM_def GCD_def)
+qed
+
+text{* Alternative characterizations of Gcd and GCD: *}
+
+lemma Gcd_eq_Max: "finite(M::nat set) \<Longrightarrow> M \<noteq> {} \<Longrightarrow> 0 \<notin> M \<Longrightarrow> Gcd M = Max(\<Inter>m\<in>M. {d. d dvd m})"
+apply(rule antisym)
+ apply(rule Max_ge)
+  apply (metis all_not_in_conv finite_divisors_nat finite_INT)
+ apply simp
+apply (rule Max_le_iff[THEN iffD2])
+  apply (metis all_not_in_conv finite_divisors_nat finite_INT)
+ apply fastsimp
+apply clarsimp
+apply (metis Gcd_dvd_nat Max_in dvd_0_left dvd_Gcd_nat dvd_imp_le linorder_antisym_conv3 not_less0)
+done
+
+lemma Gcd_remove0_nat: "finite M \<Longrightarrow> Gcd M = Gcd (M - {0::nat})"
+apply(induct pred:finite)
+ apply simp
+apply(case_tac "x=0")
+ apply simp
+apply(subgoal_tac "insert x F - {0} = insert x (F - {0})")
+ apply simp
+apply blast
+done
+
+lemma Lcm_in_lcm_closed_set_nat:
+  "finite M \<Longrightarrow> M \<noteq> {} \<Longrightarrow> ALL m n :: nat. m:M \<longrightarrow> n:M \<longrightarrow> lcm m n : M \<Longrightarrow> Lcm M : M"
+apply(induct rule:finite_linorder_min_induct)
+ apply simp
+apply simp
+apply(subgoal_tac "ALL m n :: nat. m:A \<longrightarrow> n:A \<longrightarrow> lcm m n : A")
+ apply simp
+ apply(case_tac "A={}")
+  apply simp
+ apply simp
+apply (metis lcm_pos_nat lcm_unique_nat linorder_neq_iff nat_dvd_not_less not_less0)
+done
+
+lemma Lcm_eq_Max_nat:
+  "finite M \<Longrightarrow> M \<noteq> {} \<Longrightarrow> 0 \<notin> M \<Longrightarrow> ALL m n :: nat. m:M \<longrightarrow> n:M \<longrightarrow> lcm m n : M \<Longrightarrow> Lcm M = Max M"
+apply(rule antisym)
+ apply(rule Max_ge, assumption)
+ apply(erule (2) Lcm_in_lcm_closed_set_nat)
+apply clarsimp
+apply (metis Lcm0_iff dvd_Lcm_nat dvd_imp_le neq0_conv)
+done
+
+text{* Finally GCD is Gcd: *}
+
+lemma GCD_eq_Gcd[simp]: assumes "finite(M::nat set)" shows "GCD M = Gcd M"
+proof-
+  have divisors_remove0_nat: "(\<Inter>m\<in>M. {d::nat. d dvd m}) = (\<Inter>m\<in>M-{0}. {d::nat. d dvd m})" by auto
+  show ?thesis
+  proof cases
+    assume "M={}" thus ?thesis by simp
+  next
+    assume "M\<noteq>{}"
+    show ?thesis
+    proof cases
+      assume "M={0}" thus ?thesis by(simp add:GCD_def LCM_def)
+    next
+      assume "M\<noteq>{0}"
+      with `M\<noteq>{}` assms show ?thesis
+	apply(subst Gcd_remove0_nat[OF assms])
+	apply(simp add:GCD_def)
+	apply(subst divisors_remove0_nat)
+	apply(simp add:LCM_def)
+	apply rule
+	 apply rule
+	 apply(subst Gcd_eq_Max)
+	    apply simp
+	   apply blast
+	  apply blast
+	 apply(rule Lcm_eq_Max_nat)
+	    apply simp
+	   apply blast
+	  apply fastsimp
+	 apply clarsimp
+	apply(fastsimp intro: finite_divisors_nat intro!: finite_INT)
+	done
+    qed
+  qed
+qed
+
+lemma Lcm_set_nat [code_unfold]:
+  "Lcm (set ns) = foldl lcm (1::nat) ns"
+proof -
+  interpret fun_left_comm_idem "lcm::nat\<Rightarrow>nat\<Rightarrow>nat" by (rule fun_left_comm_idem_lcm_nat)
+  show ?thesis by(simp add: Lcm_def fold_set lcm_commute_nat)
+qed
+
+lemma Lcm_set_int [code_unfold]:
+  "Lcm (set is) = foldl lcm (1::int) is"
+proof -
+  interpret fun_left_comm_idem "lcm::int\<Rightarrow>int\<Rightarrow>int" by (rule fun_left_comm_idem_lcm_int)
+  show ?thesis by(simp add: Lcm_def fold_set lcm_commute_int)
+qed
+
+lemma Gcd_set_nat [code_unfold]:
+  "Gcd (set ns) = foldl gcd (0::nat) ns"
+proof -
+  interpret fun_left_comm_idem "gcd::nat\<Rightarrow>nat\<Rightarrow>nat" by (rule fun_left_comm_idem_gcd_nat)
+  show ?thesis by(simp add: Gcd_def fold_set gcd_commute_nat)
+qed
+
+lemma Gcd_set_int [code_unfold]:
+  "Gcd (set ns) = foldl gcd (0::int) ns"
+proof -
+  interpret fun_left_comm_idem "gcd::int\<Rightarrow>int\<Rightarrow>int" by (rule fun_left_comm_idem_gcd_int)
+  show ?thesis by(simp add: Gcd_def fold_set gcd_commute_int)
+qed
+
 
 subsection {* Primes *}
 
@@ -1553,32 +1801,6 @@ lemma prime_int_altdef: "prime (p::int) = (1 < p \<and> (\<forall>m \<ge> 0. m d
     apply (case_tac "p >= 0")
     by (blast, auto simp add: prime_ge_0_int)
 
-(* To do: determine primality of any numeral *)
-
-lemma zero_not_prime_nat [simp]: "~prime (0::nat)"
-  by (simp add: prime_nat_def)
-
-lemma zero_not_prime_int [simp]: "~prime (0::int)"
-  by (simp add: prime_int_def)
-
-lemma one_not_prime_nat [simp]: "~prime (1::nat)"
-  by (simp add: prime_nat_def)
-
-lemma Suc_0_not_prime_nat [simp]: "~prime (Suc 0)"
-  by (simp add: prime_nat_def One_nat_def)
-
-lemma one_not_prime_int [simp]: "~prime (1::int)"
-  by (simp add: prime_int_def)
-
-lemma two_is_prime_nat [simp]: "prime (2::nat)"
-  apply (auto simp add: prime_nat_def)
-  apply (case_tac m)
-  apply (auto dest!: dvd_imp_le)
-  done
-
-lemma two_is_prime_int [simp]: "prime (2::int)"
-  by (rule two_is_prime_nat [transferred direction: nat "op <= (0::int)"])
-
 lemma prime_imp_coprime_nat: "prime (p::nat) \<Longrightarrow> \<not> p dvd n \<Longrightarrow> coprime p n"
   apply (unfold prime_nat_def)
   apply (metis gcd_dvd1_nat gcd_dvd2_nat)
@@ -1625,15 +1847,84 @@ lemma prime_dvd_power_int [rule_format]: "prime (p::int) -->
   apply auto
 done
 
-lemma prime_imp_power_coprime_nat: "prime (p::nat) \<Longrightarrow> ~ p dvd a \<Longrightarrow>
-    coprime a (p^m)"
+subsubsection{* Make prime naively executable *}
+
+lemma zero_not_prime_nat [simp]: "~prime (0::nat)"
+  by (simp add: prime_nat_def)
+
+lemma zero_not_prime_int [simp]: "~prime (0::int)"
+  by (simp add: prime_int_def)
+
+lemma one_not_prime_nat [simp]: "~prime (1::nat)"
+  by (simp add: prime_nat_def)
+
+lemma Suc_0_not_prime_nat [simp]: "~prime (Suc 0)"
+  by (simp add: prime_nat_def One_nat_def)
+
+lemma one_not_prime_int [simp]: "~prime (1::int)"
+  by (simp add: prime_int_def)
+
+lemma prime_nat_code[code]:
+ "prime(p::nat) = (p > 1 & (ALL n : {1<..<p}. ~(n dvd p)))"
+apply(simp add: Ball_def)
+apply (metis less_not_refl prime_nat_def dvd_triv_right not_prime_eq_prod_nat)
+done
+
+lemma prime_nat_simp:
+ "prime(p::nat) = (p > 1 & (list_all (%n. ~ n dvd p) [2..<p]))"
+apply(simp only:prime_nat_code list_ball_code greaterThanLessThan_upt)
+apply(simp add:nat_number One_nat_def)
+done
+
+lemmas prime_nat_simp_number_of[simp] = prime_nat_simp[of "number_of m", standard]
+
+lemma prime_int_code[code]:
+  "prime(p::int) = (p > 1 & (ALL n : {1<..<p}. ~(n dvd p)))" (is "?L = ?R")
+proof
+  assume "?L" thus "?R"
+    by (clarsimp simp: prime_gt_1_int) (metis int_one_le_iff_zero_less prime_int_altdef zless_le)
+next
+    assume "?R" thus "?L" by (clarsimp simp:Ball_def) (metis dvdI not_prime_eq_prod_int)
+qed
+
+lemma prime_int_simp:
+  "prime(p::int) = (p > 1 & (list_all (%n. ~ n dvd p) [2..p - 1]))"
+apply(simp only:prime_int_code list_ball_code greaterThanLessThan_upto)
+apply simp
+done
+
+lemmas prime_int_simp_number_of[simp] = prime_int_simp[of "number_of m", standard]
+
+declare successor_int_def[simp]
+
+lemma two_is_prime_nat [simp]: "prime (2::nat)"
+by simp
+
+lemma two_is_prime_int [simp]: "prime (2::int)"
+by simp
+
+text{* A bit of regression testing: *}
+
+lemma "prime(97::nat)"
+by simp
+
+lemma "prime(97::int)"
+by simp
+
+lemma "prime(997::nat)"
+by eval
+
+lemma "prime(997::int)"
+by eval
+
+
+lemma prime_imp_power_coprime_nat: "prime (p::nat) \<Longrightarrow> ~ p dvd a \<Longrightarrow> coprime a (p^m)"
   apply (rule coprime_exp_nat)
   apply (subst gcd_commute_nat)
   apply (erule (1) prime_imp_coprime_nat)
 done
 
-lemma prime_imp_power_coprime_int: "prime (p::int) \<Longrightarrow> ~ p dvd a \<Longrightarrow>
-    coprime a (p^m)"
+lemma prime_imp_power_coprime_int: "prime (p::int) \<Longrightarrow> ~ p dvd a \<Longrightarrow> coprime a (p^m)"
   apply (rule coprime_exp_int)
   apply (subst gcd_commute_int)
   apply (erule (1) prime_imp_coprime_int)
@@ -1652,12 +1943,10 @@ lemma primes_coprime_int: "prime (p::int) \<Longrightarrow> prime q \<Longrighta
   apply auto
 done
 
-lemma primes_imp_powers_coprime_nat: "prime (p::nat) \<Longrightarrow> prime q \<Longrightarrow> p ~= q \<Longrightarrow>
-    coprime (p^m) (q^n)"
+lemma primes_imp_powers_coprime_nat: "prime (p::nat) \<Longrightarrow> prime q \<Longrightarrow> p ~= q \<Longrightarrow> coprime (p^m) (q^n)"
   by (rule coprime_exp2_nat, rule primes_coprime_nat)
 
-lemma primes_imp_powers_coprime_int: "prime (p::int) \<Longrightarrow> prime q \<Longrightarrow> p ~= q \<Longrightarrow>
-    coprime (p^m) (q^n)"
+lemma primes_imp_powers_coprime_int: "prime (p::int) \<Longrightarrow> prime q \<Longrightarrow> p ~= q \<Longrightarrow> coprime (p^m) (q^n)"
   by (rule coprime_exp2_int, rule primes_coprime_int)
 
 lemma prime_factor_nat: "n \<noteq> (1::nat) \<Longrightarrow> \<exists> p. prime p \<and> p dvd n"
@@ -1750,5 +2039,43 @@ proof-
     ultimately have ?thesis by blast}
   ultimately show ?thesis by blast
 qed
+
+subsection {* Infinitely many primes *}
+
+lemma next_prime_bound: "\<exists>(p::nat). prime p \<and> n < p \<and> p <= fact n + 1"
+proof-
+  have f1: "fact n + 1 \<noteq> 1" using fact_ge_one_nat [of n] by arith 
+  from prime_factor_nat [OF f1]
+      obtain p where "prime p" and "p dvd fact n + 1" by auto
+  hence "p \<le> fact n + 1" 
+    by (intro dvd_imp_le, auto)
+  {assume "p \<le> n"
+    from `prime p` have "p \<ge> 1" 
+      by (cases p, simp_all)
+    with `p <= n` have "p dvd fact n" 
+      by (intro dvd_fact_nat)
+    with `p dvd fact n + 1` have "p dvd fact n + 1 - fact n"
+      by (rule dvd_diff_nat)
+    hence "p dvd 1" by simp
+    hence "p <= 1" by auto
+    moreover from `prime p` have "p > 1" by auto
+    ultimately have False by auto}
+  hence "n < p" by arith
+  with `prime p` and `p <= fact n + 1` show ?thesis by auto
+qed
+
+lemma bigger_prime: "\<exists>p. prime p \<and> p > (n::nat)" 
+using next_prime_bound by auto
+
+lemma primes_infinite: "\<not> (finite {(p::nat). prime p})"
+proof
+  assume "finite {(p::nat). prime p}"
+  with Max_ge have "(EX b. (ALL x : {(p::nat). prime p}. x <= b))"
+    by auto
+  then obtain b where "ALL (x::nat). prime x \<longrightarrow> x <= b"
+    by auto
+  with bigger_prime [of b] show False by auto
+qed
+
 
 end

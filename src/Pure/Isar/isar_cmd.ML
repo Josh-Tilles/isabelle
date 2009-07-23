@@ -230,7 +230,7 @@ val thus = goal Proof.chain Proof.show;
 (* local endings *)
 
 fun local_qed m = Toplevel.proof (Proof.local_qed (m, true));
-val local_terminal_proof = Toplevel.proof o Proof.local_terminal_proof;
+val local_terminal_proof = Toplevel.proof' o Proof.local_future_terminal_proof;
 val local_default_proof = Toplevel.proof Proof.local_default_proof;
 val local_immediate_proof = Toplevel.proof Proof.local_immediate_proof;
 val local_done_proof = Toplevel.proof Proof.local_done_proof;
@@ -363,7 +363,7 @@ val print_attributes = Toplevel.unknown_theory o
 val print_simpset = Toplevel.unknown_context o
   Toplevel.keep (fn state =>
     let val ctxt = Toplevel.context_of state
-    in Pretty.writeln (Simplifier.pretty_ss ctxt (Simplifier.local_simpset_of ctxt)) end);
+    in Pretty.writeln (Simplifier.pretty_ss ctxt (simpset_of ctxt)) end);
 
 val print_rules = Toplevel.unknown_context o
   Toplevel.keep (ContextRules.print_rules o Toplevel.context_of);
@@ -442,8 +442,7 @@ fun string_of_stmts state args =
   |> Pretty.chunks2 |> Pretty.string_of;
 
 fun string_of_thms state args =
-  Pretty.string_of (ProofContext.pretty_thms (Proof.context_of state)
-    (Proof.get_thmss state args));
+  Pretty.string_of (Display.pretty_thms (Proof.context_of state) (Proof.get_thmss state args));
 
 fun string_of_prfs full state arg =
   Pretty.string_of (case arg of
