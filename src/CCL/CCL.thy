@@ -151,7 +151,8 @@ What are the advantages of this approach?
 
 
 lemmas ccl_data_defs = apply_def fix_def
-  and [simp] = po_refl
+
+declare po_refl [simp]
 
 
 subsection {* Congruence Rules *}
@@ -187,22 +188,25 @@ lemma eq_lemma: "[| x=a;  y=b;  x=y |] ==> a=b"
   by simp
 
 ML {*
-  fun mk_inj_rl thy rews s =
+  fun inj_rl_tac ctxt rews i =
     let
       fun mk_inj_lemmas r = [@{thm arg_cong}] RL [r RS (r RS @{thm eq_lemma})]
-      val inj_lemmas = List.concat (map mk_inj_lemmas rews)
-      val tac = REPEAT (ares_tac [iffI, allI, conjI] 1 ORELSE
-        eresolve_tac inj_lemmas 1 ORELSE
-        asm_simp_tac (Simplifier.theory_context thy @{simpset} addsimps rews) 1)
-    in prove_goal thy s (fn _ => [tac]) end  
+      val inj_lemmas = maps mk_inj_lemmas rews
+    in
+      CHANGED (REPEAT (ares_tac [iffI, allI, conjI] i ORELSE
+        eresolve_tac inj_lemmas i ORELSE
+        asm_simp_tac (simpset_of ctxt addsimps rews) i))
+    end;
 *}
 
-ML {*
-  bind_thms ("ccl_injs",
-    map (mk_inj_rl @{theory} @{thms caseBs})
-      ["<a,b> = <a',b'> <-> (a=a' & b=b')",
-       "(lam x. b(x) = lam x. b'(x)) <-> ((ALL z. b(z)=b'(z)))"])
-*}
+method_setup inj_rl = {*
+  Attrib.thms >> (fn rews => fn ctxt => SIMPLE_METHOD' (inj_rl_tac ctxt rews))
+*} ""
+
+lemma ccl_injs:
+  "<a,b> = <a',b'> <-> (a=a' & b=b')"
+  "!!b b'. (lam x. b(x) = lam x. b'(x)) <-> ((ALL z. b(z)=b'(z)))"
+  by (inj_rl caseBs)
 
 
 lemma pair_inject: "<a,b> = <a',b'> \<Longrightarrow> (a = a' \<Longrightarrow> b = b' \<Longrightarrow> R) \<Longrightarrow> R"
@@ -240,7 +244,7 @@ local
   fun mk_lemma (ra,rb) = [lemma] RL [ra RS (rb RS eq_lemma)] RL
                            [distinctness RS notE,sym RS (distinctness RS notE)]
 in
-  fun mk_lemmas rls = List.concat (map mk_lemma (mk_combs pair rls))
+  fun mk_lemmas rls = maps mk_lemma (mk_combs pair rls)
   fun mk_dstnct_rls thy xs = mk_combs (mk_thm_str thy) xs
 end
 
@@ -261,7 +265,7 @@ fun mk_dstnct_thms thy defs inj_rls xs =
     (fn _ => [simp_tac (global_simpset_of thy addsimps (rls@inj_rls)) 1])
   in map (mk_dstnct_thm ccl_dstncts) (mk_dstnct_rls thy xs) end
 
-fun mkall_dstnct_thms thy defs i_rls xss = List.concat (map (mk_dstnct_thms thy defs i_rls) xss)
+fun mkall_dstnct_thms thy defs i_rls xss = maps (mk_dstnct_thms thy defs i_rls) xss
 
 (*** Rewriting and Proving ***)
 
@@ -272,7 +276,7 @@ val XH_to_Is = map XH_to_I
 val XH_to_Ds = map XH_to_D
 val XH_to_Es = map XH_to_E;
 
-bind_thms ("ccl_rews", @{thms caseBs} @ ccl_injs @ ccl_dstncts);
+bind_thms ("ccl_rews", @{thms caseBs} @ @{thms ccl_injs} @ ccl_dstncts);
 bind_thms ("ccl_dstnctsEs", ccl_dstncts RL [notE]);
 bind_thms ("ccl_injDs", XH_to_Ds @{thms ccl_injs});
 *}
@@ -384,25 +388,25 @@ lemma npo_lam_pair: "~ lam x. f(x) [= <a,b>"
   apply (rule po_refl npo_lam_bot)+
   done
 
-ML {*
+lemma npo_rls1:
+  "~ true [= false"
+  "~ false [= true"
+  "~ true [= <a,b>"
+  "~ <a,b> [= true"
+  "~ true [= lam x. f(x)"
+  "~ lam x. f(x) [= true"
+  "~ false [= <a,b>"
+  "~ <a,b> [= false"
+  "~ false [= lam x. f(x)"
+  "~ lam x. f(x) [= false"
+  by (tactic {*
+    REPEAT (rtac notI 1 THEN
+      dtac @{thm case_pocong} 1 THEN
+      etac rev_mp 5 THEN
+      ALLGOALS (simp_tac @{simpset}) THEN
+      REPEAT (resolve_tac [@{thm po_refl}, @{thm npo_lam_bot}] 1)) *})
 
-local
-  fun mk_thm s = prove_goal @{theory} s (fn _ =>
-                          [rtac notI 1, dtac @{thm case_pocong} 1, etac rev_mp 5,
-                           ALLGOALS (simp_tac @{simpset}),
-                           REPEAT (resolve_tac [@{thm po_refl}, @{thm npo_lam_bot}] 1)])
-in
-
-val npo_rls = [@{thm npo_pair_lam}, @{thm npo_lam_pair}] @ map mk_thm
-            ["~ true [= false",          "~ false [= true",
-             "~ true [= <a,b>",          "~ <a,b> [= true",
-             "~ true [= lam x. f(x)","~ lam x. f(x) [= true",
-            "~ false [= <a,b>",          "~ <a,b> [= false",
-            "~ false [= lam x. f(x)","~ lam x. f(x) [= false"]
-end;
-
-bind_thms ("npo_rls", npo_rls);
-*}
+lemmas npo_rls = npo_pair_lam npo_lam_pair npo_rls1
 
 
 subsection {* Coinduction for @{text "[="} *}
@@ -411,11 +415,6 @@ lemma po_coinduct: "[|  <t,u> : R;  R <= POgen(R) |] ==> t [= u"
   apply (rule PO_def [THEN def_coinduct, THEN PO_iff [THEN iffD2]])
    apply assumption+
   done
-
-ML {*
-  fun po_coinduct_tac ctxt s i =
-    res_inst_tac ctxt [(("R", 0), s)] @{thm po_coinduct} i
-*}
 
 
 subsection {* Equality *}
