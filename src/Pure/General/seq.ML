@@ -33,7 +33,6 @@ sig
   val lift: ('a -> 'b -> 'c) -> 'a seq -> 'b -> 'c seq
   val lifts: ('a -> 'b -> 'c seq) -> 'a seq -> 'b -> 'c seq
   val singleton: ('a list -> 'b list seq) -> 'a -> 'b seq
-  val wrap: ((unit -> ('a * 'a seq) option) -> ('a * 'a seq) option) -> 'a seq -> 'a seq
   val print: (int -> 'a -> unit) -> int -> 'a seq -> unit
   val it_right : ('a * 'b seq -> 'b seq) -> 'a seq * 'b seq -> 'b seq
   val succeed: 'a -> 'a seq
@@ -170,13 +169,6 @@ fun lifts f xq y = maps (fn x => f x y) xq;
 
 fun singleton f x = f [x] |> map (fn [y] => y | _ => raise Empty);
 
-(*wrapped lazy evaluation*)
-fun wrap f xq =
-  make (fn () =>
-    (case f (fn () => pull xq) of
-      NONE => NONE
-    | SOME (x, xq') => SOME (x, wrap f xq')));
-
 (*print a sequence, up to "count" elements*)
 fun print print_elem count =
   let
@@ -200,7 +192,7 @@ fun it_right f (xq, yq) =
 
 
 
-(** sequence functions **)      (*cf. Pure/tctical.ML*)
+(** sequence functions **)      (*cf. Pure/tactical.ML*)
 
 fun succeed x = single x;
 fun fail _ = empty;

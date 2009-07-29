@@ -15,6 +15,8 @@ sig
   include BASIC_MULTITHREADING
   val trace: int ref
   val tracing: int -> (unit -> string) -> unit
+  val tracing_time: bool -> Time.time -> (unit -> string) -> unit
+  val real_time: ('a -> unit) -> 'a -> Time.time
   val available: bool
   val max_threads: int ref
   val max_threads_value: unit -> int
@@ -31,10 +33,15 @@ end;
 structure Multithreading: MULTITHREADING =
 struct
 
-(* options *)
+(* tracing *)
 
 val trace = ref (0: int);
 fun tracing _ _ = ();
+fun tracing_time _ _ _ = ();
+fun real_time f x = (f x; Time.zeroTime);
+
+
+(* options *)
 
 val available = false;
 val max_threads = ref (1: int);

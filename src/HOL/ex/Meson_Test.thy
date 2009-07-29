@@ -5,6 +5,12 @@ theory Meson_Test
 imports Main
 begin
 
+ML {*
+  val Goal = OldGoals.Goal;
+  val by = OldGoals.by;
+  val gethyps = OldGoals.gethyps;
+*}
+
 text {*
   WARNING: there are many potential conflicts between variables used
   below and constants declared in HOL!

@@ -18,6 +18,8 @@ are formally declared.  INCOMPATIBILITY.
 
 *** HOL ***
 
+* Set.UNIV and Set.empty are mere abbreviations for top and bot.  INCOMPATIBILITY.
+
 * More convenient names for set intersection and union.  INCOMPATIBILITY:
 
     Set.Int ~>  Set.inter
@@ -31,7 +33,7 @@ are formally declared.  INCOMPATIBILITY.
 
 * New quickcheck implementation using new code generator.
 
-* New type class boolean_algebra.
+* New class "boolean_algebra".
 
 * Refinements to lattices classes:
   - added boolean_algebra type class
@@ -40,6 +42,19 @@ are formally declared.  INCOMPATIBILITY.
   - lemma ge_sup_conv renamed to le_sup_iff, in accordance with le_inf_iff
   - dropped lemma alias inf_ACI for inf_aci (same for sup_ACI and sup_aci)
   - renamed ACI to inf_sup_aci
+  - class "complete_lattice" moved to separate theory "complete_lattice";
+    corresponding constants renamed:
+    
+    Set.Inf ~>      Complete_Lattice.Inf
+    Set.Sup ~>      Complete_Lattice.Sup
+    Set.INFI ~>     Complete_Lattice.INFI
+    Set.SUPR ~>     Complete_Lattice.SUPR
+    Set.Inter ~>    Complete_Lattice.Inter
+    Set.Union ~>    Complete_Lattice.Union
+    Set.INTER ~>    Complete_Lattice.INTER
+    Set.UNION ~>    Complete_Lattice.UNION
+
+  INCOMPATIBILITY.
 
 * Class semiring_div requires superclass no_zero_divisors and proof of
 div_mult_mult1; theorems div_mult_mult1, div_mult_mult2,
@@ -53,6 +68,13 @@ INCOMPATIBILITY.
 constant compow with infix syntax "^^".  Power operations on
 multiplicative monoids retains syntax "^" and is now defined generic
 in class power.  INCOMPATIBILITY.
+
+* Relation composition "R O S" now has a "more standard" argument order,
+i.e., "R O S = {(x,z). EX y. (x,y) : R & (y,z) : S }".
+INCOMPATIBILITY: Rewrite propositions with "S O R" --> "R O S". Proofs
+may occationally break, since the O_assoc rule was not rewritten like this.
+Fix using O_assoc[symmetric].
+The same applies to the curried version "R OO S".
 
 * GCD now has functions Gcd/GCD and Lcm/LCM for the gcd and lcm of finite and
 infinite sets. It is shown that they form a complete lattice.
@@ -117,6 +139,11 @@ replaced by: (auto intro!: DERIV_intros).  INCOMPATIBILITY.
 
 
 *** ML ***
+
+* Tactical FOCUS is similar to SUBPROOF, but allows the body tactic to
+introduce new subgoals and schematic variables.  FOCUS_PARAMS is
+similar, but focuses on the parameter prefix only, leaving subgoal
+premises unchanged.
 
 * Renamed functor TableFun to Table, and GraphFun to Graph.  (Since
 functors have their own ML name space there is no point to mark them

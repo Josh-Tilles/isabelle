@@ -187,8 +187,12 @@ text {* Well-foundedness of the empty relation *}
 lemma wf_empty [iff]: "wf({})"
   by (simp add: wf_def)
 
-lemmas wfP_empty [iff] =
-  wf_empty [to_pred bot_empty_eq2, simplified bot_fun_eq bot_bool_eq]
+lemma wfP_empty [iff]:
+  "wfP (\<lambda>x y. False)"
+proof -
+  have "wfP bot" by (fact wf_empty [to_pred bot_empty_eq2])
+  then show ?thesis by (simp add: bot_fun_eq bot_bool_eq)
+qed
 
 lemma wf_Int1: "wf r ==> wf (r Int r')"
   apply (erule wf_subset)
@@ -235,7 +239,7 @@ subsection {* Well-Foundedness Results for Unions *}
 
 lemma wf_union_compatible:
   assumes "wf R" "wf S"
-  assumes "S O R \<subseteq> R"
+  assumes "R O S \<subseteq> R"
   shows "wf (R \<union> S)"
 proof (rule wfI_min)
   fix x :: 'a and Q 
@@ -254,8 +258,8 @@ proof (rule wfI_min)
       assume "y \<in> Q"
       with `y \<notin> ?Q'` 
       obtain w where "(w, y) \<in> R" and "w \<in> Q" by auto
-      from `(w, y) \<in> R` `(y, z) \<in> S` have "(w, z) \<in> S O R" by (rule rel_compI)
-      with `S O R \<subseteq> R` have "(w, z) \<in> R" ..
+      from `(w, y) \<in> R` `(y, z) \<in> S` have "(w, z) \<in> R O S" by (rule rel_compI)
+      with `R O S \<subseteq> R` have "(w, z) \<in> R" ..
       with `z \<in> ?Q'` have "w \<notin> Q" by blast 
       with `w \<in> Q` show False by contradiction
     qed
@@ -279,8 +283,10 @@ apply (erule_tac x="{a. a:A & (EX b:A. (b,a) : r i) }" in allE)
 apply (blast elim!: allE)  
 done
 
-lemmas wfP_SUP = wf_UN [where I=UNIV and r="\<lambda>i. {(x, y). r i x y}",
-  to_pred SUP_UN_eq2 bot_empty_eq pred_equals_eq, simplified, standard]
+lemma wfP_SUP:
+  "\<forall>i. wfP (r i) \<Longrightarrow> \<forall>i j. r i \<noteq> r j \<longrightarrow> inf (DomainP (r i)) (RangeP (r j)) = bot \<Longrightarrow> wfP (SUPR UNIV r)"
+  by (rule wf_UN [where I=UNIV and r="\<lambda>i. {(x, y). r i x y}", to_pred SUP_UN_eq2 pred_equals_eq])
+    (simp_all add: bot_fun_eq bot_bool_eq)
 
 lemma wf_Union: 
  "[| ALL r:R. wf r;  
@@ -308,7 +314,7 @@ lemma wf_Un:
   by (auto simp: Un_ac)
 
 lemma wf_union_merge: 
-  "wf (R \<union> S) = wf (R O R \<union> R O S \<union> S)" (is "wf ?A = wf ?B")
+  "wf (R \<union> S) = wf (R O R \<union> S O R \<union> S)" (is "wf ?A = wf ?B")
 proof
   assume "wf ?A"
   with wf_trancl have wfT: "wf (?A^+)" .
@@ -327,7 +333,7 @@ next
     obtain z where "z \<in> Q" and "\<And>y. (y, z) \<in> ?B \<Longrightarrow> y \<notin> Q" 
       by (erule wfE_min)
     then have A1: "\<And>y. (y, z) \<in> R O R \<Longrightarrow> y \<notin> Q"
-      and A2: "\<And>y. (y, z) \<in> R O S \<Longrightarrow> y \<notin> Q"
+      and A2: "\<And>y. (y, z) \<in> S O R \<Longrightarrow> y \<notin> Q"
       and A3: "\<And>y. (y, z) \<in> S \<Longrightarrow> y \<notin> Q"
       by auto
     
@@ -349,7 +355,7 @@ next
           with A1 show "y \<notin> Q" .
         next
           assume "(y, z') \<in> S" 
-          then have "(y, z) \<in> R O S" using  `(z', z) \<in> R` ..
+          then have "(y, z) \<in> S O R" using  `(z', z) \<in> R` ..
           with A2 show "y \<notin> Q" .
         qed
       qed
@@ -881,30 +887,6 @@ proof (rule wfI_min)
     qed      
   qed
 qed
-
-text {*Wellfoundedness of @{text same_fst}*}
-
-definition
- same_fst :: "('a => bool) => ('a => ('b * 'b)set) => (('a*'b)*('a*'b))set"
-where
-    "same_fst P R == {((x',y'),(x,y)) . x'=x & P x & (y',y) : R x}"
-   --{*For @{text rec_def} declarations where the first n parameters
-       stay unchanged in the recursive call. *}
-
-lemma same_fstI [intro!]:
-     "[| P x; (y',y) : R x |] ==> ((x,y'),(x,y)) : same_fst P R"
-by (simp add: same_fst_def)
-
-lemma wf_same_fst:
-  assumes prem: "(!!x. P x ==> wf(R x))"
-  shows "wf(same_fst P R)"
-apply (simp cong del: imp_cong add: wf_def same_fst_def)
-apply (intro strip)
-apply (rename_tac a b)
-apply (case_tac "wf (R a)")
- apply (erule_tac a = b in wf_induct, blast)
-apply (blast intro: prem)
-done
 
 
 subsection{*Weakly decreasing sequences (w.r.t. some well-founded order) 

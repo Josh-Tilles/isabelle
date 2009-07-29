@@ -27,7 +27,7 @@ end;
 structure Multithreading: MULTITHREADING =
 struct
 
-(* options *)
+(* tracing *)
 
 val trace = ref 0;
 
@@ -35,6 +35,24 @@ fun tracing level msg =
   if level > ! trace then ()
   else (TextIO.output (TextIO.stdErr, (">>> " ^ msg () ^ "\n")); TextIO.flushOut TextIO.stdErr)
     handle _ (*sic*) => ();
+
+fun tracing_time detailed time =
+  tracing
+   (if not detailed then 5
+    else if Time.>= (time, Time.fromMilliseconds 1000) then 1
+    else if Time.>= (time, Time.fromMilliseconds 100) then 2
+    else if Time.>= (time, Time.fromMilliseconds 10) then 3
+    else if Time.>= (time, Time.fromMilliseconds 1) then 4 else 5);
+
+fun real_time f x =
+  let
+    val timer = Timer.startRealTimer ();
+    val () = f x;
+    val time = Timer.checkRealTimer timer;
+  in time end;
+
+
+(* options *)
 
 val available = true;
 
@@ -92,8 +110,8 @@ fun with_attributes new_atts f x =
     val _ = Thread.setAttributes orig_atts;
   in Exn.release result end;
 
-fun interruptible f =
-  with_attributes regular_interrupts (fn _ => fn x => f x);
+fun interruptible f x =
+  (Thread.testInterrupt (); with_attributes regular_interrupts (fn _ => fn x => f x) x);
 
 fun uninterruptible f =
   with_attributes no_interrupts (fn atts => fn x =>
@@ -205,22 +223,16 @@ fun self_critical () =
 fun NAMED_CRITICAL name e =
   if self_critical () then e ()
   else
-    uninterruptible (fn restore_attributes => fn () =>
+    Exn.release (uninterruptible (fn restore_attributes => fn () =>
       let
         val name' = ! critical_name;
         val _ =
           if Mutex.trylock critical_lock then ()
           else
             let
-              val timer = Timer.startRealTimer ();
-              val _ = tracing 4 (fn () => "CRITICAL" ^ show name ^ show' name' ^ ": waiting");
-              val _ = Mutex.lock critical_lock;
-              val time = Timer.checkRealTimer timer;
-              val trace_time =
-                if Time.>= (time, Time.fromMilliseconds 1000) then 1
-                else if Time.>= (time, Time.fromMilliseconds 100) then 2
-                else if Time.>= (time, Time.fromMilliseconds 10) then 3 else 4;
-              val _ = tracing trace_time (fn () =>
+              val _ = tracing 5 (fn () => "CRITICAL" ^ show name ^ show' name' ^ ": waiting");
+              val time = real_time Mutex.lock critical_lock;
+              val _ = tracing_time true time (fn () =>
                 "CRITICAL" ^ show name ^ show' name' ^ ": passed after " ^ Time.toString time);
             in () end;
         val _ = critical_thread := SOME (Thread.self ());
@@ -229,7 +241,7 @@ fun NAMED_CRITICAL name e =
         val _ = critical_name := "";
         val _ = critical_thread := NONE;
         val _ = Mutex.unlock critical_lock;
-      in Exn.release result end) ();
+      in result end) ());
 
 fun CRITICAL e = NAMED_CRITICAL "" e;
 

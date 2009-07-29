@@ -159,7 +159,7 @@ lemma rtranclE [cases set: rtrancl]:
   apply (erule asm_rl exE disjE conjE base step)+
   done
 
-lemma rtrancl_Int_subset: "[| Id \<subseteq> s; r O (r^* \<inter> s) \<subseteq> s|] ==> r^* \<subseteq> s"
+lemma rtrancl_Int_subset: "[| Id \<subseteq> s; (r^* \<inter> s) O r \<subseteq> s|] ==> r^* \<subseteq> s"
   apply (rule subsetI)
   apply (rule_tac p="x" in PairE, clarify)
   apply (erule rtrancl_induct, auto) 
@@ -291,7 +291,7 @@ lemma r_comp_rtrancl_eq: "r O r^* = r^* O r"
   by (blast elim: rtranclE converse_rtranclE
     intro: rtrancl_into_rtrancl converse_rtrancl_into_rtrancl)
 
-lemma rtrancl_unfold: "r^* = Id Un r O r^*"
+lemma rtrancl_unfold: "r^* = Id Un r^* O r"
   by (auto intro: rtrancl_into_rtrancl elim: rtranclE)
 
 lemma rtrancl_Un_separatorE:
@@ -384,7 +384,7 @@ lemma tranclE [cases set: trancl]:
   | (step) c where "(a, c) : r^+" and "(c, b) : r"
   using assms by cases simp_all
 
-lemma trancl_Int_subset: "[| r \<subseteq> s; r O (r^+ \<inter> s) \<subseteq> s|] ==> r^+ \<subseteq> s"
+lemma trancl_Int_subset: "[| r \<subseteq> s; (r^+ \<inter> s) O r \<subseteq> s|] ==> r^+ \<subseteq> s"
   apply (rule subsetI)
   apply (rule_tac p = x in PairE)
   apply clarify
@@ -392,7 +392,7 @@ lemma trancl_Int_subset: "[| r \<subseteq> s; r O (r^+ \<inter> s) \<subseteq> s
    apply auto
   done
 
-lemma trancl_unfold: "r^+ = r Un r O r^+"
+lemma trancl_unfold: "r^+ = r Un r^+ O r"
   by (auto intro: trancl_into_trancl elim: tranclE)
 
 text {* Transitivity of @{term "r^+"} *}
@@ -676,7 +676,7 @@ begin
 
 primrec relpow :: "nat \<Rightarrow> ('a \<times> 'a) set \<Rightarrow> ('a \<times> 'a) set" where
     "relpow 0 R = Id"
-  | "relpow (Suc n) R = R O (R ^^ n)"
+  | "relpow (Suc n) R = (R ^^ n) O R"
 
 end
 
@@ -734,11 +734,11 @@ lemma rel_pow_E2:
   apply (cut_tac n=nat and R=R in rel_pow_Suc_D2', simp, blast)
   done
 
-lemma rel_pow_add: "R ^^ (m+n) = R^^n O R^^m"
+lemma rel_pow_add: "R ^^ (m+n) = R^^m O R^^n"
 by(induct n) auto
 
 lemma rel_pow_commute: "R O R ^^ n = R ^^ n O R"
-  by (induct n) (simp, simp add: O_assoc [symmetric])
+by (induct n) (simp, simp add: O_assoc [symmetric])
 
 lemma rtrancl_imp_UN_rel_pow:
   assumes "p \<in> R^*"
@@ -811,16 +811,16 @@ subsection {* Setup of transitivity reasoner *}
 
 ML {*
 
-structure Trancl_Tac = Trancl_Tac_Fun (
-  struct
-    val r_into_trancl = @{thm trancl.r_into_trancl};
-    val trancl_trans  = @{thm trancl_trans};
-    val rtrancl_refl = @{thm rtrancl.rtrancl_refl};
-    val r_into_rtrancl = @{thm r_into_rtrancl};
-    val trancl_into_rtrancl = @{thm trancl_into_rtrancl};
-    val rtrancl_trancl_trancl = @{thm rtrancl_trancl_trancl};
-    val trancl_rtrancl_trancl = @{thm trancl_rtrancl_trancl};
-    val rtrancl_trans = @{thm rtrancl_trans};
+structure Trancl_Tac = Trancl_Tac
+(
+  val r_into_trancl = @{thm trancl.r_into_trancl};
+  val trancl_trans  = @{thm trancl_trans};
+  val rtrancl_refl = @{thm rtrancl.rtrancl_refl};
+  val r_into_rtrancl = @{thm r_into_rtrancl};
+  val trancl_into_rtrancl = @{thm trancl_into_rtrancl};
+  val rtrancl_trancl_trancl = @{thm rtrancl_trancl_trancl};
+  val trancl_rtrancl_trancl = @{thm trancl_rtrancl_trancl};
+  val rtrancl_trans = @{thm rtrancl_trans};
 
   fun decomp (@{const Trueprop} $ t) =
     let fun dec (Const ("op :", _) $ (Const ("Pair", _) $ a $ b) $ rel ) =
@@ -832,19 +832,18 @@ structure Trancl_Tac = Trancl_Tac_Fun (
       | dec _ =  NONE
     in dec t end
     | decomp _ = NONE;
+);
 
-  end);
-
-structure Tranclp_Tac = Trancl_Tac_Fun (
-  struct
-    val r_into_trancl = @{thm tranclp.r_into_trancl};
-    val trancl_trans  = @{thm tranclp_trans};
-    val rtrancl_refl = @{thm rtranclp.rtrancl_refl};
-    val r_into_rtrancl = @{thm r_into_rtranclp};
-    val trancl_into_rtrancl = @{thm tranclp_into_rtranclp};
-    val rtrancl_trancl_trancl = @{thm rtranclp_tranclp_tranclp};
-    val trancl_rtrancl_trancl = @{thm tranclp_rtranclp_tranclp};
-    val rtrancl_trans = @{thm rtranclp_trans};
+structure Tranclp_Tac = Trancl_Tac
+(
+  val r_into_trancl = @{thm tranclp.r_into_trancl};
+  val trancl_trans  = @{thm tranclp_trans};
+  val rtrancl_refl = @{thm rtranclp.rtrancl_refl};
+  val r_into_rtrancl = @{thm r_into_rtranclp};
+  val trancl_into_rtrancl = @{thm tranclp_into_rtranclp};
+  val rtrancl_trancl_trancl = @{thm rtranclp_tranclp_tranclp};
+  val trancl_rtrancl_trancl = @{thm tranclp_rtranclp_tranclp};
+  val rtrancl_trans = @{thm rtranclp_trans};
 
   fun decomp (@{const Trueprop} $ t) =
     let fun dec (rel $ a $ b) =
@@ -856,31 +855,31 @@ structure Tranclp_Tac = Trancl_Tac_Fun (
       | dec _ =  NONE
     in dec t end
     | decomp _ = NONE;
-
-  end);
+);
 *}
 
 declaration {* fn _ =>
   Simplifier.map_ss (fn ss => ss
-    addSolver (mk_solver "Trancl" (fn _ => Trancl_Tac.trancl_tac))
-    addSolver (mk_solver "Rtrancl" (fn _ => Trancl_Tac.rtrancl_tac))
-    addSolver (mk_solver "Tranclp" (fn _ => Tranclp_Tac.trancl_tac))
-    addSolver (mk_solver "Rtranclp" (fn _ => Tranclp_Tac.rtrancl_tac)))
+    addSolver (mk_solver' "Trancl" (Trancl_Tac.trancl_tac o Simplifier.the_context))
+    addSolver (mk_solver' "Rtrancl" (Trancl_Tac.rtrancl_tac o Simplifier.the_context))
+    addSolver (mk_solver' "Tranclp" (Tranclp_Tac.trancl_tac o Simplifier.the_context))
+    addSolver (mk_solver' "Rtranclp" (Tranclp_Tac.rtrancl_tac o Simplifier.the_context)))
 *}
 
-(* Optional methods *)
+
+text {* Optional methods. *}
 
 method_setup trancl =
-  {* Scan.succeed (K (SIMPLE_METHOD' Trancl_Tac.trancl_tac)) *}
+  {* Scan.succeed (SIMPLE_METHOD' o Trancl_Tac.trancl_tac) *}
   {* simple transitivity reasoner *}
 method_setup rtrancl =
-  {* Scan.succeed (K (SIMPLE_METHOD' Trancl_Tac.rtrancl_tac)) *}
+  {* Scan.succeed (SIMPLE_METHOD' o Trancl_Tac.rtrancl_tac) *}
   {* simple transitivity reasoner *}
 method_setup tranclp =
-  {* Scan.succeed (K (SIMPLE_METHOD' Tranclp_Tac.trancl_tac)) *}
+  {* Scan.succeed (SIMPLE_METHOD' o Tranclp_Tac.trancl_tac) *}
   {* simple transitivity reasoner (predicate version) *}
 method_setup rtranclp =
-  {* Scan.succeed (K (SIMPLE_METHOD' Tranclp_Tac.rtrancl_tac)) *}
+  {* Scan.succeed (SIMPLE_METHOD' o Tranclp_Tac.rtrancl_tac) *}
   {* simple transitivity reasoner (predicate version) *}
 
 end

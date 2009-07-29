@@ -1,7 +1,8 @@
 (*  Title:      Pure/Concurrent/future.ML
     Author:     Makarius
 
-Future values.
+Future values, see also
+http://www4.in.tum.de/~wenzelm/papers/parallel-isabelle.pdf
 
 Notes:
 
@@ -11,7 +12,7 @@ Notes:
     processes.
 
   * Futures are grouped; failure of one group member causes the whole
-    group to be interrupted eventually.
+    group to be interrupted eventually.  Groups are block-structured.
 
   * Forked futures are evaluated spontaneously by a farm of worker
     threads in the background; join resynchronizes the computation and
@@ -26,7 +27,6 @@ Notes:
 
 signature FUTURE =
 sig
-  val enabled: unit -> bool
   type task = Task_Queue.task
   type group = Task_Queue.group
   val is_worker: unit -> bool
@@ -46,7 +46,6 @@ sig
   val join: 'a future -> 'a
   val map: ('a -> 'b) -> 'a future -> 'b future
   val interruptible_task: ('a -> 'b) -> 'a -> 'b
-  val interrupt_task: string -> unit
   val cancel_group: group -> unit
   val cancel: 'a future -> unit
   val shutdown: unit -> unit
@@ -56,11 +55,6 @@ structure Future: FUTURE =
 struct
 
 (** future values **)
-
-fun enabled () =
-  Multithreading.enabled () andalso
-    not (Multithreading.self_critical ());
-
 
 (* identifiers *)
 
@@ -84,18 +78,19 @@ val worker_group = Option.map #3 o thread_data;
 datatype 'a future = Future of
  {task: task,
   group: group,
-  result: 'a Exn.result option ref};
+  result: 'a Exn.result option Synchronized.var};
 
 fun task_of (Future {task, ...}) = task;
 fun group_of (Future {group, ...}) = group;
+fun result_of (Future {result, ...}) = result;
 
-fun peek (Future {result, ...}) = ! result;
+fun peek x = Synchronized.peek (result_of x);
 fun is_finished x = is_some (peek x);
 
 fun value x = Future
  {task = Task_Queue.new_task 0,
   group = Task_Queue.new_group NONE,
-  result = ref (SOME (Exn.Result x))};
+  result = Synchronized.var "future" (SOME (Exn.Result x))};
 
 
 
@@ -114,58 +109,51 @@ val do_shutdown = ref false;
 
 (* synchronization *)
 
+val scheduler_event = ConditionVar.conditionVar ();
+val work_available = ConditionVar.conditionVar ();
+val work_finished = ConditionVar.conditionVar ();
+
 local
   val lock = Mutex.mutex ();
-  val cond = ConditionVar.conditionVar ();
 in
 
 fun SYNCHRONIZED name = SimpleThread.synchronized name lock;
 
-fun wait () = (*requires SYNCHRONIZED*)
-  ConditionVar.wait (cond, lock);
+fun wait cond = (*requires SYNCHRONIZED*)
+  ConditionVar.wait (cond, lock) handle Exn.Interrupt => ();
 
-fun wait_timeout timeout = (*requires SYNCHRONIZED*)
-  ignore (ConditionVar.waitUntil (cond, lock, Time.+ (Time.now (), timeout)));
+fun wait_interruptible cond timeout = (*requires SYNCHRONIZED*)
+  interruptible (fn () =>
+    ignore (ConditionVar.waitUntil (cond, lock, Time.+ (Time.now (), timeout)))) ();
 
-fun notify_all () = (*requires SYNCHRONIZED*)
+fun signal cond = (*requires SYNCHRONIZED*)
+  ConditionVar.signal cond;
+
+fun broadcast cond = (*requires SYNCHRONIZED*)
   ConditionVar.broadcast cond;
 
+fun broadcast_work () = (*requires SYNCHRONIZED*)
+ (ConditionVar.broadcast work_available;
+  ConditionVar.broadcast work_finished);
+
 end;
-
-
-(* worker activity *)
-
-fun count_active ws =
-  fold (fn (_, active) => fn i => if active then i + 1 else i) ws 0;
-
-fun trace_active () = Multithreading.tracing 1 (fn () =>
-  let
-    val ws = ! workers;
-    val m = string_of_int (length ws);
-    val n = string_of_int (count_active ws);
-  in "SCHEDULE: " ^ m ^ " workers, " ^ n ^ " active" end);
-
-fun change_active active = (*requires SYNCHRONIZED*)
-  change workers (AList.update Thread.equal (Thread.self (), active));
-
-fun overloaded () =
-  count_active (! workers) > Multithreading.max_threads_value ();
 
 
 (* execute future jobs *)
 
 fun future_job group (e: unit -> 'a) =
   let
-    val result = ref (NONE: 'a Exn.result option);
+    val result = Synchronized.var "future" (NONE: 'a Exn.result option);
     fun job ok =
       let
         val res =
           if ok then
-            Exn.capture
-              (Multithreading.with_attributes Multithreading.restricted_interrupts
-                (fn _ => fn () => e ())) ()
+            Exn.capture (fn () =>
+             (Thread.testInterrupt ();
+              Multithreading.with_attributes Multithreading.restricted_interrupts
+                (fn _ => fn () => e ())) ()) ()
           else Exn.Exn Exn.Interrupt;
-        val _ = result := SOME res;
+        val _ = Synchronized.change result (K (SOME res));
       in
         (case res of
           Exn.Exn exn => (Task_Queue.cancel_group group exn; false)
@@ -174,38 +162,51 @@ fun future_job group (e: unit -> 'a) =
   in (result, job) end;
 
 fun do_cancel group = (*requires SYNCHRONIZED*)
-  change canceled (insert Task_Queue.eq_group group);
+ (change canceled (insert Task_Queue.eq_group group); broadcast scheduler_event);
 
 fun execute name (task, group, jobs) =
   let
-    val _ = trace_active ();
     val valid = not (Task_Queue.is_canceled group);
     val ok = setmp_thread_data (name, task, group) (fn () =>
       fold (fn job => fn ok => job valid andalso ok) jobs true) ();
-    val _ = SYNCHRONIZED "execute" (fn () =>
-     (change queue (Task_Queue.finish task);
-      if ok then ()
-      else if Task_Queue.cancel (! queue) group then ()
-      else do_cancel group;
-      notify_all ()));
+    val _ = SYNCHRONIZED "finish" (fn () =>
+      let
+        val maximal = change_result queue (Task_Queue.finish task);
+        val _ =
+          if ok then ()
+          else if Task_Queue.cancel (! queue) group then ()
+          else do_cancel group;
+        val _ = broadcast work_finished;
+        val _ = if maximal then () else broadcast work_available;
+      in () end);
   in () end;
+
+
+(* worker activity *)
+
+fun count_active () = (*requires SYNCHRONIZED*)
+  fold (fn (_, active) => fn i => if active then i + 1 else i) (! workers) 0;
+
+fun change_active active = (*requires SYNCHRONIZED*)
+  change workers (AList.update Thread.equal (Thread.self (), active));
 
 
 (* worker threads *)
 
-fun worker_wait () = (*requires SYNCHRONIZED*)
-  (change_active false; wait (); change_active true);
+fun worker_wait cond = (*requires SYNCHRONIZED*)
+ (change_active false; wait cond; change_active true);
 
 fun worker_next () = (*requires SYNCHRONIZED*)
   if ! excessive > 0 then
     (dec excessive;
      change workers (filter_out (fn (thread, _) => Thread.equal (thread, Thread.self ())));
-     notify_all ();
+     broadcast scheduler_event;
      NONE)
-  else if overloaded () then (worker_wait (); worker_next ())
+  else if count_active () > Multithreading.max_threads_value () then
+    (worker_wait scheduler_event; worker_next ())
   else
-    (case change_result queue Task_Queue.dequeue of
-      NONE => (worker_wait (); worker_next ())
+    (case change_result queue (Task_Queue.dequeue (Thread.self ())) of
+      NONE => (worker_wait work_available; worker_next ())
     | some => some);
 
 fun worker_loop name =
@@ -214,37 +215,51 @@ fun worker_loop name =
   | SOME work => (execute name work; worker_loop name));
 
 fun worker_start name = (*requires SYNCHRONIZED*)
-  change workers (cons (SimpleThread.fork false (fn () => worker_loop name), true));
+  change workers (cons (SimpleThread.fork false (fn () =>
+     (broadcast scheduler_event; worker_loop name)), true));
 
 
 (* scheduler *)
 
+val last_status = ref Time.zeroTime;
+val next_status = Time.fromMilliseconds 500;
+val next_round = Time.fromMilliseconds 50;
+
 fun scheduler_next () = (*requires SYNCHRONIZED*)
   let
-    (*queue status*)
-    val _ = Multithreading.tracing 1 (fn () =>
-      let val {ready, pending, running} = Task_Queue.status (! queue) in
-        "SCHEDULE: " ^
-          string_of_int ready ^ " ready, " ^
-          string_of_int pending ^ " pending, " ^
-          string_of_int running ^ " running"
-      end);
+    (*queue and worker status*)
+    val _ =
+      let val now = Time.now () in
+        if Time.> (Time.+ (! last_status, next_status), now) then ()
+        else
+         (last_status := now; Multithreading.tracing 1 (fn () =>
+            let
+              val {ready, pending, running} = Task_Queue.status (! queue);
+              val total = length (! workers);
+              val active = count_active ();
+            in
+              "SCHEDULE: " ^
+                string_of_int ready ^ " ready, " ^
+                string_of_int pending ^ " pending, " ^
+                string_of_int running ^ " running; " ^
+                string_of_int total ^ " workers, " ^
+                string_of_int active ^ " active"
+            end))
+      end;
 
     (*worker threads*)
-    val ws = ! workers;
     val _ =
-      if forall (Thread.isActive o #1) ws then ()
+      if forall (Thread.isActive o #1) (! workers) then ()
       else
-        (case List.partition (Thread.isActive o #1) ws of
+        (case List.partition (Thread.isActive o #1) (! workers) of
           (_, []) => ()
-        | (active, inactive) =>
-            (workers := active; Multithreading.tracing 0 (fn () =>
-              "SCHEDULE: disposed " ^ string_of_int (length inactive) ^ " dead worker threads")));
-    val _ = trace_active ();
+        | (alive, dead) =>
+            (workers := alive; Multithreading.tracing 0 (fn () =>
+              "SCHEDULE: disposed " ^ string_of_int (length dead) ^ " dead worker threads")));
 
     val m = if ! do_shutdown then 0 else Multithreading.max_threads_value ();
     val mm = (m * 3) div 2;
-    val l = length ws;
+    val l = length (! workers);
     val _ = excessive := l - mm;
     val _ =
       if mm > l then
@@ -252,16 +267,21 @@ fun scheduler_next () = (*requires SYNCHRONIZED*)
       else ();
 
     (*canceled groups*)
-    val _ = change canceled (filter_out (Task_Queue.cancel (! queue)));
+    val _ =
+      if null (! canceled) then ()
+      else (change canceled (filter_out (Task_Queue.cancel (! queue))); broadcast_work ());
+
+    (*delay loop*)
+    val _ = wait_interruptible scheduler_event next_round
+      handle Exn.Interrupt =>
+        (Multithreading.tracing 1 (fn () => "Interrupt");
+          List.app do_cancel (Task_Queue.cancel_all (! queue)));
 
     (*shutdown*)
-    val continue = not (! do_shutdown andalso null ws);
+    val _ = if Task_Queue.is_empty (! queue) then do_shutdown := true else ();
+    val continue = not (! do_shutdown andalso null (! workers));
     val _ = if continue then () else scheduler := NONE;
-
-    val _ = notify_all ();
-    val _ = interruptible (fn () =>
-        wait_timeout (Time.fromMilliseconds (if null (! canceled) then 1000 else 50))) ()
-      handle Exn.Interrupt => List.app do_cancel (Task_Queue.cancel_all (! queue));
+    val _ = broadcast scheduler_event;
   in continue end;
 
 fun scheduler_loop () =
@@ -270,11 +290,10 @@ fun scheduler_loop () =
 fun scheduler_active () = (*requires SYNCHRONIZED*)
   (case ! scheduler of NONE => false | SOME thread => Thread.isActive thread);
 
-fun scheduler_check name = SYNCHRONIZED name (fn () =>
-  if not (scheduler_active ()) then
-    (do_shutdown := false; scheduler := SOME (SimpleThread.fork false scheduler_loop))
-  else if ! do_shutdown then error "Scheduler shutdown in progress"
-  else ());
+fun scheduler_check () = (*requires SYNCHRONIZED*)
+ (do_shutdown := false;
+  if scheduler_active () then ()
+  else scheduler := SOME (SimpleThread.fork false scheduler_loop));
 
 
 
@@ -284,15 +303,17 @@ fun scheduler_check name = SYNCHRONIZED name (fn () =>
 
 fun fork_future opt_group deps pri e =
   let
-    val _ = scheduler_check "future check";
-
     val group =
       (case opt_group of
         SOME group => group
       | NONE => Task_Queue.new_group (worker_group ()));
     val (result, job) = future_job group e;
-    val task = SYNCHRONIZED "future" (fn () =>
-      change_result queue (Task_Queue.enqueue group deps pri job) before notify_all ());
+    val task = SYNCHRONIZED "enqueue" (fn () =>
+      let
+        val (task, minimal) = change_result queue (Task_Queue.enqueue group deps pri job);
+        val _ = if minimal then signal work_available else ();
+        val _ = scheduler_check ();
+      in task end);
   in Future {task = task, group = group, result = result} end;
 
 fun fork e = fork_future NONE [] 0 e;
@@ -312,35 +333,33 @@ fun get_result x =
       Exn.Exn (Exn.EXCEPTIONS (Exn.flatten_list (Task_Queue.group_status (group_of x))))
   | SOME res => res);
 
-fun join_next deps = (*requires SYNCHRONIZED*)
-  if overloaded () then (worker_wait (); join_next deps)
-  else change_result queue (Task_Queue.dequeue_towards deps);
+fun join_wait x =
+  Synchronized.guarded_access (result_of x) (fn NONE => NONE | some => SOME ((), some));
 
-fun join_deps deps =
+fun join_next deps = (*requires SYNCHRONIZED*)
+  if null deps then NONE
+  else
+    (case change_result queue (Task_Queue.dequeue_towards (Thread.self ()) deps) of
+      (NONE, []) => NONE
+    | (NONE, deps') => (worker_wait work_finished; join_next deps')
+    | (SOME work, deps') => SOME (work, deps'));
+
+fun join_work deps =
   (case SYNCHRONIZED "join" (fn () => join_next deps) of
     NONE => ()
-  | SOME (work, deps') => (execute "join" work; join_deps deps'));
+  | SOME (work, deps') => (execute "join" work; join_work deps'));
 
 in
 
 fun join_results xs =
   if forall is_finished xs then map get_result xs
+  else if Multithreading.self_critical () then
+    error "Cannot join future values within critical section"
   else uninterruptible (fn _ => fn () =>
-    let
-      val _ = scheduler_check "join check";
-      val _ = Multithreading.self_critical () andalso
-        error "Cannot join future values within critical section";
-
-      val worker = is_worker ();
-      val _ = if worker then join_deps (map task_of xs) else ();
-
-      fun join_wait x =
-        if SYNCHRONIZED "join_wait" (fn () =>
-          is_finished x orelse (if worker then worker_wait () else wait (); false))
-        then () else join_wait x;
-      val _ = List.app join_wait xs;
-
-    in map get_result xs end) ();
+     (if is_worker ()
+      then join_work (map task_of xs)
+      else List.app join_wait xs;
+      map get_result xs)) ();
 
 end;
 
@@ -352,13 +371,11 @@ fun join x = Exn.release (join_result x);
 
 fun map_future f x =
   let
-    val _ = scheduler_check "map_future check";
-
     val task = task_of x;
     val group = Task_Queue.new_group (SOME (group_of x));
     val (result, job) = future_job group (fn () => f (join x));
 
-    val extended = SYNCHRONIZED "map_future" (fn () =>
+    val extended = SYNCHRONIZED "extend" (fn () =>
       (case Task_Queue.extend task job (! queue) of
         SOME queue' => (queue := queue'; true)
       | NONE => false));
@@ -372,38 +389,26 @@ fun map_future f x =
 
 fun interruptible_task f x =
   if Multithreading.available then
+   (Thread.testInterrupt ();
     Multithreading.with_attributes
       (if is_worker ()
        then Multithreading.restricted_interrupts
        else Multithreading.regular_interrupts)
-      (fn _ => f) x
+      (fn _ => fn x => f x) x)
   else interruptible f x;
 
-(*interrupt: permissive signal, may get ignored*)
-fun interrupt_task id = SYNCHRONIZED "interrupt"
-  (fn () => Task_Queue.interrupt_external (! queue) id);
-
 (*cancel: present and future group members will be interrupted eventually*)
-fun cancel_group group =
- (scheduler_check "cancel check";
-  SYNCHRONIZED "cancel" (fn () => (do_cancel group; notify_all ())));
-
+fun cancel_group group = SYNCHRONIZED "cancel" (fn () => do_cancel group);
 fun cancel x = cancel_group (group_of x);
 
 
-(** global join and shutdown **)
+(* shutdown *)
 
 fun shutdown () =
   if Multithreading.available then
-   (scheduler_check "shutdown check";
     SYNCHRONIZED "shutdown" (fn () =>
-     (while not (scheduler_active ()) do wait ();
-      while not (Task_Queue.is_empty (! queue)) do wait ();
-      do_shutdown := true;
-      notify_all ();
-      while not (null (! workers)) do wait ();
-      while scheduler_active () do wait ();
-      OS.Process.sleep (Time.fromMilliseconds 300))))
+     while scheduler_active () do
+      (wait scheduler_event; broadcast_work ()))
   else ();
 
 

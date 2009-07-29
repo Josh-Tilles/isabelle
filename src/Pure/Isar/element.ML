@@ -213,7 +213,7 @@ fun obtain prop ctxt =
   let
     val ((xs, prop'), ctxt') = Variable.focus prop ctxt;
     val As = Logic.strip_imp_prems (Thm.term_of prop');
-  in ((Binding.empty, (map (fix o Term.dest_Free o Thm.term_of) xs, As)), ctxt') end;
+  in ((Binding.empty, (map (fix o Term.dest_Free o Thm.term_of o #2) xs, As)), ctxt') end;
 
 in
 
@@ -272,7 +272,7 @@ val refine_witness =
   Proof.refine (Method.Basic (K (RAW_METHOD
     (K (ALLGOALS
       (CONJUNCTS (ALLGOALS
-        (CONJUNCTS (TRYALL (Tactic.rtac Drule.protectI)))))))), Position.none));
+        (CONJUNCTS (TRYALL (Tactic.rtac Drule.protectI))))))))));
 
 fun gen_witness_proof proof after_qed wit_propss eq_props =
   let

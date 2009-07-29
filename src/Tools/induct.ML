@@ -70,7 +70,7 @@ sig
   val setup: theory -> theory
 end;
 
-functor InductFun(Data: INDUCT_DATA): INDUCT =
+functor Induct(Data: INDUCT_DATA): INDUCT =
 struct
 
 
@@ -568,7 +568,7 @@ fun add_defs def_insts =
 *)
 
 fun get_inductT ctxt insts =
-  fold_rev multiply (insts |> map
+  fold_rev (map_product cons) (insts |> map
       ((fn [] => NONE | ts => List.last ts) #>
         (fn NONE => TVar (("'a", 0), []) | SOME t => Term.fastype_of t) #>
         find_inductT ctxt)) [[]]

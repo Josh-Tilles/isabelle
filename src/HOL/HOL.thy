@@ -910,8 +910,9 @@ apply iprover
 done
 
 ML {*
-structure Blast = BlastFun
+structure Blast = Blast
 (
+  val thy = @{theory}
   type claset = Classical.claset
   val equality_name = @{const_name "op ="}
   val not_name = @{const_name Not}
@@ -1390,7 +1391,7 @@ subsubsection {* Generic cases and induction *}
 text {* Rule projections: *}
 
 ML {*
-structure ProjectRule = ProjectRuleFun
+structure Project_Rule = Project_Rule
 (
   val conjunct1 = @{thm conjunct1}
   val conjunct2 = @{thm conjunct2}
@@ -1446,7 +1447,7 @@ hide const induct_forall induct_implies induct_equal induct_conj
 text {* Method setup. *}
 
 ML {*
-structure Induct = InductFun
+structure Induct = Induct
 (
   val cases_default = @{thm case_split}
   val atomize = @{thms induct_atomize}

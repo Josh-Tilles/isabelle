@@ -96,11 +96,12 @@ val inductive_rulify_fallback = thms "induct_rulify_fallback";
 
 val notTrueE = TrueI RSN (2, notE);
 val notFalseI = Seq.hd (atac 1 notI);
-val simp_thms' = map (fn s => mk_meta_eq (the (find_first
-  (equal (OldGoals.read_prop @{theory HOL} s) o prop_of) simp_thms)))
-  ["(~True) = False", "(~False) = True",
-   "(True --> ?P) = ?P", "(False --> ?P) = True",
-   "(?P & True) = ?P", "(True & ?P) = ?P"];
+
+val simp_thms' = map mk_meta_eq
+  @{lemma "(~True) = False" "(~False) = True"
+      "(True --> P) = P" "(False --> P) = True"
+      "(P & True) = P" "(True & P) = P"
+    by (fact simp_thms)+};
 
 
 
@@ -712,7 +713,7 @@ fun declare_rules kind rec_binding coind no_ind cnames intrs intr_bindings intr_
           map (Attrib.internal o K) (#2 induct)), [rulify (#1 induct)]);
 
     val ctxt3 = if no_ind orelse coind then ctxt2 else
-      let val inducts = cnames ~~ ProjectRule.projects ctxt2 (1 upto length cnames) induct'
+      let val inducts = cnames ~~ Project_Rule.projects ctxt2 (1 upto length cnames) induct'
       in
         ctxt2 |>
         LocalTheory.notes kind [((rec_qualified (Binding.name "inducts"), []),
