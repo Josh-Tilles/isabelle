@@ -43,9 +43,11 @@ my $setup_file = $output_path . "/" . $setup_thy_name . ".thy";
 my $log_file = $output_path . "/" . $thy_name . ".log";
 
 my @action_files;
+my @action_names;
 foreach (split(/:/, $actions)) {
   if (m/([^[]*)/) {
     push @action_files, "\"$mirabelle_home/Tools/mirabelle_$1.ML\"";
+    push @action_names, $1;
   }
 }
 my $tools = "";
@@ -62,7 +64,7 @@ $tools
 begin
 
 setup {* 
-  Mirabelle.set_logfile "$log_file" #>
+  Config.put_thy Mirabelle.logfile "$log_file" #>
   Config.put_thy Mirabelle.timeout $timeout #>
   Config.put_thy Mirabelle.verbose $verbose #>
   Config.put_thy Mirabelle.start_line $start_line #>
@@ -99,7 +101,8 @@ close(OLD_FILE);
 
 my $thy_text = join("", @lines);
 my $old_len = length($thy_text);
-$thy_text =~ s/\btheory\b[^\n]*\s*\bimports\s/theory $new_thy_name\nimports "$setup_thy_name" /gm;
+$thy_text =~ s/(theory\s+)\"?$thy_name\"?/$1"$new_thy_name"/g;
+$thy_text =~ s/(imports)(\s+)/$1 "$setup_thy_name"$2/g;
 die "No 'imports' found" if length($thy_text) == $old_len;
 
 open(NEW_FILE, ">$new_thy_file") || die "Cannot create file '$new_thy_file'";
@@ -114,14 +117,21 @@ close(ROOT_FILE);
 
 # run isabelle
 
-my $r = system "$isabelle_home/bin/isabelle-process " .
+open(LOG_FILE, ">$log_file");
+print LOG_FILE "Run of $new_thy_file with:\n";
+foreach $name (@action_names) {
+  print LOG_FILE "  $name\n";
+}
+print LOG_FILE "\n\n";
+close(LOG_FILE);
+
+my $r = system "\"$ISABELLE_PROCESS\" " .
   "-e 'use \"$root_file\";' -q $mirabelle_logic" . "\n";
 
 
 # cleanup
 
 unlink $root_file;
-unlink $new_thy_file;
 unlink $setup_file;
 
 exit $r;
