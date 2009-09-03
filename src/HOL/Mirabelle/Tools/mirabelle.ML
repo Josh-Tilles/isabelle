@@ -4,14 +4,20 @@
 
 signature MIRABELLE =
 sig
-  type action
-  val register : string * action -> theory -> theory
-
+  (* configuration *)
   val logfile : string Config.T
   val timeout : int Config.T
   val start_line : int Config.T
   val end_line : int Config.T
+  val setup : theory -> theory
 
+  (* core *)
+  type action
+  val register : string * action -> theory -> theory
+  val step_hook : Toplevel.transition -> Toplevel.state -> Toplevel.state ->
+    unit
+
+  (* utility functions *)
   val goal_thm_of : Proof.state -> thm
   val can_apply : Time.time -> (Proof.context -> int -> tactic) ->
     Proof.state -> bool
@@ -19,22 +25,24 @@ sig
   val theorems_of_sucessful_proof : Toplevel.state option -> Thm.thm list
   val get_setting : (string * string) list -> string * string -> string
   val get_int_setting : (string * string) list -> string * int -> int
+  val cpu_time : ('a -> 'b) -> 'a -> 'b * int
 end
 
 
 
-signature MIRABELLE_EXT =
-sig
-  include MIRABELLE
-  val setup : theory -> theory
-  val step_hook : Toplevel.transition -> Toplevel.state -> Toplevel.state ->
-    unit
-end
-
-
-
-structure Mirabelle : MIRABELLE_EXT =
+structure Mirabelle : MIRABELLE =
 struct
+
+(* Mirabelle configuration *)
+
+val (logfile, setup1) = Attrib.config_string "mirabelle_logfile" ""
+val (timeout, setup2) = Attrib.config_int "mirabelle_timeout" 30
+val (start_line, setup3) = Attrib.config_int "mirabelle_start_line" 0
+val (end_line, setup4) = Attrib.config_int "mirabelle_end_line" ~1
+
+val setup = setup1 #> setup2 #> setup3 #> setup4
+
+
 
 (* Mirabelle core *)
 
@@ -52,13 +60,6 @@ structure Actions = TheoryDataFun
 
 val register = Actions.map o Symtab.update_new
 
-val (logfile, setup1) = Attrib.config_string "mirabelle_logfile" ""
-val (timeout, setup2) = Attrib.config_int "mirabelle_timeout" 30
-val (start_line, setup3) = Attrib.config_int "mirabelle_start_line" 0
-val (end_line, setup4) = Attrib.config_int "mirabelle_end_line" ~1
-
-val setup = setup1 #> setup2 #> setup3 #> setup4
-
 local
 
 fun log thy s =
@@ -67,23 +68,22 @@ fun log thy s =
   (* FIXME: with multithreading and parallel proofs enabled, we might need to
      encapsulate this inside a critical section *)
 
-fun log_block thy msg = log thy (msg ^ "\n------------------")
-fun log_action thy name msg = log_block thy (name ^ ": " ^ msg)
+fun log_sep thy = log thy "------------------"
 
-fun capture_exns logf f x =
-  let
-    fun f' x = f x
-      handle TimeLimit.TimeOut => logf "time out"
-           | ERROR msg => logf ("error: " ^ msg)
-  in (case try f' x of NONE => logf "exception" | _ => ()) end
+fun log_exn thy name (exn : exn) = log thy ("Unhandled exception in action " ^
+  quote name ^ ":\n" ^ PolyML.makestring exn)
+
+fun try_with f g x = SOME (g x)
+  handle (exn as Exn.Interrupt) => reraise exn | exn => (f exn; NONE)
+
+fun capture_exns thy name f x = (try_with (log_exn thy name) f x; log_sep thy)
 
 fun apply_actions thy info (pre, post, time) actions =
   let
-    val _ = log_block thy info
     fun apply (name, action) =
-      let val st = {pre=pre, post=post, timeout=time, log=log_action thy name}
-      in capture_exns (log_action thy name) action st end
-  in List.app apply actions end
+      {pre=pre, post=post, timeout=time, log=log thy}
+      |> capture_exns thy name action
+  in (log thy info; log_sep thy; List.app apply actions) end
 
 fun in_range _ _ NONE = true
   | in_range l r (SOME i) = (l <= i andalso (r < 0 orelse i <= r))
@@ -112,12 +112,12 @@ fun basic_hook tr pre post =
 
 end
 
-val blacklist = ["disable_pr", "enable_pr", "done", ".", "using", "txt"]
+val whitelist = ["apply", "by", "proof"]
 
 fun step_hook tr pre post =
  (* FIXME: might require wrapping into "interruptible" *)
   if can (Proof.assert_backward o Toplevel.proof_of) pre andalso
-     not (member (op =) blacklist (Toplevel.name_of tr))
+     member (op =) whitelist (Toplevel.name_of tr)
   then basic_hook tr (Toplevel.proof_of pre) (SOME post)
   else ()   (* FIXME: add theory_hook here *)
 
@@ -181,5 +181,12 @@ fun get_int_setting settings (key, default) =
     SOME (SOME i) => i
   | SOME NONE => error ("bad option: " ^ key)
   | NONE => default)
+
+fun cpu_time f x =
+  let
+    val start = start_timing ()
+    val result = Exn.capture (fn () => f x) ()
+    val time = Time.toMilliseconds (#cpu (end_timing start))
+  in (Exn.release result, time) end
 
 end
