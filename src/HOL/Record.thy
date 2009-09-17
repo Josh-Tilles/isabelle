@@ -5,22 +5,31 @@
 header {* Extensible records with structural subtyping *}
 
 theory Record
-imports Product_Type
+imports Product_Type IsTuple
 uses ("Tools/record.ML")
 begin
 
 lemma prop_subst: "s = t \<Longrightarrow> PROP P t \<Longrightarrow> PROP P s"
   by simp
 
-lemma rec_UNIV_I: "\<And>x. x\<in>UNIV \<equiv> True"
-  by simp
-
-lemma rec_True_simp: "(True \<Longrightarrow> PROP P) \<equiv> PROP P"
-  by simp
-
 lemma K_record_comp: "(\<lambda>x. c) \<circ> f = (\<lambda>x. c)" 
   by (simp add: comp_def)
 
+lemma meta_iffD2:
+  "\<lbrakk> PROP P \<equiv> PROP Q; PROP Q \<rbrakk> \<Longrightarrow> PROP P"
+  by simp
+
+lemma o_eq_dest_lhs:
+  "a o b = c \<Longrightarrow> a (b v) = c v"
+  by clarsimp
+
+lemma id_o_refl:
+  "id o f = f o id"
+  by simp
+
+lemma o_eq_id_dest:
+  "a o b = id o c \<Longrightarrow> a (b v) = c v"
+  by clarsimp
 
 subsection {* Concrete record syntax *}
 
