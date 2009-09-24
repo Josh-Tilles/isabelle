@@ -505,9 +505,10 @@ fun mk_eqn_liberal thy = Option.map (fn (thm, _) => (thm, is_linear thm))
 
 (*those following are permissive wrt. to overloaded constants!*)
 
+val head_eqn = dest_Const o fst o strip_comb o fst o Logic.dest_equals o Thm.plain_prop_of;
 fun const_typ_eqn thy thm =
   let
-    val (c, ty) = (dest_Const o fst o strip_comb o fst o Logic.dest_equals o Thm.plain_prop_of) thm;
+    val (c, ty) = head_eqn thm;
     val c' = AxClass.unoverload_const thy (c, ty);
   in (c', ty) end;
 
@@ -523,8 +524,8 @@ fun assert_eqns_const thy c eqns =
 
 fun same_typscheme thy thms =
   let
-    fun tvars_of t = rev (Term.add_tvars t []);
-    val vss = map (tvars_of o Thm.prop_of) thms;
+    fun tvars_of T = rev (Term.add_tvarsT T []);
+    val vss = map (tvars_of o snd o head_eqn) thms;
     fun inter_sorts vs =
       fold (curry (Sorts.inter_sort (Sign.classes_of thy)) o snd) vs [];
     val sorts = map_transpose inter_sorts vss;
@@ -547,7 +548,7 @@ fun all_eqns thy =
 fun case_certificate thm =
   let
     val ((head, raw_case_expr), cases) = (apfst Logic.dest_equals
-      o apsnd Logic.dest_conjunctions o Logic.dest_implies o Thm.prop_of) thm;
+      o apsnd Logic.dest_conjunctions o Logic.dest_implies o Thm.plain_prop_of) thm;
     val _ = case head of Free _ => true
       | Var _ => true
       | _ => raise TERM ("case_cert", []);
@@ -759,7 +760,7 @@ fun add_undefined c thy =
 end; (*struct*)
 
 
-(** type-safe interfaces for data depedent on executable code **)
+(** type-safe interfaces for data dependent on executable code **)
 
 functor Code_Data_Fun(Data: CODE_DATA_ARGS): CODE_DATA =
 struct
@@ -776,6 +777,51 @@ val data_op = (kind, Data, dest);
 val get = Code.get_data data_op;
 val change = Code.change_data data_op;
 fun change_yield thy = Code.change_yield_data data_op thy;
+
+end;
+
+(** datastructure to log definitions for preprocessing of the predicate compiler **)
+(* obviously a clone of Named_Thms *)
+
+signature PREDICATE_COMPILE_PREPROC_CONST_DEFS =
+sig
+  val get: Proof.context -> thm list
+  val add_thm: thm -> Context.generic -> Context.generic
+  val del_thm: thm -> Context.generic -> Context.generic
+  
+  val add_attribute : attribute
+  val del_attribute : attribute
+  
+  val add_attrib : Attrib.src
+  
+  val setup: theory -> theory
+end;
+
+structure Predicate_Compile_Preproc_Const_Defs : PREDICATE_COMPILE_PREPROC_CONST_DEFS =
+struct
+
+structure Data = GenericDataFun
+(
+  type T = thm list;
+  val empty = [];
+  val extend = I;
+  fun merge _ = Thm.merge_thms;
+);
+
+val get = Data.get o Context.Proof;
+
+val add_thm = Data.map o Thm.add_thm;
+val del_thm = Data.map o Thm.del_thm;
+
+val add_attribute = Thm.declaration_attribute add_thm;
+val del_attribute = Thm.declaration_attribute del_thm;
+
+val add_attrib = Attrib.internal (K add_attribute)
+
+val setup =
+  Attrib.setup (Binding.name "pred_compile_preproc") (Attrib.add_del add_attribute del_attribute)
+    ("declaration of definition for preprocessing of the predicate compiler") #>
+  PureThy.add_thms_dynamic (Binding.name "pred_compile_preproc", Data.get);
 
 end;
 
