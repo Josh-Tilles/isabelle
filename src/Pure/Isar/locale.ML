@@ -68,13 +68,16 @@ sig
   val intro_locales_tac: bool -> Proof.context -> thm list -> tactic
 
   (* Registrations and dependencies *)
+  val add_registration: string * morphism -> morphism * bool -> morphism -> theory -> theory
+  val amend_registration: string * morphism -> morphism * bool -> morphism -> theory -> theory
   val add_registration_eqs: string * morphism -> thm list -> morphism -> theory -> theory
-  val amend_registration: morphism -> string * morphism -> theory -> theory
+  val amend_registration_legacy: morphism -> string * morphism -> theory -> theory
   val add_dependency: string -> string * morphism -> morphism -> theory -> theory
 
   (* Diagnostic *)
   val print_locales: theory -> unit
   val print_locale: theory -> bool -> xstring -> unit
+  val print_registrations: theory -> string -> unit
 end;
 
 structure Locale: LOCALE =
@@ -177,6 +180,7 @@ fun dependencies_of thy name = the_locale thy name |>
 (** Identifiers: activated locales in theory or proof context **)
 
 fun ident_eq thy ((n: string, ts), (m, ss)) = (m = n) andalso Pattern.matchess thy (ss, ts);
+(* FIXME: this is ident_le, smaller term is more general *)
 
 local
 
@@ -212,13 +216,13 @@ local
 
 val roundup_bound = 120;
 
-fun add thy depth (name, morph) (deps, marked) =
+fun add thy depth export (name, morph) (deps, marked) =
   if depth > roundup_bound
   then error "Roundup bound exceeded (sublocale relation probably not terminating)."
   else
     let
       val dependencies = dependencies_of thy name;
-      val instance = instance_of thy name morph;
+      val instance = instance_of thy name (morph $> export);
     in
       if member (ident_eq thy) marked (name, instance)
       then (deps, marked)
@@ -226,7 +230,7 @@ fun add thy depth (name, morph) (deps, marked) =
         let
           val dependencies' = map (fn (name, morph') => (name, morph' $> morph)) dependencies;
           val marked' = (name, instance) :: marked;
-          val (deps', marked'') = fold_rev (add thy (depth + 1)) dependencies' ([], marked');
+          val (deps', marked'') = fold_rev (add thy (depth + 1) export) dependencies' ([], marked');
         in
           ((name, morph) :: deps' @ deps, marked'')
         end
@@ -234,14 +238,17 @@ fun add thy depth (name, morph) (deps, marked) =
 
 in
 
-fun roundup thy activate_dep (name, morph) (marked, input) =
+(* Note that while identifiers always have the external (exported) view, activate_dep is
+  is presented with the internal view. *)
+
+fun roundup thy activate_dep export (name, morph) (marked, input) =
   let
     (* Find all dependencies incuding new ones (which are dependencies enriching
       existing registrations). *)
-    val (dependencies, marked') = add thy 0 (name, morph) ([], []);
-    (* Filter out exisiting fragments. *)
+    val (dependencies, marked') = add thy 0 export (name, morph) ([], []);
+    (* Filter out fragments from marked; these won't be activated. *)
     val dependencies' = filter_out (fn (name, morph) =>
-      member (ident_eq thy) marked (name, instance_of thy name morph)) dependencies;
+      member (ident_eq thy) marked (name, instance_of thy name (morph $> export))) dependencies;
   in
     (merge (ident_eq thy) (marked, marked'), input |> fold_rev activate_dep dependencies')
   end;
@@ -285,7 +292,7 @@ fun activate_all name thy activ_elem transfer (marked, input) =
         else I);
     val activate = activate_notes activ_elem transfer thy;
   in
-    roundup thy activate (name, Morphism.identity) (marked, input')
+    roundup thy activate Morphism.identity (name, Morphism.identity) (marked, input')
   end;
 
 
@@ -294,13 +301,13 @@ fun activate_all name thy activ_elem transfer (marked, input) =
 fun activate_declarations dep = Context.proof_map (fn context =>
   let
     val thy = Context.theory_of context;
-  in roundup thy activate_decls dep (get_idents context, context) |-> put_idents end);
+  in roundup thy activate_decls Morphism.identity dep (get_idents context, context) |-> put_idents end);
 
 fun activate_facts dep context =
   let
     val thy = Context.theory_of context;
     val activate = activate_notes Element.init (Element.transfer_morphism o Context.theory_of) thy;
-  in roundup thy activate dep (get_idents context, context) |-> put_idents end;
+  in roundup thy activate Morphism.identity dep (get_idents context, context) |-> put_idents end;
 
 fun init name thy =
   activate_all name thy Element.init (Element.transfer_morphism o Context.theory_of)
@@ -325,28 +332,158 @@ fun print_locale thy show_facts raw_name =
 
 structure Registrations = TheoryDataFun
 (
-  type T = ((string * (morphism * morphism)) * stamp) list;
-    (* FIXME mixins need to be stamped *)
+  type T = ((string * (morphism * morphism)) * stamp) list *
     (* registrations, in reverse order of declaration *)
-  val empty = [];
+    (stamp * ((morphism * bool) * stamp) list) list;
+    (* alist of mixin lists, per list mixins in reverse order of declaration *)
+  val empty = ([], []);
   val extend = I;
   val copy = I;
-  fun merge _ data : T = Library.merge (eq_snd op =) data;
+  fun merge _ ((r1, m1), (r2, m2)) : T =
+    (Library.merge (eq_snd op =) (r1, r2),
+      AList.join (op =) (K (Library.merge (eq_snd op =))) (m1, m2));
     (* FIXME consolidate with dependencies, consider one data slot only *)
 );
 
-fun reg_morph ((name, (base, export)), _) = (name, base $> export);
+
+(* Primitive operations *)
+
+fun compose_mixins mixins =
+  fold_rev Morphism.compose (map (fst o fst) mixins) Morphism.identity;
+
+fun reg_morph mixins ((name, (base, export)), stamp) =
+  let val mix = the_default [] (AList.lookup (op =) mixins stamp) |> compose_mixins;
+  in (name, base $> mix $> export) end;
 
 fun these_registrations thy name = Registrations.get thy
-  |> filter (curry (op =) name o fst o fst)
-  |> map reg_morph;
+  |>> filter (curry (op =) name o fst o fst)
+  |-> (fn regs => fn mixins => map (reg_morph mixins) regs);
 
 fun all_registrations thy = Registrations.get thy
-  |> map reg_morph;
+  |-> (fn regs => fn mixins => map (reg_morph mixins) regs);
 
-fun amend_registration morph (name, base_morph) thy =
+fun get_mixins thy (name, morph) =
   let
-    val regs = map #1 (Registrations.get thy);
+    val (regs, mixins) = Registrations.get thy;
+  in
+    case find_first (fn ((name', (morph', export')), _) => ident_eq thy
+      ((name', instance_of thy name' (morph' $> export')), (name, instance_of thy name morph))) (rev regs) of
+      NONE => []
+    | SOME (_, stamp) => the_default [] (AList.lookup (op =) mixins stamp)
+  end;
+
+fun collect_mixins thy (name, morph) =
+  roundup thy (fn dep => fn mixins =>
+    merge (eq_snd op =) (mixins, get_mixins thy dep)) Morphism.identity (name, morph) ([], [])
+  |> snd |> filter (snd o fst);  (* only inheritable mixins *)
+
+fun activate_notes' activ_elem transfer thy export (name, morph) input =
+  let
+    val {notes, ...} = the_locale thy name;
+    fun activate ((kind, facts), _) input =
+      let
+        val mixin = collect_mixins thy (name, morph $> export) |> compose_mixins;
+        val facts' = facts |> Element.facts_map (Element.morph_ctxt (transfer input $> morph $> mixin $> export))
+      in activ_elem (Notes (kind, facts')) input end;
+  in
+    fold_rev activate notes input
+  end;
+
+fun activate_facts' export dep context =
+  let
+    val thy = Context.theory_of context;
+    val activate = activate_notes' Element.init (Element.transfer_morphism o Context.theory_of) thy export;
+  in roundup thy activate export dep (get_idents context, context) |-> put_idents end;
+
+
+(* Diagnostic *)
+
+fun print_registrations thy raw_name =
+  let
+    val name = intern thy raw_name;
+    val name' = extern thy name;
+    val ctxt = ProofContext.init thy;
+    fun prt_qual (qual, mand) = Pretty.str (qual ^ (if mand then "!" else "?"));
+    fun prt_quals qs = Pretty.separate "." (map prt_qual qs) |> Pretty.block;
+    val prt_term = Pretty.quote o Syntax.pretty_term ctxt;
+    fun prt_term' t = if !show_types
+      then Pretty.block [prt_term t, Pretty.brk 1, Pretty.str "::",
+        Pretty.brk 1, (Pretty.quote o Syntax.pretty_typ ctxt) (type_of t)]
+      else prt_term t;
+    fun prt_inst ts =
+      Pretty.block (Pretty.breaks (Pretty.str name' :: map prt_term' ts));
+    fun prt_reg (name, morph) =
+      let
+        val qs = Binding.name "x" |> Morphism.binding morph |> Binding.prefix_of;
+        val ts = instance_of thy name morph;
+      in
+        case qs of
+           [] => prt_inst ts
+         | qs => Pretty.block [prt_quals qs, Pretty.brk 1, Pretty.str ":",
+             Pretty.brk 1, prt_inst ts]
+      end;
+  in
+    (case these_registrations thy name of
+        [] => Pretty.str ("no interpretations")
+      | regs => Pretty.big_list "interpretations:" (map prt_reg regs))
+    |> Pretty.writeln
+  end;
+
+
+(* Add and extend registrations *)
+
+fun amend_registration (name, morph) mixin export thy =
+  let
+    val regs = Registrations.get thy |> fst;
+    val base = instance_of thy name (morph $> export);
+    fun match ((name', (morph', export')), _) =
+      name = name' andalso eq_list (op aconv) (base, instance_of thy name' (morph' $> export'));
+  in
+    case find_first match (rev regs) of
+        NONE => error ("No interpretation of locale " ^
+          quote (extern thy name) ^ " and\nparameter instantiation " ^
+          space_implode " " (map (quote o Syntax.string_of_term_global thy) base) ^
+          " available")
+      | SOME (_, stamp') => Registrations.map 
+          (apsnd (AList.map_default (op =) (stamp', []) (cons (mixin, stamp ())))) thy
+    (* FIXME deal with inheritance: propagate to existing children *)
+  end;
+
+(* Note that a registration that would be subsumed by an existing one will not be
+   generated, and it will not be possible to amend it. *)
+
+fun add_registration (name, base_morph) mixin export thy =
+  let
+    val base = instance_of thy name base_morph;
+  in
+    if member (ident_eq thy) (get_idents (Context.Theory thy)) (name, base)
+    then thy
+    else
+      let
+        fun add_reg (dep', morph') =
+          let
+            val mixins = collect_mixins thy (dep', morph' $> export);
+            val stamp = stamp ();
+          in
+            Registrations.map (apfst (cons ((dep', (morph', export)), stamp))
+              #> apsnd (cons (stamp, mixins)))
+          end
+      in
+        (get_idents (Context.Theory thy), thy)
+        (* add new registrations with inherited mixins *)
+        |> roundup thy add_reg export (name, base_morph)
+        |> snd
+        (* add mixin *)
+        |> amend_registration (name, base_morph) mixin export
+        (* activate import hierarchy as far as not already active *)
+        |> Context.theory_map (activate_facts' export (name, base_morph))
+      end
+  end;
+
+fun amend_registration_legacy morph (name, base_morph) thy =
+  (* legacy, never modify base morphism *)
+  let
+    val regs = Registrations.get thy |> fst |> map fst;
     val base = instance_of thy name base_morph;
     fun match (name', (morph', _)) =
       name = name' andalso eq_list (op aconv) (base, instance_of thy name' morph');
@@ -357,7 +494,7 @@ fun amend_registration morph (name, base_morph) thy =
         space_implode " " (map (quote o Syntax.string_of_term_global thy) base) ^ " available")
       else ();
   in
-    Registrations.map (nth_map (length regs - 1 - i)
+    Registrations.map ((apfst o nth_map (length regs - 1 - i))
       (fn ((name, (base, export)), stamp) => ((name, (base $> morph, export)), stamp))) thy
   end;
 
@@ -368,7 +505,7 @@ fun add_registration_eqs (dep, proto_morph) eqns export thy =
   in
     (get_idents (Context.Theory thy), thy)
     |> roundup thy (fn (dep', morph') =>
-        Registrations.map (cons ((dep', (morph', export)), stamp ()))) (dep, morph)
+        Registrations.map (apfst (cons ((dep', (morph', export)), stamp ())))) export (dep, morph)
     |> snd
     |> Context.theory_map (activate_facts (dep, morph $> export))
   end;
@@ -379,8 +516,9 @@ fun add_registration_eqs (dep, proto_morph) eqns export thy =
 fun add_dependency loc (dep, morph) export thy =
   thy
   |> (change_locale loc o apsnd) (cons ((dep, morph $> export), stamp ()))
-  |> (fn thy => fold_rev (Context.theory_map o activate_facts)
+  |> (fn thy => fold_rev (Context.theory_map o activate_facts' export)
       (all_registrations thy) thy);
+  (* FIXME deal with inheritance: propagate mixins to new children *)
 
 
 (*** Storing results ***)
