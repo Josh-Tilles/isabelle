@@ -537,8 +537,8 @@ fun isnum x = x mem_string ["0","1","2","3","4","5","6","7","8","9"]
  fun token s =
   Scan.repeat ($$ " ") |-- word s --| Scan.repeat ($$ " ")
  val numeral = Scan.one isnum
- val decimalint = Scan.bulk numeral >> (rat_of_string o implode)
- val decimalfrac = Scan.bulk numeral
+ val decimalint = Scan.repeat numeral >> (rat_of_string o implode)
+ val decimalfrac = Scan.repeat numeral
     >> (fn s => rat_of_string(implode s) // pow10 (length s))
  val decimalsig =
     decimalint -- Scan.option (Scan.$$ "." |-- decimalfrac)
@@ -564,7 +564,9 @@ fun emptyin def xs = if null xs then (def,xs) else Scan.fail xs
 (* Parse back csdp output.                                                      *)
 
  fun ignore inp = ((),[])
- fun csdpoutput inp =  ((decimal -- Scan.bulk (Scan.$$ " " |-- Scan.option decimal) >> (fn (h,to) => map_filter I ((SOME h)::to))) --| ignore >> vector_of_list) inp
+ fun csdpoutput inp =
+   ((decimal -- Scan.repeat (Scan.$$ " " |-- Scan.option decimal) >>
+    (fn (h,to) => map_filter I ((SOME h)::to))) --| ignore >> vector_of_list) inp
  val parse_csdpoutput = mkparser csdpoutput
 
 (* Run prover on a problem in linear form.                       *)
@@ -965,8 +967,8 @@ fun enumerate_monomials d vars =
  else if d = 0 then [FuncUtil.Ctermfunc.empty]
  else if null vars then [monomial_1] else
  let val alts =
-  map (fn k => let val oths = enumerate_monomials (d - k) (tl vars)
-               in map (fn ks => if k = 0 then ks else FuncUtil.Ctermfunc.update (hd vars, k) ks) oths end) (0 upto d)
+  map_range (fn k => let val oths = enumerate_monomials (d - k) (tl vars)
+               in map (fn ks => if k = 0 then ks else FuncUtil.Ctermfunc.update (hd vars, k) ks) oths end) (d + 1)
  in flat alts
  end;
 
@@ -1202,9 +1204,9 @@ fun real_nonlinear_prover proof_method ctxt =
    val eq0 = map (poly_of_term o Thm.dest_arg1 o concl) eqs
    val le0 = map (poly_of_term o Thm.dest_arg o concl) les
    val lt0 = map (poly_of_term o Thm.dest_arg o concl) lts
-   val eqp0 = map (fn (t,i) => (t,RealArith.Axiom_eq i)) (eq0 ~~ (0 upto (length eq0 - 1)))
-   val lep0 = map (fn (t,i) => (t,RealArith.Axiom_le i)) (le0 ~~ (0 upto (length le0 - 1)))
-   val ltp0 = map (fn (t,i) => (t,RealArith.Axiom_lt i)) (lt0 ~~ (0 upto (length lt0 - 1)))
+   val eqp0 = map_index (fn (i, t) => (t,RealArith.Axiom_eq i)) eq0
+   val lep0 = map_index (fn (i, t) => (t,RealArith.Axiom_le i)) le0
+   val ltp0 = map_index (fn (i, t) => (t,RealArith.Axiom_lt i)) lt0
    val (keq,eq) = List.partition (fn (p,_) => multidegree p = 0) eqp0
    val (klep,lep) = List.partition (fn (p,_) => multidegree p = 0) lep0
    val (kltp,ltp) = List.partition (fn (p,_) => multidegree p = 0) ltp0
