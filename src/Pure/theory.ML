@@ -19,7 +19,7 @@ sig
   val checkpoint: theory -> theory
   val copy: theory -> theory
   val requires: theory -> string -> string -> unit
-  val axiom_space: theory -> NameSpace.T
+  val axiom_space: theory -> Name_Space.T
   val axiom_table: theory -> term Symtab.table
   val axioms_of: theory -> (string * term) list
   val all_axioms_of: theory -> (string * term) list
@@ -80,29 +80,27 @@ fun apply_wrappers (wrappers: wrapper list) =
   perhaps (perhaps_loop (perhaps_apply (map fst wrappers)));
 
 datatype thy = Thy of
- {axioms: term NameSpace.table,
+ {axioms: term Name_Space.table,
   defs: Defs.T,
   wrappers: wrapper list * wrapper list};
 
 fun make_thy (axioms, defs, wrappers) = Thy {axioms = axioms, defs = defs, wrappers = wrappers};
 
-fun err_dup_axm dup = error ("Duplicate axiom: " ^ quote dup);
-
 structure ThyData = TheoryDataFun
 (
   type T = thy;
-  val empty = make_thy (NameSpace.empty_table, Defs.empty, ([], []));
+  val empty_axioms = Name_Space.empty_table "axiom";
+  val empty = make_thy (empty_axioms, Defs.empty, ([], []));
   val copy = I;
 
-  fun extend (Thy {axioms = _, defs, wrappers}) =
-    make_thy (NameSpace.empty_table, defs, wrappers);
+  fun extend (Thy {axioms = _, defs, wrappers}) = make_thy (empty_axioms, defs, wrappers);
 
   fun merge pp (thy1, thy2) =
     let
       val Thy {axioms = _, defs = defs1, wrappers = (bgs1, ens1)} = thy1;
       val Thy {axioms = _, defs = defs2, wrappers = (bgs2, ens2)} = thy2;
 
-      val axioms' = NameSpace.empty_table;
+      val axioms' = empty_axioms;
       val defs' = Defs.merge pp (defs1, defs2);
       val bgs' = Library.merge (eq_snd op =) (bgs1, bgs2);
       val ens' = Library.merge (eq_snd op =) (ens1, ens2);
@@ -166,7 +164,7 @@ fun cert_axm thy (b, raw_tm) =
 
 fun read_axm thy (b, str) =
   cert_axm thy (b, Syntax.read_prop_global thy str) handle ERROR msg =>
-    cat_error msg ("The error(s) above occurred in axiom: " ^ quote (Binding.str_of b));
+    cat_error msg ("The error(s) above occurred in axiom " ^ quote (Binding.str_of b));
 
 
 (* add_axioms(_i) *)
@@ -176,8 +174,7 @@ local
 fun gen_add_axioms prep_axm raw_axms thy = thy |> map_axioms (fn axioms =>
   let
     val axms = map (apsnd Logic.varify o prep_axm thy) raw_axms;
-    val axioms' = fold (snd oo NameSpace.define (Sign.naming_of thy)) axms axioms
-      handle Symtab.DUP dup => err_dup_axm dup;
+    val axioms' = fold (#2 oo Name_Space.define true (Sign.naming_of thy)) axms axioms;
   in axioms' end);
 
 in
