@@ -50,6 +50,7 @@ imports
   Ramsey
   Reflection
   RBT
+  SML_Quickcheck
   State_Monad
   Sum_Of_Squares
   Univ_Poly
