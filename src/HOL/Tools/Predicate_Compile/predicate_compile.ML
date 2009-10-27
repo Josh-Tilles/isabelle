@@ -99,7 +99,7 @@ fun preprocess options const thy =
   let
     val _ = print_step options "Fetching definitions from theory..."
     val table = Predicate_Compile_Data.make_const_spec_table thy
-    val gr = Predicate_Compile_Data.obtain_specification_graph thy table const
+    val gr = Predicate_Compile_Data.obtain_specification_graph options thy table const
     val gr = Graph.subgraph (member (op =) (Graph.all_succs gr [const])) gr
   in fold_rev (preprocess_strong_conn_constnames options gr)
     (Graph.strong_conn gr) thy
@@ -114,6 +114,7 @@ fun extract_options ((modes, raw_options), const) =
       show_steps = chk "show_steps",
       show_intermediate_results = chk "show_intermediate_results",
       show_proof_trace = chk "show_proof_trace",
+      show_modes = chk "show_modes",
       show_mode_inference = chk "show_mode_inference",
       show_compilation = chk "show_compilation",
       skip_proof = chk "skip_proof",
@@ -146,7 +147,7 @@ fun code_pred_cmd ((modes, raw_options), raw_const) lthy =
 
 val setup = Predicate_Compile_Fun.setup_oracle #> Predicate_Compile_Core.setup
 
-val bool_options = ["show_steps", "show_intermediate_results", "show_proof_trace",
+val bool_options = ["show_steps", "show_intermediate_results", "show_proof_trace", "show_modes",
   "show_mode_inference", "show_compilation", "skip_proof", "inductify", "rpred", "depth_limited"]
 
 local structure P = OuterParse
