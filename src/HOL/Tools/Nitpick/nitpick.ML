@@ -62,15 +62,15 @@ end;
 structure Nitpick : NITPICK =
 struct
 
-open NitpickUtil
-open NitpickHOL
-open NitpickMono
-open NitpickScope
-open NitpickPeephole
-open NitpickRep
-open NitpickNut
-open NitpickKodkod
-open NitpickModel
+open Nitpick_Util
+open Nitpick_HOL
+open Nitpick_Mono
+open Nitpick_Scope
+open Nitpick_Peephole
+open Nitpick_Rep
+open Nitpick_Nut
+open Nitpick_Kodkod
+open Nitpick_Model
 
 type params = {
   cards_assigns: (typ option * int list) list,
@@ -355,21 +355,21 @@ fun pick_them_nits_in_term deadline state (params : params) auto orig_assm_ts
     val effective_sat_solver =
       if sat_solver <> "smart" then
         if need_incremental andalso
-           not (sat_solver mem KodkodSAT.configured_sat_solvers true) then
+           not (sat_solver mem Kodkod_SAT.configured_sat_solvers true) then
           (print_m (K ("An incremental SAT solver is required: \"SAT4J\" will \
                        \be used instead of " ^ quote sat_solver ^ "."));
            "SAT4J")
         else
           sat_solver
       else
-        KodkodSAT.smart_sat_solver_name need_incremental
+        Kodkod_SAT.smart_sat_solver_name need_incremental
     val _ =
       if sat_solver = "smart" then
         print_v (fn () => "Using SAT solver " ^ quote effective_sat_solver ^
                           ". The following" ^
                           (if need_incremental then " incremental " else " ") ^
                           "solvers are configured: " ^
-                          commas (map quote (KodkodSAT.configured_sat_solvers
+                          commas (map quote (Kodkod_SAT.configured_sat_solvers
                                                        need_incremental)) ^ ".")
       else
         ()
@@ -439,7 +439,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto orig_assm_ts
         val formula = fold (fold s_and) [def_fs, nondef_fs] core_f
         val comment = (if liberal then "liberal" else "conservative") ^ "\n" ^
                       PrintMode.setmp [] multiline_string_for_scope scope
-        val kodkod_sat_solver = KodkodSAT.sat_solver_spec effective_sat_solver
+        val kodkod_sat_solver = Kodkod_SAT.sat_solver_spec effective_sat_solver
                                 |> snd
         val delay = if liberal then
                       Option.map (fn time => Time.- (time, Time.now ()))
@@ -483,7 +483,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto orig_assm_ts
                defs = nondef_fs @ def_fs @ declarative_axioms})
       end
       handle LIMIT (loc, msg) =>
-             if loc = "NitpickKodkod.check_arity"
+             if loc = "Nitpick_Kodkod.check_arity"
                 andalso not (Typtab.is_empty ofs) then
                problem_for_scope liberal
                    {ext_ctxt = ext_ctxt, card_assigns = card_assigns,
@@ -626,7 +626,18 @@ fun pick_them_nits_in_term deadline state (params : params) auto orig_assm_ts
         else
           case Kodkod.solve_any_problem overlord deadline max_threads
                                         max_solutions (map fst problems) of
-            Kodkod.Normal ([], unsat_js) =>
+            Kodkod.NotInstalled =>
+            (print_m (fn () =>
+                         "Nitpick requires the external Java program Kodkodi. \
+                         \To install it, download the package from Isabelle's \
+                         \web page and add the \"kodkodi-x.y.z\" directory's \
+                         \full path to \"" ^
+                         Path.implode (Path.expand (Path.appends
+                             (Path.variable "ISABELLE_HOME" ::
+                              (map Path.basic ["etc", "components"])))) ^
+                         "\".");
+             (max_potential, max_genuine, donno + 1))
+          | Kodkod.Normal ([], unsat_js) =>
             (update_checked_problems problems unsat_js;
              (max_potential, max_genuine, donno))
           | Kodkod.Normal (sat_ps, unsat_js) =>
@@ -785,7 +796,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto orig_assm_ts
     (* int -> int -> scope list -> int * int * int -> Kodkod.outcome *)
     fun run_batches _ _ [] (max_potential, max_genuine, donno) =
         if donno > 0 andalso max_genuine > 0 then
-          (print_m (fn () => excipit "ran out of resources"); "unknown")
+          (print_m (fn () => excipit "ran into difficulties"); "unknown")
         else if max_genuine = original_max_genuine then
           if max_potential = original_max_potential then
             (print_m (K ("Nitpick found no " ^ word_model ^ ".")); "none")

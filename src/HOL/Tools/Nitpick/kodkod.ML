@@ -157,6 +157,7 @@ sig
   type raw_bound = n_ary_index * int list list
 
   datatype outcome =
+    NotInstalled |
     Normal of (int * raw_bound list) list * int list |
     TimedOut of int list |
     Interrupted of int list option |
@@ -301,6 +302,7 @@ type problem = {
 type raw_bound = n_ary_index * int list list
 
 datatype outcome =
+  NotInstalled |
   Normal of (int * raw_bound list) list * int list |
   TimedOut of int list |
   Interrupted of int list option |
@@ -1043,6 +1045,10 @@ fun solve_any_problem overlord deadline max_threads max_solutions problems =
             let
               val code =
                 system ("env CLASSPATH=\"$KODKODI_CLASSPATH:$CLASSPATH\" \
+                        \JAVA_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
+                        \$JAVA_LIBRARY_PATH\" \
+                        \LD_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
+                        \$LD_LIBRARY_PATH\" \
                         \\"$ISABELLE_TOOL\" java \
                         \de.tum.in.isabelle.Kodkodi.Kodkodi" ^
                         (if ms >= 0 then " -max-msecs " ^ Int.toString ms
@@ -1065,6 +1071,10 @@ fun solve_any_problem overlord deadline max_threads max_solutions problems =
               if null ps then
                 if code = 2 then
                   TimedOut js
+                else if first_error |> Substring.full
+                        |> Substring.position "NoClassDefFoundError" |> snd
+                        |> Substring.isEmpty |> not then
+                  NotInstalled
                 else if first_error <> "" then
                   Error (first_error |> perhaps (try (unsuffix "."))
                                      |> perhaps (try (unprefix "Error: ")), js)
