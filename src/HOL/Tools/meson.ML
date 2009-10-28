@@ -323,7 +323,7 @@ fun apply_skolem_ths (th, rls) =
   Strips universal quantifiers and breaks up conjunctions.
   Eliminates existential quantifiers using skoths: Skolemization theorems.*)
 fun cnf skoths ctxt (th,ths) =
-  let val ctxtr = Unsynchronized.ref ctxt
+  let val ctxtr = Unsynchronized.ref ctxt   (* FIXME ??? *)
       fun cnf_aux (th,ths) =
         if not (can HOLogic.dest_Trueprop (prop_of th)) then ths (*meta-level: ignore*)
         else if not (has_conns ["All","Ex","op &"] (prop_of th))
@@ -462,14 +462,13 @@ fun rhyps (Const("==>",_) $ (Const("Trueprop",_) $ A) $ phi,
 (** Detecting repeated assumptions in a subgoal **)
 
 (*The stringtree detects repeated assumptions.*)
-fun ins_term (net,t) = Net.insert_term (op aconv) (t,t) net;
+fun ins_term t net = Net.insert_term (op aconv) (t, t) net;
 
 (*detects repetitions in a list of terms*)
 fun has_reps [] = false
   | has_reps [_] = false
   | has_reps [t,u] = (t aconv u)
-  | has_reps ts = (Library.foldl ins_term (Net.empty, ts);  false)
-                  handle Net.INSERT => true;
+  | has_reps ts = (fold ins_term ts Net.empty; false) handle Net.INSERT => true;
 
 (*Like TRYALL eq_assume_tac, but avoids expensive THEN calls*)
 fun TRYING_eq_assume_tac 0 st = Seq.single st

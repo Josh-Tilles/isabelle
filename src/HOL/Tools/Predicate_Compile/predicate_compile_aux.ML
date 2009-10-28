@@ -1,7 +1,10 @@
-(* Author: Lukas Bulwahn, TU Muenchen
+(*  Title:      HOL/Tools/Predicate_Compile/predicate_compile_aux.ML
+    Author:     Lukas Bulwahn, TU Muenchen
 
-Auxilary functions for predicate compiler
+Auxilary functions for predicate compiler.
 *)
+
+(* FIXME proper signature *)
 
 structure Predicate_Compile_Aux =
 struct
@@ -135,9 +138,10 @@ fun equals_conv lhs_cv rhs_cv ct =
 datatype options = Options of {  
   expected_modes : (string * int list list) option,
   show_steps : bool,
-  show_mode_inference : bool,
   show_proof_trace : bool,
   show_intermediate_results : bool,
+  show_mode_inference : bool,
+  show_modes : bool,
   show_compilation : bool,
   skip_proof : bool,
 
@@ -148,9 +152,10 @@ datatype options = Options of {
 
 fun expected_modes (Options opt) = #expected_modes opt
 fun show_steps (Options opt) = #show_steps opt
-fun show_mode_inference (Options opt) = #show_mode_inference opt
 fun show_intermediate_results (Options opt) = #show_intermediate_results opt
 fun show_proof_trace (Options opt) = #show_proof_trace opt
+fun show_modes (Options opt) = #show_modes opt
+fun show_mode_inference (Options opt) = #show_mode_inference opt
 fun show_compilation (Options opt) = #show_compilation opt
 fun skip_proof (Options opt) = #skip_proof opt
 
@@ -163,6 +168,7 @@ val default_options = Options {
   show_steps = false,
   show_intermediate_results = false,
   show_proof_trace = false,
+  show_modes = false,
   show_mode_inference = false,
   show_compilation = false,
   skip_proof = false,
@@ -230,7 +236,5 @@ fun expand_tuples thy intro =
   in
     intro'''''
   end
-
-
 
 end;
