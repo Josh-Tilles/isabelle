@@ -138,7 +138,6 @@ $(OUT)/HOL-Base: base.ML $(BASE_DEPENDENCIES)
 PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES)\
   Complete_Lattice.thy \
   Datatype.thy \
-  Divides.thy \
   Extraction.thy \
   Finite_Set.thy \
   Fun.thy \
@@ -224,7 +223,6 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES)\
   Tools/sat_funcs.ML \
   Tools/sat_solver.ML \
   Tools/split_rule.ML \
-  Tools/transfer.ML \
   Tools/typecopy.ML \
   Tools/typedef_codegen.ML \
   Tools/typedef.ML \
@@ -246,6 +244,7 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   ATP_Linkup.thy \
   Code_Evaluation.thy \
   Code_Numeral.thy \
+  Divides.thy \
   Equiv_Relations.thy \
   Groebner_Basis.thy \
   Hilbert_Choice.thy \
@@ -255,6 +254,7 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Main.thy \
   Map.thy \
   Nat_Numeral.thy \
+  Nat_Transfer.thy \
   Presburger.thy \
   Predicate_Compile.thy \
   Quickcheck.thy \
@@ -276,6 +276,7 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Tools/Groebner_Basis/misc.ML \
   Tools/Groebner_Basis/normalizer.ML \
   Tools/Groebner_Basis/normalizer_data.ML \
+  Tools/choice_specification.ML \
   Tools/int_arith.ML \
   Tools/list_code.ML \
   Tools/meson.ML \
@@ -299,7 +300,6 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Tools/Qelim/presburger.ML \
   Tools/Qelim/qelim.ML \
   Tools/recdef.ML \
-  Tools/choice_specification.ML \
   Tools/res_atp.ML \
   Tools/res_axioms.ML \
   Tools/res_clause.ML \
@@ -307,6 +307,7 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Tools/res_reconstruct.ML \
   Tools/string_code.ML \
   Tools/string_syntax.ML \
+  Tools/transfer.ML \
   Tools/TFL/casesplit.ML \
   Tools/TFL/dcterm.ML \
   Tools/TFL/post.ML \
@@ -334,7 +335,6 @@ $(OUT)/HOL: ROOT.ML $(MAIN_DEPENDENCIES) \
   Log.thy \
   Lubs.thy \
   MacLaurin.thy \
-  Nat_Transfer.thy \
   NthRoot.thy \
   PReal.thy \
   Parity.thy \
@@ -1069,6 +1069,7 @@ $(OUT)/HOL-Multivariate_Analysis: $(OUT)/HOL Multivariate_Analysis/ROOT.ML \
   Multivariate_Analysis/Convex_Euclidean_Space.thy
 	@cd Multivariate_Analysis; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL HOL-Multivariate_Analysis
 
+
 ## HOL-Probability
 
 HOL-Probability: HOL $(LOG)/HOL-Probability.gz
@@ -1079,7 +1080,8 @@ $(LOG)/HOL-Probability.gz: $(OUT)/HOL Probability/ROOT.ML \
   Probability/SeriesPlus.thy \
   Probability/Caratheodory.thy \
   Probability/Measure.thy
-	$(ISABELLE_TOOL) usedir -g true $(OUT)/HOL Probability
+	@$(ISABELLE_TOOL) usedir -g true $(OUT)/HOL Probability
+
 
 ## HOL-Nominal
 
