@@ -18,8 +18,6 @@ val fail_safe_mode = true
 
 open Predicate_Compile_Aux;
 
-val priority = tracing;
-
 (* Some last processing *)
 
 fun remove_pointless_clauses intro =
@@ -27,14 +25,12 @@ fun remove_pointless_clauses intro =
     []
   else [intro]
 
-fun tracing s = ()
-
 fun print_intross options thy msg intross =
   if show_intermediate_results options then
-   Output.tracing (msg ^ 
-    (space_implode "\n" (map 
-      (fn (c, intros) => "Introduction rule(s) of " ^ c ^ ":\n" ^
-         commas (map (Display.string_of_thm_global thy) intros)) intross)))
+    tracing (msg ^ 
+      (space_implode "\n" (map 
+        (fn (c, intros) => "Introduction rule(s) of " ^ c ^ ":\n" ^
+           commas (map (Display.string_of_thm_global thy) intros)) intross)))
   else ()
       
 fun print_specs thy specs =
@@ -122,7 +118,7 @@ fun extract_options ((modes, raw_options), const) =
       show_compilation = chk "show_compilation",
       skip_proof = chk "skip_proof",
       inductify = chk "inductify",
-      rpred = chk "rpred",
+      random = chk "random",
       depth_limited = chk "depth_limited"
     }
   end
@@ -151,7 +147,7 @@ fun code_pred_cmd ((modes, raw_options), raw_const) lthy =
 val setup = Predicate_Compile_Fun.setup_oracle #> Predicate_Compile_Core.setup
 
 val bool_options = ["show_steps", "show_intermediate_results", "show_proof_trace", "show_modes",
-  "show_mode_inference", "show_compilation", "skip_proof", "inductify", "rpred", "depth_limited"]
+  "show_mode_inference", "show_compilation", "skip_proof", "inductify", "random", "depth_limited"]
 
 local structure P = OuterParse
 in

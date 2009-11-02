@@ -254,7 +254,7 @@ val modes_of = (map fst) o #functions oo the_pred_data
 
 val depth_limited_modes_of = (map fst) o #depth_limited_functions oo the_pred_data
 
-val rpred_modes_of = (map fst) o #generators oo the_pred_data
+val random_modes_of = (map fst) o #generators oo the_pred_data
   
 fun all_modes_of thy = map (fn name => (name, modes_of thy name)) (all_preds_of thy) 
 
@@ -301,8 +301,6 @@ fun the_depth_limited_function_data thy name mode = case lookup_depth_limited_fu
    | SOME data => data
 
 val depth_limited_function_name_of = #name ooo the_depth_limited_function_data
-
-(*val generator_modes_of = (map fst) o #generators oo the_pred_data*)
 
 (* diagnostic display functions *)
 
@@ -1586,7 +1584,7 @@ fun generator_funT_of (iss, is) T =
       (mk_predT RandomPredCompFuns.compfuns (HOLogic.mk_tupleT outargTs))
   end
 
-fun rpred_create_definitions preds (name, modes) thy =
+fun random_create_definitions preds (name, modes) thy =
   let
     val T = AList.lookup (op =) preds name |> the
     fun create_definition mode thy =
@@ -2020,6 +2018,8 @@ fun prove_by_skip options thy _ _ _ _ compiled_terms =
   map_preds_modes (fn pred => fn mode => fn t => Drule.standard (Skip_Proof.make_thm thy t))
     compiled_terms
 
+(* preparation of introduction rules into special datastructures *)
+
 fun dest_prem thy params t =
   (case strip_comb t of
     (v as Free _, ts) => if v mem params then Prem (ts, v) else Sidecond t
@@ -2093,6 +2093,8 @@ fun prepare_intrs thy prednames intros =
     val all_modes = map (fn (s, T) => (s, modes_of_typ T)) preds
   in (preds, nparams, all_vs, param_vs, extra_modes, clauses, all_modes) end;
 
+(* sanity check of introduction rules *)
+
 fun check_format_of_intro_rule thy intro =
   let
     val concl = Logic.strip_imp_concl (prop_of intro)
@@ -2134,6 +2136,40 @@ fun check_intros_elim_match thy prednames =
   in forall check prednames end
 *)
 
+(* create code equation *)
+
+fun add_code_equations thy nparams preds result_thmss =
+  let
+    fun add_code_equation ((predname, T), (pred, result_thms)) =
+      let
+        val full_mode = (replicate nparams NONE,
+          map (rpair NONE) (1 upto (length (binder_types T) - nparams)))
+      in
+        if member (op =) (modes_of thy predname) full_mode then
+          let
+            val Ts = binder_types T
+            val arg_names = Name.variant_list []
+              (map (fn i => "x" ^ string_of_int i) (1 upto length Ts))
+            val args = map Free (arg_names ~~ Ts)
+            val predfun = Const (predfun_name_of thy predname full_mode,
+              Ts ---> PredicateCompFuns.mk_predT @{typ unit})
+            val rhs = PredicateCompFuns.mk_Eval (list_comb (predfun, args), @{term "Unity"})
+            val eq_term = HOLogic.mk_Trueprop
+              (HOLogic.mk_eq (list_comb (Const (predname, T), args), rhs))
+            val def = predfun_definition_of thy predname full_mode
+            val tac = fn {...} => Simplifier.simp_tac
+              (HOL_basic_ss addsimps [def, @{thm eval_pred}]) 1
+            val eq = Goal.prove (ProofContext.init thy) arg_names [] eq_term tac
+          in
+            (pred, result_thms @ [eq])
+          end
+        else
+          (pred, result_thms)
+      end
+  in
+    map add_code_equation (preds ~~ result_thmss)
+  end
+
 (** main function of predicate compiler **)
 
 datatype steps = Steps of
@@ -2147,6 +2183,8 @@ datatype steps = Steps of
   prove : options -> theory -> (string * (term list * indprem list) list) list
     -> (string * typ) list -> (string * mode list) list
     -> moded_clause list pred_mode_table -> term pred_mode_table -> thm pred_mode_table,
+  add_code_equations : theory -> int -> (string * typ) list
+    -> (string * thm list) list -> (string * thm list) list,
   are_not_defined : theory -> string list -> bool,
   qname : bstring
   }
@@ -2176,14 +2214,15 @@ fun add_equations_of steps options prednames thy =
     val _ = print_step options "Proving equations..."
     val result_thms = #prove (dest_steps steps) options thy' clauses preds (extra_modes @ modes)
       moded_clauses compiled_terms
+    val result_thms' = #add_code_equations (dest_steps steps) thy' nparams preds
+      (maps_modes result_thms)
     val qname = #qname (dest_steps steps)
     val attrib = fn thy => Attrib.attribute_i thy (Attrib.internal (K (Thm.declaration_attribute
       (fn thm => Context.mapping (Code.add_eqn thm) I))))
     val thy'' = fold (fn (name, result_thms) => fn thy => snd (PureThy.add_thmss
       [((Binding.qualify true (Long_Name.base_name name) (Binding.name qname), result_thms),
         [attrib thy ])] thy))
-      (maps_modes result_thms) thy'
-      |> Theory.checkpoint
+      result_thms' thy' |> Theory.checkpoint
   in
     thy''
   end
@@ -2260,7 +2299,7 @@ val depth_limited_comp_modifiers = Comp_Mod.Comp_Modifiers
     in [polarity', depth'] end
   }
 
-val rpred_comp_modifiers = Comp_Mod.Comp_Modifiers
+val random_comp_modifiers = Comp_Mod.Comp_Modifiers
   {const_name_of = generator_name_of,
   funT_of = K generator_funT_of : (compilation_funs -> mode -> typ -> typ),
   additional_arguments = fn names => [Free (Name.variant names "size", @{typ code_numeral})],
@@ -2274,6 +2313,7 @@ val add_equations = gen_add_equations
   create_definitions = create_definitions,
   compile_preds = compile_preds predicate_comp_modifiers PredicateCompFuns.compfuns,
   prove = prove,
+  add_code_equations = add_code_equations,
   are_not_defined = fn thy => forall (null o modes_of thy),
   qname = "equation"})
 
@@ -2282,16 +2322,18 @@ val add_depth_limited_equations = gen_add_equations
   create_definitions = create_definitions_of_depth_limited_functions,
   compile_preds = compile_preds depth_limited_comp_modifiers PredicateCompFuns.compfuns,
   prove = prove_by_skip,
+  add_code_equations = K (K (K I)),
   are_not_defined = fn thy => forall (null o depth_limited_modes_of thy),
   qname = "depth_limited_equation"})
 
 val add_quickcheck_equations = gen_add_equations
   (Steps {infer_modes = infer_modes_with_generator,
-  create_definitions = rpred_create_definitions,
-  compile_preds = compile_preds rpred_comp_modifiers RandomPredCompFuns.compfuns,
+  create_definitions = random_create_definitions,
+  compile_preds = compile_preds random_comp_modifiers RandomPredCompFuns.compfuns,
   prove = prove_by_skip,
-  are_not_defined = fn thy => forall (null o rpred_modes_of thy),
-  qname = "rpred_equation"})
+  add_code_equations = K (K (K I)),
+  are_not_defined = fn thy => forall (null o random_modes_of thy),
+  qname = "random_equation"})
 
 (** user interface **)
 
@@ -2345,7 +2387,7 @@ fun generic_code_pred prep_const options raw_const lthy =
           (ProofContext.init (ProofContext.theory_of goal_ctxt)) (map the_single thms)
       in
         goal_ctxt |> LocalTheory.theory (fold set_elim global_thms #>
-          (if is_rpred options then
+          (if is_random options then
             (add_equations options [const] #>
             add_quickcheck_equations options [const])
            else if is_depth_limited options then
@@ -2395,7 +2437,7 @@ fun analyze_compr thy compfuns (depth_limit, random) t_compr =
       | SOME d => [@{term "True"}, HOLogic.mk_number @{typ "code_numeral"} d]
     val comp_modifiers =
       case depth_limit of NONE => 
-      (if random then rpred_comp_modifiers else predicate_comp_modifiers) | SOME _ => depth_limited_comp_modifiers
+      (if random then random_comp_modifiers else predicate_comp_modifiers) | SOME _ => depth_limited_comp_modifiers
     val mk_fun_of = if random then mk_generator_of else
       if (is_some depth_limit) then mk_depth_limited_fun_of else mk_fun_of
     val t_pred = compile_expr comp_modifiers compfuns thy
