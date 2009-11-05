@@ -227,8 +227,8 @@ end;
 
 (*** Pure theory syntax and logical content ***)
 
-val typ = SimpleSyntax.read_typ;
-val prop = SimpleSyntax.read_prop;
+val typ = Simple_Syntax.read_typ;
+val prop = Simple_Syntax.read_prop;
 
 val typeT = Syntax.typeT;
 val spropT = Syntax.spropT;
@@ -268,7 +268,8 @@ val old_appl_syntax_setup =
 (* main content *)
 
 val _ = Context.>> (Context.map_theory
-  (OldApplSyntax.init #>
+  (Sign.map_naming (Name_Space.set_theory_name Context.PureN) #>
+   OldApplSyntax.init #>
    Sign.add_types
    [(Binding.name "fun", 2, NoSyn),
     (Binding.name "prop", 0, NoSyn),

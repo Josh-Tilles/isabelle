@@ -451,72 +451,99 @@ fun prove_stuff ctxt globals G f R clauses complete compat compat_store G_elim f
       (goalstate, values)
     end
 
+(* wrapper -- restores quantifiers in rule specifications *)
+fun inductive_def (binding as ((R, T), _)) intrs lthy =
+  let
+    val ({intrs = intrs_gen, elims = [elim_gen], preds = [ Rdef ], induct, ...}, lthy) =
+      lthy
+      |> LocalTheory.conceal
+      |> Inductive.add_inductive_i
+          {quiet_mode = true,
+            verbose = ! trace,
+            kind = Thm.internalK,
+            alt_name = Binding.empty,
+            coind = false,
+            no_elim = false,
+            no_ind = false,
+            skip_mono = true,
+            fork_mono = false}
+          [binding] (* relation *)
+          [] (* no parameters *)
+          (map (fn t => (Attrib.empty_binding, t)) intrs) (* intro rules *)
+          [] (* no special monos *)
+      ||> LocalTheory.restore_naming lthy
+
+    val cert = cterm_of (ProofContext.theory_of lthy)
+    fun requantify orig_intro thm =
+      let
+        val (qs, t) = dest_all_all orig_intro
+        val frees = frees_in_term lthy t |> remove (op =) (Binding.name_of R, T)
+        val vars = Term.add_vars (prop_of thm) [] |> rev
+        val varmap = AList.lookup (op =) (frees ~~ map fst vars)
+          #> the_default ("",0)
+      in
+        fold_rev (fn Free (n, T) =>
+          forall_intr_rename (n, cert (Var (varmap (n, T), T)))) qs thm
+      end
+  in
+      ((Rdef, map2 requantify intrs intrs_gen, forall_intr_vars elim_gen, induct), lthy)
+  end
 
 fun define_graph Gname fvar domT ranT clauses RCss lthy =
-    let
-      val GT = domT --> ranT --> boolT
-      val Gvar = Free (the_single (Variable.variant_frees lthy [] [(Gname, GT)]))
+  let
+    val GT = domT --> ranT --> boolT
+    val (Gvar as (n, T)) = singleton (Variable.variant_frees lthy []) (Gname, GT)
 
-      fun mk_GIntro (ClauseContext {qs, gs, lhs, rhs, ...}) RCs =
-          let
-            fun mk_h_assm (rcfix, rcassm, rcarg) =
-                HOLogic.mk_Trueprop (Gvar $ rcarg $ (fvar $ rcarg))
-                          |> fold_rev (curry Logic.mk_implies o prop_of) rcassm
-                          |> fold_rev (Logic.all o Free) rcfix
-          in
-            HOLogic.mk_Trueprop (Gvar $ lhs $ rhs)
-                      |> fold_rev (curry Logic.mk_implies o mk_h_assm) RCs
-                      |> fold_rev (curry Logic.mk_implies) gs
-                      |> fold_rev Logic.all (fvar :: qs)
-          end
+    fun mk_GIntro (ClauseContext {qs, gs, lhs, rhs, ...}) RCs =
+      let
+        fun mk_h_assm (rcfix, rcassm, rcarg) =
+          HOLogic.mk_Trueprop (Free Gvar $ rcarg $ (fvar $ rcarg))
+          |> fold_rev (curry Logic.mk_implies o prop_of) rcassm
+          |> fold_rev (Logic.all o Free) rcfix
+      in
+        HOLogic.mk_Trueprop (Free Gvar $ lhs $ rhs)
+        |> fold_rev (curry Logic.mk_implies o mk_h_assm) RCs
+        |> fold_rev (curry Logic.mk_implies) gs
+        |> fold_rev Logic.all (fvar :: qs)
+      end
 
-      val G_intros = map2 mk_GIntro clauses RCss
-
-      val (GIntro_thms, (G, G_elim, G_induct, lthy)) =
-          Function_Inductive_Wrap.inductive_def G_intros ((dest_Free Gvar, NoSyn), lthy)
-    in
-      ((G, GIntro_thms, G_elim, G_induct), lthy)
-    end
-
-
+    val G_intros = map2 mk_GIntro clauses RCss
+  in
+    inductive_def ((Binding.name n, T), NoSyn) G_intros lthy
+  end
 
 fun define_function fdefname (fname, mixfix) domT ranT G default lthy =
-    let
-      val f_def =
-          Abs ("x", domT, Const (@{const_name FunDef.THE_default}, ranT --> (ranT --> boolT) --> ranT) $ (default $ Bound 0) $
-                                Abs ("y", ranT, G $ Bound 1 $ Bound 0))
-              |> Syntax.check_term lthy
-
-      val ((f, (_, f_defthm)), lthy) =
-        LocalTheory.define Thm.internalK
-          ((Binding.name (function_name fname), mixfix),
-            ((Binding.conceal (Binding.name fdefname), []), f_def)) lthy
-    in
-      ((f, f_defthm), lthy)
-    end
-
+  let
+    val f_def =
+      Abs ("x", domT, Const (@{const_name FunDef.THE_default}, ranT --> (ranT --> boolT) --> ranT) 
+        $ (default $ Bound 0) $ Abs ("y", ranT, G $ Bound 1 $ Bound 0))
+      |> Syntax.check_term lthy
+  in
+    LocalTheory.define Thm.internalK
+      ((Binding.name (function_name fname), mixfix),
+        ((Binding.conceal (Binding.name fdefname), []), f_def)) lthy
+  end
 
 fun define_recursion_relation Rname domT ranT fvar f qglrs clauses RCss lthy =
-    let
+  let
+    val RT = domT --> domT --> boolT
+    val (Rvar as (n, T)) = singleton (Variable.variant_frees lthy []) (Rname, RT)
 
-      val RT = domT --> domT --> boolT
-      val Rvar = Free (the_single (Variable.variant_frees lthy [] [(Rname, RT)]))
+    fun mk_RIntro (ClauseContext {qs, gs, lhs, ...}, (oqs, _, _, _)) (rcfix, rcassm, rcarg) =
+      HOLogic.mk_Trueprop (Free Rvar $ rcarg $ lhs)
+      |> fold_rev (curry Logic.mk_implies o prop_of) rcassm
+      |> fold_rev (curry Logic.mk_implies) gs
+      |> fold_rev (Logic.all o Free) rcfix
+      |> fold_rev mk_forall_rename (map fst oqs ~~ qs)
+      (* "!!qs xs. CS ==> G => (r, lhs) : R" *)
 
-      fun mk_RIntro (ClauseContext {qs, gs, lhs, ...}, (oqs, _, _, _)) (rcfix, rcassm, rcarg) =
-          HOLogic.mk_Trueprop (Rvar $ rcarg $ lhs)
-                    |> fold_rev (curry Logic.mk_implies o prop_of) rcassm
-                    |> fold_rev (curry Logic.mk_implies) gs
-                    |> fold_rev (Logic.all o Free) rcfix
-                    |> fold_rev mk_forall_rename (map fst oqs ~~ qs)
-                    (* "!!qs xs. CS ==> G => (r, lhs) : R" *)
+    val R_intross = map2 (map o mk_RIntro) (clauses ~~ qglrs) RCss
 
-      val R_intross = map2 (map o mk_RIntro) (clauses ~~ qglrs) RCss
-
-      val (RIntro_thmss, (R, R_elim, _, lthy)) =
-          fold_burrow Function_Inductive_Wrap.inductive_def R_intross ((dest_Free Rvar, NoSyn), lthy)
-    in
-      ((R, RIntro_thmss, R_elim), lthy)
-    end
+    val ((R, RIntro_thms, R_elim, _), lthy) =
+      inductive_def ((Binding.name n, T), NoSyn) (flat R_intross) lthy
+  in
+    ((R, Library.unflat R_intross RIntro_thms, R_elim), lthy)
+  end
 
 
 fun fix_globals domT ranT fvar ctxt =
@@ -892,7 +919,7 @@ fun prepare_function config defname [((fname, fT), mixfix)] abstract_qglrs lthy 
       val ((G, GIntro_thms, G_elim, G_induct), lthy) =
           PROFILE "def_graph" (define_graph (graph_name defname) fvar domT ranT clauses RCss) lthy
 
-      val ((f, f_defthm), lthy) =
+      val ((f, (_, f_defthm)), lthy) =
           PROFILE "def_fun" (define_function (defname ^ "_sumC_def") (fname, mixfix) domT ranT G default) lthy
 
       val RCss = map (map (inst_RC (ProofContext.theory_of lthy) fvar f)) RCss

@@ -18,8 +18,6 @@ val fail_safe_mode = true
 
 open Predicate_Compile_Aux;
 
-val priority = tracing;
-
 (* Some last processing *)
 
 fun remove_pointless_clauses intro =
@@ -27,19 +25,20 @@ fun remove_pointless_clauses intro =
     []
   else [intro]
 
-fun tracing s = ()
-
 fun print_intross options thy msg intross =
   if show_intermediate_results options then
-   Output.tracing (msg ^ 
-    (space_implode "\n" (map 
-      (fn (c, intros) => "Introduction rule(s) of " ^ c ^ ":\n" ^
-         commas (map (Display.string_of_thm_global thy) intros)) intross)))
+    tracing (msg ^ 
+      (space_implode "\n" (map 
+        (fn (c, intros) => "Introduction rule(s) of " ^ c ^ ":\n" ^
+           commas (map (Display.string_of_thm_global thy) intros)) intross)))
   else ()
       
 fun print_specs thy specs =
   map (fn (c, thms) => "Constant " ^ c ^ " has specification:\n"
     ^ (space_implode "\n" (map (Display.string_of_thm_global thy) thms)) ^ "\n") specs
+
+(* TODO: *)
+fun overload_const thy s = s
 
 fun map_specs f specs =
   map (fn (s, ths) => (s, f ths)) specs
@@ -63,14 +62,13 @@ fun process_specification options specs thy' =
     val (intross3, (new_defs, thy''')) = Predicate_Compile_Pred.flat_higher_order_arguments (intross2, thy'')
     val (new_intross, thy'''')  =
       if not (null new_defs) then
-      let
-        val _ = print_step options "Recursively obtaining introduction rules for new definitions..."
-      in process_specification options new_defs thy''' end
-    else ([], thy''')
+        let
+          val _ = print_step options "Recursively obtaining introduction rules for new definitions..."
+        in process_specification options new_defs thy''' end
+      else ([], thy''')
   in
     (intross3 @ new_intross, thy'''')
   end
-
 
 fun preprocess_strong_conn_constnames options gr constnames thy =
   let
@@ -89,7 +87,7 @@ fun preprocess_strong_conn_constnames options gr constnames thy =
     val _ = print_intross options thy''' "Introduction rules with new constants: " intross3
     val intross4 = map_specs (maps remove_pointless_clauses) intross3
     val _ = print_intross options thy''' "After removing pointless clauses: " intross4
-      (*val intross5 = map (fn s, ths) => ( s, map (AxClass.overload thy''') ths)) intross4*)
+    val intross5 = (*map (fn (s, ths) => (overload_const s, map (AxClass.overload thy''') ths))*) intross4
     val intross6 = map_specs (map (expand_tuples thy''')) intross4
     val _ = print_intross options thy''' "introduction rules before registering: " intross6
     val _ = print_step options "Registering introduction rules..."
@@ -101,7 +99,7 @@ fun preprocess_strong_conn_constnames options gr constnames thy =
 fun preprocess options const thy =
   let
     val _ = print_step options "Fetching definitions from theory..."
-    val table = Predicate_Compile_Data.make_const_spec_table thy
+    val table = Predicate_Compile_Data.make_const_spec_table options thy
     val gr = Predicate_Compile_Data.obtain_specification_graph options thy table const
     val gr = Graph.subgraph (member (op =) (Graph.all_succs gr [const])) gr
   in fold_rev (preprocess_strong_conn_constnames options gr)
@@ -122,7 +120,7 @@ fun extract_options ((modes, raw_options), const) =
       show_compilation = chk "show_compilation",
       skip_proof = chk "skip_proof",
       inductify = chk "inductify",
-      rpred = chk "rpred",
+      random = chk "random",
       depth_limited = chk "depth_limited"
     }
   end
@@ -151,7 +149,7 @@ fun code_pred_cmd ((modes, raw_options), raw_const) lthy =
 val setup = Predicate_Compile_Fun.setup_oracle #> Predicate_Compile_Core.setup
 
 val bool_options = ["show_steps", "show_intermediate_results", "show_proof_trace", "show_modes",
-  "show_mode_inference", "show_compilation", "skip_proof", "inductify", "rpred", "depth_limited"]
+  "show_mode_inference", "show_compilation", "skip_proof", "inductify", "random", "depth_limited"]
 
 local structure P = OuterParse
 in

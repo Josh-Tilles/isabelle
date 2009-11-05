@@ -44,12 +44,12 @@ val psimp_attribs = map (Attrib.internal o K)
     [Simplifier.simp_add,
      Nitpick_Psimps.add]
 
-fun note_theorem ((name, atts), ths) =
-  LocalTheory.note Thm.generatedK ((Binding.qualified_name name, atts), ths)
+fun note_theorem ((binding, atts), ths) =
+  LocalTheory.note Thm.generatedK ((binding, atts), ths)
 
 fun mk_defname fixes = fixes |> map (fst o fst) |> space_implode "_"
 
-fun add_simps fnames post sort extra_qualify label moreatts simps lthy =
+fun add_simps fnames post sort extra_qualify label mod_binding moreatts simps lthy =
     let
       val spec = post simps
                    |> map (apfst (apsnd (fn ats => moreatts @ ats)))
@@ -62,7 +62,8 @@ fun add_simps fnames post sort extra_qualify label moreatts simps lthy =
       val simps_by_f = sort saved_simps
 
       fun add_for_f fname simps =
-        note_theorem ((Long_Name.qualify fname label, []), simps) #> snd
+        note_theorem ((mod_binding (Binding.qualify true fname (Binding.name label)), []), simps)
+        #> snd
     in
       (saved_simps,
        fold2 add_for_f fnames simps_by_f lthy)
@@ -89,21 +90,24 @@ fun gen_add_function is_external prep default_constraint fixspec eqns config lth
           cont (Thm.close_derivation proof)
 
           val fnames = map (fst o fst) fixes
-          val qualify = Long_Name.qualify defname
+          fun qualify n = Binding.name n
+            |> Binding.qualify true defname
+          val conceal_partial = if partials then I else Binding.conceal
+
           val addsmps = add_simps fnames post sort_cont
 
           val (((psimps', pinducts'), (_, [termination'])), lthy) =
             lthy
-            |> addsmps (Binding.qualify false "partial") "psimps"
-                 psimp_attribs psimps
-            ||> fold_option (snd oo addsmps I "simps" simp_attribs) trsimps
-            ||>> note_theorem ((qualify "pinduct",
-                   [Attrib.internal (K (RuleCases.case_names cnames)),
-                    Attrib.internal (K (RuleCases.consumes 1)),
+            |> addsmps (conceal_partial o Binding.qualify false "partial")
+                 "psimps" conceal_partial psimp_attribs psimps
+            ||> fold_option (snd oo addsmps I "simps" I simp_attribs) trsimps
+            ||>> note_theorem ((conceal_partial (qualify "pinduct"),
+                   [Attrib.internal (K (Rule_Cases.case_names cnames)),
+                    Attrib.internal (K (Rule_Cases.consumes 1)),
                     Attrib.internal (K (Induct.induct_pred ""))]), simple_pinducts)
-            ||>> note_theorem ((qualify "termination", []), [termination])
+            ||>> note_theorem ((Binding.conceal (qualify "termination"), []), [termination])
             ||> (snd o note_theorem ((qualify "cases",
-                   [Attrib.internal (K (RuleCases.case_names cnames))]), [cases]))
+                   [Attrib.internal (K (Rule_Cases.case_names cnames))]), [cases]))
             ||> fold_option (snd oo curry note_theorem (qualify "domintros", [])) domintros
 
           val cdata = FunctionCtxData { add_simps=addsmps, case_names=cnames, psimps=psimps',
@@ -147,23 +151,24 @@ fun gen_termination_proof prep_term raw_term_opt lthy =
               full_simplify (HOL_basic_ss addsimps [totality, True_implies_equals])
             val tsimps = map remove_domain_condition psimps
             val tinduct = map remove_domain_condition pinducts
-            val qualify = Long_Name.qualify defname;
+            fun qualify n = Binding.name n
+              |> Binding.qualify true defname
           in
             lthy
-            |> add_simps I "simps" simp_attribs tsimps |> snd
+            |> add_simps I "simps" I simp_attribs tsimps |> snd
             |> note_theorem
                ((qualify "induct",
-                 [Attrib.internal (K (RuleCases.case_names case_names))]),
+                 [Attrib.internal (K (Rule_Cases.case_names case_names))]),
                 tinduct) |> snd
           end
     in
       lthy
       |> ProofContext.note_thmss ""
-         [((Binding.empty, [ContextRules.rule_del]), [([allI], [])])] |> snd
+         [((Binding.empty, [Context_Rules.rule_del]), [([allI], [])])] |> snd
       |> ProofContext.note_thmss ""
-         [((Binding.empty, [ContextRules.intro_bang (SOME 1)]), [([allI], [])])] |> snd
+         [((Binding.empty, [Context_Rules.intro_bang (SOME 1)]), [([allI], [])])] |> snd
       |> ProofContext.note_thmss ""
-         [((Binding.name "termination", [ContextRules.intro_bang (SOME 0)]),
+         [((Binding.name "termination", [Context_Rules.intro_bang (SOME 0)]),
            [([Goal.norm_result termination], [])])] |> snd
       |> Proof.theorem_i NONE afterqed [[(goal, [])]]
     end

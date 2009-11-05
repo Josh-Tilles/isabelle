@@ -66,7 +66,7 @@ let
 
   val intr_specs = map (apfst (apfst Binding.name_of)) raw_intr_specs;
   val (intr_names, intr_tms) = split_list (map fst intr_specs);
-  val case_names = RuleCases.case_names intr_names;
+  val case_names = Rule_Cases.case_names intr_names;
 
   (*recT and rec_params should agree for all mutually recursive components*)
   val rec_hds = map head_of rec_tms;
@@ -156,7 +156,7 @@ let
   val big_rec_tm = list_comb(Const(big_rec_name,recT), rec_params);
 
   (*The individual sets must already be declared*)
-  val axpairs = map PrimitiveDefs.mk_defpair
+  val axpairs = map Primitive_Defs.mk_defpair
         ((big_rec_tm, fp_rhs) ::
          (case parts of
              [_] => []                        (*no mutual recursion*)

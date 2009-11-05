@@ -15,16 +15,9 @@ struct
 val solver_name = "yices"
 val env_var = "YICES_SOLVER"
 
-val options = ["--evidence", "--smtlib"]
+val options = ["--smtlib"]
 
-fun cex_kind true = "Counterexample"
-  | cex_kind false = "Possible counterexample"
-
-fun raise_cex real ctxt rtab ls =
-  let val p = Pretty.big_list (cex_kind real ^ " found:") (map Pretty.str ls)
-  in error (Pretty.string_of p) end
-
-structure S = SMT_Solver
+fun raise_cex real = raise SMT_Solver.SMT_COUNTEREXAMPLE (real, [])
 
 fun core_oracle ({context, output, recon, ...} : SMT_Solver.proof_data) =
   let
@@ -33,9 +26,9 @@ fun core_oracle ({context, output, recon, ...} : SMT_Solver.proof_data) =
     val (l, ls) = split_first (dropwhile empty_line output)
   in
     if String.isPrefix "unsat" l then @{cprop False}
-    else if String.isPrefix "sat" l then raise_cex true context recon ls
-    else if String.isPrefix "unknown" l then raise_cex false context recon ls
-    else error (solver_name ^ " failed")
+    else if String.isPrefix "sat" l then raise_cex true
+    else if String.isPrefix "unknown" l then raise_cex false
+    else raise SMT_Solver.SMT (solver_name ^ " failed")
   end
 
 fun smtlib_solver oracle _ = {

@@ -141,11 +141,8 @@ fun flat_higher_order_arguments (intross, thy) =
     fun process constname atom (new_defs, thy) =
       let
         val (pred, args) = strip_comb atom
-        val abs_args = filter is_Abs args
         fun replace_abs_arg (abs_arg as Abs _ ) (new_defs, thy) =
           let
-            val _ = tracing ("Introduce new constant for " ^
-              Syntax.string_of_term_global thy abs_arg)
             val vars = map Var (Term.add_vars abs_arg [])
             val abs_arg' = Logic.unvarify abs_arg
             val frees = map Free (Term.add_frees abs_arg' [])
@@ -156,14 +153,18 @@ fun flat_higher_order_arguments (intross, thy) =
             val const = Const (full_constname, constT)
             val lhs = list_comb (const, frees)
             val def = Logic.mk_equals (lhs, abs_arg')
-            val _ = tracing (Syntax.string_of_term_global thy def)
             val ([definition], thy') = thy
               |> Sign.add_consts_i [(Binding.name constname, constT, NoSyn)]
               |> PureThy.add_defs false [((Binding.name (constname ^ "_def"), def), [])]
           in
             (list_comb (Logic.varify const, vars), ((full_constname, [definition])::new_defs, thy'))
           end
-        | replace_abs_arg arg (new_defs, thy) = (arg, (new_defs, thy))
+        | replace_abs_arg arg (new_defs, thy) =
+          if (is_predT (fastype_of arg)) then
+            process constname arg (new_defs, thy)
+          else
+            (arg, (new_defs, thy))
+        
         val (args', (new_defs', thy')) = fold_map replace_abs_arg args (new_defs, thy)
       in
         (list_comb (pred, args'), (new_defs', thy'))

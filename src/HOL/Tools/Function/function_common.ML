@@ -65,8 +65,9 @@ datatype function_context_data =
       defname : string,
 
       (* contains no logical entities: invariant under morphisms *)
-      add_simps : (binding -> binding) -> string -> Attrib.src list -> thm list 
-                  -> local_theory -> thm list * local_theory,
+      add_simps : (binding -> binding) -> string -> (binding -> binding) ->
+        Attrib.src list -> thm list -> local_theory -> thm list * local_theory,
+
       case_names : string list,
 
       fs : term list,
@@ -92,9 +93,7 @@ fun morph_function_data (FunctionCtxData {add_simps, case_names, fs, R,
 structure FunctionData = GenericDataFun
 (
   type T = (term * function_context_data) Item_Net.T;
-  val empty = Item_Net.init
-    (op aconv o pairself fst : (term * function_context_data) * (term * function_context_data) -> bool)
-    fst;
+  val empty : T = Item_Net.init (op aconv o pairself fst) (single o fst);
   val copy = I;
   val extend = I;
   fun merge _ (tab1, tab2) = Item_Net.merge (tab1, tab2)
@@ -138,7 +137,7 @@ fun import_last_function ctxt =
 val all_function_data = Item_Net.content o get_function
 
 fun add_function_data (data as FunctionCtxData {fs, termination, ...}) =
-    FunctionData.map (fold (fn f => Item_Net.insert (f, data)) fs)
+    FunctionData.map (fold (fn f => Item_Net.update (f, data)) fs)
     #> store_termination_rule termination
 
 

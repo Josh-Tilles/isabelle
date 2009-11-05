@@ -39,7 +39,6 @@ structure ScnpReconstruct : SCNP_RECONSTRUCT =
 struct
 
 val PROFILE = Function_Common.PROFILE
-fun TRACE x = if ! Function_Common.profile then tracing x else ()
 
 open ScnpSolve
 
@@ -347,17 +346,13 @@ fun print_error ctxt D = CALLS (fn (cs, i) =>
   end)
 end
 
-
 fun single_scnp_tac use_tags orders ctxt cont err_cont D = Termination.CALLS (fn (cs, i) =>
   let
     val ms_configured = is_some (Multiset_Setup.get (ProofContext.theory_of ctxt))
     val orders' = if ms_configured then orders
                   else filter_out (curry op = MS) orders
     val gp = gen_probl D cs
-(*    val _ = TRACE ("SCNP instance: " ^ makestring gp)*)
     val certificate = generate_certificate use_tags orders' gp
-(*    val _ = TRACE ("Certificate: " ^ makestring certificate)*)
-
   in
     case certificate
      of NONE => err_cont D i

@@ -34,11 +34,11 @@ fun primrec_eq_err thy s eq =
   same type in all introduction rules*)
 fun unify_consts thy cs intr_ts =
   (let
-    fun varify (t, (i, ts)) =
+    fun varify t (i, ts) =
       let val t' = map_types (Logic.incr_tvar (i + 1)) (snd (Type.varify [] t))
       in (maxidx_of_term t', t'::ts) end;
-    val (i, cs') = List.foldr varify (~1, []) cs;
-    val (i', intr_ts') = List.foldr varify (i, []) intr_ts;
+    val (i, cs') = fold_rev varify cs (~1, []);
+    val (i', intr_ts') = fold_rev varify intr_ts (i, []);
     val rec_consts = fold Term.add_consts cs' [];
     val intr_consts = fold Term.add_consts intr_ts' [];
     fun unify (cname, cT) =
@@ -237,8 +237,8 @@ fun prepare_induct ({descr, induct, ...}: info) rec_eqns =
     val params_of = these o AList.lookup (op =) (maps constrs_of rec_eqns);
   in
     induct
-    |> RuleCases.rename_params (map params_of (maps (map #1 o #3 o #2) descr))
-    |> RuleCases.save induct
+    |> Rule_Cases.rename_params (map params_of (maps (map #1 o #3 o #2) descr))
+    |> Rule_Cases.save induct
   end;
 
 local
