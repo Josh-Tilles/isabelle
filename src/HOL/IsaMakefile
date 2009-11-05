@@ -1343,7 +1343,15 @@ $(LOG)/HOL-SMT-Examples.gz: $(OUT)/HOL-SMT SMT/Examples/ROOT.ML		\
   SMT/Examples/cert/z3_linarith_15					\
   SMT/Examples/cert/z3_linarith_15.proof				\
   SMT/Examples/cert/z3_linarith_16					\
-  SMT/Examples/cert/z3_linarith_16.proof SMT/Examples/cert/z3_mono_01	\
+  SMT/Examples/cert/z3_linarith_16.proof				\
+  SMT/Examples/cert/z3_linarith_17					\
+  SMT/Examples/cert/z3_linarith_17.proof				\
+  SMT/Examples/cert/z3_linarith_18					\
+  SMT/Examples/cert/z3_linarith_18.proof				\
+  SMT/Examples/cert/z3_linarith_19					\
+  SMT/Examples/cert/z3_linarith_19.proof				\
+  SMT/Examples/cert/z3_linarith_20					\
+  SMT/Examples/cert/z3_linarith_20.proof SMT/Examples/cert/z3_mono_01	\
   SMT/Examples/cert/z3_mono_01.proof SMT/Examples/cert/z3_mono_02	\
   SMT/Examples/cert/z3_mono_02.proof SMT/Examples/cert/z3_nat_arith_01	\
   SMT/Examples/cert/z3_nat_arith_01.proof				\
@@ -1400,12 +1408,12 @@ $(LOG)/HOL-Boogie-Examples.gz: $(OUT)/HOL-Boogie			\
   Boogie/Examples/ROOT.ML Boogie/Examples/Boogie_Max.thy		\
   Boogie/Examples/Boogie_Max.b2i Boogie/Examples/Boogie_Dijkstra.thy	\
   Boogie/Examples/VCC_Max.thy Boogie/Examples/Boogie_Dijkstra.b2i	\
-  Boogie/Examples/VCC_Max.b2i Boogie/Examples/cert/Boogie_b_max		\
-  Boogie/Examples/cert/Boogie_b_max.proof				\
-  Boogie/Examples/cert/Boogie_b_Dijkstra				\
-  Boogie/Examples/cert/Boogie_b_Dijkstra.proof				\
-  Boogie/Examples/cert/VCC_b_maximum					\
-  Boogie/Examples/cert/VCC_b_maximum.proof
+  Boogie/Examples/VCC_Max.b2i Boogie/Examples/cert/Boogie_max		\
+  Boogie/Examples/cert/Boogie_max.proof					\
+  Boogie/Examples/cert/Boogie_Dijkstra					\
+  Boogie/Examples/cert/Boogie_Dijkstra.proof				\
+  Boogie/Examples/cert/VCC_maximum					\
+  Boogie/Examples/cert/VCC_maximum.proof
 	@cd Boogie; $(ISABELLE_TOOL) usedir $(OUT)/HOL-Boogie Examples
 
 
