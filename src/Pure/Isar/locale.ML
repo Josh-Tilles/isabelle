@@ -72,8 +72,6 @@ sig
     morphism -> theory -> theory
   val amend_registration: string * morphism -> morphism * bool ->
     morphism -> theory -> theory
-  val add_registration_eqs: string * morphism -> thm list -> morphism -> theory -> theory
-  val amend_registration_legacy: morphism -> string * morphism -> theory -> theory
   val add_dependency: string -> string * morphism -> morphism -> theory -> theory
 
   (* Diagnostic *)
@@ -122,13 +120,12 @@ fun merge_locale (Loc {parameters, spec, intros, axioms, decls = (decls1, decls2
           merge (eq_snd op =) (notes, notes')),
             merge (eq_snd op =) (dependencies, dependencies')));
 
-structure Locales = TheoryDataFun
+structure Locales = Theory_Data
 (
   type T = locale Name_Space.table;
   val empty : T = Name_Space.empty_table "locale";
-  val copy = I;
   val extend = I;
-  fun merge _ = Name_Space.join_tables (K merge_locale);
+  val merge = Name_Space.join_tables (K merge_locale);
 );
 
 val intern = Name_Space.intern o #1 o Locales.get;
@@ -188,12 +185,12 @@ local
 
 datatype 'a delayed = Ready of 'a | ToDo of 'a delayed * 'a delayed;
 
-structure Identifiers = GenericDataFun
+structure Identifiers = Generic_Data
 (
   type T = (string * term list) list delayed;
   val empty = Ready [];
   val extend = I;
-  fun merge _ = ToDo;
+  val merge = ToDo;
 );
 
 fun finish thy (ToDo (i1, i2)) = merge (ident_eq thy) (finish thy i1, finish thy i2)
@@ -240,7 +237,7 @@ fun add thy depth export (name, morph) (deps, marked) =
 
 in
 
-(* Note that while identifiers always have the external (exported) view, activate_dep is
+(* Note that while identifiers always have the external (exported) view, activate_dep
   is presented with the internal view. *)
 
 fun roundup thy activate_dep export (name, morph) (marked, input) =
@@ -332,7 +329,7 @@ fun print_locale thy show_facts raw_name =
 
 (*** Registrations: interpretations in theories ***)
 
-structure Registrations = TheoryDataFun
+structure Registrations = Theory_Data
 (
   type T = ((string * (morphism * morphism)) * stamp) list *
     (* registrations, in reverse order of declaration *)
@@ -340,8 +337,7 @@ structure Registrations = TheoryDataFun
     (* alist of mixin lists, per list mixins in reverse order of declaration *)
   val empty = ([], []);
   val extend = I;
-  val copy = I;
-  fun merge _ ((r1, m1), (r2, m2)) : T =
+  fun merge ((r1, m1), (r2, m2)) : T =
     (Library.merge (eq_snd op =) (r1, r2),
       AList.join (op =) (K (Library.merge (eq_snd op =))) (m1, m2));
     (* FIXME consolidate with dependencies, consider one data slot only *)
@@ -483,36 +479,6 @@ fun add_registration (name, base_morph) mixin export thy =
       end
   end;
 
-fun amend_registration_legacy morph (name, base_morph) thy =
-  (* legacy, never modify base morphism *)
-  let
-    val regs = Registrations.get thy |> fst |> map fst;
-    val base = instance_of thy name base_morph;
-    fun match (name', (morph', _)) =
-      name = name' andalso eq_list (op aconv) (base, instance_of thy name' morph');
-    val i = find_index match (rev regs);
-    val _ =
-      if i = ~1 then error ("No registration of locale " ^
-        quote (extern thy name) ^ " and parameter instantiation " ^
-        space_implode " " (map (quote o Syntax.string_of_term_global thy) base) ^ " available")
-      else ();
-  in
-    Registrations.map ((apfst o nth_map (length regs - 1 - i))
-      (fn ((name, (base, export)), stamp) => ((name, (base $> morph, export)), stamp))) thy
-  end;
-
-fun add_registration_eqs (dep, proto_morph) eqns export thy =
-  let
-    val morph = if null eqns then proto_morph
-      else proto_morph $> Element.eq_morphism thy eqns;
-  in
-    (get_idents (Context.Theory thy), thy)
-    |> roundup thy (fn (dep', morph') =>
-        Registrations.map (apfst (cons ((dep', (morph', export)), stamp ())))) export (dep, morph)
-    |> snd
-    |> Context.theory_map (activate_facts (dep, morph $> export))
-  end;
-
 
 (*** Dependencies ***)
 
@@ -569,12 +535,12 @@ end;
 
 (* Storage for witnesses, intro and unfold rules *)
 
-structure Thms = GenericDataFun
+structure Thms = Generic_Data
 (
   type T = thm list * thm list * thm list;
   val empty = ([], [], []);
   val extend = I;
-  fun merge _ ((witnesses1, intros1, unfolds1), (witnesses2, intros2, unfolds2)) =
+  fun merge ((witnesses1, intros1, unfolds1), (witnesses2, intros2, unfolds2)) =
    (Thm.merge_thms (witnesses1, witnesses2),
     Thm.merge_thms (intros1, intros2),
     Thm.merge_thms (unfolds1, unfolds2));

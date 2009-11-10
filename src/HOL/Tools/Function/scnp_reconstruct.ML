@@ -63,13 +63,12 @@ datatype multiset_setup =
    reduction_pair : thm
   }
 
-structure Multiset_Setup = TheoryDataFun
+structure Multiset_Setup = Theory_Data
 (
   type T = multiset_setup option
   val empty = NONE
-  val copy = I;
   val extend = I;
-  fun merge _ (v1, v2) = if is_some v2 then v2 else v1
+  fun merge (v1, v2) = if is_some v2 then v2 else v1   (* FIXME prefer v1 !?! *)
 )
 
 val multiset_setup = Multiset_Setup.put o SOME
@@ -418,7 +417,7 @@ val orders =
      (Args.$$$ "ms" >> K MS))
   || Scan.succeed [MAX, MS, MIN]
 
-val setup = Method.setup @{binding sizechange}
+val setup = Method.setup @{binding size_change}
   (Scan.lift orders --| Method.sections clasimp_modifiers >> decomp_scnp)
   "termination prover with graph decomposition and the NP subset of size change termination"
 

@@ -86,18 +86,17 @@ end;
 
 type recdef_info = {simps: thm list, rules: thm list list, induct: thm, tcs: term list};
 
-structure GlobalRecdefData = TheoryDataFun
+structure GlobalRecdefData = Theory_Data
 (
   type T = recdef_info Symtab.table * hints;
   val empty = (Symtab.empty, mk_hints ([], [], [])): T;
-  val copy = I;
   val extend = I;
-  fun merge _
+  fun merge
    ((tab1, {simps = simps1, congs = congs1, wfs = wfs1}),
     (tab2, {simps = simps2, congs = congs2, wfs = wfs2})) : T =
       (Symtab.merge (K true) (tab1, tab2),
         mk_hints (Thm.merge_thms (simps1, simps2),
-          AList.merge (op =) Thm.eq_thm (congs1, congs2),
+          AList.merge (op =) Thm.eq_thm_prop (congs1, congs2),
           Thm.merge_thms (wfs1, wfs2)));
 );
 
@@ -115,7 +114,7 @@ val get_global_hints = #2 o GlobalRecdefData.get;
 
 (* proof data *)
 
-structure LocalRecdefData = ProofDataFun
+structure LocalRecdefData = Proof_Data
 (
   type T = hints;
   val init = get_global_hints;

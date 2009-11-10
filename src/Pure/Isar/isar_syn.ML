@@ -22,8 +22,9 @@ val _ = List.app OuterKeyword.keyword
   "advanced", "and", "assumes", "attach", "begin", "binder",
   "constrains", "defines", "fixes", "for", "identifier", "if",
   "imports", "in", "infix", "infixl", "infixr", "is",
-  "notes", "obtains", "open", "output", "overloaded", "shows",
-  "structure", "unchecked", "uses", "where", "|"];
+  "notes", "obtains", "open", "output", "overloaded", "pervasive",
+  "shows", "structure", "unchecked", "uses", "where", "|"];
+
 
 
 (** init and exit **)
@@ -337,7 +338,7 @@ val _ =
 
 val _ =
   OuterSyntax.local_theory "declaration" "generic ML declaration" (K.tag_ml K.thy_decl)
-    (P.ML_source >> IsarCmd.declaration);
+    (P.opt_keyword "pervasive" -- P.ML_source >> uncurry IsarCmd.declaration);
 
 val _ =
   OuterSyntax.local_theory "simproc_setup" "define simproc in ML" (K.tag_ml K.thy_decl)
@@ -779,7 +780,7 @@ val _ =
 val _ =
   OuterSyntax.improper_command "print_theorems"
       "print theorems of local theory or proof context" K.diag
-    (Scan.succeed (Toplevel.no_timing o IsarCmd.print_theorems));
+    (opt_bang >> (Toplevel.no_timing oo IsarCmd.print_theorems));
 
 val _ =
   OuterSyntax.improper_command "print_locales" "print locales of this theory" K.diag

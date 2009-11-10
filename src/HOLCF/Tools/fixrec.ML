@@ -13,8 +13,8 @@ sig
   val add_fixpat: Thm.binding * term list -> theory -> theory
   val add_fixpat_cmd: Attrib.binding * string list -> theory -> theory
   val add_matchers: (string * string) list -> theory -> theory
-  val fixrec_simp_add: Thm.attribute
-  val fixrec_simp_del: Thm.attribute
+  val fixrec_simp_add: attribute
+  val fixrec_simp_del: attribute
   val fixrec_simp_tac: Proof.context -> int -> tactic
   val setup: theory -> theory
 end;
@@ -160,12 +160,12 @@ fun lambda_tuple [] rhs = Term.lambda (Free("unit", HOLogic.unitT)) rhs
 (************* fixed-point definitions and unfolding theorems ************)
 (*************************************************************************)
 
-structure FixrecUnfoldData = GenericDataFun (
+structure FixrecUnfoldData = Generic_Data
+(
   type T = thm Symtab.table;
   val empty = Symtab.empty;
-  val copy = I;
   val extend = I;
-  val merge = K (Symtab.merge (K true));
+  fun merge data : T = Symtab.merge (K true) data;
 );
 
 local
@@ -179,7 +179,7 @@ val lhs_name =
 
 in
 
-val add_unfold : Thm.attribute =
+val add_unfold : attribute =
   Thm.declaration_attribute
     (fn th => FixrecUnfoldData.map (Symtab.insert (K true) (lhs_name th, th)));
 
@@ -252,12 +252,12 @@ fun add_fixdefs
 (*********** monadic notation and pattern matching compilation ***********)
 (*************************************************************************)
 
-structure FixrecMatchData = TheoryDataFun (
+structure FixrecMatchData = Theory_Data
+(
   type T = string Symtab.table;
   val empty = Symtab.empty;
-  val copy = I;
   val extend = I;
-  val merge = K (Symtab.merge (K true));
+  fun merge data = Symtab.merge (K true) data;
 );
 
 (* associate match functions with pattern constants *)
@@ -363,16 +363,16 @@ fun compile_pats match_name eqs =
 (********************** Proving associated theorems **********************)
 (*************************************************************************)
 
-structure FixrecSimpData = GenericDataFun (
+structure FixrecSimpData = Generic_Data
+(
   type T = simpset;
   val empty =
     HOL_basic_ss
       addsimps simp_thms
       addsimps [@{thm beta_cfun}]
       addsimprocs [@{simproc cont_proc}];
-  val copy = I;
   val extend = I;
-  val merge = K merge_ss;
+  val merge = merge_ss;
 );
 
 fun fixrec_simp_tac ctxt =
@@ -391,14 +391,14 @@ fun fixrec_simp_tac ctxt =
         CHANGED (rtac rule i THEN asm_simp_tac ss i)
       end
   in
-    SUBGOAL (fn ti => tac ti handle _ => no_tac)
+    SUBGOAL (fn ti => the_default no_tac (try tac ti))
   end;
 
-val fixrec_simp_add : Thm.attribute =
+val fixrec_simp_add : attribute =
   Thm.declaration_attribute
     (fn th => FixrecSimpData.map (fn ss => ss addsimps [th]));
 
-val fixrec_simp_del : Thm.attribute =
+val fixrec_simp_del : attribute =
   Thm.declaration_attribute
     (fn th => FixrecSimpData.map (fn ss => ss delsimps [th]));
 
@@ -523,8 +523,7 @@ val _ = OuterSyntax.command "fixpat" "define rewrites for fixrec functions" K.th
 end;
 
 val setup =
-  FixrecMatchData.init
-  #> Attrib.setup @{binding fixrec_simp}
+  Attrib.setup @{binding fixrec_simp}
                      (Attrib.add_del fixrec_simp_add fixrec_simp_del)
                      "declaration of fixrec simp rule"
   #> Method.setup @{binding fixrec_simp}

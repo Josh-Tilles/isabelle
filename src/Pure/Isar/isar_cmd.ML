@@ -16,7 +16,7 @@ sig
   val oracle: bstring * Position.T -> Symbol_Pos.text * Position.T -> theory -> theory
   val add_axioms: ((binding * string) * Attrib.src list) list -> theory -> theory
   val add_defs: (bool * bool) * ((binding * string) * Attrib.src list) list -> theory -> theory
-  val declaration: Symbol_Pos.text * Position.T -> local_theory -> local_theory
+  val declaration: bool -> Symbol_Pos.text * Position.T -> local_theory -> local_theory
   val simproc_setup: string -> string list -> Symbol_Pos.text * Position.T -> string list ->
     local_theory -> local_theory
   val hide_names: bool -> string * xstring list -> theory -> theory
@@ -50,7 +50,7 @@ sig
   val print_abbrevs: Toplevel.transition -> Toplevel.transition
   val print_facts: Toplevel.transition -> Toplevel.transition
   val print_configs: Toplevel.transition -> Toplevel.transition
-  val print_theorems: Toplevel.transition -> Toplevel.transition
+  val print_theorems: bool -> Toplevel.transition -> Toplevel.transition
   val print_locales: Toplevel.transition -> Toplevel.transition
   val print_locale: bool * xstring -> Toplevel.transition -> Toplevel.transition
   val print_registrations: string -> Toplevel.transition -> Toplevel.transition
@@ -178,10 +178,10 @@ fun add_defs ((unchecked, overloaded), args) =
 
 (* declarations *)
 
-fun declaration (txt, pos) =
+fun declaration pervasive (txt, pos) =
   txt |> ML_Context.expression pos
     "val declaration: Morphism.declaration"
-    "Context.map_proof (LocalTheory.declaration declaration)"
+    ("Context.map_proof (LocalTheory.declaration " ^ Bool.toString pervasive ^ " declaration)")
   |> Context.proof_map;
 
 
@@ -343,20 +343,20 @@ val print_theorems_proof = Toplevel.keep (fn state =>
   ProofContext.setmp_verbose_CRITICAL
     ProofContext.print_lthms (Proof.context_of (Toplevel.proof_of state)));
 
-val print_theorems_theory = Toplevel.keep (fn state =>
+fun print_theorems_theory verbose = Toplevel.keep (fn state =>
   Toplevel.theory_of state |>
   (case Toplevel.previous_context_of state of
-    SOME prev => Proof_Display.print_theorems_diff (ProofContext.theory_of prev)
-  | NONE => Proof_Display.print_theorems));
+    SOME prev => Proof_Display.print_theorems_diff verbose (ProofContext.theory_of prev)
+  | NONE => Proof_Display.print_theorems verbose));
 
-val print_theorems = Toplevel.unknown_context o print_theorems_theory o print_theorems_proof;
+fun print_theorems verbose =
+  Toplevel.unknown_context o print_theorems_theory verbose o print_theorems_proof;
 
 val print_locales = Toplevel.unknown_theory o
   Toplevel.keep (Locale.print_locales o Toplevel.theory_of);
 
-fun print_locale (show_facts, name) = Toplevel.unknown_theory o
-  Toplevel.keep (fn state =>
-    Locale.print_locale (Toplevel.theory_of state) show_facts name);
+fun print_locale (verbose, name) = Toplevel.unknown_theory o
+  Toplevel.keep (fn state => Locale.print_locale (Toplevel.theory_of state) verbose name);
 
 fun print_registrations name = Toplevel.unknown_context o
   Toplevel.keep (fn state =>

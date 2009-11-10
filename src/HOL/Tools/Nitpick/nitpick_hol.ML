@@ -182,14 +182,13 @@ type extended_context = {
   wf_cache: wf_cache Unsynchronized.ref,
   constr_cache: (typ * styp list) list Unsynchronized.ref}
 
-structure TheoryData = TheoryDataFun(
+structure Data = Theory_Data(
   type T = {frac_types: (string * (string * string) list) list,
             codatatypes: (string * (string * styp list)) list}
   val empty = {frac_types = [], codatatypes = []}
-  val copy = I
   val extend = I
-  fun merge _ ({frac_types = fs1, codatatypes = cs1},
-               {frac_types = fs2, codatatypes = cs2}) =
+  fun merge ({frac_types = fs1, codatatypes = cs1},
+               {frac_types = fs2, codatatypes = cs2}) : T =
     {frac_types = AList.merge (op =) (op =) (fs1, fs2),
      codatatypes = AList.merge (op =) (op =) (cs1, cs2)})
 
@@ -396,8 +395,7 @@ val is_integer_type =
 val is_record_type = not o null o Record.dest_recTs
 (* theory -> typ -> bool *)
 fun is_frac_type thy (Type (s, [])) =
-    not (null (these (AList.lookup (op =) (#frac_types (TheoryData.get thy))
-                                          s)))
+    not (null (these (AList.lookup (op =) (#frac_types (Data.get thy)) s)))
   | is_frac_type _ _ = false
 fun is_number_type thy = is_integer_type orf is_frac_type thy
 
@@ -473,16 +471,16 @@ fun repair_constr_type thy body_T' T =
 (* string -> (string * string) list -> theory -> theory *)
 fun register_frac_type frac_s ersaetze thy =
   let
-    val {frac_types, codatatypes} = TheoryData.get thy
+    val {frac_types, codatatypes} = Data.get thy
     val frac_types = AList.update (op =) (frac_s, ersaetze) frac_types
-  in TheoryData.put {frac_types = frac_types, codatatypes = codatatypes} thy end
+  in Data.put {frac_types = frac_types, codatatypes = codatatypes} thy end
 (* string -> theory -> theory *)
 fun unregister_frac_type frac_s = register_frac_type frac_s []
 
 (* typ -> string -> styp list -> theory -> theory *)
 fun register_codatatype co_T case_name constr_xs thy =
   let
-    val {frac_types, codatatypes} = TheoryData.get thy
+    val {frac_types, codatatypes} = Data.get thy
     val constr_xs = map (apsnd (repair_constr_type thy co_T)) constr_xs
     val (co_s, co_Ts) = dest_Type co_T
     val _ =
@@ -490,7 +488,7 @@ fun register_codatatype co_T case_name constr_xs thy =
       else raise TYPE ("Nitpick_HOL.register_codatatype", [co_T], [])
     val codatatypes = AList.update (op =) (co_s, (case_name, constr_xs))
                                    codatatypes
-  in TheoryData.put {frac_types = frac_types, codatatypes = codatatypes} thy end
+  in Data.put {frac_types = frac_types, codatatypes = codatatypes} thy end
 (* typ -> theory -> theory *)
 fun unregister_codatatype co_T = register_codatatype co_T "" []
 
@@ -524,7 +522,7 @@ val is_typedef = is_some oo typedef_info
 val is_real_datatype = is_some oo Datatype.get_info
 (* theory -> typ -> bool *)
 fun is_codatatype thy (T as Type (s, _)) =
-    not (null (AList.lookup (op =) (#codatatypes (TheoryData.get thy)) s
+    not (null (AList.lookup (op =) (#codatatypes (Data.get thy)) s
                |> Option.map snd |> these))
   | is_codatatype _ _ = false
 fun is_pure_typedef thy (T as Type (s, _)) =
@@ -596,7 +594,7 @@ fun mate_of_rep_fun thy (x as (_, Type ("fun", [T1 as Type (s', _), T2]))) =
 (* theory -> styp -> bool *)
 fun is_coconstr thy (s, T) =
   let
-    val {codatatypes, ...} = TheoryData.get thy
+    val {codatatypes, ...} = Data.get thy
     val co_T = body_type T
     val co_s = dest_Type co_T |> fst
   in
@@ -735,7 +733,7 @@ fun suc_const T = Const (@{const_name Suc}, T --> T)
 
 (* theory -> typ -> styp list *)
 fun uncached_datatype_constrs thy (T as Type (s, Ts)) =
-    (case AList.lookup (op =) (#codatatypes (TheoryData.get thy)) s of
+    (case AList.lookup (op =) (#codatatypes (Data.get thy)) s of
        SOME (_, xs' as (_ :: _)) =>
        map (apsnd (repair_constr_type thy T)) xs'
      | _ =>
@@ -1191,7 +1189,7 @@ fun case_const_names thy =
                     cons (case_name, AList.lookup (op =) descr index
                                      |> the |> #3 |> length))
               (Datatype.get_all thy) [] @
-  map (apsnd length o snd) (#codatatypes (TheoryData.get thy))
+  map (apsnd length o snd) (#codatatypes (Data.get thy))
 
 (* Proof.context -> term list -> const_table *)
 fun const_def_table ctxt ts =
@@ -1227,7 +1225,7 @@ val basic_ersatz_table =
 
 (* theory -> (string * string) list *)
 fun ersatz_table thy =
-  fold (append o snd) (#frac_types (TheoryData.get thy)) basic_ersatz_table
+  fold (append o snd) (#frac_types (Data.get thy)) basic_ersatz_table
 
 (* const_table Unsynchronized.ref -> string -> term list -> unit *)
 fun add_simps simp_table s eqs =
@@ -1244,7 +1242,7 @@ fun multi_specialize_type thy slack (x as (s, T)) t =
         if s = s' then
           ys |> (if AList.defined (op =) ys T' then
                    I
-                else
+                 else
                   cons (T', Refute.monomorphic_term
                                 (Sign.typ_match thy (T', T) Vartab.empty) t)
                   handle Type.TYPE_MATCH => I

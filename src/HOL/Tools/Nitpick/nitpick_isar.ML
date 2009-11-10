@@ -132,7 +132,7 @@ fun unnegate_raw_param (name, value) =
                           | _ => value)
   | NONE => (name, value)
 
-structure TheoryData = TheoryDataFun(
+structure Data = Theory_Data(
   type T = {params: raw_param list}
   val empty = {params = rev default_default_params}
   val copy = I
@@ -142,12 +142,12 @@ structure TheoryData = TheoryDataFun(
 
 (* raw_param -> theory -> theory *)
 fun set_default_raw_param param thy =
-  let val {params} = TheoryData.get thy in
-    TheoryData.put
-        {params = AList.update (op =) (unnegate_raw_param param) params} thy
+  let val {params} = Data.get thy in
+    Data.put {params = AList.update (op =) (unnegate_raw_param param) params}
+             thy
   end
 (* theory -> raw_param list *)
-val default_raw_params = #params o TheoryData.get
+val default_raw_params = #params o Data.get
 
 (* string -> bool *)
 fun is_punctuation s = (s = "," orelse s = "-" orelse s = "\<midarrow>")

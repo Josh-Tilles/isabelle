@@ -19,15 +19,14 @@ struct
 
 open Predicate_Compile_Aux;
 
-structure Data = TheoryDataFun
+structure Data = Theory_Data
 (
   type T =
     {const_spec_table : thm list Symtab.table};
   val empty =
     {const_spec_table = Symtab.empty};
-  val copy = I;
   val extend = I;
-  fun merge _
+  fun merge
     ({const_spec_table = const_spec_table1},
      {const_spec_table = const_spec_table2}) =
      {const_spec_table = Symtab.merge (K true) (const_spec_table1, const_spec_table2)}
@@ -113,7 +112,7 @@ fun split_all_pairs thy th =
     val (rewr, _) = fold_map mk_tuple_rewrites frees nctxt 
     val t' = Pattern.rewrite_term thy rewr [] t
     val tac = Skip_Proof.cheat_tac thy
-    val th'' = Goal.prove ctxt (Term.add_free_names t' []) [] t' (fn {...} => tac)
+    val th'' = Goal.prove ctxt (Term.add_free_names t' []) [] t' (fn _ => tac)
     val th''' = LocalDefs.unfold ctxt [@{thm split_conv}] th''
   in
     th'''
@@ -161,7 +160,9 @@ fun store_thm_in_table options ignore_consts thy th=
 
 fun make_const_spec_table options thy =
   let
-    fun store ignore_const f = fold (store_thm_in_table options ignore_const thy) (map (Thm.transfer thy) (f (ProofContext.init thy)))
+    fun store ignore_const f =
+      fold (store_thm_in_table options ignore_const thy)
+        (map (Thm.transfer thy) (f (ProofContext.init thy)))
     val table = Symtab.empty
       |> store [] Predicate_Compile_Alternative_Defs.get
     val ignore_consts = Symtab.keys table

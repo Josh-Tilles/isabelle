@@ -105,13 +105,12 @@ fun merge_class_data _ (ClassData { consts = consts,
     (Thm.merge_thms (defs1, defs2),
       AList.merge (op =) (K true) (operations1, operations2)));
 
-structure ClassData = TheoryDataFun
+structure ClassData = Theory_Data
 (
   type T = class_data Graph.T
   val empty = Graph.empty;
-  val copy = I;
   val extend = I;
-  fun merge _ = Graph.join merge_class_data;
+  val merge = Graph.join merge_class_data;
 );
 
 
@@ -398,7 +397,7 @@ datatype instantiation = Instantiation of {
     (*(instantiation parameter, type constructor), (local instantiation parameter, typ)*)
 }
 
-structure Instantiation = ProofDataFun
+structure Instantiation = Proof_Data
 (
   type T = instantiation
   fun init _ = Instantiation { arities = ([], [], []), params = [] };

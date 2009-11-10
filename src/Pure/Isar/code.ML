@@ -343,15 +343,17 @@ fun constrset_of_consts thy cs =
   let
     val _ = map (fn (c, _) => if (is_some o AxClass.class_of_param thy) c
       then error ("Is a class parameter: " ^ string_of_const thy c) else ()) cs;
-    fun no_constr (c, ty) = error ("Not a datatype constructor: " ^ string_of_const thy c
-      ^ " :: " ^ string_of_typ thy ty);
+    fun no_constr s (c, ty) = error ("Not a datatype constructor:\n" ^ string_of_const thy c
+      ^ " :: " ^ string_of_typ thy ty ^ "\n" ^ enclose "(" ")" s);
     fun last_typ c_ty ty =
       let
-        val frees = OldTerm.typ_tfrees ty;
+        val tfrees = Term.add_tfreesT ty [];
         val (tyco, vs) = ((apsnd o map) (dest_TFree) o dest_Type o snd o strip_type) ty
-          handle TYPE _ => no_constr c_ty
-        val _ = if has_duplicates (eq_fst (op =)) vs then no_constr c_ty else ();
-        val _ = if length frees <> length vs then no_constr c_ty else ();
+          handle TYPE _ => no_constr "bad type" c_ty
+        val _ = if has_duplicates (eq_fst (op =)) vs
+          then no_constr "duplicate type variables in datatype" c_ty else ();
+        val _ = if length tfrees <> length vs
+          then no_constr "type variables missing in datatype" c_ty else ();
       in (tyco, vs) end;
     fun ty_sorts (c, ty) =
       let
@@ -703,13 +705,12 @@ fun del_eqn thm thy = case mk_eqn_liberal thy thm
 
 (* c.f. src/HOL/Tools/recfun_codegen.ML *)
 
-structure Code_Target_Attr = TheoryDataFun (
+structure Code_Target_Attr = Theory_Data
+(
   type T = (string -> thm -> theory -> theory) option;
   val empty = NONE;
-  val copy = I;
   val extend = I;
-  fun merge _ (NONE, f2) = f2
-    | merge _ (f1, _) = f1;
+  fun merge (f1, f2) = if is_some f1 then f1 else f2;
 );
 
 fun set_code_target_attr f = Code_Target_Attr.map (K (SOME f));
@@ -794,12 +795,12 @@ end;
 structure Predicate_Compile_Preproc_Const_Defs : PREDICATE_COMPILE_PREPROC_CONST_DEFS =
 struct
 
-structure Data = GenericDataFun
+structure Data = Generic_Data
 (
   type T = thm list;
   val empty = [];
   val extend = I;
-  fun merge _ = Thm.merge_thms;
+  val merge = Thm.merge_thms;
 );
 
 val get = Data.get o Context.Proof;

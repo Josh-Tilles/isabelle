@@ -34,7 +34,7 @@ fun make_target target is_locale is_class instantiation overloading =
 
 val global_target = make_target "" false false ([], [], []) [];
 
-structure Data = ProofDataFun
+structure Data = Proof_Data
 (
   type T = target;
   fun init _ = global_target;
@@ -71,25 +71,37 @@ fun pretty (Target {target, is_class, instantiation, overloading, ...}) ctxt =
      else pretty_thy ctxt target is_class);
 
 
-(* target declarations *)
+(* generic declarations *)
 
-fun target_decl add (Target {target, ...}) d lthy =
+local
+
+fun direct_decl decl =
+  let val decl0 = Morphism.form decl in
+    LocalTheory.theory (Context.theory_map decl0) #>
+    LocalTheory.target (Context.proof_map decl0)
+  end;
+
+fun target_decl add (Target {target, ...}) pervasive decl lthy =
   let
-    val d' = Morphism.transform (LocalTheory.target_morphism lthy) d;
-    val d0 = Morphism.form d';
+    val global_decl = Morphism.transform (LocalTheory.global_morphism lthy) decl;
+    val target_decl = Morphism.transform (LocalTheory.target_morphism lthy) decl;
   in
     if target = "" then
       lthy
-      |> LocalTheory.theory (Context.theory_map d0)
-      |> LocalTheory.target (Context.proof_map d0)
+      |> direct_decl target_decl
     else
       lthy
-      |> LocalTheory.target (add target d')
+      |> pervasive ? direct_decl global_decl
+      |> LocalTheory.target (add target target_decl)
   end;
+
+in
 
 val type_syntax = target_decl Locale.add_type_syntax;
 val term_syntax = target_decl Locale.add_term_syntax;
 val declaration = target_decl Locale.add_declaration;
+
+end;
 
 fun class_target (Target {target, ...}) f =
   LocalTheory.raw_theory f #>
@@ -178,7 +190,7 @@ fun locale_const (Target {target, is_class, ...}) (prmode as (mode, _)) ((b, mx)
     val b' = Morphism.binding phi b;
     val rhs' = Morphism.term phi rhs;
     val arg = (b', Term.close_schematic_term rhs');
-    val similar_body = Type.similar_types (rhs, rhs');
+    val same_shape = Term.aconv_untyped (rhs, rhs');
     (* FIXME workaround based on educated guess *)
     val prefix' = Binding.prefix_of b';
     val class_global =
@@ -186,12 +198,12 @@ fun locale_const (Target {target, is_class, ...}) (prmode as (mode, _)) ((b, mx)
       not (null prefix') andalso
       fst (snd (split_last prefix')) = Class_Target.class_prefix target;
   in
-    not (is_class andalso (similar_body orelse class_global)) ?
+    not (is_class andalso (same_shape orelse class_global)) ?
       (Context.mapping_result
         (Sign.add_abbrev PrintMode.internal arg)
         (ProofContext.add_abbrev PrintMode.internal arg)
       #-> (fn (lhs' as Const (d, _), _) =>
-          similar_body ?
+          same_shape ?
             (Context.mapping (Sign.revert_abbrev mode d) (ProofContext.revert_abbrev mode d) #>
              Morphism.form (ProofContext.target_notation true prmode [(lhs', mx)]))))
   end;
@@ -219,7 +231,7 @@ fun declare_const (ta as Target {target, is_locale, is_class, ...}) depends ((b,
     val t = Term.list_comb (const, map Free xs);
   in
     lthy'
-    |> is_locale ? term_syntax ta (locale_const ta Syntax.mode_default ((b, mx2), t))
+    |> is_locale ? term_syntax ta false (locale_const ta Syntax.mode_default ((b, mx2), t))
     |> is_class ? class_target ta (Class_Target.declare target ((b, mx1), t))
     |> LocalDefs.add_def ((b, NoSyn), t)
   end;
@@ -244,7 +256,7 @@ fun abbrev (ta as Target {target, is_locale, is_class, ...}) prmode ((b, mx), t)
         LocalTheory.theory_result (Sign.add_abbrev PrintMode.internal (b, global_rhs))
         #-> (fn (lhs, _) =>
           let val lhs' = Term.list_comb (Logic.unvarify lhs, xs) in
-            term_syntax ta (locale_const ta prmode ((b, mx2), lhs')) #>
+            term_syntax ta false (locale_const ta prmode ((b, mx2), lhs')) #>
             is_class ? class_target ta (Class_Target.abbrev target prmode ((b, mx1), t'))
           end)
       else

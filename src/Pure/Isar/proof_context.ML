@@ -177,7 +177,7 @@ fun make_ctxt (mode, naming, syntax, consts, facts, cases) =
 
 val local_naming = Name_Space.default_naming |> Name_Space.add_path "local";
 
-structure ContextData = ProofDataFun
+structure ContextData = Proof_Data
 (
   type T = ctxt;
   fun init thy =
@@ -515,7 +515,7 @@ fun prepare_patternT ctxt T =
 
 local
 
-structure Allow_Dummies = ProofDataFun(type T = bool fun init _ = false);
+structure Allow_Dummies = Proof_Data(type T = bool fun init _ = false);
 
 fun check_dummies ctxt t =
   if Allow_Dummies.get ctxt then t
@@ -1032,7 +1032,10 @@ fun notation add mode args ctxt =
     (Local_Syntax.update_modesyntax (theory_of ctxt) add mode (map_filter (const_syntax ctxt) args));
 
 fun target_notation add mode args phi =
-  let val args' = filter (fn (t, _) => Type.similar_types (t, Morphism.term phi t)) args;
+  let
+    val args' = args |> map_filter (fn (t, mx) =>
+      let val t' = Morphism.term phi t
+      in if Term.aconv_untyped (t, t') then SOME (t', mx) else NONE end);
   in Context.mapping (Sign.notation add mode args') (notation add mode args') end;
 
 end;
