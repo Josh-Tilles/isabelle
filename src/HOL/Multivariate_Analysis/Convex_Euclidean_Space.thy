@@ -379,6 +379,9 @@ lemma mem_convex:
   shows "((1 - u) *\<^sub>R a + u *\<^sub>R b) \<in> s"
   using assms unfolding convex_alt by auto
 
+lemma convex_vec1:"convex (vec1 ` s) = convex (s::real set)"
+  unfolding convex_def Ball_def forall_vec1 unfolding vec1_dest_vec1_simps image_iff by auto
+
 lemma convex_empty[intro]: "convex {}"
   unfolding convex_def by simp
 
@@ -1952,16 +1955,17 @@ proof- from assms[unfolded affine_dependent_explicit] guess s .. then guess u ..
 subsection {* Helly's theorem. *}
 
 lemma helly_induct: fixes f::"(real^'n::finite) set set"
-  assumes "f hassize n" "n \<ge> CARD('n) + 1"
+  assumes "card f = n" "n \<ge> CARD('n) + 1"
   "\<forall>s\<in>f. convex s" "\<forall>t\<subseteq>f. card t = CARD('n) + 1 \<longrightarrow> \<Inter> t \<noteq> {}"
   shows "\<Inter> f \<noteq> {}"
-  using assms unfolding hassize_def apply(erule_tac conjE) proof(induct n arbitrary: f)
+using assms proof(induct n arbitrary: f)
 case (Suc n)
-show "\<Inter> f \<noteq> {}" apply(cases "n = CARD('n)") apply(rule Suc(4)[rule_format])
-  unfolding card_Diff_singleton_if[OF Suc(5)] and Suc(6) proof-
+have "finite f" using `card f = Suc n` by (auto intro: card_ge_0_finite)
+show "\<Inter> f \<noteq> {}" apply(cases "n = CARD('n)") apply(rule Suc(5)[rule_format])
+  unfolding `card f = Suc n` proof-
   assume ng:"n \<noteq> CARD('n)" hence "\<exists>X. \<forall>s\<in>f. X s \<in> \<Inter>(f - {s})" apply(rule_tac bchoice) unfolding ex_in_conv
-    apply(rule, rule Suc(1)[rule_format])  unfolding card_Diff_singleton_if[OF Suc(5)] and Suc(6)
-    defer apply(rule Suc(3)[rule_format]) defer apply(rule Suc(4)[rule_format]) using Suc(2,5) by auto
+    apply(rule, rule Suc(1)[rule_format]) unfolding card_Diff_singleton_if[OF `finite f`] `card f = Suc n`
+    defer defer apply(rule Suc(4)[rule_format]) defer apply(rule Suc(5)[rule_format]) using Suc(3) `finite f` by auto
   then obtain X where X:"\<forall>s\<in>f. X s \<in> \<Inter>(f - {s})" by auto
   show ?thesis proof(cases "inj_on X f")
     case False then obtain s t where st:"s\<noteq>t" "s\<in>f" "t\<in>f" "X s = X t" unfolding inj_on_def by auto
@@ -1970,7 +1974,7 @@ show "\<Inter> f \<noteq> {}" apply(cases "n = CARD('n)") apply(rule Suc(4)[rule
       apply(rule, rule X[rule_format]) using X st by auto
   next case True then obtain m p where mp:"m \<inter> p = {}" "m \<union> p = X ` f" "convex hull m \<inter> convex hull p \<noteq> {}"
       using radon_partition[of "X ` f"] and affine_dependent_biggerset[of "X ` f"]
-      unfolding card_image[OF True] and Suc(6) using Suc(2,5) and ng by auto
+      unfolding card_image[OF True] and `card f = Suc n` using Suc(3) `finite f` and ng by auto
     have "m \<subseteq> X ` f" "p \<subseteq> X ` f" using mp(2) by auto
     then obtain g h where gh:"m = X ` g" "p = X ` h" "g \<subseteq> f" "h \<subseteq> f" unfolding subset_image_iff by auto 
     hence "f \<union> (g \<union> h) = f" by auto
@@ -1978,7 +1982,7 @@ show "\<Inter> f \<noteq> {}" apply(cases "n = CARD('n)") apply(rule Suc(4)[rule
       unfolding mp(2)[unfolded image_Un[THEN sym] gh] by auto
     have *:"g \<inter> h = {}" using mp(1) unfolding gh using inj_on_image_Int[OF True gh(3,4)] by auto
     have "convex hull (X ` h) \<subseteq> \<Inter> g" "convex hull (X ` g) \<subseteq> \<Inter> h"
-      apply(rule_tac [!] hull_minimal) using Suc(3) gh(3-4)  unfolding mem_def unfolding subset_eq
+      apply(rule_tac [!] hull_minimal) using Suc gh(3-4)  unfolding mem_def unfolding subset_eq
       apply(rule_tac [2] convex_Inter, rule_tac [4] convex_Inter) apply rule prefer 3 apply rule proof-
       fix x assume "x\<in>X ` g" then guess y unfolding image_iff ..
       thus "x\<in>\<Inter>h" using X[THEN bspec[where x=y]] using * f by auto next
@@ -1989,10 +1993,10 @@ show "\<Inter> f \<noteq> {}" apply(cases "n = CARD('n)") apply(rule Suc(4)[rule
 qed(insert dimindex_ge_1, auto) qed(auto)
 
 lemma helly: fixes f::"(real^'n::finite) set set"
-  assumes "finite f" "card f \<ge> CARD('n) + 1" "\<forall>s\<in>f. convex s"
+  assumes "card f \<ge> CARD('n) + 1" "\<forall>s\<in>f. convex s"
           "\<forall>t\<subseteq>f. card t = CARD('n) + 1 \<longrightarrow> \<Inter> t \<noteq> {}"
   shows "\<Inter> f \<noteq>{}"
-  apply(rule helly_induct) unfolding hassize_def using assms by auto
+  apply(rule helly_induct) using assms by auto
 
 subsection {* Convex hull is "preserved" by a linear function. *}
 
@@ -3379,6 +3383,4 @@ lemma path_connected_sphere: assumes "2 \<le> CARD('n::finite)" shows "path_conn
 lemma connected_sphere: "2 \<le> CARD('n) \<Longrightarrow> connected {x::real^'n::finite. norm(x - a) = r}"
   using path_connected_sphere path_connected_imp_connected by auto
  
-(** In continuous_at_vec1_norm : Use \<And> instead of \<forall>. **)
-
 end
