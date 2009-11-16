@@ -190,8 +190,8 @@ structure Data = Theory_Data(
   val extend = I
   fun merge ({frac_types = fs1, codatatypes = cs1},
                {frac_types = fs2, codatatypes = cs2}) : T =
-    {frac_types = AList.merge (op =) (op =) (fs1, fs2),
-     codatatypes = AList.merge (op =) (op =) (cs1, cs2)})
+    {frac_types = AList.merge (op =) (K true) (fs1, fs2),
+     codatatypes = AList.merge (op =) (K true) (cs1, cs2)})
 
 (* term * term -> term *)
 fun s_conj (t1, @{const True}) = t1
@@ -1045,7 +1045,7 @@ fun all_axioms_of thy =
     (* theory list -> term list *)
     val axioms_of_thys = maps Thm.axioms_of #> map (apsnd prop_of)
     val specs = Defs.all_specifications_of (Theory.defs_of thy)
-    val def_names = specs |> maps snd |> filter #is_def |> map #name
+    val def_names = specs |> maps snd |> map_filter #def
                     |> OrdList.make fast_string_ord
     val thys = thy :: Theory.ancestors_of thy
     val (built_in_thys, user_thys) = List.partition is_built_in_theory thys

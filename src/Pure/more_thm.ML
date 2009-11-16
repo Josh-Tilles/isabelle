@@ -86,7 +86,6 @@ sig
   val put_name_hint: string -> thm -> thm
   val definitionK: string
   val theoremK: string
-  val generatedK : string
   val lemmaK: string
   val corollaryK: string
   val get_kind: thm -> string
@@ -280,9 +279,10 @@ in
 
 val forall_elim_vars = forall_elim_vars_aux Term.strip_all_vars;
 
-fun forall_elim_var i th = forall_elim_vars_aux
-  (fn Const ("all", _) $ Abs (a, T, _) => [(a, T)]
-  | _ => raise THM ("forall_elim_vars", i, [th])) i th;
+fun forall_elim_var i th =
+  forall_elim_vars_aux
+    (fn Const ("all", _) $ Abs (a, T, _) => [(a, T)]
+      | _ => raise THM ("forall_elim_vars", i, [th])) i th;
 
 end;
 
@@ -413,7 +413,6 @@ fun put_name_hint name = untag_rule Markup.nameN #> tag_rule (Markup.nameN, name
 
 val definitionK = "definition";
 val theoremK = "theorem";
-val generatedK = "generatedK"
 val lemmaK = "lemma";
 val corollaryK = "corollary";
 
