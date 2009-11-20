@@ -150,7 +150,7 @@ fun calc_axioms
                    mk_ex("n",(%%:(dname^"_take") $ Bound 0)`Bound 1 === Bound 1)));
 
   in (dnam,
-      (if definitional then [reach_ax] else [abs_iso_ax, rep_iso_ax, reach_ax]),
+      (if definitional then [] else [abs_iso_ax, rep_iso_ax, reach_ax]),
       (if definitional then [when_def] else [when_def, copy_def]) @
       con_defs @ dis_defs @ mat_defs @ pat_defs @ sel_defs @
       [take_def, finite_def])
@@ -241,10 +241,11 @@ fun add_axioms definitional comp_dnam (eqs : eq list) thy' =
     val thy = thy'
       |> fold add_one (mapn (calc_axioms definitional map_tab comp_dname eqs) 0 eqs);
 
+    val use_copy_def = length eqs>1 andalso not definitional;
   in
     thy
     |> Sign.add_path comp_dnam  
-    |> add_defs_infer (bisim_def::(if length eqs>1 then [copy_def] else []))
+    |> add_defs_infer (bisim_def::(if use_copy_def then [copy_def] else []))
     |> Sign.parent_path
     |> fold add_matchers eqs
   end; (* let (add_axioms) *)
