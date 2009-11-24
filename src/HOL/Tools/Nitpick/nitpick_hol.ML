@@ -496,7 +496,7 @@ fun unregister_codatatype co_T = register_codatatype co_T "" []
 type typedef_info =
   {rep_type: typ, abs_type: typ, Rep_name: string, Abs_name: string,
    set_def: thm option, prop_of_Rep: thm, set_name: string,
-   Rep_inverse: thm option}
+   Abs_inverse: thm option, Rep_inverse: thm option}
 
 (* theory -> string -> typedef_info *)
 fun typedef_info thy s =
@@ -505,13 +505,14 @@ fun typedef_info thy s =
           Abs_name = @{const_name Abs_Frac}, Rep_name = @{const_name Rep_Frac},
           set_def = NONE, prop_of_Rep = @{prop "Rep_Frac x \<in> Frac"}
                           |> Logic.varify,
-          set_name = @{const_name Frac}, Rep_inverse = NONE}
+          set_name = @{const_name Frac}, Abs_inverse = NONE, Rep_inverse = NONE}
   else case Typedef.get_info thy s of
-    SOME {abs_type, rep_type, Abs_name, Rep_name, set_def, Rep, Rep_inverse,
-          ...} =>
+    SOME {abs_type, rep_type, Abs_name, Rep_name, set_def, Rep, Abs_inverse,
+          Rep_inverse, ...} =>
     SOME {abs_type = abs_type, rep_type = rep_type, Abs_name = Abs_name,
           Rep_name = Rep_name, set_def = set_def, prop_of_Rep = prop_of Rep,
-          set_name = set_prefix ^ s, Rep_inverse = SOME Rep_inverse}
+          set_name = set_prefix ^ s, Abs_inverse = SOME Abs_inverse,
+          Rep_inverse = SOME Rep_inverse}
   | NONE => NONE
 
 (* FIXME: use antiquotation for "code_numeral" below or detect "rep_datatype",
@@ -1288,11 +1289,13 @@ fun optimized_typedef_axioms thy (abs_s, abs_Ts) =
       end
     | NONE => []
   end
-(* theory -> styp -> term *)
-fun inverse_axiom_for_rep_fun thy (x as (_, T)) =
+(* theory -> styp -> term list *)
+fun inverse_axioms_for_rep_fun thy (x as (_, T)) =
   let val abs_T = domain_type T in
-    typedef_info thy (fst (dest_Type abs_T)) |> the |> #Rep_inverse |> the
-    |> prop_of |> Refute.specialize_type thy x
+    typedef_info thy (fst (dest_Type abs_T)) |> the
+    |> pairf #Abs_inverse #Rep_inverse
+    |> pairself (Refute.specialize_type thy x o prop_of o the)
+    ||> single |> op ::
   end
 
 (* theory -> int * styp -> term *)
@@ -1493,14 +1496,7 @@ fun unfold_defs_in_term (ext_ctxt as {thy, destroy_constrs, fast_descrs,
         let
           val (const, ts) =
             if is_built_in_const fast_descrs x then
-              if s = @{const_name finite} then
-                if is_finite_type ext_ctxt (domain_type T) then
-                  (Abs ("A", domain_type T, @{const True}), ts)
-                else case ts of
-                  [Const (@{const_name top}, _)] => (@{const False}, [])
-                | _ => (Const x, ts)
-              else
-                (Const x, ts)
+              (Const x, ts)
             else case AList.lookup (op =) case_names s of
               SOME n =>
               let
@@ -2475,7 +2471,7 @@ fun skolemize_term_and_more (ext_ctxt as {thy, def_table, skolems, ...})
                        list_comb (f (),
                                   map Bound (length trunk_arg_Ts - 1 downto 0))
                    in
-                     List.foldl absdummy
+                     List.foldr absdummy
                                 (Const (set_oper, [set_T, set_T] ---> set_T)
                                         $ app pos $ app neg) trunk_arg_Ts
                    end
@@ -3063,8 +3059,8 @@ fun axioms_for_term
                                                     (extra_table def_table s) x)
                      |> add_axioms_for_term depth
                                             (Const (mate_of_rep_fun thy x))
-                     |> add_maybe_def_axiom depth
-                                            (inverse_axiom_for_rep_fun thy x)
+                     |> fold (add_def_axiom depth)
+                             (inverse_axioms_for_rep_fun thy x)
              else
                accum |> user_axioms <> SOME false
                         ? fold (add_nondef_axiom depth)
