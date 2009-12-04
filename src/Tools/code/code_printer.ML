@@ -233,7 +233,7 @@ fun gen_print_app print_app_expr print_term syntax_const thm vars fxy (app as ((
    of NONE => brackify fxy (print_app_expr thm vars app)
     | SOME (k, print) =>
         let
-          fun print' fxy ts = print (print_term thm) thm vars fxy (ts ~~ curry Library.take k tys);
+          fun print' fxy ts = print (print_term thm) thm vars fxy (ts ~~ take k tys);
         in if k = length ts
           then print' fxy ts
         else if k < length ts

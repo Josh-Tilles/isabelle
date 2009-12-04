@@ -366,7 +366,7 @@ let
       val case2 = Syntax.const "_case1" $ Syntax.const Term.dummy_patternN
                                         $ NilC;
       val cs = Syntax.const "_case2" $ case1 $ case2
-      val ft = DatatypeCase.case_tr false Datatype.info_of_constr
+      val ft = Datatype_Case.case_tr false Datatype.info_of_constr
                  ctxt [x, cs]
     in lambda x ft end;
 
@@ -2665,6 +2665,10 @@ apply(subgoal_tac "length (remdups xs) <= length xs")
 apply(rule length_remdups_leq)
 done
 
+lemma remdups_filter: "remdups(filter P xs) = filter P (remdups xs)"
+apply(induct xs)
+apply auto
+done
 
 lemma distinct_map:
   "distinct(map f xs) = (distinct xs & inj_on f (set xs))"

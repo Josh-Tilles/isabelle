@@ -78,7 +78,7 @@ fun print_haskell_stmt labelled_name syntax_class syntax_tyco syntax_const
     and print_app_expr tyvars thm vars ((c, (_, tys)), ts) = case contr_classparam_typs c
      of [] => (str o deresolve) c :: map (print_term tyvars thm vars BR) ts
       | fingerprint => let
-          val ts_fingerprint = ts ~~ curry Library.take (length ts) fingerprint;
+          val ts_fingerprint = ts ~~ take (length ts) fingerprint;
           val needs_annotation = forall (fn (_, NONE) => true | (t, SOME _) =>
             (not o Code_Thingol.locally_monomorphic) t) ts_fingerprint;
           fun print_term_anno (t, NONE) _ = print_term tyvars thm vars BR t
@@ -86,7 +86,7 @@ fun print_haskell_stmt labelled_name syntax_class syntax_tyco syntax_const
                 brackets [print_term tyvars thm vars NOBR t, str "::", print_typ tyvars NOBR ty];
         in
           if needs_annotation then
-            (str o deresolve) c :: map2 print_term_anno ts_fingerprint (curry Library.take (length ts) tys)
+            (str o deresolve) c :: map2 print_term_anno ts_fingerprint (take (length ts) tys)
           else (str o deresolve) c :: map (print_term tyvars thm vars BR) ts
         end
     and print_app tyvars = gen_print_app (print_app_expr tyvars) (print_term tyvars) syntax_const
