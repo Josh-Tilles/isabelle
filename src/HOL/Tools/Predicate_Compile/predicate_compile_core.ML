@@ -1282,7 +1282,7 @@ fun compile_match compilation_modifiers compfuns additional_arguments
     val v' = Free (name', T);
   in
     lambda v (fst (Datatype.make_case
-      (ProofContext.init thy) DatatypeCase.Quiet [] v
+      (ProofContext.init thy) Datatype_Case.Quiet [] v
       [(HOLogic.mk_tuple out_ts,
         if null eqs'' then success_t
         else Const (@{const_name HOL.If}, HOLogic.boolT --> U --> U --> U) $
@@ -2586,11 +2586,11 @@ fun eval thy param_user_modes (options as (depth_limit, (random, annotated))) t_
     val t' = mk_map compfuns T HOLogic.termT (HOLogic.term_of_const T) t;
     val eval =
       if random then
-        Code_ML.eval NONE ("Predicate_Compile_Core.random_eval_ref", random_eval_ref)
+        Code_Eval.eval NONE ("Predicate_Compile_Core.random_eval_ref", random_eval_ref)
             (fn proc => fn g => fn s => g s |>> Predicate.map proc) thy t' []
           |> Random_Engine.run
       else
-        Code_ML.eval NONE ("Predicate_Compile_Core.eval_ref", eval_ref) Predicate.map thy t' []
+        Code_Eval.eval NONE ("Predicate_Compile_Core.eval_ref", eval_ref) Predicate.map thy t' []
   in (T, eval) end;
 
 fun values ctxt param_user_modes options k t_compr =

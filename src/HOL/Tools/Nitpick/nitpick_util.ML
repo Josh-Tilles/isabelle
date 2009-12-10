@@ -1,4 +1,4 @@
-(*  Title:      HOL/Nitpick/Tools/nitpick_util.ML
+(*  Title:      HOL/Tools/Nitpick/nitpick_util.ML
     Author:     Jasmin Blanchette, TU Muenchen
     Copyright   2008, 2009
 
@@ -250,8 +250,8 @@ val subscript = implode o map (prefix "\<^isub>") o explode
 val nat_subscript = subscript o signed_string_of_int
 
 (* Time.time option -> ('a -> 'b) -> 'a -> 'b *)
-fun time_limit NONE f = f
-  | time_limit (SOME delay) f = TimeLimit.timeLimit delay f
+fun time_limit NONE = I
+  | time_limit (SOME delay) = TimeLimit.timeLimit delay
 
 (* Time.time option -> tactic -> tactic *)
 fun DETERM_TIMEOUT delay tac st =

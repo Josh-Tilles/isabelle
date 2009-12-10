@@ -42,7 +42,7 @@ fun parse_pattern ctxt nm =
       | _ => Consts.intern consts nm);
   in
     (case try (Consts.the_abbreviation consts) nm' of
-      SOME (_, rhs) => apply_dummies rhs
+      SOME (_, rhs) => apply_dummies (ProofContext.expand_abbrevs ctxt rhs)
     | NONE => ProofContext.read_term_pattern ctxt nm)
   end;
 
@@ -409,7 +409,7 @@ fun find_theorems ctxt opt_goal opt_limit rem_dups raw_criteria =
 
         val len = length matches;
         val lim = the_default (! limit) opt_limit;
-      in (SOME len, Library.drop (len - lim, matches)) end;
+      in (SOME len, drop (len - lim) matches) end;
 
     val find =
       if rem_dups orelse is_none opt_limit

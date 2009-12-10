@@ -26,35 +26,41 @@ object XML
   case class Elem(name: String, attributes: Attributes, body: List[Tree]) extends Tree
   case class Text(content: String) extends Tree
 
+  def elem(name: String, body: List[Tree]) = Elem(name, Nil, body)
+  def elem(name: String) = Elem(name, Nil, Nil)
+
 
   /* string representation */
 
   private def append_text(text: String, s: StringBuilder) {
-    for (c <- text.elements) c match {
-      case '<' => s.append("&lt;")
-      case '>' => s.append("&gt;")
-      case '&' => s.append("&amp;")
-      case '"' => s.append("&quot;")
-      case '\'' => s.append("&apos;")
-      case _ => s.append(c)
+    if (text == null) s ++ text
+    else {
+      for (c <- text.elements) c match {
+        case '<' => s ++ "&lt;"
+        case '>' => s ++ "&gt;"
+        case '&' => s ++ "&amp;"
+        case '"' => s ++ "&quot;"
+        case '\'' => s ++ "&apos;"
+        case _ => s + c
+      }
     }
   }
 
   private def append_elem(name: String, atts: Attributes, s: StringBuilder) {
-    s.append(name)
+    s ++ name
     for ((a, x) <- atts) {
-      s.append(" "); s.append(a); s.append("=\""); append_text(x, s); s.append("\"")
+      s ++ " "; s ++ a; s ++ "=\""; append_text(x, s); s ++ "\""
     }
   }
 
   private def append_tree(tree: Tree, s: StringBuilder) {
     tree match {
       case Elem(name, atts, Nil) =>
-        s.append("<"); append_elem(name, atts, s); s.append("/>")
+        s ++ "<"; append_elem(name, atts, s); s ++ "/>"
       case Elem(name, atts, ts) =>
-        s.append("<"); append_elem(name, atts, s); s.append(">")
+        s ++ "<"; append_elem(name, atts, s); s ++ ">"
         for (t <- ts) append_tree(t, s)
-        s.append("</"); s.append(name); s.append(">")
+        s ++ "</"; s ++ name; s ++ ">"
       case Text(text) => append_text(text, s)
     }
   }
@@ -86,18 +92,10 @@ object XML
   }
 
 
-  /* document object model (DOM) */
+  /* document object model (W3C DOM) */
 
-  def document(tree: Tree, styles: String*) = {
-    val doc = DocumentBuilderFactory.newInstance.newDocumentBuilder.newDocument
-    doc.appendChild(doc.createProcessingInstruction("xml", "version=\"1.0\""))
-
-    for (style <- styles) {
-      doc.appendChild(doc.createProcessingInstruction("xml-stylesheet",
-        "href=\"" + style + "\" type=\"text/css\""))
-    }
-
-    // main body
+  def document_node(doc: Document, tree: Tree): Node =
+  {
     def DOM(tr: Tree): Node = tr match {
       case Elem(name, atts, ts) => {
         val node = doc.createElement(name)
@@ -107,9 +105,21 @@ object XML
       }
       case Text(txt) => doc.createTextNode(txt)
     }
+    DOM(tree)
+  }
+
+  def document(tree: Tree, styles: String*): Document =
+  {
+    val doc = DocumentBuilderFactory.newInstance.newDocumentBuilder.newDocument
+    doc.appendChild(doc.createProcessingInstruction("xml", "version=\"1.0\""))
+
+    for (style <- styles) {
+      doc.appendChild(doc.createProcessingInstruction("xml-stylesheet",
+        "href=\"" + style + "\" type=\"text/css\""))
+    }
     val root_elem = tree match {
-      case Elem(_, _, _) => DOM(tree)
-      case Text(_) => DOM(Elem(Markup.ROOT, Nil, List(tree)))
+      case Elem(_, _, _) => document_node(doc, tree)
+      case Text(_) => document_node(doc, (Elem(Markup.ROOT, Nil, List(tree))))
     }
     doc.appendChild(root_elem)
     doc

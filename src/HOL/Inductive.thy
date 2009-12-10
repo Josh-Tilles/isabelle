@@ -5,17 +5,16 @@
 header {* Knaster-Tarski Fixpoint Theorem and inductive definitions *}
 
 theory Inductive 
-imports Lattices Sum_Type
+imports Complete_Lattice
 uses
   ("Tools/inductive.ML")
   "Tools/dseq.ML"
   ("Tools/inductive_codegen.ML")
-  ("Tools/Datatype/datatype_aux.ML")
-  ("Tools/Datatype/datatype_prop.ML")
-  ("Tools/Datatype/datatype_rep_proofs.ML")
+  "Tools/Datatype/datatype_aux.ML"
+  "Tools/Datatype/datatype_prop.ML"
+  "Tools/Datatype/datatype_case.ML"
   ("Tools/Datatype/datatype_abs_proofs.ML")
-  ("Tools/Datatype/datatype_case.ML")
-  ("Tools/Datatype/datatype.ML")
+  ("Tools/Datatype/datatype_data.ML")
   ("Tools/old_primrec.ML")
   ("Tools/primrec.ML")
   ("Tools/Datatype/datatype_codegen.ML")
@@ -262,18 +261,13 @@ text {* Package setup. *}
 theorems basic_monos =
   subset_refl imp_refl disj_mono conj_mono ex_mono all_mono if_bool_eq_conj
   Collect_mono in_mono vimage_mono
-  imp_conv_disj not_not de_Morgan_disj de_Morgan_conj
-  not_all not_ex
-  Ball_def Bex_def
-  induct_rulify_fallback
 
 use "Tools/inductive.ML"
 setup Inductive.setup
 
 theorems [mono] =
   imp_refl disj_mono conj_mono ex_mono all_mono if_bool_eq_conj
-  imp_conv_disj not_not de_Morgan_disj de_Morgan_conj
-  not_all not_ex
+  imp_mono not_mono
   Ball_def Bex_def
   induct_rulify_fallback
 
@@ -282,19 +276,15 @@ subsection {* Inductive datatypes and primitive recursion *}
 
 text {* Package setup. *}
 
-use "Tools/Datatype/datatype_aux.ML"
-use "Tools/Datatype/datatype_prop.ML"
-use "Tools/Datatype/datatype_rep_proofs.ML"
 use "Tools/Datatype/datatype_abs_proofs.ML"
-use "Tools/Datatype/datatype_case.ML"
-use "Tools/Datatype/datatype.ML"
-setup Datatype.setup
+use "Tools/Datatype/datatype_data.ML"
+setup Datatype_Data.setup
+
+use "Tools/Datatype/datatype_codegen.ML"
+setup Datatype_Codegen.setup
 
 use "Tools/old_primrec.ML"
 use "Tools/primrec.ML"
-
-use "Tools/Datatype/datatype_codegen.ML"
-setup DatatypeCodegen.setup
 
 use "Tools/inductive_codegen.ML"
 setup InductiveCodegen.setup
@@ -311,7 +301,7 @@ let
   fun fun_tr ctxt [cs] =
     let
       val x = Free (Name.variant (Term.add_free_names cs []) "x", dummyT);
-      val ft = DatatypeCase.case_tr true Datatype.info_of_constr
+      val ft = Datatype_Case.case_tr true Datatype_Data.info_of_constr
                  ctxt [x, cs]
     in lambda x ft end
 in [("_lam_pats_syntax", fun_tr)] end

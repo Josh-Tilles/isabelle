@@ -46,6 +46,7 @@ sig
   val add_syntax_tyco: string -> string -> tyco_syntax option -> theory -> theory
   val add_syntax_const: string -> string -> proto_const_syntax option -> theory -> theory
   val add_reserved: string -> string -> theory -> theory
+  val add_include: string -> string * (string * string list) option -> theory -> theory
 end;
 
 structure Code_Target : CODE_TARGET =
@@ -165,10 +166,9 @@ fun the_module_alias (Target { module_alias , ... }) = module_alias;
 
 val abort_allowed = snd o CodeTargetData.get;
 
-fun assert_target thy target =
-  case Symtab.lookup (fst (CodeTargetData.get thy)) target
-   of SOME data => target
-    | NONE => error ("Unknown code target language: " ^ quote target);
+fun assert_target thy target = if Symtab.defined (fst (CodeTargetData.get thy)) target
+  then target
+  else error ("Unknown code target language: " ^ quote target);
 
 fun put_target (target, seri) thy =
   let
@@ -217,156 +217,9 @@ fun map_module_alias target =
   map_target_data target o apsnd o apsnd o apsnd;
 
 
-(** serializer configuration **)
+(** serializer usage **)
 
-(* data access *)
-
-local
-
-fun cert_class thy class =
-  let
-    val _ = AxClass.get_info thy class;
-  in class end;
-
-fun read_class thy = cert_class thy o Sign.intern_class thy;
-
-fun cert_tyco thy tyco =
-  let
-    val _ = if Sign.declared_tyname thy tyco then ()
-      else error ("No such type constructor: " ^ quote tyco);
-  in tyco end;
-
-fun read_tyco thy = cert_tyco thy o Sign.intern_type thy;
-
-fun gen_add_syntax_class prep_class prep_const target raw_class raw_syn thy =
-  let
-    val class = prep_class thy raw_class;
-  in case raw_syn
-   of SOME syntax =>
-      thy
-      |> (map_name_syntax target o apfst o apfst)
-           (Symtab.update (class, syntax))
-    | NONE =>
-      thy
-      |> (map_name_syntax target o apfst o apfst)
-           (Symtab.delete_safe class)
-  end;
-
-fun gen_add_syntax_inst prep_class prep_tyco target (raw_tyco, raw_class) add_del thy =
-  let
-    val inst = (prep_class thy raw_class, prep_tyco thy raw_tyco);
-  in if add_del then
-    thy
-    |> (map_name_syntax target o apfst o apsnd)
-        (Symreltab.update (inst, ()))
-  else
-    thy
-    |> (map_name_syntax target o apfst o apsnd)
-        (Symreltab.delete_safe inst)
-  end;
-
-fun gen_add_syntax_tyco prep_tyco target raw_tyco raw_syn thy =
-  let
-    val tyco = prep_tyco thy raw_tyco;
-    fun check_args (syntax as (n, _)) = if n <> Sign.arity_number thy tyco
-      then error ("Number of arguments mismatch in syntax for type constructor " ^ quote tyco)
-      else syntax
-  in case raw_syn
-   of SOME syntax =>
-      thy
-      |> (map_name_syntax target o apsnd o apfst)
-           (Symtab.update (tyco, check_args syntax))
-    | NONE =>
-      thy
-      |> (map_name_syntax target o apsnd o apfst)
-           (Symtab.delete_safe tyco)
-  end;
-
-fun gen_add_syntax_const prep_const target raw_c raw_syn thy =
-  let
-    val c = prep_const thy raw_c;
-    fun check_args (syntax as (n, _)) = if n > Code.args_number thy c
-      then error ("Too many arguments in syntax for constant " ^ quote c)
-      else syntax;
-  in case raw_syn
-   of SOME syntax =>
-      thy
-      |> (map_name_syntax target o apsnd o apsnd)
-           (Symtab.update (c, check_args syntax))
-    | NONE =>
-      thy
-      |> (map_name_syntax target o apsnd o apsnd)
-           (Symtab.delete_safe c)
-  end;
-
-fun add_reserved target =
-  let
-    fun add sym syms = if member (op =) syms sym
-      then error ("Reserved symbol " ^ quote sym ^ " already declared")
-      else insert (op =) sym syms
-  in map_reserved target o add end;
-
-fun gen_add_include read_const target args thy =
-  let
-    fun add (name, SOME (content, raw_cs)) incls =
-          let
-            val _ = if Symtab.defined incls name
-              then warning ("Overwriting existing include " ^ name)
-              else ();
-            val cs = map (read_const thy) raw_cs;
-          in Symtab.update (name, (str content, cs)) incls end
-      | add (name, NONE) incls = Symtab.delete name incls;
-  in map_includes target (add args) thy end;
-
-val add_include = gen_add_include Code.check_const;
-val add_include_cmd = gen_add_include Code.read_const;
-
-fun add_module_alias target (thyname, modlname) =
-  let
-    val xs = Long_Name.explode modlname;
-    val xs' = map (Name.desymbolize true) xs;
-  in if xs' = xs
-    then map_module_alias target (Symtab.update (thyname, modlname))
-    else error ("Invalid module name: " ^ quote modlname ^ "\n"
-      ^ "perhaps try " ^ quote (Long_Name.implode xs'))
-  end;
-
-fun gen_allow_abort prep_const raw_c thy =
-  let
-    val c = prep_const thy raw_c;
-  in thy |> (CodeTargetData.map o apsnd) (insert (op =) c) end;
-
-fun zip_list (x::xs) f g =
-  f
-  #-> (fn y =>
-    fold_map (fn x => g |-- f >> pair x) xs
-    #-> (fn xys => pair ((x, y) :: xys)));
-
-
-(* concrete syntax *)
-
-structure P = OuterParse
-and K = OuterKeyword
-
-fun parse_multi_syntax parse_thing parse_syntax =
-  P.and_list1 parse_thing
-  #-> (fn things => Scan.repeat1 (P.$$$ "(" |-- P.name --
-        (zip_list things parse_syntax (P.$$$ "and")) --| P.$$$ ")"));
-
-in
-
-val add_syntax_class = gen_add_syntax_class cert_class (K I);
-val add_syntax_inst = gen_add_syntax_inst cert_class cert_tyco;
-val add_syntax_tyco = gen_add_syntax_tyco cert_tyco;
-val add_syntax_const = gen_add_syntax_const (K I);
-val allow_abort = gen_allow_abort (K I);
-val add_reserved = add_reserved;
-
-val add_syntax_class_cmd = gen_add_syntax_class read_class Code.read_const;
-val add_syntax_inst_cmd = gen_add_syntax_inst read_class read_tyco;
-val add_syntax_tyco_cmd = gen_add_syntax_tyco read_tyco;
-val add_syntax_const_cmd = gen_add_syntax_const Code.read_const;
-val allow_abort_cmd = gen_allow_abort Code.read_const;
+(* montage *)
 
 fun the_literals thy =
   let
@@ -377,11 +230,6 @@ fun the_literals thy =
           | Extends (super, _) => literals super)
       | NONE => error ("Unknown code target language: " ^ quote target);
   in literals end;
-
-
-(** serializer usage **)
-
-(* montage *)
 
 local
 
@@ -474,11 +322,6 @@ fun serialize_custom thy (target_name, seri) naming program names =
 
 end; (* local *)
 
-fun parse_args f args =
-  case Scan.read OuterLex.stopper f args
-   of SOME x => x
-    | NONE => error "Bad serializer arguments";
-
 
 (* code presentation *)
 
@@ -526,6 +369,164 @@ fun export_code thy cs seris =
   in () end;
 
 fun export_code_cmd raw_cs seris thy = export_code thy (read_const_exprs thy raw_cs) seris;
+
+
+(** serializer configuration **)
+
+(* data access *)
+
+fun cert_class thy class =
+  let
+    val _ = AxClass.get_info thy class;
+  in class end;
+
+fun read_class thy = cert_class thy o Sign.intern_class thy;
+
+fun cert_tyco thy tyco =
+  let
+    val _ = if Sign.declared_tyname thy tyco then ()
+      else error ("No such type constructor: " ^ quote tyco);
+  in tyco end;
+
+fun read_tyco thy = cert_tyco thy o Sign.intern_type thy;
+
+fun gen_add_syntax_class prep_class target raw_class raw_syn thy =
+  let
+    val class = prep_class thy raw_class;
+  in case raw_syn
+   of SOME syntax =>
+      thy
+      |> (map_name_syntax target o apfst o apfst)
+           (Symtab.update (class, syntax))
+    | NONE =>
+      thy
+      |> (map_name_syntax target o apfst o apfst)
+           (Symtab.delete_safe class)
+  end;
+
+fun gen_add_syntax_inst prep_class prep_tyco target (raw_tyco, raw_class) add_del thy =
+  let
+    val inst = (prep_class thy raw_class, prep_tyco thy raw_tyco);
+  in if add_del then
+    thy
+    |> (map_name_syntax target o apfst o apsnd)
+        (Symreltab.update (inst, ()))
+  else
+    thy
+    |> (map_name_syntax target o apfst o apsnd)
+        (Symreltab.delete_safe inst)
+  end;
+
+fun gen_add_syntax_tyco prep_tyco target raw_tyco raw_syn thy =
+  let
+    val tyco = prep_tyco thy raw_tyco;
+    fun check_args (syntax as (n, _)) = if n <> Sign.arity_number thy tyco
+      then error ("Number of arguments mismatch in syntax for type constructor " ^ quote tyco)
+      else syntax
+  in case raw_syn
+   of SOME syntax =>
+      thy
+      |> (map_name_syntax target o apsnd o apfst)
+           (Symtab.update (tyco, check_args syntax))
+    | NONE =>
+      thy
+      |> (map_name_syntax target o apsnd o apfst)
+           (Symtab.delete_safe tyco)
+  end;
+
+fun gen_add_syntax_const prep_const target raw_c raw_syn thy =
+  let
+    val c = prep_const thy raw_c;
+    fun check_args (syntax as (n, _)) = if n > Code.args_number thy c
+      then error ("Too many arguments in syntax for constant " ^ quote c)
+      else syntax;
+  in case raw_syn
+   of SOME syntax =>
+      thy
+      |> (map_name_syntax target o apsnd o apsnd)
+           (Symtab.update (c, check_args syntax))
+    | NONE =>
+      thy
+      |> (map_name_syntax target o apsnd o apsnd)
+           (Symtab.delete_safe c)
+  end;
+
+fun add_reserved target =
+  let
+    fun add sym syms = if member (op =) syms sym
+      then error ("Reserved symbol " ^ quote sym ^ " already declared")
+      else insert (op =) sym syms
+  in map_reserved target o add end;
+
+fun gen_add_include read_const target args thy =
+  let
+    fun add (name, SOME (content, raw_cs)) incls =
+          let
+            val _ = if Symtab.defined incls name
+              then warning ("Overwriting existing include " ^ name)
+              else ();
+            val cs = map (read_const thy) raw_cs;
+          in Symtab.update (name, (str content, cs)) incls end
+      | add (name, NONE) incls = Symtab.delete name incls;
+  in map_includes target (add args) thy end;
+
+val add_include = gen_add_include (K I);
+val add_include_cmd = gen_add_include Code.read_const;
+
+fun add_module_alias target (thyname, modlname) =
+  let
+    val xs = Long_Name.explode modlname;
+    val xs' = map (Name.desymbolize true) xs;
+  in if xs' = xs
+    then map_module_alias target (Symtab.update (thyname, modlname))
+    else error ("Invalid module name: " ^ quote modlname ^ "\n"
+      ^ "perhaps try " ^ quote (Long_Name.implode xs'))
+  end;
+
+fun gen_allow_abort prep_const raw_c thy =
+  let
+    val c = prep_const thy raw_c;
+  in thy |> (CodeTargetData.map o apsnd) (insert (op =) c) end;
+
+fun zip_list (x::xs) f g =
+  f
+  #-> (fn y =>
+    fold_map (fn x => g |-- f >> pair x) xs
+    #-> (fn xys => pair ((x, y) :: xys)));
+
+
+(* concrete syntax *)
+
+local
+
+structure P = OuterParse
+and K = OuterKeyword
+
+fun parse_multi_syntax parse_thing parse_syntax =
+  P.and_list1 parse_thing
+  #-> (fn things => Scan.repeat1 (P.$$$ "(" |-- P.name --
+        (zip_list things parse_syntax (P.$$$ "and")) --| P.$$$ ")"));
+
+in
+
+val add_syntax_class = gen_add_syntax_class cert_class;
+val add_syntax_inst = gen_add_syntax_inst cert_class cert_tyco;
+val add_syntax_tyco = gen_add_syntax_tyco cert_tyco;
+val add_syntax_const = gen_add_syntax_const (K I);
+val allow_abort = gen_allow_abort (K I);
+val add_reserved = add_reserved;
+val add_include = add_include;
+
+val add_syntax_class_cmd = gen_add_syntax_class read_class;
+val add_syntax_inst_cmd = gen_add_syntax_inst read_class read_tyco;
+val add_syntax_tyco_cmd = gen_add_syntax_tyco read_tyco;
+val add_syntax_const_cmd = gen_add_syntax_const Code.read_const;
+val allow_abort_cmd = gen_allow_abort Code.read_const;
+
+fun parse_args f args =
+  case Scan.read OuterLex.stopper f args
+   of SOME x => x
+    | NONE => error "Bad serializer arguments";
 
 
 (** Isar setup **)
@@ -606,7 +607,7 @@ fun shell_command thyname cmd = Toplevel.program (fn _ =>
     ((filter OuterLex.is_proper o OuterSyntax.scan Position.none) cmd)
    of SOME f => (writeln "Now generating code..."; f (theory thyname))
     | NONE => error ("Bad directive " ^ quote cmd)))
-  handle TOPLEVEL_ERROR => OS.Process.exit OS.Process.failure;
+  handle Runtime.TOPLEVEL_ERROR => OS.Process.exit OS.Process.failure;
 
 end; (*local*)
 
