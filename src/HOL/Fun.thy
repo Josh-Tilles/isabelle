@@ -74,6 +74,14 @@ by (simp add: comp_def)
 lemma o_id [simp]: "f o id = f"
 by (simp add: comp_def)
 
+lemma o_eq_dest:
+  "a o b = c o d \<Longrightarrow> a (b v) = c (d v)"
+  by (simp only: o_def) (fact fun_cong)
+
+lemma o_eq_elim:
+  "a o b = c o d \<Longrightarrow> ((\<And>v. a (b v) = c (d v)) \<Longrightarrow> R) \<Longrightarrow> R"
+  by (erule meta_mp) (fact o_eq_dest) 
+
 lemma image_compose: "(f o g) ` r = f`(g`r)"
 by (simp add: comp_def, blast)
 
@@ -466,6 +474,11 @@ by (rule ext, simp add: fun_upd_def swap_def)
 
 lemma swap_nilpotent [simp]: "swap a b (swap a b f) = f"
 by (rule ext, simp add: fun_upd_def swap_def)
+
+lemma swap_triple:
+  assumes "a \<noteq> c" and "b \<noteq> c"
+  shows "swap a b (swap b c (swap a b f)) = swap a c f"
+  using assms by (simp add: expand_fun_eq swap_def)
 
 lemma comp_swap: "f \<circ> swap a b g = swap a b (f \<circ> g)"
 by (rule ext, simp add: fun_upd_def swap_def)
