@@ -878,7 +878,6 @@ proof-
   ultimately show ?thesis by blast
 qed
 
-(* FIXME move to Divides(?) *)
 lemma pow_divides_eq_nat [simp]: "n ~= 0 \<Longrightarrow> ((a::nat)^n dvd b^n) = (a dvd b)"
   by (auto intro: pow_divides_pow_nat dvd_power_same)
 
@@ -1684,6 +1683,19 @@ proof -
   interpret fun_left_comm_idem "gcd::int\<Rightarrow>int\<Rightarrow>int" by (rule fun_left_comm_idem_gcd_int)
   show ?thesis by(simp add: Gcd_def fold_set gcd_commute_int)
 qed
+
+
+lemma mult_inj_if_coprime_nat:
+  "inj_on f A \<Longrightarrow> inj_on g B \<Longrightarrow> ALL a:A. ALL b:B. coprime (f a) (g b)
+   \<Longrightarrow> inj_on (%(a,b). f a * g b::nat) (A \<times> B)"
+apply(auto simp add:inj_on_def)
+apply (metis gcd_semilattice_nat.inf_commute coprime_dvd_mult_iff_nat
+             dvd.neq_le_trans dvd_triv_left)
+apply (metis gcd_semilattice_nat.inf_commute coprime_dvd_mult_iff_nat
+             dvd.neq_le_trans dvd_triv_right mult_commute)
+done
+
+text{* Nitpick: *}
 
 lemma gcd_eq_nitpick_gcd [nitpick_def]: "gcd x y \<equiv> Nitpick.nat_gcd x y"
 apply (rule eq_reflection)
