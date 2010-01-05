@@ -426,9 +426,9 @@ struct
 val declare = declare_theory_data;
 
 fun get k dest thy =
-  dest (case Datatab.lookup (data_of thy) k of
+  (case Datatab.lookup (data_of thy) k of
     SOME x => x
-  | NONE => invoke_empty k);   (*adhoc value*)
+  | NONE => invoke_empty k) |> dest;
 
 fun put k mk x = modify_thy (Datatab.update (k, mk x));
 
@@ -574,40 +574,12 @@ open Basic_Context;
 
 (** theory data **)
 
-signature OLD_THEORY_DATA_ARGS =
+signature THEORY_DATA_PP_ARGS =
 sig
   type T
   val empty: T
   val extend: T -> T
   val merge: Pretty.pp -> T * T -> T
-end;
-
-signature OLD_THEORY_DATA =
-sig
-  type T
-  val get: theory -> T
-  val put: T -> theory -> theory
-  val map: (T -> T) -> theory -> theory
-  val init: theory -> theory
-end;
-
-functor TheoryDataFun(Data: OLD_THEORY_DATA_ARGS): OLD_THEORY_DATA =
-struct
-
-type T = Data.T;
-exception Data of T;
-
-val kind = Context.Theory_Data.declare
-  (Data Data.empty)
-  (fn Data x => Data (Data.extend x))
-  (fn pp => fn (Data x1, Data x2) => Data (Data.merge pp (x1, x2)));
-
-val get = Context.Theory_Data.get kind (fn Data x => x);
-val put = Context.Theory_Data.put kind Data;
-fun map f thy = put (f (get thy)) thy;
-
-fun init thy = map I thy;
-
 end;
 
 signature THEORY_DATA_ARGS =
@@ -626,20 +598,31 @@ sig
   val map: (T -> T) -> theory -> theory
 end;
 
-functor Theory_Data(Data: THEORY_DATA_ARGS): THEORY_DATA =
+functor Theory_Data_PP(Data: THEORY_DATA_PP_ARGS): THEORY_DATA =
 struct
 
-structure Result = TheoryDataFun
-(
-  type T = Data.T;
-  val empty = Data.empty;
-  val extend = Data.extend;
-  fun merge _ = Data.merge;
-);
+type T = Data.T;
+exception Data of T;
 
-open Result;
+val kind = Context.Theory_Data.declare
+  (Data Data.empty)
+  (fn Data x => Data (Data.extend x))
+  (fn pp => fn (Data x1, Data x2) => Data (Data.merge pp (x1, x2)));
+
+val get = Context.Theory_Data.get kind (fn Data x => x);
+val put = Context.Theory_Data.put kind Data;
+fun map f thy = put (f (get thy)) thy;
 
 end;
+
+functor Theory_Data(Data: THEORY_DATA_ARGS): THEORY_DATA =
+  Theory_Data_PP
+  (
+    type T = Data.T;
+    val empty = Data.empty;
+    val extend = Data.extend;
+    fun merge _ = Data.merge;
+  );
 
 
 

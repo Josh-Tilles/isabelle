@@ -47,12 +47,21 @@ as infinity (as in chop).  INCOMPATIBILITY.
 * Subgoal.FOCUS (and variants): resulting goal state is normalized as
 usual for resolution.  Rare INCOMPATIBILITY.
 
+* Discontinued old TheoryDataFun with its copy/init operation -- data
+needs to be pure.  Functor Theory_Data_PP retains the traditional
+Pretty.pp argument to merge, which is absent in the standard
+Theory_Data version.
+
 
 *** System ***
 
 * Discontinued special HOL_USEDIR_OPTIONS for the main HOL image;
 ISABELLE_USEDIR_OPTIONS applies uniformly to all sessions.  Note that
 proof terms are enabled unconditionally in the new HOL-Proofs image.
+
+* Discontinued old ISABELLE and ISATOOL environment settings (legacy
+feature since Isabelle2009).  Use ISABELLE_PROCESS and ISABELLE_TOOL,
+respectively.
 
 
 
