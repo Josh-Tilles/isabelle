@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+#
+# Author: Makarius
+#
+# DESCRIPTION: Standard statistics.
+
+THIS=$(cd "$(dirname "$0")"; pwd -P)
+
+PLATFORMS="at-poly at64-poly mac-poly-M4 mac-poly64-M4 mac-poly-M8 mac-poly64-M8 at-poly-5.1-para-e at64-poly-5.1-para at-mac-poly-5.1-para afp at-sml-dev sun-poly"
+
+ISABELLE_SESSIONS="\
+  HOL-Plain \
+  HOL-Main \
+  HOL \
+  HOL-Proofs \
+  HOL-Algebra \
+  HOL-Auth \
+  HOL-Bali \
+  HOL-Decision_Procs \
+  HOL-Hoare \
+  HOL-Hoare_Parallel \
+  HOL-Library \
+  HOL-Metis_Examples \
+  HOL-MicroJava \
+  HOL-Multivariate_Analysis \
+  HOL-NSA \
+  HOL-Nominal-Examples \
+  HOL-Number_Theory \
+  HOL-Old_Number_Theory \
+  HOL-Proofs-Extraction \
+  HOL-Proofs-Lambda \
+  HOL-SET_Protocol \
+  HOL-UNITY \
+  HOL-Word \
+  HOL-ex \
+  HOLCF \
+  IOA \
+  ZF \
+  ZF-Constructible \
+  ZF-UNITY"
+
+AFP_SESSIONS="\
+  CoreC++ \
+  Jinja-Slicing \
+  HOL-BytecodeLogicJmlTypes \
+  HOL-DiskPaxos \
+  HOL-Fermat3_4 \
+  HOL-Flyspeck-Tame \
+  HOL-Group-Ring-Module \
+  HOL-Jinja \
+  HOL-JinjaThreads \
+  HOL-JiveDataStoreModel \
+  HOL-POPLmark-deBruijn \
+  HOL-Program-Conflict-Analysis \
+  HOL-RSAPSS \
+  HOL-Recursion-Theory-I \
+  HOL-SATSolverVerification \
+  HOL-SIFPL \
+  HOL-SenSocialChoice \
+  HOL-SumSquares \
+  HOL-Topology \
+  HOL-Valuation \
+  LinearQuantifierElim \
+  Simpl \
+  Simpl-BDD"
+
+for PLATFORM in $PLATFORMS
+do
+  if [ "$PLATFORM" = afp ]; then
+    SESSIONS="$AFP_SESSIONS"
+  else
+    SESSIONS="$ISABELLE_SESSIONS"
+  fi
+
+  "$THIS/isatest-statistics" "stats/$PLATFORM" "$PLATFORM" ${1:-100} $SESSIONS
+  cat > "stats/$PLATFORM.html" <<EOF
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<head><title>Development Snapshot -- Performance Statistics</title></head>
+
+<body>
+<h1>$PLATFORM</h1>
+EOF
+
+for SESSION in $SESSIONS
+do
+  echo "<br><img src="$PLATFORM/$SESSION.png"><br>" >> "stats/$PLATFORM.html"
+done
+
+echo "</body>" >> "stats/$PLATFORM.html"
+echo "</html>" >> "stats/$PLATFORM.html"
+
+done

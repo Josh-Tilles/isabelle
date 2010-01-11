@@ -1,0 +1,27 @@
+syntax: glob
+
+*~
+*.class
+*.jar
+.DS_Store
+
+
+syntax: regexp
+
+^contrib
+^heaps/
+^browser_info/
+^doc-src/.*\.aux
+^doc-src/.*\.bbl
+^doc-src/.*\.blg
+^doc-src/.*\.dvi
+^doc-src/.*\.idx
+^doc-src/.*\.ind
+^doc-src/.*\.lof
+^doc-src/.*\.log
+^doc-src/.*\.out
+^doc-src/.*\.rai
+^doc-src/.*\.rao
+^doc-src/.*\.toc
+
+

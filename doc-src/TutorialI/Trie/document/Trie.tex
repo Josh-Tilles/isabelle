@@ -1,0 +1,297 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{Trie}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\begin{isamarkuptext}%
+To minimize running time, each node of a trie should contain an array that maps
+letters to subtries. We have chosen a
+representation where the subtries are held in an association list, i.e.\ a
+list of (letter,trie) pairs.  Abstracting over the alphabet \isa{{\isacharprime}a} and the
+values \isa{{\isacharprime}v} we define a trie as follows:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{datatype}\isamarkupfalse%
+\ {\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie\ {\isacharequal}\ Trie\ \ {\isachardoublequoteopen}{\isacharprime}v\ option{\isachardoublequoteclose}\ \ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}a\ {\isacharasterisk}\ {\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie{\isacharparenright}list{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+\index{datatypes!and nested recursion}%
+The first component is the optional value, the second component the
+association list of subtries.  This is an example of nested recursion involving products,
+which is fine because products are datatypes as well.
+We define two selector functions:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{primrec}\isamarkupfalse%
+\ {\isachardoublequoteopen}value{\isachardoublequoteclose}\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie\ {\isasymRightarrow}\ {\isacharprime}v\ option{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+{\isachardoublequoteopen}value{\isacharparenleft}Trie\ ov\ al{\isacharparenright}\ {\isacharequal}\ ov{\isachardoublequoteclose}\isanewline
+\isacommand{primrec}\isamarkupfalse%
+\ alist\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie\ {\isasymRightarrow}\ {\isacharparenleft}{\isacharprime}a\ {\isacharasterisk}\ {\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie{\isacharparenright}list{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+{\isachardoublequoteopen}alist{\isacharparenleft}Trie\ ov\ al{\isacharparenright}\ {\isacharequal}\ al{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+Association lists come with a generic lookup function.  Its result
+involves type \isa{option} because a lookup can fail:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{primrec}\isamarkupfalse%
+\ assoc\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}key\ {\isacharasterisk}\ {\isacharprime}val{\isacharparenright}list\ {\isasymRightarrow}\ {\isacharprime}key\ {\isasymRightarrow}\ {\isacharprime}val\ option{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+{\isachardoublequoteopen}assoc\ {\isacharbrackleft}{\isacharbrackright}\ x\ {\isacharequal}\ None{\isachardoublequoteclose}\ {\isacharbar}\isanewline
+{\isachardoublequoteopen}assoc\ {\isacharparenleft}p{\isacharhash}ps{\isacharparenright}\ x\ {\isacharequal}\isanewline
+\ \ \ {\isacharparenleft}let\ {\isacharparenleft}a{\isacharcomma}b{\isacharparenright}\ {\isacharequal}\ p\ in\ if\ a{\isacharequal}x\ then\ Some\ b\ else\ assoc\ ps\ x{\isacharparenright}{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+Now we can define the lookup function for tries. It descends into the trie
+examining the letters of the search string one by one. As
+recursion on lists is simpler than on tries, let us express this as primitive
+recursion on the search string argument:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{primrec}\isamarkupfalse%
+\ lookup\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie\ {\isasymRightarrow}\ {\isacharprime}a\ list\ {\isasymRightarrow}\ {\isacharprime}v\ option{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+{\isachardoublequoteopen}lookup\ t\ {\isacharbrackleft}{\isacharbrackright}\ {\isacharequal}\ value\ t{\isachardoublequoteclose}\ {\isacharbar}\isanewline
+{\isachardoublequoteopen}lookup\ t\ {\isacharparenleft}a{\isacharhash}as{\isacharparenright}\ {\isacharequal}\ {\isacharparenleft}case\ assoc\ {\isacharparenleft}alist\ t{\isacharparenright}\ a\ of\isanewline
+\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ None\ {\isasymRightarrow}\ None\isanewline
+\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\isacharbar}\ Some\ at\ {\isasymRightarrow}\ lookup\ at\ as{\isacharparenright}{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+As a first simple property we prove that looking up a string in the empty
+trie \isa{Trie\ None\ {\isacharbrackleft}{\isacharbrackright}} always returns \isa{None}. The proof merely
+distinguishes the two cases whether the search string is empty or not:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isacharbrackleft}simp{\isacharbrackright}{\isacharcolon}\ {\isachardoublequoteopen}lookup\ {\isacharparenleft}Trie\ None\ {\isacharbrackleft}{\isacharbrackright}{\isacharparenright}\ as\ {\isacharequal}\ None{\isachardoublequoteclose}\isanewline
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}case{\isacharunderscore}tac\ as{\isacharcomma}\ simp{\isacharunderscore}all{\isacharparenright}\isanewline
+\isacommand{done}\isamarkupfalse%
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+Things begin to get interesting with the definition of an update function
+that adds a new (string, value) pair to a trie, overwriting the old value
+associated with that string:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{primrec}\isamarkupfalse%
+\ update{\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie\ {\isasymRightarrow}\ {\isacharprime}a\ list\ {\isasymRightarrow}\ {\isacharprime}v\ {\isasymRightarrow}\ {\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}v{\isacharparenright}trie{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+{\isachardoublequoteopen}update\ t\ {\isacharbrackleft}{\isacharbrackright}\ \ \ \ \ v\ {\isacharequal}\ Trie\ {\isacharparenleft}Some\ v{\isacharparenright}\ {\isacharparenleft}alist\ t{\isacharparenright}{\isachardoublequoteclose}\ {\isacharbar}\isanewline
+{\isachardoublequoteopen}update\ t\ {\isacharparenleft}a{\isacharhash}as{\isacharparenright}\ v\ {\isacharequal}\isanewline
+\ \ \ {\isacharparenleft}let\ tt\ {\isacharequal}\ {\isacharparenleft}case\ assoc\ {\isacharparenleft}alist\ t{\isacharparenright}\ a\ of\isanewline
+\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ None\ {\isasymRightarrow}\ Trie\ None\ {\isacharbrackleft}{\isacharbrackright}\ {\isacharbar}\ Some\ at\ {\isasymRightarrow}\ at{\isacharparenright}\isanewline
+\ \ \ \ in\ Trie\ {\isacharparenleft}value\ t{\isacharparenright}\ {\isacharparenleft}{\isacharparenleft}a{\isacharcomma}update\ tt\ as\ v{\isacharparenright}\ {\isacharhash}\ alist\ t{\isacharparenright}{\isacharparenright}{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+The base case is obvious. In the recursive case the subtrie
+\isa{tt} associated with the first letter \isa{a} is extracted,
+recursively updated, and then placed in front of the association list.
+The old subtrie associated with \isa{a} is still in the association list
+but no longer accessible via \isa{assoc}. Clearly, there is room here for
+optimizations!
+
+Before we start on any proofs about \isa{update} we tell the simplifier to
+expand all \isa{let}s and to split all \isa{case}-constructs over
+options:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{declare}\isamarkupfalse%
+\ Let{\isacharunderscore}def{\isacharbrackleft}simp{\isacharbrackright}\ option{\isachardot}split{\isacharbrackleft}split{\isacharbrackright}%
+\begin{isamarkuptext}%
+\noindent
+The reason becomes clear when looking (probably after a failed proof
+attempt) at the body of \isa{update}: it contains both
+\isa{let} and a case distinction over type \isa{option}.
+
+Our main goal is to prove the correct interaction of \isa{update} and
+\isa{lookup}:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{theorem}\isamarkupfalse%
+\ {\isachardoublequoteopen}{\isasymforall}t\ v\ bs{\isachardot}\ lookup\ {\isacharparenleft}update\ t\ as\ v{\isacharparenright}\ bs\ {\isacharequal}\isanewline
+\ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ \ {\isacharparenleft}if\ as{\isacharequal}bs\ then\ Some\ v\ else\ lookup\ t\ bs{\isacharparenright}{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\begin{isamarkuptxt}%
+\noindent
+Our plan is to induct on \isa{as}; hence the remaining variables are
+quantified. From the definitions it is clear that induction on either
+\isa{as} or \isa{bs} is required. The choice of \isa{as} is 
+guided by the intuition that simplification of \isa{lookup} might be easier
+if \isa{update} has already been simplified, which can only happen if
+\isa{as} is instantiated.
+The start of the proof is conventional:%
+\end{isamarkuptxt}%
+\isamarkuptrue%
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}induct{\isacharunderscore}tac\ as{\isacharcomma}\ auto{\isacharparenright}%
+\begin{isamarkuptxt}%
+\noindent
+Unfortunately, this time we are left with three intimidating looking subgoals:
+\begin{isabelle}
+~1.~\dots~{\isasymLongrightarrow}~lookup~\dots~bs~=~lookup~t~bs\isanewline
+~2.~\dots~{\isasymLongrightarrow}~lookup~\dots~bs~=~lookup~t~bs\isanewline
+~3.~\dots~{\isasymLongrightarrow}~lookup~\dots~bs~=~lookup~t~bs
+\end{isabelle}
+Clearly, if we want to make headway we have to instantiate \isa{bs} as
+well now. It turns out that instead of induction, case distinction
+suffices:%
+\end{isamarkuptxt}%
+\isamarkuptrue%
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}case{\isacharunderscore}tac{\isacharbrackleft}{\isacharbang}{\isacharbrackright}\ bs{\isacharcomma}\ auto{\isacharparenright}\isanewline
+\isacommand{done}\isamarkupfalse%
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\noindent
+\index{subgoal numbering}%
+All methods ending in \isa{tac} take an optional first argument that
+specifies the range of subgoals they are applied to, where \isa{{\isacharbrackleft}{\isacharbang}{\isacharbrackright}} means
+all subgoals, i.e.\ \isa{{\isacharbrackleft}{\isadigit{1}}{\isacharminus}{\isadigit{3}}{\isacharbrackright}} in our case. Individual subgoal numbers,
+e.g. \isa{{\isacharbrackleft}{\isadigit{2}}{\isacharbrackright}} are also allowed.
+
+This proof may look surprisingly straightforward. However, note that this
+comes at a cost: the proof script is unreadable because the intermediate
+proof states are invisible, and we rely on the (possibly brittle) magic of
+\isa{auto} (\isa{simp{\isacharunderscore}all} will not do --- try it) to split the subgoals
+of the induction up in such a way that case distinction on \isa{bs} makes
+sense and solves the proof. 
+
+\begin{exercise}
+  Modify \isa{update} (and its type) such that it allows both insertion and
+  deletion of entries with a single function.  Prove the corresponding version 
+  of the main theorem above.
+  Optimize your function such that it shrinks tries after
+  deletion if possible.
+\end{exercise}
+
+\begin{exercise}
+  Write an improved version of \isa{update} that does not suffer from the
+  space leak (pointed out above) caused by not deleting overwritten entries
+  from the association list. Prove the main theorem for your improved
+  \isa{update}.
+\end{exercise}
+
+\begin{exercise}
+  Conceptually, each node contains a mapping from letters to optional
+  subtries. Above we have implemented this by means of an association
+  list. Replay the development replacing \isa{{\isacharparenleft}{\isacharprime}a\ {\isasymtimes}\ {\isacharparenleft}{\isacharprime}a{\isacharcomma}\ {\isacharprime}v{\isacharparenright}\ trie{\isacharparenright}\ list}
+  with \isa{{\isacharprime}a\ {\isasymrightharpoonup}\ {\isacharparenleft}{\isacharprime}a{\isacharcomma}\ {\isacharprime}v{\isacharparenright}\ trie}.
+\end{exercise}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+#
+# Author: Makarius
+#
+# DESCRIPTION: invoke Java within the Isabelle environment
+
+CLASSPATH="$(jvmpath "$CLASSPATH")"
+exec "$ISABELLE_JAVA" "$@"

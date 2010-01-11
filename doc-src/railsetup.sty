@@ -1,0 +1,42 @@
+%% dimensions
+
+\setlength\railextra{3.6ex}
+\setlength\railboxleft{0.9ex}
+\setlength\railboxright{0.9ex}
+\setlength\railovalspace{1.8ex}
+\setlength\railframespace{1.8ex}
+\setlength\railtextleft{0.9ex}
+\setlength\railtextright{0.9ex}
+\setlength\railnamesep{0.9ex}
+
+\setlength\railboxheight{16pt}
+\setlength\railboxskip{24pt}
+\setlength\railtextup{5pt}
+\setlength\railjoinsize{16pt}
+
+
+%% rail antiquotation environment
+
+\newenvironment{railoutput}%
+{\begin{list}{}{\rail@param}\def\rail@expand{\relax}\makeatletter}{\end{list}}
+
+
+%% old-style content markup
+
+\railalias{percent}{\%}
+\railalias{ppercent}{\%\%}
+\railalias{underscore}{\_}
+\railalias{lbrace}{\texttt{\ttlbrace}}
+\railalias{rbrace}{\texttt{\ttrbrace}}
+\railalias{atsign}{{\at}}
+
+\def\rail@termfont{\small\ttfamily\upshape}
+\def\rail@tokenfont{\small\ttfamily\upshape}
+\def\rail@nontfont{\small\rmfamily\upshape}
+\def\rail@annofont{\small\rmfamily\itshape}
+\def\rail@namefont{\small\rmfamily\itshape}
+\def\rail@indexfont{\small\rmfamily\itshape}
+\newcommand{\railtterm}[1]{{\texttt{#1}}}
+\newcommand{\railtok}[1]{{\textrm{#1}}}
+\newcommand{\railqtok}[1]{{\rmfamily\textsl{#1}}}
+\newcommand{\railnonterm}[1]{{\emph{#1}}}

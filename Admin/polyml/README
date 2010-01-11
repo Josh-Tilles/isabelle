@@ -1,0 +1,18 @@
+
+This distribution of Poly/ML 5.3 has been compiled from the original
+sources as follows:
+
+  tar xvzf polyml.5.3.tar.gz
+  cd polyml.5.3
+  ./configure --prefix="$HOME/tmp/polyml"
+  make
+  make install
+
+Now $HOME/tmp/polyml/bin/* and $HOME/tmp/polyml/lib/* are moved to the
+platform-specific target directory (e.g. polyml-5.3.0/x86-linux).
+Note that Isabelle/lib/scripts/polyml-platform identifies your
+platform.
+
+
+	Makarius
+	09-Nov-2009

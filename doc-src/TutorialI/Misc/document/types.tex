@@ -1,0 +1,73 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{types}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\isacommand{types}\isamarkupfalse%
+\ number\ \ \ \ \ \ \ {\isacharequal}\ nat\isanewline
+\ \ \ \ \ \ gate\ \ \ \ \ \ \ \ \ {\isacharequal}\ {\isachardoublequoteopen}bool\ {\isasymRightarrow}\ bool\ {\isasymRightarrow}\ bool{\isachardoublequoteclose}\isanewline
+\ \ \ \ \ \ {\isacharparenleft}{\isacharprime}a{\isacharcomma}{\isacharprime}b{\isacharparenright}alist\ {\isacharequal}\ {\isachardoublequoteopen}{\isacharparenleft}{\isacharprime}a\ {\isasymtimes}\ {\isacharprime}b{\isacharparenright}list{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+Internally all synonyms are fully expanded.  As a consequence Isabelle's
+output never contains synonyms.  Their main purpose is to improve the
+readability of theories.  Synonyms can be used just like any other
+type.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Constant Definitions%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\label{sec:ConstDefinitions}\indexbold{definitions}%
+Nonrecursive definitions can be made with the \commdx{definition}
+command, for example \isa{nand} and \isa{xor} gates
+(based on type \isa{gate} above):%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{definition}\isamarkupfalse%
+\ nand\ {\isacharcolon}{\isacharcolon}\ gate\ \isakeyword{where}\ {\isachardoublequoteopen}nand\ A\ B\ {\isasymequiv}\ {\isasymnot}{\isacharparenleft}A\ {\isasymand}\ B{\isacharparenright}{\isachardoublequoteclose}\isanewline
+\isacommand{definition}\isamarkupfalse%
+\ xor\ \ {\isacharcolon}{\isacharcolon}\ gate\ \isakeyword{where}\ {\isachardoublequoteopen}xor\ \ A\ B\ {\isasymequiv}\ A\ {\isasymand}\ {\isasymnot}B\ {\isasymor}\ {\isasymnot}A\ {\isasymand}\ B{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent%
+The symbol \indexboldpos{\isasymequiv}{$IsaEq} is a special form of equality
+that must be used in constant definitions.
+Pattern-matching is not allowed: each definition must be of
+the form $f\,x@1\,\dots\,x@n~\isasymequiv~t$.
+Section~\ref{sec:Simp-with-Defs} explains how definitions are used
+in proofs. The default name of each definition is $f$\isa{{\isacharunderscore}def}, where
+$f$ is the name of the defined constant.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

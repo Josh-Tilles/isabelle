@@ -1,0 +1,52 @@
+
+\documentclass[a4wide]{article}
+\usepackage{graphicx,isabelle,isabellesym}
+\usepackage{pdfsetup}
+
+\urlstyle{rm}
+\renewcommand{\isachardoublequote}{}
+
+% pretty printing for the Com language
+%\newcommand{\CMD}[1]{\isatext{\bf\sffamily#1}}
+\newcommand{\CMD}[1]{\isatext{\rm\sffamily#1}}
+\newcommand{\isasymSKIP}{\CMD{skip}}
+\newcommand{\isasymIF}{\CMD{if}}
+\newcommand{\isasymTHEN}{\CMD{then}}
+\newcommand{\isasymELSE}{\CMD{else}}
+\newcommand{\isasymWHILE}{\CMD{while}}
+\newcommand{\isasymDO}{\CMD{do}}
+
+\addtolength{\hoffset}{-1cm}
+\addtolength{\textwidth}{2cm}
+
+\begin{document}
+
+\title{IMP --- A {\tt WHILE}-language and its Semantics}
+\author{Gerwin Klein, Heiko Loetzbeyer, Tobias Nipkow, Robert Sandner}
+\maketitle
+
+\parindent 0pt\parskip 0.5ex
+
+\begin{abstract}\noindent
+  The denotational, operational, and axiomatic semantics, a verification
+  condition generator, and all the necessary soundness, completeness and
+  equivalence proofs. Essentially a formalization of the first 100 pages of
+  \cite{Winskel}.
+  
+  An eminently readable description of this theory is found in \cite{Nipkow}.
+  See also HOLCF/IMP for a denotational semantics.
+\end{abstract}
+
+\tableofcontents
+
+\begin{center}
+  \includegraphics[scale=0.7]{session_graph}
+\end{center}
+
+\parindent 0pt\parskip 0.5ex
+\input{session}
+
+\bibliographystyle{plain}
+\bibliography{root}
+
+\end{document}

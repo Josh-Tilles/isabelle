@@ -1,0 +1,585 @@
+(*  Title:      Tools/code/code_target.ML
+    Author:     Florian Haftmann, TU Muenchen
+
+Serializer from intermediate language ("Thin-gol") to target languages.
+*)
+
+signature CODE_TARGET =
+sig
+  type serializer
+  type literals = Code_Printer.literals
+  val add_target: string * (serializer * literals) -> theory -> theory
+  val extend_target: string *
+      (string * (Code_Thingol.naming -> Code_Thingol.program -> Code_Thingol.program))
+    -> theory -> theory
+  val assert_target: theory -> string -> string
+
+  type destination
+  type serialization
+  val parse_args: (OuterLex.token list -> 'a * OuterLex.token list)
+    -> OuterLex.token list -> 'a
+  val stmt_names_of_destination: destination -> string list
+  val mk_serialization: string -> ('a -> unit) option
+    -> (Path.T option -> 'a -> unit)
+    -> ('a -> string * string option list)
+    -> 'a -> serialization
+  val serialize: theory -> string -> int option -> string option -> OuterLex.token list
+    -> Code_Thingol.naming -> Code_Thingol.program -> string list -> serialization
+  val serialize_custom: theory -> string * (serializer * literals)
+    -> Code_Thingol.naming -> Code_Thingol.program -> string list -> string * string option list
+  val the_literals: theory -> string -> literals
+  val compile: serialization -> unit
+  val export: serialization -> unit
+  val file: Path.T -> serialization -> unit
+  val string: string list -> serialization -> string
+  val code_of: theory -> string -> int option -> string
+    -> string list -> (Code_Thingol.naming -> string list) -> string
+  val set_default_code_width: int -> theory -> theory
+  val shell_command: string (*theory name*) -> string (*export_code expr*) -> unit
+
+  val allow_abort: string -> theory -> theory
+  type tyco_syntax = Code_Printer.tyco_syntax
+  type proto_const_syntax = Code_Printer.proto_const_syntax
+  val add_syntax_class: string -> class -> string option -> theory -> theory
+  val add_syntax_inst: string -> class * string -> unit option -> theory -> theory
+  val add_syntax_tyco: string -> string -> tyco_syntax option -> theory -> theory
+  val add_syntax_const: string -> string -> proto_const_syntax option -> theory -> theory
+  val add_reserved: string -> string -> theory -> theory
+  val add_include: string -> string * (string * string list) option -> theory -> theory
+end;
+
+structure Code_Target : CODE_TARGET =
+struct
+
+open Basic_Code_Thingol;
+
+type literals = Code_Printer.literals;
+type tyco_syntax = Code_Printer.tyco_syntax;
+type proto_const_syntax = Code_Printer.proto_const_syntax;
+
+
+(** basics **)
+
+datatype destination = Compile | Export | File of Path.T | String of string list;
+type serialization = destination -> (string * string option list) option;
+
+fun compile f = (f Compile; ());
+fun export f = (f Export; ());
+fun file p f = (f (File p); ());
+fun string stmts f = fst (the (f (String stmts)));
+
+fun stmt_names_of_destination (String stmts) = stmts
+  | stmt_names_of_destination _ = [];
+
+fun mk_serialization target (SOME comp) _ _ code Compile = (comp code; NONE)
+  | mk_serialization target NONE _ _ _ Compile = error (target ^ ": no internal compilation")
+  | mk_serialization target _ output _ code Export = (output NONE code ; NONE)
+  | mk_serialization target _ output _ code (File file) = (output (SOME file) code; NONE)
+  | mk_serialization target _ _ string code (String _) = SOME (string code);
+
+
+(** theory data **)
+
+datatype name_syntax_table = NameSyntaxTable of {
+  class: string Symtab.table,
+  instance: unit Symreltab.table,
+  tyco: Code_Printer.tyco_syntax Symtab.table,
+  const: Code_Printer.proto_const_syntax Symtab.table
+};
+
+fun mk_name_syntax_table ((class, instance), (tyco, const)) =
+  NameSyntaxTable { class = class, instance = instance, tyco = tyco, const = const };
+fun map_name_syntax_table f (NameSyntaxTable { class, instance, tyco, const }) =
+  mk_name_syntax_table (f ((class, instance), (tyco, const)));
+fun merge_name_syntax_table (NameSyntaxTable { class = class1, instance = instance1, tyco = tyco1, const = const1 },
+    NameSyntaxTable { class = class2, instance = instance2, tyco = tyco2, const = const2 }) =
+  mk_name_syntax_table (
+    (Symtab.join (K snd) (class1, class2),
+       Symreltab.join (K snd) (instance1, instance2)),
+    (Symtab.join (K snd) (tyco1, tyco2),
+       Symtab.join (K snd) (const1, const2))
+  );
+
+type serializer =
+  string option                         (*module name*)
+  -> OuterLex.token list                (*arguments*)
+  -> (string -> string)                 (*labelled_name*)
+  -> string list                        (*reserved symbols*)
+  -> (string * Pretty.T) list           (*includes*)
+  -> (string -> string option)          (*module aliasses*)
+  -> (string -> string option)          (*class syntax*)
+  -> (string -> Code_Printer.tyco_syntax option)
+  -> (string -> Code_Printer.const_syntax option)
+  -> ((Pretty.T -> string) * (Pretty.T -> unit))
+  -> Code_Thingol.program
+  -> string list                        (*selected statements*)
+  -> serialization;
+
+datatype serializer_entry = Serializer of serializer * Code_Printer.literals
+  | Extends of string * (Code_Thingol.naming -> Code_Thingol.program -> Code_Thingol.program);
+
+datatype target = Target of {
+  serial: serial,
+  serializer: serializer_entry,
+  reserved: string list,
+  includes: (Pretty.T * string list) Symtab.table,
+  name_syntax_table: name_syntax_table,
+  module_alias: string Symtab.table
+};
+
+fun make_target ((serial, serializer), ((reserved, includes), (name_syntax_table, module_alias))) =
+  Target { serial = serial, serializer = serializer, reserved = reserved, 
+    includes = includes, name_syntax_table = name_syntax_table, module_alias = module_alias };
+fun map_target f ( Target { serial, serializer, reserved, includes, name_syntax_table, module_alias } ) =
+  make_target (f ((serial, serializer), ((reserved, includes), (name_syntax_table, module_alias))));
+fun merge_target strict target (Target { serial = serial1, serializer = serializer,
+  reserved = reserved1, includes = includes1,
+  name_syntax_table = name_syntax_table1, module_alias = module_alias1 },
+    Target { serial = serial2, serializer = _,
+      reserved = reserved2, includes = includes2,
+      name_syntax_table = name_syntax_table2, module_alias = module_alias2 }) =
+  if serial1 = serial2 orelse not strict then
+    make_target ((serial1, serializer),
+      ((merge (op =) (reserved1, reserved2), Symtab.merge (op =) (includes1, includes2)),
+        (merge_name_syntax_table (name_syntax_table1, name_syntax_table2),
+          Symtab.join (K snd) (module_alias1, module_alias2))
+    ))
+  else
+    error ("Incompatible serializers: " ^ quote target);
+
+fun the_serializer (Target { serializer, ... }) = serializer;
+fun the_reserved (Target { reserved, ... }) = reserved;
+fun the_includes (Target { includes, ... }) = includes;
+fun the_name_syntax (Target { name_syntax_table = NameSyntaxTable x, ... }) = x;
+fun the_module_alias (Target { module_alias , ... }) = module_alias;
+
+structure Targets = Theory_Data
+(
+  type T = (target Symtab.table * string list) * int;
+  val empty = ((Symtab.empty, []), 80);
+  val extend = I;
+  fun merge (((target1, exc1), width1), ((target2, exc2), width2)) : T =
+    ((Symtab.join (merge_target true) (target1, target2),
+      Library.merge (op =) (exc1, exc2)), Int.max (width1, width2));
+);
+
+val abort_allowed = snd o fst o Targets.get;
+
+val the_default_width = snd o Targets.get;
+
+fun assert_target thy target = if Symtab.defined ((fst o fst) (Targets.get thy)) target
+  then target
+  else error ("Unknown code target language: " ^ quote target);
+
+fun put_target (target, seri) thy =
+  let
+    val lookup_target = Symtab.lookup ((fst o fst) (Targets.get thy));
+    val _ = case seri
+     of Extends (super, _) => if is_some (lookup_target super) then ()
+          else error ("Unknown code target language: " ^ quote super)
+      | _ => ();
+    val overwriting = case (Option.map the_serializer o lookup_target) target
+     of NONE => false
+      | SOME (Extends _) => true
+      | SOME (Serializer _) => (case seri
+         of Extends _ => error ("Will not overwrite existing target " ^ quote target)
+          | _ => true);
+    val _ = if overwriting
+      then warning ("Overwriting existing target " ^ quote target)
+      else (); 
+  in
+    thy
+    |> (Targets.map o apfst o apfst o Symtab.update)
+          (target, make_target ((serial (), seri), (([], Symtab.empty),
+            (mk_name_syntax_table ((Symtab.empty, Symreltab.empty), (Symtab.empty, Symtab.empty)),
+              Symtab.empty))))
+  end;
+
+fun add_target (target, seri) = put_target (target, Serializer seri);
+fun extend_target (target, (super, modify)) =
+  put_target (target, Extends (super, modify));
+
+fun map_target_data target f thy =
+  let
+    val _ = assert_target thy target;
+  in
+    thy
+    |> (Targets.map o apfst o apfst o Symtab.map_entry target o map_target) f
+  end;
+
+fun map_reserved target =
+  map_target_data target o apsnd o apfst o apfst;
+fun map_includes target =
+  map_target_data target o apsnd o apfst o apsnd;
+fun map_name_syntax target =
+  map_target_data target o apsnd o apsnd o apfst o map_name_syntax_table;
+fun map_module_alias target =
+  map_target_data target o apsnd o apsnd o apsnd;
+
+fun set_default_code_width k = (Targets.map o apsnd) (K k);
+
+
+(** serializer usage **)
+
+(* montage *)
+
+fun the_literals thy =
+  let
+    val ((targets, _), _) = Targets.get thy;
+    fun literals target = case Symtab.lookup targets target
+     of SOME data => (case the_serializer data
+         of Serializer (_, literals) => literals
+          | Extends (super, _) => literals super)
+      | NONE => error ("Unknown code target language: " ^ quote target);
+  in literals end;
+
+local
+
+fun activate_syntax lookup_name src_tab = Symtab.empty
+  |> fold_map (fn thing_identifier => fn tab => case lookup_name thing_identifier
+       of SOME name => (SOME name,
+            Symtab.update_new (name, the (Symtab.lookup src_tab thing_identifier)) tab)
+        | NONE => (NONE, tab)) (Symtab.keys src_tab)
+  |>> map_filter I;
+
+fun activate_const_syntax thy literals src_tab naming = (Symtab.empty, naming)
+  |> fold_map (fn thing_identifier => fn (tab, naming) =>
+      case Code_Thingol.lookup_const naming thing_identifier
+       of SOME name => let
+              val (syn, naming') = Code_Printer.activate_const_syntax thy
+                literals (the (Symtab.lookup src_tab thing_identifier)) naming
+            in (SOME name, (Symtab.update_new (name, syn) tab, naming')) end
+        | NONE => (NONE, (tab, naming))) (Symtab.keys src_tab)
+  |>> map_filter I;
+
+fun invoke_serializer thy abortable serializer literals reserved abs_includes 
+    module_alias class instance tyco const module width args naming program2 names1 =
+  let
+    val (names_class, class') =
+      activate_syntax (Code_Thingol.lookup_class naming) class;
+    val names_inst = map_filter (Code_Thingol.lookup_instance naming)
+      (Symreltab.keys instance);
+    val (names_tyco, tyco') =
+      activate_syntax (Code_Thingol.lookup_tyco naming) tyco;
+    val (names_const, (const', _)) =
+      activate_const_syntax thy literals const naming;
+    val names_hidden = names_class @ names_inst @ names_tyco @ names_const;
+    val names2 = subtract (op =) names_hidden names1;
+    val program3 = Graph.subgraph (not o member (op =) names_hidden) program2;
+    val names_all = Graph.all_succs program3 names2;
+    val includes = abs_includes names_all;
+    val program4 = Graph.subgraph (member (op =) names_all) program3;
+    val empty_funs = filter_out (member (op =) abortable)
+      (Code_Thingol.empty_funs program3);
+    val _ = if null empty_funs then () else error ("No code equations for "
+      ^ commas (map (Sign.extern_const thy) empty_funs));
+  in
+    serializer module args (Code_Thingol.labelled_name thy program2) reserved includes
+      (Symtab.lookup module_alias) (Symtab.lookup class')
+      (Symtab.lookup tyco') (Symtab.lookup const')
+      (Code_Printer.string_of_pretty width, Code_Printer.writeln_pretty width)
+      program4 names2
+  end;
+
+fun mount_serializer thy alt_serializer target some_width module args naming program names =
+  let
+    val ((targets, abortable), default_width) = Targets.get thy;
+    fun collapse_hierarchy target =
+      let
+        val data = case Symtab.lookup targets target
+         of SOME data => data
+          | NONE => error ("Unknown code target language: " ^ quote target);
+      in case the_serializer data
+       of Serializer _ => (I, data)
+        | Extends (super, modify) => let
+            val (modify', data') = collapse_hierarchy super
+          in (modify' #> modify naming, merge_target false target (data', data)) end
+      end;
+    val (modify, data) = collapse_hierarchy target;
+    val (serializer, _) = the_default (case the_serializer data
+     of Serializer seri => seri) alt_serializer;
+    val reserved = the_reserved data;
+    fun select_include names_all (name, (content, cs)) =
+      if null cs then SOME (name, content)
+      else if exists (fn c => case Code_Thingol.lookup_const naming c
+       of SOME name => member (op =) names_all name
+        | NONE => false) cs
+      then SOME (name, content) else NONE;
+    fun includes names_all = map_filter (select_include names_all)
+      ((Symtab.dest o the_includes) data);
+    val module_alias = the_module_alias data;
+    val { class, instance, tyco, const } = the_name_syntax data;
+    val literals = the_literals thy target;
+    val width = the_default default_width some_width;
+  in
+    invoke_serializer thy abortable serializer literals reserved
+      includes module_alias class instance tyco const module width args naming (modify program) names
+  end;
+
+in
+
+fun serialize thy = mount_serializer thy NONE;
+
+fun serialize_custom thy (target_name, seri) naming program names =
+  mount_serializer thy (SOME seri) target_name NONE NONE [] naming program names (String [])
+  |> the;
+
+end; (* local *)
+
+
+(* code presentation *)
+
+fun code_of thy target some_width module_name cs names_stmt =
+  let
+    val (names_cs, (naming, program)) = Code_Thingol.consts_program thy cs;
+  in
+    string (names_stmt naming)
+      (serialize thy target some_width (SOME module_name) [] naming program names_cs)
+  end;
+
+
+(* code generation *)
+
+fun transitivly_non_empty_funs thy naming program =
+  let
+    val cs = subtract (op =) (abort_allowed thy) (Code_Thingol.empty_funs program);
+    val names = map_filter (Code_Thingol.lookup_const naming) cs;
+  in subtract (op =) (Graph.all_preds program names) (Graph.keys program) end;
+
+fun read_const_exprs thy cs =
+  let
+    val (cs1, cs2) = Code_Thingol.read_const_exprs thy cs;
+    val (names3, (naming, program)) = Code_Thingol.consts_program thy cs2;
+    val names4 = transitivly_non_empty_funs thy naming program;
+    val cs5 = map_filter
+      (fn (c, name) => if member (op =) names4 name then SOME c else NONE) (cs2 ~~ names3);
+  in fold (insert (op =)) cs5 cs1 end;
+
+fun export_code thy cs seris =
+  let
+    val (cs', (naming, program)) = Code_Thingol.consts_program thy cs;
+    fun mk_seri_dest dest = case dest
+     of NONE => compile
+      | SOME "-" => export
+      | SOME f => file (Path.explode f)
+    val _ = map (fn (((target, module), dest), args) =>
+      (mk_seri_dest dest (serialize thy target NONE module args naming program cs'))) seris;
+  in () end;
+
+fun export_code_cmd raw_cs seris thy = export_code thy (read_const_exprs thy raw_cs) seris;
+
+
+(** serializer configuration **)
+
+(* data access *)
+
+fun cert_class thy class =
+  let
+    val _ = AxClass.get_info thy class;
+  in class end;
+
+fun read_class thy = cert_class thy o Sign.intern_class thy;
+
+fun cert_tyco thy tyco =
+  let
+    val _ = if Sign.declared_tyname thy tyco then ()
+      else error ("No such type constructor: " ^ quote tyco);
+  in tyco end;
+
+fun read_tyco thy = cert_tyco thy o Sign.intern_type thy;
+
+fun cert_inst thy (class, tyco) =
+  (cert_class thy class, cert_tyco thy tyco);
+
+fun read_inst thy (raw_tyco, raw_class) =
+  (read_class thy raw_class, read_tyco thy raw_tyco);
+
+fun gen_add_syntax upd del mapp check_x check_raw_syn prep_syn prep_x target raw_x some_raw_syn thy =
+  let
+    val x = prep_x thy raw_x |> tap (check_x thy);
+    fun prep_check raw_syn = prep_syn (raw_syn |> tap (check_raw_syn thy target));
+  in case some_raw_syn
+   of SOME raw_syn => (map_name_syntax target o mapp) (upd (x, prep_check raw_syn)) thy
+    | NONE => (map_name_syntax target o mapp) (del x) thy
+  end;
+
+fun gen_add_syntax_class prep_class =
+  gen_add_syntax Symtab.update Symtab.delete_safe (apfst o apfst) (K I) ((K o K o K) ()) I prep_class;
+
+fun gen_add_syntax_inst prep_inst =
+  gen_add_syntax Symreltab.update Symreltab.delete_safe (apfst o apsnd) (K I) ((K o K o K) ()) I prep_inst;
+
+fun gen_add_syntax_tyco prep_tyco =
+  gen_add_syntax Symtab.update Symtab.delete_safe (apsnd o apfst)
+    (fn thy => fn tyco => fn (n, _) => if n <> Sign.arity_number thy tyco
+      then error ("Number of arguments mismatch in syntax for type constructor " ^ quote tyco)
+      else ()) ((K o K o K) ()) I prep_tyco;
+
+fun gen_add_syntax_const prep_const check_raw_syn prep_syn =
+  gen_add_syntax Symtab.update Symtab.delete_safe (apsnd o apsnd)
+    (fn thy => fn c => fn (n, _) => if n > Code.args_number thy c
+      then error ("Too many arguments in syntax for constant " ^ quote c)
+      else ()) check_raw_syn prep_syn prep_const;
+
+fun add_reserved target =
+  let
+    fun add sym syms = if member (op =) syms sym
+      then error ("Reserved symbol " ^ quote sym ^ " already declared")
+      else insert (op =) sym syms
+  in map_reserved target o add end;
+
+fun gen_add_include read_const target args thy =
+  let
+    fun add (name, SOME (content, raw_cs)) incls =
+          let
+            val _ = if Symtab.defined incls name
+              then warning ("Overwriting existing include " ^ name)
+              else ();
+            val cs = map (read_const thy) raw_cs;
+          in Symtab.update (name, (Code_Printer.str content, cs)) incls end
+      | add (name, NONE) incls = Symtab.delete name incls;
+  in map_includes target (add args) thy end;
+
+val add_include = gen_add_include (K I);
+val add_include_cmd = gen_add_include Code.read_const;
+
+fun add_module_alias target (thyname, modlname) =
+  let
+    val xs = Long_Name.explode modlname;
+    val xs' = map (Name.desymbolize true) xs;
+  in if xs' = xs
+    then map_module_alias target (Symtab.update (thyname, modlname))
+    else error ("Invalid module name: " ^ quote modlname ^ "\n"
+      ^ "perhaps try " ^ quote (Long_Name.implode xs'))
+  end;
+
+fun gen_allow_abort prep_const raw_c thy =
+  let
+    val c = prep_const thy raw_c;
+  in thy |> (Targets.map o apfst o apsnd) (insert (op =) c) end;
+
+
+(* concrete syntax *)
+
+local
+
+structure P = OuterParse
+and K = OuterKeyword
+
+fun zip_list (x::xs) f g =
+  f
+  #-> (fn y =>
+    fold_map (fn x => g |-- f >> pair x) xs
+    #-> (fn xys => pair ((x, y) :: xys)));
+
+fun parse_multi_syntax parse_thing parse_syntax =
+  P.and_list1 parse_thing
+  #-> (fn things => Scan.repeat1 (P.$$$ "(" |-- P.name --
+        (zip_list things parse_syntax (P.$$$ "and")) --| P.$$$ ")"));
+
+in
+
+val add_syntax_class = gen_add_syntax_class cert_class;
+val add_syntax_inst = gen_add_syntax_inst cert_inst;
+val add_syntax_tyco = gen_add_syntax_tyco cert_tyco;
+val add_syntax_const_simple = gen_add_syntax_const (K I) ((K o K o K) ()) Code_Printer.simple_const_syntax;
+val add_syntax_const = gen_add_syntax_const (K I) ((K o K o K) ()) I;
+val allow_abort = gen_allow_abort (K I);
+val add_reserved = add_reserved;
+val add_include = add_include;
+
+val add_syntax_class_cmd = gen_add_syntax_class read_class;
+val add_syntax_inst_cmd = gen_add_syntax_inst read_inst;
+val add_syntax_tyco_cmd = gen_add_syntax_tyco read_tyco;
+val add_syntax_const_simple_cmd = gen_add_syntax_const Code.read_const ((K o K o K) ()) Code_Printer.simple_const_syntax;
+val add_syntax_const_cmd = gen_add_syntax_const Code.read_const ((K o K o K) ()) I;
+
+val allow_abort_cmd = gen_allow_abort Code.read_const;
+
+fun parse_args f args =
+  case Scan.read OuterLex.stopper f args
+   of SOME x => x
+    | NONE => error "Bad serializer arguments";
+
+
+(** Isar setup **)
+
+val (inK, module_nameK, fileK) = ("in", "module_name", "file");
+
+val code_exprP =
+  (Scan.repeat1 P.term_group
+  -- Scan.repeat (P.$$$ inK |-- P.name
+     -- Scan.option (P.$$$ module_nameK |-- P.name)
+     -- Scan.option (P.$$$ fileK |-- P.name)
+     -- Scan.optional (P.$$$ "(" |-- Args.parse --| P.$$$ ")") []
+  ) >> (fn (raw_cs, seris) => export_code_cmd raw_cs seris));
+
+val _ = List.app OuterKeyword.keyword [inK, module_nameK, fileK];
+
+val _ =
+  OuterSyntax.command "code_class" "define code syntax for class" K.thy_decl (
+    parse_multi_syntax P.xname (Scan.option P.string)
+    >> (Toplevel.theory oo fold) (fn (target, syns) =>
+          fold (fn (raw_class, syn) => add_syntax_class_cmd target raw_class syn) syns)
+  );
+
+val _ =
+  OuterSyntax.command "code_instance" "define code syntax for instance" K.thy_decl (
+    parse_multi_syntax (P.xname --| P.$$$ "::" -- P.xname) (Scan.option (P.minus >> K ()))
+    >> (Toplevel.theory oo fold) (fn (target, syns) =>
+          fold (fn (raw_inst, add_del) => add_syntax_inst_cmd target raw_inst add_del) syns)
+  );
+
+val _ =
+  OuterSyntax.command "code_type" "define code syntax for type constructor" K.thy_decl (
+    parse_multi_syntax P.xname (Code_Printer.parse_syntax I)
+    >> (Toplevel.theory oo fold) (fn (target, syns) =>
+          fold (fn (raw_tyco, syn) => add_syntax_tyco_cmd target raw_tyco syn) syns)
+  );
+
+val _ =
+  OuterSyntax.command "code_const" "define code syntax for constant" K.thy_decl (
+    parse_multi_syntax P.term_group (Code_Printer.parse_syntax fst)
+    >> (Toplevel.theory oo fold) (fn (target, syns) =>
+      fold (fn (raw_const, syn) => add_syntax_const_simple_cmd target raw_const syn) syns)
+  );
+
+val _ =
+  OuterSyntax.command "code_reserved" "declare words as reserved for target language" K.thy_decl (
+    P.name -- Scan.repeat1 P.name
+    >> (fn (target, reserveds) => (Toplevel.theory o fold (add_reserved target)) reserveds)
+  );
+
+val _ =
+  OuterSyntax.command "code_include" "declare piece of code to be included in generated code" K.thy_decl (
+    P.name -- P.name -- (P.text :|-- (fn "-" => Scan.succeed NONE
+      | s => Scan.optional (P.$$$ "attach" |-- Scan.repeat1 P.term) [] >> pair s >> SOME))
+    >> (fn ((target, name), content_consts) =>
+        (Toplevel.theory o add_include_cmd target) (name, content_consts))
+  );
+
+val _ =
+  OuterSyntax.command "code_modulename" "alias module to other name" K.thy_decl (
+    P.name -- Scan.repeat1 (P.name -- P.name)
+    >> (fn (target, modlnames) => (Toplevel.theory o fold (add_module_alias target)) modlnames)
+  );
+
+val _ =
+  OuterSyntax.command "code_abort" "permit constant to be implemented as program abort" K.thy_decl (
+    Scan.repeat1 P.term_group >> (Toplevel.theory o fold allow_abort_cmd)
+  );
+
+val _ =
+  OuterSyntax.command "export_code" "generate executable code for constants"
+    K.diag (P.!!! code_exprP >> (fn f => Toplevel.keep (f o Toplevel.theory_of)));
+
+fun shell_command thyname cmd = Toplevel.program (fn _ =>
+  (use_thy thyname; case Scan.read OuterLex.stopper (P.!!! code_exprP)
+    ((filter OuterLex.is_proper o OuterSyntax.scan Position.none) cmd)
+   of SOME f => (writeln "Now generating code..."; f (theory thyname))
+    | NONE => error ("Bad directive " ^ quote cmd)))
+  handle Runtime.TOPLEVEL_ERROR => OS.Process.exit OS.Process.failure;
+
+end; (*local*)
+
+end; (*struct*)

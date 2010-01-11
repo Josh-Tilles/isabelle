@@ -1,0 +1,474 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{Outer{\isacharunderscore}Syntax}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+\isacommand{theory}\isamarkupfalse%
+\ Outer{\isacharunderscore}Syntax\isanewline
+\isakeyword{imports}\ Main\isanewline
+\isakeyword{begin}%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isamarkupchapter{Outer syntax%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+The rather generic framework of Isabelle/Isar syntax emerges from
+  three main syntactic categories: \emph{commands} of the top-level
+  Isar engine (covering theory and proof elements), \emph{methods} for
+  general goal refinements (analogous to traditional ``tactics''), and
+  \emph{attributes} for operations on facts (within a certain
+  context).  Subsequently we give a reference of basic syntactic
+  entities underlying Isabelle/Isar syntax in a bottom-up manner.
+  Concrete theory and proof language elements will be introduced later
+  on.
+
+  \medskip In order to get started with writing well-formed
+  Isabelle/Isar documents, the most important aspect to be noted is
+  the difference of \emph{inner} versus \emph{outer} syntax.  Inner
+  syntax is that of Isabelle types and terms of the logic, while outer
+  syntax is that of Isabelle/Isar theory sources (specifications and
+  proofs).  As a general rule, inner syntax entities may occur only as
+  \emph{atomic entities} within outer syntax.  For example, the string
+  \verb|"x + y"| and identifier \verb|z| are legal term
+  specifications within a theory, while \verb|x + y| without
+  quotes is not.
+
+  Printed theory documents usually omit quotes to gain readability
+  (this is a matter of {\LaTeX} macro setup, say via \verb|\isabellestyle|, see also \cite{isabelle-sys}).  Experienced
+  users of Isabelle/Isar may easily reconstruct the lost technical
+  information, while mere readers need not care about quotes at all.
+
+  \medskip Isabelle/Isar input may contain any number of input
+  termination characters ``\verb|;|'' (semicolon) to separate
+  commands explicitly.  This is particularly useful in interactive
+  shell sessions to make clear where the current command is intended
+  to end.  Otherwise, the interpreter loop will continue to issue a
+  secondary prompt ``\verb|#|'' until an end-of-command is
+  clearly recognized from the input syntax, e.g.\ encounter of the
+  next command keyword.
+
+  More advanced interfaces such as Proof~General \cite{proofgeneral}
+  do not require explicit semicolons, the amount of input text is
+  determined automatically by inspecting the present content of the
+  Emacs text buffer.  In the printed presentation of Isabelle/Isar
+  documents semicolons are omitted altogether for readability.
+
+  \begin{warn}
+    Proof~General requires certain syntax classification tables in
+    order to achieve properly synchronized interaction with the
+    Isabelle/Isar process.  These tables need to be consistent with
+    the Isabelle version and particular logic image to be used in a
+    running session (common object-logics may well change the outer
+    syntax).  The standard setup should work correctly with any of the
+    ``official'' logic images derived from Isabelle/HOL (including
+    HOLCF etc.).  Users of alternative logics may need to tell
+    Proof~General explicitly, e.g.\ by giving an option \verb|-k ZF|
+    (in conjunction with \verb|-l ZF|, to specify the default
+    logic image).  Note that option \verb|-L| does both
+    of this at the same time.
+  \end{warn}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Lexical matters \label{sec:outer-lex}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+The outer lexical syntax consists of three main categories of
+  syntax tokens:
+
+  \begin{enumerate}
+
+  \item \emph{major keywords} --- the command names that are available
+  in the present logic session;
+
+  \item \emph{minor keywords} --- additional literal tokens required
+  by the syntax of commands;
+
+  \item \emph{named tokens} --- various categories of identifiers etc.
+
+  \end{enumerate}
+
+  Major keywords and minor keywords are guaranteed to be disjoint.
+  This helps user-interfaces to determine the overall structure of a
+  theory text, without knowing the full details of command syntax.
+  Internally, there is some additional information about the kind of
+  major keywords, which approximates the command type (theory command,
+  proof command etc.).
+
+  Keywords override named tokens.  For example, the presence of a
+  command called \verb|term| inhibits the identifier \verb|term|, but the string \verb|"term"| can be used instead.
+  By convention, the outer syntax always allows quoted strings in
+  addition to identifiers, wherever a named entity is expected.
+
+  When tokenizing a given input sequence, the lexer repeatedly takes
+  the longest prefix of the input that forms a valid token.  Spaces,
+  tabs, newlines and formfeeds between tokens serve as explicit
+  separators.
+
+  \medskip The categories for named tokens are defined once and for
+  all as follows.
+
+  \begin{center}
+  \begin{supertabular}{rcl}
+    \indexdef{}{syntax}{ident}\hypertarget{syntax.ident}{\hyperlink{syntax.ident}{\mbox{\isa{ident}}}} & = & \isa{{\isachardoublequote}letter\ quasiletter\isactrlsup {\isacharasterisk}{\isachardoublequote}} \\
+    \indexdef{}{syntax}{longident}\hypertarget{syntax.longident}{\hyperlink{syntax.longident}{\mbox{\isa{longident}}}} & = & \isa{{\isachardoublequote}ident{\isacharparenleft}{\isachardoublequote}}\verb|.|\isa{{\isachardoublequote}ident{\isacharparenright}\isactrlsup {\isacharplus}{\isachardoublequote}} \\
+    \indexdef{}{syntax}{symident}\hypertarget{syntax.symident}{\hyperlink{syntax.symident}{\mbox{\isa{symident}}}} & = & \isa{{\isachardoublequote}sym\isactrlsup {\isacharplus}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\|\verb|<|\isa{ident}\verb|>| \\
+    \indexdef{}{syntax}{nat}\hypertarget{syntax.nat}{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}} & = & \isa{{\isachardoublequote}digit\isactrlsup {\isacharplus}{\isachardoublequote}} \\
+    \indexdef{}{syntax}{var}\hypertarget{syntax.var}{\hyperlink{syntax.var}{\mbox{\isa{var}}}} & = & \verb|?|\isa{{\isachardoublequote}ident\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|?|\isa{ident}\verb|.|\isa{nat} \\
+    \indexdef{}{syntax}{typefree}\hypertarget{syntax.typefree}{\hyperlink{syntax.typefree}{\mbox{\isa{typefree}}}} & = & \verb|'|\isa{ident} \\
+    \indexdef{}{syntax}{typevar}\hypertarget{syntax.typevar}{\hyperlink{syntax.typevar}{\mbox{\isa{typevar}}}} & = & \verb|?|\isa{{\isachardoublequote}typefree\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|?|\isa{typefree}\verb|.|\isa{nat} \\
+    \indexdef{}{syntax}{string}\hypertarget{syntax.string}{\hyperlink{syntax.string}{\mbox{\isa{string}}}} & = & \verb|"| \isa{{\isachardoublequote}{\isasymdots}{\isachardoublequote}} \verb|"| \\
+    \indexdef{}{syntax}{altstring}\hypertarget{syntax.altstring}{\hyperlink{syntax.altstring}{\mbox{\isa{altstring}}}} & = & \verb|`| \isa{{\isachardoublequote}{\isasymdots}{\isachardoublequote}} \verb|`| \\
+    \indexdef{}{syntax}{verbatim}\hypertarget{syntax.verbatim}{\hyperlink{syntax.verbatim}{\mbox{\isa{verbatim}}}} & = & \verb|{*| \isa{{\isachardoublequote}{\isasymdots}{\isachardoublequote}} \verb|*|\verb|}| \\[1ex]
+
+    \isa{letter} & = & \isa{{\isachardoublequote}latin\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\|\verb|<|\isa{latin}\verb|>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\|\verb|<|\isa{{\isachardoublequote}latin\ latin{\isachardoublequote}}\verb|>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ greek\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<^isub>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<^isup>| \\
+    \isa{quasiletter} & = & \isa{{\isachardoublequote}letter\ \ {\isacharbar}\ \ digit\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|_|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|'| \\
+    \isa{latin} & = & \verb|a|\isa{{\isachardoublequote}\ \ {\isacharbar}\ {\isasymdots}\ {\isacharbar}\ \ {\isachardoublequote}}\verb|z|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|A|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isasymdots}\ {\isacharbar}\ \ {\isachardoublequote}}\verb|Z| \\
+    \isa{digit} & = & \verb|0|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isasymdots}\ {\isacharbar}\ \ {\isachardoublequote}}\verb|9| \\
+    \isa{sym} & = & \verb|!|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|#|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|$|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|%|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|&|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|*|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|+|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|-|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|/|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+    & & \verb|<|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|=|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|?|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|@|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|^|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|_|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb||\verb,|,\verb||\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|~| \\
+    \isa{greek} & = & \verb|\<alpha>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<beta>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<gamma>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<delta>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<epsilon>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<zeta>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<eta>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<theta>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<iota>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<kappa>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<mu>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<nu>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<xi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<pi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<rho>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<sigma>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<tau>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<upsilon>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<phi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<chi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<psi>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<omega>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Gamma>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Delta>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Theta>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<Lambda>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Xi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Pi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Sigma>|\isa{{\isachardoublequote}\ \ {\isacharbar}{\isachardoublequote}} \\
+          &   & \verb|\<Upsilon>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Phi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Psi>|\isa{{\isachardoublequote}\ \ {\isacharbar}\ \ {\isachardoublequote}}\verb|\<Omega>| \\
+  \end{supertabular}
+  \end{center}
+
+  A \indexref{}{syntax}{var}\hyperlink{syntax.var}{\mbox{\isa{var}}} or \indexref{}{syntax}{typevar}\hyperlink{syntax.typevar}{\mbox{\isa{typevar}}} describes an unknown,
+  which is internally a pair of base name and index (ML type \verb|indexname|).  These components are either separated by a dot as in
+  \isa{{\isachardoublequote}{\isacharquery}x{\isachardot}{\isadigit{1}}{\isachardoublequote}} or \isa{{\isachardoublequote}{\isacharquery}x{\isadigit{7}}{\isachardot}{\isadigit{3}}{\isachardoublequote}} or run together as in \isa{{\isachardoublequote}{\isacharquery}x{\isadigit{1}}{\isachardoublequote}}.  The latter form is possible if the base name does not end
+  with digits.  If the index is 0, it may be dropped altogether:
+  \isa{{\isachardoublequote}{\isacharquery}x{\isachardoublequote}} and \isa{{\isachardoublequote}{\isacharquery}x{\isadigit{0}}{\isachardoublequote}} and \isa{{\isachardoublequote}{\isacharquery}x{\isachardot}{\isadigit{0}}{\isachardoublequote}} all refer to the
+  same unknown, with basename \isa{{\isachardoublequote}x{\isachardoublequote}} and index 0.
+
+  The syntax of \indexref{}{syntax}{string}\hyperlink{syntax.string}{\mbox{\isa{string}}} admits any characters, including
+  newlines; ``\verb|"|'' (double-quote) and ``\verb|\|'' (backslash) need to be escaped by a backslash; arbitrary
+  character codes may be specified as ``\verb|\|\isa{ddd}'',
+  with three decimal digits.  Alternative strings according to
+  \indexref{}{syntax}{altstring}\hyperlink{syntax.altstring}{\mbox{\isa{altstring}}} are analogous, using single back-quotes
+  instead.
+
+  The body of \indexref{}{syntax}{verbatim}\hyperlink{syntax.verbatim}{\mbox{\isa{verbatim}}} may consist of any text not
+  containing ``\verb|*|\verb|}|''; this allows
+  convenient inclusion of quotes without further escapes.  There is no
+  way to escape ``\verb|*|\verb|}|''.  If the quoted
+  text is {\LaTeX} source, one may usually add some blank or comment
+  to avoid the critical character sequence.
+
+  Source comments take the form \verb|(*|~\isa{{\isachardoublequote}{\isasymdots}{\isachardoublequote}}~\verb|*)| and may be nested, although the user-interface
+  might prevent this.  Note that this form indicates source comments
+  only, which are stripped after lexical analysis of the input.  The
+  Isar syntax also provides proper \emph{document comments} that are
+  considered as part of the text (see \secref{sec:comments}).
+
+  Common mathematical symbols such as \isa{{\isasymforall}} are represented in
+  Isabelle as \verb|\<forall>|.  There are infinitely many Isabelle
+  symbols like this, although proper presentation is left to front-end
+  tools such as {\LaTeX} or Proof~General with the X-Symbol package.
+  A list of predefined Isabelle symbols that work well with these
+  tools is given in \appref{app:symbols}.  Note that \verb|\<lambda>|
+  does not belong to the \isa{letter} category, since it is already
+  used differently in the Pure term language.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Common syntax entities%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+We now introduce several basic syntactic entities, such as names,
+  terms, and theorem specifications, which are factored out of the
+  actual Isar language elements to be described later.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Names%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Entity \railqtok{name} usually refers to any name of types,
+  constants, theorems etc.\ that are to be \emph{declared} or
+  \emph{defined} (so qualified identifiers are excluded here).  Quoted
+  strings provide an escape for non-identifier names or those ruled
+  out by outer syntax keywords (e.g.\ quoted \verb|"let"|).
+  Already existing objects are usually referenced by
+  \railqtok{nameref}.
+
+  \indexoutertoken{name}\indexoutertoken{parname}\indexoutertoken{nameref}
+  \indexoutertoken{int}
+  \begin{rail}
+    name: ident | symident | string | nat
+    ;
+    parname: '(' name ')'
+    ;
+    nameref: name | longident
+    ;
+    int: nat | '-' nat
+    ;
+  \end{rail}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Comments \label{sec:comments}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Large chunks of plain \railqtok{text} are usually given
+  \railtok{verbatim}, i.e.\ enclosed in \verb|{|\verb|*|~\isa{{\isachardoublequote}{\isasymdots}{\isachardoublequote}}~\verb|*|\verb|}|.  For convenience,
+  any of the smaller text units conforming to \railqtok{nameref} are
+  admitted as well.  A marginal \railnonterm{comment} is of the form
+  \verb|--| \railqtok{text}.  Any number of these may occur
+  within Isabelle/Isar commands.
+
+  \indexoutertoken{text}\indexouternonterm{comment}
+  \begin{rail}
+    text: verbatim | nameref
+    ;
+    comment: '--' text
+    ;
+  \end{rail}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Type classes, sorts and arities%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Classes are specified by plain names.  Sorts have a very simple
+  inner syntax, which is either a single class name \isa{c} or a
+  list \isa{{\isachardoublequote}{\isacharbraceleft}c\isactrlsub {\isadigit{1}}{\isacharcomma}\ {\isasymdots}{\isacharcomma}\ c\isactrlsub n{\isacharbraceright}{\isachardoublequote}} referring to the
+  intersection of these classes.  The syntax of type arities is given
+  directly at the outer level.
+
+  \indexouternonterm{sort}\indexouternonterm{arity}
+  \indexouternonterm{classdecl}
+  \begin{rail}
+    classdecl: name (('<' | subseteq) (nameref + ','))?
+    ;
+    sort: nameref
+    ;
+    arity: ('(' (sort + ',') ')')? sort
+    ;
+  \end{rail}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Types and terms \label{sec:types-terms}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+The actual inner Isabelle syntax, that of types and terms of the
+  logic, is far too sophisticated in order to be modelled explicitly
+  at the outer theory level.  Basically, any such entity has to be
+  quoted to turn it into a single token (the parsing and type-checking
+  is performed internally later).  For convenience, a slightly more
+  liberal convention is adopted: quotes may be omitted for any type or
+  term that is already atomic at the outer level.  For example, one
+  may just write \verb|x| instead of quoted \verb|"x"|.
+  Note that symbolic identifiers (e.g.\ \verb|++| or \isa{{\isachardoublequote}{\isasymforall}{\isachardoublequote}} are available as well, provided these have not been superseded
+  by commands or other keywords already (such as \verb|=| or
+  \verb|+|).
+
+  \indexoutertoken{type}\indexoutertoken{term}\indexoutertoken{prop}
+  \begin{rail}
+    type: nameref | typefree | typevar
+    ;
+    term: nameref | var
+    ;
+    prop: term
+    ;
+  \end{rail}
+
+  Positional instantiations are indicated by giving a sequence of
+  terms, or the placeholder ``\isa{{\isacharunderscore}}'' (underscore), which means to
+  skip a position.
+
+  \indexoutertoken{inst}\indexoutertoken{insts}
+  \begin{rail}
+    inst: underscore | term
+    ;
+    insts: (inst *)
+    ;
+  \end{rail}
+
+  Type declarations and definitions usually refer to
+  \railnonterm{typespec} on the left-hand side.  This models basic
+  type constructor application at the outer syntax level.  Note that
+  only plain postfix notation is available here, but no infixes.
+
+  \indexouternonterm{typespec}
+  \begin{rail}
+    typespec: (() | typefree | '(' ( typefree + ',' ) ')') name
+    ;
+  \end{rail}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Term patterns and declarations \label{sec:term-decls}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Wherever explicit propositions (or term fragments) occur in a proof
+  text, casual binding of schematic term variables may be given
+  specified via patterns of the form ``\isa{{\isachardoublequote}{\isacharparenleft}{\isasymIS}\ p\isactrlsub {\isadigit{1}}\ {\isasymdots}\ p\isactrlsub n{\isacharparenright}{\isachardoublequote}}''.  This works both for \railqtok{term} and \railqtok{prop}.
+
+  \indexouternonterm{termpat}\indexouternonterm{proppat}
+  \begin{rail}
+    termpat: '(' ('is' term +) ')'
+    ;
+    proppat: '(' ('is' prop +) ')'
+    ;
+  \end{rail}
+
+  \medskip Declarations of local variables \isa{{\isachardoublequote}x\ {\isacharcolon}{\isacharcolon}\ {\isasymtau}{\isachardoublequote}} and
+  logical propositions \isa{{\isachardoublequote}a\ {\isacharcolon}\ {\isasymphi}{\isachardoublequote}} represent different views on
+  the same principle of introducing a local scope.  In practice, one
+  may usually omit the typing of \railnonterm{vars} (due to
+  type-inference), and the naming of propositions (due to implicit
+  references of current facts).  In any case, Isar proof elements
+  usually admit to introduce multiple such items simultaneously.
+
+  \indexouternonterm{vars}\indexouternonterm{props}
+  \begin{rail}
+    vars: (name+) ('::' type)?
+    ;
+    props: thmdecl? (prop proppat? +)
+    ;
+  \end{rail}
+
+  The treatment of multiple declarations corresponds to the
+  complementary focus of \railnonterm{vars} versus
+  \railnonterm{props}.  In ``\isa{{\isachardoublequote}x\isactrlsub {\isadigit{1}}\ {\isasymdots}\ x\isactrlsub n\ {\isacharcolon}{\isacharcolon}\ {\isasymtau}{\isachardoublequote}}''
+  the typing refers to all variables, while in \isa{{\isachardoublequote}a{\isacharcolon}\ {\isasymphi}\isactrlsub {\isadigit{1}}\ {\isasymdots}\ {\isasymphi}\isactrlsub n{\isachardoublequote}} the naming refers to all propositions collectively.
+  Isar language elements that refer to \railnonterm{vars} or
+  \railnonterm{props} typically admit separate typings or namings via
+  another level of iteration, with explicit \indexref{}{keyword}{and}\hyperlink{keyword.and}{\mbox{\isa{\isakeyword{and}}}}
+  separators; e.g.\ see \hyperlink{command.fix}{\mbox{\isa{\isacommand{fix}}}} and \hyperlink{command.assume}{\mbox{\isa{\isacommand{assume}}}} in
+  \secref{sec:proof-context}.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Attributes and theorems \label{sec:syn-att}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Attributes have their own ``semi-inner'' syntax, in the sense
+  that input conforming to \railnonterm{args} below is parsed by the
+  attribute a second time.  The attribute argument specifications may
+  be any sequence of atomic entities (identifiers, strings etc.), or
+  properly bracketed argument lists.  Below \railqtok{atom} refers to
+  any atomic entity, including any \railtok{keyword} conforming to
+  \railtok{symident}.
+
+  \indexoutertoken{atom}\indexouternonterm{args}\indexouternonterm{attributes}
+  \begin{rail}
+    atom: nameref | typefree | typevar | var | nat | keyword
+    ;
+    arg: atom | '(' args ')' | '[' args ']'
+    ;
+    args: arg *
+    ;
+    attributes: '[' (nameref args * ',') ']'
+    ;
+  \end{rail}
+
+  Theorem specifications come in several flavors:
+  \railnonterm{axmdecl} and \railnonterm{thmdecl} usually refer to
+  axioms, assumptions or results of goal statements, while
+  \railnonterm{thmdef} collects lists of existing theorems.  Existing
+  theorems are given by \railnonterm{thmref} and
+  \railnonterm{thmrefs}, the former requires an actual singleton
+  result.
+
+  There are three forms of theorem references:
+  \begin{enumerate}
+  
+  \item named facts \isa{{\isachardoublequote}a{\isachardoublequote}},
+
+  \item selections from named facts \isa{{\isachardoublequote}a{\isacharparenleft}i{\isacharparenright}{\isachardoublequote}} or \isa{{\isachardoublequote}a{\isacharparenleft}j\ {\isacharminus}\ k{\isacharparenright}{\isachardoublequote}},
+
+  \item literal fact propositions using \indexref{}{syntax}{altstring}\hyperlink{syntax.altstring}{\mbox{\isa{altstring}}} syntax
+  \verb|`|\isa{{\isachardoublequote}{\isasymphi}{\isachardoublequote}}\verb|`| (see also method
+  \indexref{}{method}{fact}\hyperlink{method.fact}{\mbox{\isa{fact}}}).
+
+  \end{enumerate}
+
+  Any kind of theorem specification may include lists of attributes
+  both on the left and right hand sides; attributes are applied to any
+  immediately preceding fact.  If names are omitted, the theorems are
+  not stored within the theorem database of the theory or proof
+  context, but any given attributes are applied nonetheless.
+
+  An extra pair of brackets around attributes (like ``\isa{{\isachardoublequote}{\isacharbrackleft}{\isacharbrackleft}simproc\ a{\isacharbrackright}{\isacharbrackright}{\isachardoublequote}}'') abbreviates a theorem reference involving an
+  internal dummy fact, which will be ignored later on.  So only the
+  effect of the attribute on the background context will persist.
+  This form of in-place declarations is particularly useful with
+  commands like \hyperlink{command.declare}{\mbox{\isa{\isacommand{declare}}}} and \hyperlink{command.using}{\mbox{\isa{\isacommand{using}}}}.
+
+  \indexouternonterm{axmdecl}\indexouternonterm{thmdecl}
+  \indexouternonterm{thmdef}\indexouternonterm{thmref}
+  \indexouternonterm{thmrefs}\indexouternonterm{selection}
+  \begin{rail}
+    axmdecl: name attributes? ':'
+    ;
+    thmdecl: thmbind ':'
+    ;
+    thmdef: thmbind '='
+    ;
+    thmref: (nameref selection? | altstring) attributes? | '[' attributes ']'
+    ;
+    thmrefs: thmref +
+    ;
+
+    thmbind: name attributes | name | attributes
+    ;
+    selection: '(' ((nat | nat '-' nat?) + ',') ')'
+    ;
+  \end{rail}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+\isacommand{end}\isamarkupfalse%
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\isanewline
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

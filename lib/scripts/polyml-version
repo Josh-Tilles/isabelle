@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+#
+# polyml-version --- determine Poly/ML runtime system version
+
+echo -n polyml
+
+if [ -x "$ML_HOME/poly" ]; then
+  env LD_LIBRARY_PATH="$ML_HOME:$ML_HOME/../lib:$LD_LIBRARY_PATH" \
+    DYLD_LIBRARY_PATH="$ML_HOME:$ML_HOME/../lib:$DYLD_LIBRARY_PATH" \
+    "$ML_HOME/poly" -v -H 10 | \
+    sed -n 's,^Poly/ML.*RTS version: [^ ]*\(-[^ ]*\).*$,\1,p'
+fi

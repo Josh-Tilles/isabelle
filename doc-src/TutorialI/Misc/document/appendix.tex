@@ -1,0 +1,63 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{appendix}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\begin{isamarkuptext}%
+\begin{table}[htbp]
+\begin{center}
+\begin{tabular}{lll}
+Constant & Type & Syntax \\
+\hline
+\isa{{\isadigit{0}}} & \isa{{\isacharprime}a{\isasymColon}zero} \\
+\isa{{\isadigit{1}}} & \isa{{\isacharprime}a{\isasymColon}one} \\
+\isa{plus} & \isa{{\isacharprime}a{\isasymColon}plus\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}plus\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}plus} & (infixl $+$ 65) \\
+\isa{minus} & \isa{{\isacharprime}a{\isasymColon}minus\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}minus\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}minus} & (infixl $-$ 65) \\
+\isa{uminus} & \isa{{\isacharprime}a{\isasymColon}uminus\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}uminus} & $- x$ \\
+\isa{times} & \isa{{\isacharprime}a{\isasymColon}times\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}times\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}times} & (infixl $*$ 70) \\
+\isa{divide} & \isa{{\isacharprime}a{\isasymColon}inverse\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}inverse\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}inverse} & (infixl $/$ 70) \\
+\isa{Divides{\isachardot}div} & \isa{{\isacharprime}a{\isasymColon}div\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}div\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}div} & (infixl $div$ 70) \\
+\isa{Divides{\isachardot}mod} & \isa{{\isacharprime}a{\isasymColon}div\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}div\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}div} & (infixl $mod$ 70) \\
+\isa{abs} & \isa{{\isacharprime}a{\isasymColon}abs\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}abs} & ${\mid} x {\mid}$ \\
+\isa{sgn} & \isa{{\isacharprime}a{\isasymColon}sgn\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}sgn} \\
+\isa{less{\isacharunderscore}eq} & \isa{{\isacharprime}a{\isasymColon}ord\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}ord\ {\isasymRightarrow}\ bool} & (infixl $\le$ 50) \\
+\isa{less} & \isa{{\isacharprime}a{\isasymColon}ord\ {\isasymRightarrow}\ {\isacharprime}a{\isasymColon}ord\ {\isasymRightarrow}\ bool} & (infixl $<$ 50) \\
+\isa{top} & \isa{{\isacharprime}a{\isasymColon}top} \\
+\isa{bot} & \isa{{\isacharprime}a{\isasymColon}bot}
+\end{tabular}
+\caption{Important Overloaded Constants in Main}
+\label{tab:overloading}
+\end{center}
+\end{table}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

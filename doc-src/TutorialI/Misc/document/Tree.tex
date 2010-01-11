@@ -1,0 +1,83 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{Tree}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\begin{isamarkuptext}%
+\noindent
+Define the datatype of \rmindex{binary trees}:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{datatype}\isamarkupfalse%
+\ {\isacharprime}a\ tree\ {\isacharequal}\ Tip\ {\isacharbar}\ Node\ {\isachardoublequoteopen}{\isacharprime}a\ tree{\isachardoublequoteclose}\ {\isacharprime}a\ {\isachardoublequoteopen}{\isacharprime}a\ tree{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+Define a function \isa{mirror} that mirrors a binary tree
+by swapping subtrees recursively. Prove%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ mirror{\isacharunderscore}mirror{\isacharcolon}\ {\isachardoublequoteopen}mirror{\isacharparenleft}mirror\ t{\isacharparenright}\ {\isacharequal}\ t{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\noindent
+Define a function \isa{flatten} that flattens a tree into a list
+by traversing it in infix order. Prove%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}flatten{\isacharparenleft}mirror\ t{\isacharparenright}\ {\isacharequal}\ rev{\isacharparenleft}flatten\ t{\isacharparenright}{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

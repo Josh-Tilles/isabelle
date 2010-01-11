@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+#
+# Author: Gerwin Klein, TU Muenchen
+#
+# DESCRIPTION: Run isabelle makeall from specified distribution and settings.
+
+## global settings
+. ~/admin/isatest/isatest-settings
+
+# max time until test is aborted (in sec)
+MAXTIME=28800
+
+PUBLISH_TEST=/home/isabelle-repository/repos/testtool/publish_test.py
+
+## diagnostics
+
+PRG="$(basename "$0")"
+
+function usage()
+{
+  echo
+  echo "Usage: $PRG [-l logic targets] settings1 [settings2 ...]"
+  echo
+  echo "  Runs isabelle makeall for specified settings."
+  echo "  Leaves messages in ${ERRORLOG} and ${LOGPREFIX} if it fails."
+  echo
+  echo "Examples:"
+  echo "  $PRG ~/settings/at-poly ~/settings/at-sml"
+  echo "  $PRG -l HOL \"HOL-Library HOL-Bali\" ~/settings/at-poly"
+  exit 1
+}
+
+function fail()
+{
+  echo "$1" >&2
+  log "FAILED, $1"
+  exit 2
+}
+
+## main
+
+# argument checking
+
+[ "$1" = "-?" ] && usage
+[ "$#" -lt "1" ] && usage
+
+[ -d $DISTPREFIX ] || fail "$DISTPREFIX is not a directory."
+
+# make file flags and nice setup for different target platforms
+case $HOSTNAME in
+    atbroy51)
+        MFLAGS="-k -j 2"
+        NICE=""
+        ;;
+
+    atbroy98)
+        MFLAGS="-k"
+        NICE=""
+        ;;
+
+    atbroy31)
+        MFLAGS="-k -j 2"
+        ;;
+  
+    sunbroy2)
+        MFLAGS="-k -j 2"
+        NICE="nice"
+        ;;
+
+    sunbroy1)
+        MFLAGS="-k -j 2"
+        NICE="nice"
+        ;;
+
+    macbroy2)
+        MFLAGS="-k"
+        NICE=""
+        ;;
+
+    macbroy5)
+        MFLAGS="-k -j 2"
+        NICE=""
+        ;;
+
+    macbroy22)
+        MFLAGS="-k"
+        NICE=""
+        ;;
+
+    macbroy23)
+        MFLAGS="-k -j 2"
+        NICE="nice"
+        ;;
+
+    macbroy2[0-9])
+        MFLAGS="-k -j 2"
+        NICE=""
+        ;;
+
+    *)
+        MFLAGS="-k"
+        # be nice by default
+        NICE=nice
+        ;;
+esac
+
+ISABELLE_TOOL="$DISTPREFIX/Isabelle/bin/isabelle"
+
+[ -x $ISABELLE_TOOL ] || fail "Cannot run $ISABELLE_TOOL"
+
+if [ "$1" = "-l" ]; then
+  shift
+  [ "$#" -lt "3" ] && usage
+  LOGIC="$1"
+  TARGETS="$2"
+  shift 2
+  ISABELLE_HOME="$($ISABELLE_TOOL getenv -b ISABELLE_HOME)"
+  DIR="$ISABELLE_HOME/src/$LOGIC"
+  TOOL="$ISABELLE_TOOL make $MFLAGS $TARGETS"
+else
+  DIR="."
+  TOOL="$ISABELLE_TOOL makeall $MFLAGS all"
+fi
+
+IDENT=$(cat "$DISTPREFIX/ISABELLE_IDENT")
+
+# main test loop
+
+log "starting [$@]"
+
+for SETTINGS in $@; do
+
+    [ -r $SETTINGS ] || fail "Cannot read $SETTINGS."
+
+    # logfile setup
+
+    DATE=$(date "+%Y-%m-%d")
+    SHORT=${SETTINGS##*/}
+
+	if [ "${SHORT%-e}" == "$SHORT" ]; then
+		# normal test
+    	TESTLOG=$LOGPREFIX/isatest-makeall-$SHORT-$DATE-$HOSTNAME.log
+ 	else
+	 	# experimental test
+		TESTLOG=$LOGPREFIX/isatest-makeall-$SHORT-$DATE-$HOSTNAME-e.log
+	fi
+
+    # the test
+
+    touch $RUNNING/$SHORT.running
+
+    echo ------------------- starting test --- `date` --- $HOSTNAME > $TESTLOG 2>&1
+
+    if [ "${ISABELLE_HOME_USER:0:14}" == "/tmp/isabelle-" ]; then
+        echo "--- cleaning up old $ISABELLE_HOME_USER"
+        rm -rf $ISABELLE_HOME_USER
+    fi
+
+    cat $SETTINGS >> $DISTPREFIX/Isabelle/etc/settings
+    (ulimit -t $MAXTIME; cd $DIR; $NICE $TOOL >> $TESTLOG 2>&1)
+
+    if [ $? -eq 0 ]
+    then
+        # test log and cleanup
+        echo ------------------- test successful --- `date` --- $HOSTNAME >> $TESTLOG 2>&1
+        if [ -x $PUBLISH_TEST ]; then
+            $PUBLISH_TEST -r $IDENT -s "SUCCESS" -a log $TESTLOG -n Makeall_isatest_$SHORT
+        fi
+        gzip -f $TESTLOG
+    else
+        # test log
+        echo ------------------- test FAILED --- `date` --- $HOSTNAME >> $TESTLOG 2>&1
+        if [ -x $PUBLISH_TEST ]; then
+             $PUBLISH_TEST -r $IDENT -s "FAIL" -a log $TESTLOG -n Makeall_isatest_$SHORT
+        fi
+
+        # error log
+        echo "Test for platform ${SHORT} failed. Log file attached." >> $ERRORLOG
+        echo "[...]" >> $ERRORLOG
+        tail -3 $TESTLOG >> $ERRORLOG
+        echo >> $ERRORLOG
+
+        FAIL="$FAIL$SHORT "
+        (cd $ERRORDIR; ln -s $TESTLOG)
+    fi
+
+    rm -f $RUNNING/$SHORT.running
+done
+
+# time and success/failure to master log
+ELAPSED=$("$HOME/bin/showtime" "$SECONDS")
+
+if [ -z "$FAIL" ]; then
+    log "all tests successful, elapsed time $ELAPSED."
+else
+    log "targets ${FAIL}FAILED, elapsed time $ELAPSED."
+    exit 1
+fi
+
+# end

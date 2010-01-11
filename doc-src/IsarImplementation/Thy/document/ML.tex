@@ -1,0 +1,792 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{ML}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+\isacommand{theory}\isamarkupfalse%
+\ {\isachardoublequoteopen}ML{\isachardoublequoteclose}\isanewline
+\isakeyword{imports}\ Base\isanewline
+\isakeyword{begin}%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isamarkupchapter{Advanced ML programming%
+}
+\isamarkuptrue%
+%
+\isamarkupsection{Style%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Like any style guide, also this one should not be interpreted dogmatically, but
+  with care and discernment.  It consists of a collection of
+  recommendations which have been turned out useful over long years of
+  Isabelle system development and are supposed to support writing of readable
+  and managable code.  Special cases encourage derivations,
+  as far as you know what you are doing.
+  \footnote{This style guide is loosely based on
+  \url{http://caml.inria.fr/resources/doc/guides/guidelines.en.html}}
+
+  \begin{description}
+
+    \item[fundamental law of programming]
+      Whenever writing code, keep in mind: A program is
+      written once, modified ten times, and read
+      hundred times.  So simplify its writing,
+      always keep future modifications in mind,
+      and never jeopardize readability.  Every second you hesitate
+      to spend on making your code more clear you will
+      have to spend ten times understanding what you have
+      written later on.
+
+    \item[white space matters]
+      Treat white space in your code as if it determines
+      the meaning of code.
+
+      \begin{itemize}
+
+        \item The space bar is the easiest key to find on the keyboard,
+          press it as often as necessary. \verb|2 + 2| is better
+          than \verb|2+2|, likewise \verb|f (x, y)| is
+          better than \verb|f(x,y)|.
+
+        \item Restrict your lines to 80 characters.  This will allow
+          you to keep the beginning of a line in view while watching
+          its end.\footnote{To acknowledge the lax practice of
+          text editing these days, we tolerate as much as 100
+          characters per line, but anything beyond 120 is not
+          considered proper source text.}
+
+        \item Ban tabulators; they are a context-sensitive formatting
+          feature and likely to confuse anyone not using your favorite
+          editor.\footnote{Some modern programming language even
+          forbid tabulators altogether according to the formal syntax
+          definition.}
+
+        \item Get rid of trailing whitespace.  Instead, do not
+          suppress a trailing newline at the end of your files.
+
+        \item Choose a generally accepted style of indentation,
+          then use it systematically throughout the whole
+          application.  An indentation of two spaces is appropriate.
+          Avoid dangling indentation.
+
+      \end{itemize}
+
+    \item[cut-and-paste succeeds over copy-and-paste]
+       \emph{Never} copy-and-paste code when programming.  If you
+        need the same piece of code twice, introduce a
+        reasonable auxiliary function (if there is no
+        such function, very likely you got something wrong).
+        Any copy-and-paste will turn out to be painful 
+        when something has to be changed later on.
+
+    \item[comments]
+      are a device which requires careful thinking before using
+      it.  The best comment for your code should be the code itself.
+      Prefer efforts to write clear, understandable code
+      over efforts to explain nasty code.
+
+    \item[functional programming is based on functions]
+      Model things as abstract as appropriate.  Avoid unnecessarrily
+      concrete datatype  representations.  For example, consider a function
+      taking some table data structure as argument and performing
+      lookups on it.  Instead of taking a table, it could likewise
+      take just a lookup function.  Accustom
+      your way of coding to the level of expressiveness a functional
+      programming language is giving onto you.
+
+    \item[tuples]
+      are often in the way.  When there is no striking argument
+      to tuple function arguments, just write your function curried.
+
+    \item[telling names]
+      Any name should tell its purpose as exactly as possible, while
+      keeping its length to the absolutely necessary minimum.  Always
+      give the same name to function arguments which have the same
+      meaning. Separate words by underscores (\verb|int_of_string|, not \verb|intOfString|).\footnote{Some
+      recent tools for Emacs include special precautions to cope with
+      bumpy names in \isa{camelCase}, e.g.\ for improved on-screen
+      readability.  It is easier to abstain from using such names in the
+      first place.}
+
+  \end{description}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Thread-safe programming%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Recent versions of Poly/ML (5.2.1 or later) support robust
+  multithreaded execution, based on native operating system threads of
+  the underlying platform.  Thus threads will actually be executed in
+  parallel on multi-core systems.  A speedup-factor of approximately
+  1.5--3 can be expected on a regular 4-core machine.\footnote{There
+  is some inherent limitation of the speedup factor due to garbage
+  collection, which is still sequential.  It helps to provide initial
+  heap space generously, using the \texttt{-H} option of Poly/ML.}
+  Threads also help to organize advanced operations of the system,
+  with explicit communication between sub-components, real-time
+  conditions, time-outs etc.
+
+  Threads lack the memory protection of separate processes, and
+  operate concurrently on shared heap memory.  This has the advantage
+  that results of independent computations are immediately available
+  to other threads, without requiring untyped character streams,
+  awkward serialization etc.
+
+  On the other hand, some programming guidelines need to be observed
+  in order to make unprotected parallelism work out smoothly.  While
+  the ML system implementation is responsible to maintain basic
+  integrity of the representation of ML values in memory, the
+  application programmer needs to ensure that multithreaded execution
+  does not break the intended semantics.
+
+  \medskip \paragraph{Critical shared resources.} Actually only those
+  parts outside the purely functional world of ML are critical.  In
+  particular, this covers
+
+  \begin{itemize}
+
+  \item global references (or arrays), i.e.\ those that persist over
+  several invocations of associated operations,\footnote{This is
+  independent of the visibility of such mutable values in the toplevel
+  scope.}
+
+  \item direct I/O on shared channels, notably \isa{stdin}, \isa{stdout}, \isa{stderr}.
+
+  \end{itemize}
+
+  The majority of tools implemented within the Isabelle/Isar framework
+  will not require any of these critical elements: nothing special
+  needs to be observed when staying in the purely functional fragment
+  of ML.  Note that output via the official Isabelle channels does not
+  count as direct I/O, so the operations \verb|writeln|, \verb|warning|, \verb|tracing| etc.\ are safe.
+
+  Moreover, ML bindings within the toplevel environment (\verb|type|, \verb|val|, \verb|structure| etc.) due to
+  run-time invocation of the compiler are also safe, because
+  Isabelle/Isar manages this as part of the theory or proof context.
+
+  \paragraph{Multithreading in Isabelle/Isar.}  The theory loader
+  automatically exploits the overall parallelism of independent nodes
+  in the development graph, as well as the inherent irrelevance of
+  proofs for goals being fully specified in advance.  This means,
+  checking of individual Isar proofs is parallelized by default.
+  Beyond that, very sophisticated proof tools may use local
+  parallelism internally, via the general programming model of
+  ``future values'' (see also \hyperlink{file.~~/src/Pure/Concurrent/future.ML}{\mbox{\isa{\isatt{{\isachartilde}{\isachartilde}{\isacharslash}src{\isacharslash}Pure{\isacharslash}Concurrent{\isacharslash}future{\isachardot}ML}}}}).
+
+  Any ML code that works relatively to the present background theory
+  is already safe.  Contextual data may be easily stored within the
+  theory or proof context, thanks to the generic data concept of
+  Isabelle/Isar (see \secref{sec:context-data}).  This greatly
+  diminishes the demand for global state information in the first
+  place.
+
+  \medskip In rare situations where actual mutable content needs to be
+  manipulated, Isabelle provides a single \emph{critical section} that
+  may be entered while preventing any other thread from doing the
+  same.  Entering the critical section without contention is very
+  fast, and several basic system operations do so frequently.  This
+  also means that each thread should leave the critical section
+  quickly, otherwise parallel execution performance may degrade
+  significantly.
+
+  Despite this potential bottle-neck, centralized locking is
+  convenient, because it prevents deadlocks without demanding special
+  precautions.  Explicit communication demands other means, though.
+  The high-level abstraction of synchronized variables \hyperlink{file.~~/src/Pure/Concurrent/synchronized.ML}{\mbox{\isa{\isatt{{\isachartilde}{\isachartilde}{\isacharslash}src{\isacharslash}Pure{\isacharslash}Concurrent{\isacharslash}synchronized{\isachardot}ML}}}} enables parallel
+  components to communicate via shared state; see also \hyperlink{file.~~/src/Pure/Concurrent/mailbox.ML}{\mbox{\isa{\isatt{{\isachartilde}{\isachartilde}{\isacharslash}src{\isacharslash}Pure{\isacharslash}Concurrent{\isacharslash}mailbox{\isachardot}ML}}}} as canonical example.
+
+  \paragraph{Good conduct of impure programs.} The following
+  guidelines enable non-functional programs to participate in
+  multithreading.
+
+  \begin{itemize}
+
+  \item Minimize global state information.  Using proper theory and
+  proof context data will actually return to functional update of
+  values, without any special precautions for multithreading.  Apart
+  from the fully general functors for theory and proof data (see
+  \secref{sec:context-data}) there are drop-in replacements that
+  emulate primitive references for common cases of \emph{configuration
+  options} for type \verb|bool|/\verb|int|/\verb|string| (see structure \verb|Config| and \verb|Attrib.config_bool| etc.), and lists of theorems (see functor
+  \verb|NamedThmsFun|).
+
+  \item Keep components with local state information
+  \emph{re-entrant}.  Instead of poking initial values into (private)
+  global references, create a new state record on each invocation, and
+  pass that through any auxiliary functions of the component.  The
+  state record may well contain mutable references, without requiring
+  any special synchronizations, as long as each invocation sees its
+  own copy.  Occasionally, one might even return to plain functional
+  updates on non-mutable record values here.
+
+  \item Isolate process configuration flags.  The main legitimate
+  application of global references is to configure the whole process
+  in a certain way, essentially affecting all threads.  A typical
+  example is the \verb|show_types| flag, which tells the pretty printer
+  to output explicit type information for terms.  Such flags usually
+  do not affect the functionality of the core system, but only the
+  view being presented to the user.
+
+  Occasionally, such global process flags are treated like implicit
+  arguments to certain operations, by using the \verb|setmp_CRITICAL| combinator
+  for safe temporary assignment.  Its traditional purpose was to
+  ensure proper recovery of the original value when exceptions are
+  raised in the body, now the functionality is extended to enter the
+  \emph{critical section} (with its usual potential of degrading
+  parallelism).
+
+  Note that recovery of plain value passing semantics via \verb|setmp_CRITICAL|~\isa{ref\ value} assumes that this \isa{ref} is
+  exclusively manipulated within the critical section.  In particular,
+  any persistent global assignment of \isa{ref\ {\isacharcolon}{\isacharequal}\ value} needs to
+  be marked critical as well, to prevent intruding another threads
+  local view, and a lost-update in the global scope, too.
+
+  \end{itemize}
+
+  Recall that in an open ``LCF-style'' system like Isabelle/Isar, the
+  user participates in constructing the overall environment.  This
+  means that state-based facilities offered by one component will
+  require special caution later on.  So minimizing critical elements,
+  by staying within the plain value-oriented view relative to theory
+  or proof contexts most of the time, will also reduce the chance of
+  mishaps occurring to end-users.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{NAMED\_CRITICAL}\verb|NAMED_CRITICAL: string -> (unit -> 'a) -> 'a| \\
+  \indexdef{}{ML}{CRITICAL}\verb|CRITICAL: (unit -> 'a) -> 'a| \\
+  \indexdef{}{ML}{setmp\_CRITICAL}\verb|setmp_CRITICAL: 'a Unsynchronized.ref -> 'a -> ('b -> 'c) -> 'b -> 'c| \\
+  \end{mldecls}
+
+  \begin{description}
+
+  \item \verb|NAMED_CRITICAL|~\isa{name\ f} evaluates \isa{f\ {\isacharparenleft}{\isacharparenright}}
+  while staying within the critical section of Isabelle/Isar.  No
+  other thread may do so at the same time, but non-critical parallel
+  execution will continue.  The \isa{name} argument serves for
+  diagnostic purposes and might help to spot sources of congestion.
+
+  \item \verb|CRITICAL| is the same as \verb|NAMED_CRITICAL| with empty
+  name argument.
+
+  \item \verb|setmp_CRITICAL|~\isa{ref\ value\ f\ x} evaluates \isa{f\ x}
+  while staying within the critical section and having \isa{ref\ {\isacharcolon}{\isacharequal}\ value} assigned temporarily.  This recovers a value-passing
+  semantics involving global references, regardless of exceptions or
+  concurrency.
+
+  \end{description}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isamarkupchapter{Basic library functions%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Beyond the proposal of the SML/NJ basis library, Isabelle comes
+  with its own library, from which selected parts are given here.
+  These should encourage a study of the Isabelle sources,
+  in particular files \emph{Pure/library.ML} and \emph{Pure/General/*.ML}.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Linear transformations \label{sec:ML-linear-trans}%
+}
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{op $\mid$$>$ }\verb|op |\verb,|,\verb|> : 'a * ('a -> 'b) -> 'b| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isadelimML
+%
+\endisadelimML
+%
+\isatagML
+%
+\endisatagML
+{\isafoldML}%
+%
+\isadelimML
+%
+\endisadelimML
+%
+\begin{isamarkuptext}%
+\noindent Many problems in functional programming can be thought of
+  as linear transformations, i.e.~a caluclation starts with a
+  particular value \verb|x : foo| which is then transformed
+  by application of a function \verb|f : foo -> foo|,
+  continued by an application of a function \verb|g : foo -> bar|,
+  and so on.  As a canoncial example, take functions enriching
+  a theory by constant declararion and primitive definitions:
+
+  \smallskip\begin{mldecls}
+  \verb|Sign.declare_const: (binding * typ) * mixfix|\isasep\isanewline%
+\verb|  -> theory -> term * theory| \\
+  \verb|Thm.add_def: bool -> bool -> binding * term -> theory -> thm * theory|
+  \end{mldecls}
+
+  \noindent Written with naive application, an addition of constant
+  \isa{bar} with type \isa{foo\ {\isasymRightarrow}\ foo} and
+  a corresponding definition \isa{bar\ {\isasymequiv}\ {\isasymlambda}x{\isachardot}\ x} would look like:
+
+  \smallskip\begin{mldecls}
+  \verb|(fn (t, thy) => Thm.add_def false false|\isasep\isanewline%
+\verb|  (Binding.name "bar_def", Logic.mk_equals (t, @{term "%x. x"})) thy)|\isasep\isanewline%
+\verb|    (Sign.declare_const|\isasep\isanewline%
+\verb|      ((Binding.name "bar", @{typ "foo => foo"}), NoSyn) thy)|
+  \end{mldecls}
+
+  \noindent With increasing numbers of applications, this code gets quite
+  unreadable.  Further, it is unintuitive that things are
+  written down in the opposite order as they actually ``happen''.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\noindent At this stage, Isabelle offers some combinators which allow
+  for more convenient notation, most notably reverse application:
+
+  \smallskip\begin{mldecls}
+\verb|thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> Sign.declare_const ((Binding.name "bar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb|> (fn (t, thy) => thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> Thm.add_def false false|\isasep\isanewline%
+\verb|     (Binding.name "bar_def", Logic.mk_equals (t, @{term "%x. x"})))|
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{op $\mid$-$>$ }\verb|op |\verb,|,\verb|-> : ('c * 'a) * ('c -> 'a -> 'b) -> 'b| \\
+  \indexdef{}{ML}{op $\mid$$>$$>$ }\verb|op |\verb,|,\verb|>> : ('a * 'c) * ('a -> 'b) -> 'b * 'c| \\
+  \indexdef{}{ML}{op $\mid$$\mid$$>$ }\verb|op |\verb,|,\verb||\verb,|,\verb|> : ('c * 'a) * ('a -> 'b) -> 'c * 'b| \\
+  \indexdef{}{ML}{op $\mid$$\mid$$>$$>$ }\verb|op |\verb,|,\verb||\verb,|,\verb|>> : ('c * 'a) * ('a -> 'd * 'b) -> ('c * 'd) * 'b| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\begin{isamarkuptext}%
+\noindent Usually, functions involving theory updates also return
+  side results; to use these conveniently, yet another
+  set of combinators is at hand, most notably \verb|op |\verb,|,\verb|->|
+  which allows curried access to side results:
+
+  \smallskip\begin{mldecls}
+\verb|thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> Sign.declare_const ((Binding.name "bar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb|-> (fn t => Thm.add_def false false|\isasep\isanewline%
+\verb|      (Binding.name "bar_def", Logic.mk_equals (t, @{term "%x. x"})))|\isasep\isanewline%
+
+  \end{mldecls}
+
+  \noindent \verb|op |\verb,|,\verb|>>| allows for processing side results on their own:
+
+  \smallskip\begin{mldecls}
+\verb|thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> Sign.declare_const ((Binding.name "bar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb|>> (fn t => Logic.mk_equals (t, @{term "%x. x"}))|\isasep\isanewline%
+\verb||\verb,|,\verb|-> (fn def => Thm.add_def false false (Binding.name "bar_def", def))|\isasep\isanewline%
+
+  \end{mldecls}
+
+  \noindent Orthogonally, \verb|op |\verb,|,\verb||\verb,|,\verb|>| applies a transformation
+  in the presence of side results which are left unchanged:
+
+  \smallskip\begin{mldecls}
+\verb|thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> Sign.declare_const ((Binding.name "bar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb||\verb,|,\verb|> Sign.add_path "foobar"|\isasep\isanewline%
+\verb||\verb,|,\verb|-> (fn t => Thm.add_def false false|\isasep\isanewline%
+\verb|      (Binding.name "bar_def", Logic.mk_equals (t, @{term "%x. x"})))|\isasep\isanewline%
+\verb||\verb,|,\verb||\verb,|,\verb|> Sign.restore_naming thy|\isasep\isanewline%
+
+  \end{mldecls}
+
+  \noindent \verb|op |\verb,|,\verb||\verb,|,\verb|>>| accumulates side results:
+
+  \smallskip\begin{mldecls}
+\verb|thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> Sign.declare_const ((Binding.name "bar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb||\verb,|,\verb|>> Sign.declare_const ((Binding.name "foobar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb|-> (fn (t1, t2) => Thm.add_def false false|\isasep\isanewline%
+\verb|      (Binding.name "bar_def", Logic.mk_equals (t1, t2)))|\isasep\isanewline%
+
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{fold}\verb|fold: ('a -> 'b -> 'b) -> 'a list -> 'b -> 'b| \\
+  \indexdef{}{ML}{fold\_map}\verb|fold_map: ('a -> 'b -> 'c * 'b) -> 'a list -> 'b -> 'c list * 'b| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\begin{isamarkuptext}%
+\noindent This principles naturally lift to \emph{lists} using
+  the \verb|fold| and \verb|fold_map| combinators.
+  The first lifts a single function
+  \begin{quote}\footnotesize
+    \verb|f : 'a -> 'b -> 'b| to \verb|'a list -> 'b -> 'b|
+  \end{quote}
+  such that
+  \begin{quote}\footnotesize
+    \verb|y |\verb,|,\verb|> fold f [x1, x2, ..., x_n]| \\
+    \hspace*{2ex}\isa{{\isasymleadsto}} \verb|y |\verb,|,\verb|> f x1 |\verb,|,\verb|> f x2 |\verb,|,\verb|> ... |\verb,|,\verb|> f x_n|
+  \end{quote}
+  \noindent The second accumulates side results in a list by lifting
+  a single function
+  \begin{quote}\footnotesize
+    \verb|f : 'a -> 'b -> 'c * 'b| to \verb|'a list -> 'b -> 'c list * 'b|
+  \end{quote}
+  such that
+  \begin{quote}\footnotesize
+    \verb|y |\verb,|,\verb|> fold_map f [x1, x2, ..., x_n]| \\
+    \hspace*{2ex}\isa{{\isasymleadsto}} \verb|y |\verb,|,\verb|> f x1 |\verb,|,\verb||\verb,|,\verb|>> f x2 |\verb,|,\verb||\verb,|,\verb|>> ... |\verb,|,\verb||\verb,|,\verb|>> f x_n| \\
+    \hspace*{6ex}\verb||\verb,|,\verb||\verb,|,\verb|> (fn ((z1, z2), ..., z_n) => [z1, z2, ..., z_n])|
+  \end{quote}
+  
+  \noindent Example:
+
+  \smallskip\begin{mldecls}
+\verb|let|\isasep\isanewline%
+\verb|  val consts = ["foo", "bar"];|\isasep\isanewline%
+\verb|in|\isasep\isanewline%
+\verb|  thy|\isasep\isanewline%
+\verb|  |\verb,|,\verb|> fold_map (fn const => Sign.declare_const|\isasep\isanewline%
+\verb|       ((Binding.name const, @{typ "foo => foo"}), NoSyn)) consts|\isasep\isanewline%
+\verb|  |\verb,|,\verb|>> map (fn t => Logic.mk_equals (t, @{term "%x. x"}))|\isasep\isanewline%
+\verb|  |\verb,|,\verb|-> (fn defs => fold_map (fn def =>|\isasep\isanewline%
+\verb|       Thm.add_def false false (Binding.empty, def)) defs)|\isasep\isanewline%
+\verb|end|
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{op \#$>$ }\verb|op #> : ('a -> 'b) * ('b -> 'c) -> 'a -> 'c| \\
+  \indexdef{}{ML}{op \#-$>$ }\verb|op #-> : ('a -> 'c * 'b) * ('c -> 'b -> 'd) -> 'a -> 'd| \\
+  \indexdef{}{ML}{op \#$>$$>$ }\verb|op #>> : ('a -> 'c * 'b) * ('c -> 'd) -> 'a -> 'd * 'b| \\
+  \indexdef{}{ML}{op \#\#$>$ }\verb|op ##> : ('a -> 'c * 'b) * ('b -> 'd) -> 'a -> 'c * 'd| \\
+  \indexdef{}{ML}{op \#\#$>$$>$ }\verb|op ##>> : ('a -> 'c * 'b) * ('b -> 'e * 'd) -> 'a -> ('c * 'e) * 'd| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\begin{isamarkuptext}%
+\noindent All those linear combinators also exist in higher-order
+  variants which do not expect a value on the left hand side
+  but a function.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{op ` }\verb|op ` : ('b -> 'a) -> 'b -> 'a * 'b| \\
+  \indexdef{}{ML}{tap}\verb|tap: ('b -> 'a) -> 'b -> 'b| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\begin{isamarkuptext}%
+\noindent These operators allow to ``query'' a context
+  in a series of context transformations:
+
+  \smallskip\begin{mldecls}
+\verb|thy|\isasep\isanewline%
+\verb||\verb,|,\verb|> tap (fn _ => writeln "now adding constant")|\isasep\isanewline%
+\verb||\verb,|,\verb|> Sign.declare_const ((Binding.name "bar", @{typ "foo => foo"}), NoSyn)|\isasep\isanewline%
+\verb||\verb,|,\verb||\verb,|,\verb|>> `(fn thy => Sign.declared_const thy|\isasep\isanewline%
+\verb|         (Sign.full_name thy (Binding.name "foobar")))|\isasep\isanewline%
+\verb||\verb,|,\verb|-> (fn (t, b) => if b then I|\isasep\isanewline%
+\verb|       else Sign.declare_const|\isasep\isanewline%
+\verb|         ((Binding.name "foobar", @{typ "foo => foo"}), NoSyn) #> snd)|\isasep\isanewline%
+
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Options and partiality%
+}
+\isamarkuptrue%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\isatagmlref
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{is\_some}\verb|is_some: 'a option -> bool| \\
+  \indexdef{}{ML}{is\_none}\verb|is_none: 'a option -> bool| \\
+  \indexdef{}{ML}{the}\verb|the: 'a option -> 'a| \\
+  \indexdef{}{ML}{these}\verb|these: 'a list option -> 'a list| \\
+  \indexdef{}{ML}{the\_list}\verb|the_list: 'a option -> 'a list| \\
+  \indexdef{}{ML}{the\_default}\verb|the_default: 'a -> 'a option -> 'a| \\
+  \indexdef{}{ML}{try}\verb|try: ('a -> 'b) -> 'a -> 'b option| \\
+  \indexdef{}{ML}{can}\verb|can: ('a -> 'b) -> 'a -> bool| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\endisatagmlref
+{\isafoldmlref}%
+%
+\isadelimmlref
+%
+\endisadelimmlref
+%
+\begin{isamarkuptext}%
+Standard selector functions on \isa{option}s are provided.  The
+  \verb|try| and \verb|can| functions provide a convenient interface for
+  handling exceptions -- both take as arguments a function \verb|f|
+  together with a parameter \verb|x| and handle any exception during
+  the evaluation of the application of \verb|f| to \verb|x|, either
+  return a lifted result (\verb|NONE| on failure) or a boolean value
+  (\verb|false| on failure).%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Common data structures%
+}
+\isamarkuptrue%
+%
+\isamarkupsubsection{Lists (as set-like data structures)%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML}{member}\verb|member: ('b * 'a -> bool) -> 'a list -> 'b -> bool| \\
+  \indexdef{}{ML}{insert}\verb|insert: ('a * 'a -> bool) -> 'a -> 'a list -> 'a list| \\
+  \indexdef{}{ML}{remove}\verb|remove: ('b * 'a -> bool) -> 'b -> 'a list -> 'a list| \\
+  \indexdef{}{ML}{merge}\verb|merge: ('a * 'a -> bool) -> 'a list * 'a list -> 'a list| \\
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Lists are often used as set-like data structures -- set-like in
+  the sense that they support a notion of \verb|member|-ship,
+  \verb|insert|-ing and \verb|remove|-ing, but are order-sensitive.
+  This is convenient when implementing a history-like mechanism:
+  \verb|insert| adds an element \emph{to the front} of a list,
+  if not yet present; \verb|remove| removes \emph{all} occurences
+  of a particular element.  Correspondingly \verb|merge| implements a 
+  a merge on two lists suitable for merges of context data
+  (\secref{sec:context-theory}).
+
+  Functions are parametrized by an explicit equality function
+  to accomplish overloaded equality;  in most cases of monomorphic
+  equality, writing \verb|op =| should suffice.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Association lists%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML exception}{AList.DUP}\verb|exception AList.DUP| \\
+  \indexdef{}{ML}{AList.lookup}\verb|AList.lookup: ('a * 'b -> bool) -> ('b * 'c) list -> 'a -> 'c option| \\
+  \indexdef{}{ML}{AList.defined}\verb|AList.defined: ('a * 'b -> bool) -> ('b * 'c) list -> 'a -> bool| \\
+  \indexdef{}{ML}{AList.update}\verb|AList.update: ('a * 'a -> bool) -> ('a * 'b) -> ('a * 'b) list -> ('a * 'b) list| \\
+  \indexdef{}{ML}{AList.default}\verb|AList.default: ('a * 'a -> bool) -> ('a * 'b) -> ('a * 'b) list -> ('a * 'b) list| \\
+  \indexdef{}{ML}{AList.delete}\verb|AList.delete: ('a * 'b -> bool) -> 'a -> ('b * 'c) list -> ('b * 'c) list| \\
+  \indexdef{}{ML}{AList.map\_entry}\verb|AList.map_entry: ('a * 'b -> bool) -> 'a|\isasep\isanewline%
+\verb|    -> ('c -> 'c) -> ('b * 'c) list -> ('b * 'c) list| \\
+  \indexdef{}{ML}{AList.map\_default}\verb|AList.map_default: ('a * 'a -> bool) -> 'a * 'b -> ('b -> 'b)|\isasep\isanewline%
+\verb|    -> ('a * 'b) list -> ('a * 'b) list| \\
+  \indexdef{}{ML}{AList.join}\verb|AList.join: ('a * 'a -> bool) -> ('a -> 'b * 'b -> 'b) (*exception DUP*)|\isasep\isanewline%
+\verb|    -> ('a * 'b) list * ('a * 'b) list -> ('a * 'b) list (*exception AList.DUP*)| \\
+  \indexdef{}{ML}{AList.merge}\verb|AList.merge: ('a * 'a -> bool) -> ('b * 'b -> bool)|\isasep\isanewline%
+\verb|    -> ('a * 'b) list * ('a * 'b) list -> ('a * 'b) list (*exception AList.DUP*)|
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Association lists can be seens as an extension of set-like lists:
+  on the one hand, they may be used to implement finite mappings,
+  on the other hand, they remain order-sensitive and allow for
+  multiple key-value-pair with the same key: \verb|AList.lookup|
+  returns the \emph{first} value corresponding to a particular
+  key, if present.  \verb|AList.update| updates
+  the \emph{first} occurence of a particular key; if no such
+  key exists yet, the key-value-pair is added \emph{to the front}.
+  \verb|AList.delete| only deletes the \emph{first} occurence of a key.
+  \verb|AList.merge| provides an operation suitable for merges of context data
+  (\secref{sec:context-theory}), where an equality parameter on
+  values determines whether a merge should be considered a conflict.
+  A slightly generalized operation if implementend by the \verb|AList.join|
+  function which allows for explicit conflict resolution.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Tables%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+  \indexdef{}{ML type}{'a Symtab.table}\verb|type 'a Symtab.table| \\
+  \indexdef{}{ML exception}{Symtab.DUP}\verb|exception Symtab.DUP of string| \\
+  \indexdef{}{ML exception}{Symtab.SAME}\verb|exception Symtab.SAME| \\
+  \indexdef{}{ML exception}{Symtab.UNDEF}\verb|exception Symtab.UNDEF of string| \\
+  \indexdef{}{ML}{Symtab.empty}\verb|Symtab.empty: 'a Symtab.table| \\
+  \indexdef{}{ML}{Symtab.lookup}\verb|Symtab.lookup: 'a Symtab.table -> string -> 'a option| \\
+  \indexdef{}{ML}{Symtab.defined}\verb|Symtab.defined: 'a Symtab.table -> string -> bool| \\
+  \indexdef{}{ML}{Symtab.update}\verb|Symtab.update: (string * 'a) -> 'a Symtab.table -> 'a Symtab.table| \\
+  \indexdef{}{ML}{Symtab.default}\verb|Symtab.default: string * 'a -> 'a Symtab.table -> 'a Symtab.table| \\
+  \indexdef{}{ML}{Symtab.delete}\verb|Symtab.delete: string|\isasep\isanewline%
+\verb|    -> 'a Symtab.table -> 'a Symtab.table (*exception Symtab.UNDEF*)| \\
+  \indexdef{}{ML}{Symtab.map\_entry}\verb|Symtab.map_entry: string -> ('a -> 'a)|\isasep\isanewline%
+\verb|    -> 'a Symtab.table -> 'a Symtab.table| \\
+  \indexdef{}{ML}{Symtab.map\_default}\verb|Symtab.map_default: (string * 'a) -> ('a -> 'a)|\isasep\isanewline%
+\verb|    -> 'a Symtab.table -> 'a Symtab.table| \\
+  \indexdef{}{ML}{Symtab.join}\verb|Symtab.join: (string -> 'a * 'a -> 'a) (*exception Symtab.DUP/Symtab.SAME*)|\isasep\isanewline%
+\verb|    -> 'a Symtab.table * 'a Symtab.table|\isasep\isanewline%
+\verb|    -> 'a Symtab.table (*exception Symtab.DUP*)| \\
+  \indexdef{}{ML}{Symtab.merge}\verb|Symtab.merge: ('a * 'a -> bool)|\isasep\isanewline%
+\verb|    -> 'a Symtab.table * 'a Symtab.table|\isasep\isanewline%
+\verb|    -> 'a Symtab.table (*exception Symtab.DUP*)|
+  \end{mldecls}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Tables are an efficient representation of finite mappings without
+  any notion of order;  due to their efficiency they should be used
+  whenever such pure finite mappings are neccessary.
+
+  The key type of tables must be given explicitly by instantiating
+  the \verb|TableFun| functor which takes the key type
+  together with its \verb|order|; for convience, we restrict
+  here to the \verb|Symtab| instance with \verb|string|
+  as key type.
+
+  Most table functions correspond to those of association lists.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+\isacommand{end}\isamarkupfalse%
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

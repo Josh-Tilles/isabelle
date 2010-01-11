@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+#
+# Author: Stefan Berghofer, TU Muenchen
+#
+# DESCRIPTION: display Isabelle version
+
+echo 'unidentified repository version'    # filled in automatically!

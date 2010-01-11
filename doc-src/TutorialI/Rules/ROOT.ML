@@ -1,0 +1,8 @@
+(* ID:         $Id$ *)
+use_thy "Basic";
+use_thy "Blast";
+use_thy "Force";
+use_thy "Forward";
+use_thy "Tacticals";
+
+use_thy "find2";

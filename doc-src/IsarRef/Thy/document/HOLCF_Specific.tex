@@ -1,0 +1,96 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{HOLCF{\isacharunderscore}Specific}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+\isacommand{theory}\isamarkupfalse%
+\ HOLCF{\isacharunderscore}Specific\isanewline
+\isakeyword{imports}\ HOLCF\isanewline
+\isakeyword{begin}%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isamarkupchapter{Isabelle/HOLCF \label{ch:holcf}%
+}
+\isamarkuptrue%
+%
+\isamarkupsection{Mixfix syntax for continuous operations%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{matharray}{rcl}
+    \indexdef{HOLCF}{command}{consts}\hypertarget{command.HOLCF.consts}{\hyperlink{command.HOLCF.consts}{\mbox{\isa{\isacommand{consts}}}}} & : & \isa{{\isachardoublequote}theory\ {\isasymrightarrow}\ theory{\isachardoublequote}} \\
+  \end{matharray}
+
+  HOLCF provides a separate type for continuous functions \isa{{\isachardoublequote}{\isasymalpha}\ {\isasymrightarrow}\ {\isasymbeta}{\isachardoublequote}}, with an explicit application operator \isa{{\isachardoublequote}f\ {\isasymcdot}\ x{\isachardoublequote}}.
+  Isabelle mixfix syntax normally refers directly to the pure
+  meta-level function type \isa{{\isachardoublequote}{\isasymalpha}\ {\isasymRightarrow}\ {\isasymbeta}{\isachardoublequote}}, with application \isa{{\isachardoublequote}f\ x{\isachardoublequote}}.
+
+  The HOLCF variant of \hyperlink{command.HOLCF.consts}{\mbox{\isa{\isacommand{consts}}}} modifies that of
+  Pure Isabelle (cf.\ \secref{sec:consts}) such that declarations
+  involving continuous function types are treated specifically.  Any
+  given syntax template is transformed internally, generating
+  translation rules for the abstract and concrete representation of
+  continuous application.  Note that mixing of HOLCF and Pure
+  application is \emph{not} supported!%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Recursive domains%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{matharray}{rcl}
+    \indexdef{HOLCF}{command}{domain}\hypertarget{command.HOLCF.domain}{\hyperlink{command.HOLCF.domain}{\mbox{\isa{\isacommand{domain}}}}} & : & \isa{{\isachardoublequote}theory\ {\isasymrightarrow}\ theory{\isachardoublequote}} \\
+  \end{matharray}
+
+  \begin{rail}
+    'domain' parname? (dmspec + 'and')
+    ;
+
+    dmspec: typespec '=' (cons + '|')
+    ;
+    cons: name (type *) mixfix?
+    ;
+    dtrules: 'distinct' thmrefs 'inject' thmrefs 'induction' thmrefs
+  \end{rail}
+
+  Recursive domains in HOLCF are analogous to datatypes in classical
+  HOL (cf.\ \secref{sec:hol-datatype}).  Mutual recursion is
+  supported, but no nesting nor arbitrary branching.  Domain
+  constructors may be strict (default) or lazy, the latter admits to
+  introduce infinitary objects in the typical LCF manner (e.g.\ lazy
+  lists).  See also \cite{MuellerNvOS99} for a general discussion of
+  HOLCF domains.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+\isacommand{end}\isamarkupfalse%
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\isanewline
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

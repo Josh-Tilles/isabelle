@@ -1,0 +1,131 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{Mutual}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isamarkupsubsection{Mutually Inductive Definitions%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Just as there are datatypes defined by mutual recursion, there are sets defined
+by mutual induction. As a trivial example we consider the even and odd
+natural numbers:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{inductive{\isacharunderscore}set}\isamarkupfalse%
+\isanewline
+\ \ Even\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}nat\ set{\isachardoublequoteclose}\ \isakeyword{and}\isanewline
+\ \ Odd\ \ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}nat\ set{\isachardoublequoteclose}\isanewline
+\isakeyword{where}\isanewline
+\ \ zero{\isacharcolon}\ \ {\isachardoublequoteopen}{\isadigit{0}}\ {\isasymin}\ Even{\isachardoublequoteclose}\isanewline
+{\isacharbar}\ EvenI{\isacharcolon}\ {\isachardoublequoteopen}n\ {\isasymin}\ Odd\ {\isasymLongrightarrow}\ Suc\ n\ {\isasymin}\ Even{\isachardoublequoteclose}\isanewline
+{\isacharbar}\ OddI{\isacharcolon}\ \ {\isachardoublequoteopen}n\ {\isasymin}\ Even\ {\isasymLongrightarrow}\ Suc\ n\ {\isasymin}\ Odd{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+The mutually inductive definition of multiple sets is no different from
+that of a single set, except for induction: just as for mutually recursive
+datatypes, induction needs to involve all the simultaneously defined sets. In
+the above case, the induction rule is called \isa{Even{\isacharunderscore}Odd{\isachardot}induct}
+(simply concatenate the names of the sets involved) and has the conclusion
+\begin{isabelle}%
+\ \ \ \ \ {\isacharparenleft}{\isacharquery}x\ {\isasymin}\ Even\ {\isasymlongrightarrow}\ {\isacharquery}P\ {\isacharquery}x{\isacharparenright}\ {\isasymand}\ {\isacharparenleft}{\isacharquery}y\ {\isasymin}\ Odd\ {\isasymlongrightarrow}\ {\isacharquery}Q\ {\isacharquery}y{\isacharparenright}%
+\end{isabelle}
+
+If we want to prove that all even numbers are divisible by two, we have to
+generalize the statement as follows:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}{\isacharparenleft}m\ {\isasymin}\ Even\ {\isasymlongrightarrow}\ {\isadigit{2}}\ dvd\ m{\isacharparenright}\ {\isasymand}\ {\isacharparenleft}n\ {\isasymin}\ Odd\ {\isasymlongrightarrow}\ {\isadigit{2}}\ dvd\ {\isacharparenleft}Suc\ n{\isacharparenright}{\isacharparenright}{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\begin{isamarkuptxt}%
+\noindent
+The proof is by rule induction. Because of the form of the induction theorem,
+it is applied by \isa{rule} rather than \isa{erule} as for ordinary
+inductive definitions:%
+\end{isamarkuptxt}%
+\isamarkuptrue%
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}rule\ Even{\isacharunderscore}Odd{\isachardot}induct{\isacharparenright}%
+\begin{isamarkuptxt}%
+\begin{isabelle}%
+\ {\isadigit{1}}{\isachardot}\ {\isadigit{2}}\ dvd\ {\isadigit{0}}\isanewline
+\ {\isadigit{2}}{\isachardot}\ {\isasymAnd}n{\isachardot}\ {\isasymlbrakk}n\ {\isasymin}\ Odd{\isacharsemicolon}\ {\isadigit{2}}\ dvd\ Suc\ n{\isasymrbrakk}\ {\isasymLongrightarrow}\ {\isadigit{2}}\ dvd\ Suc\ n\isanewline
+\ {\isadigit{3}}{\isachardot}\ {\isasymAnd}n{\isachardot}\ {\isasymlbrakk}n\ {\isasymin}\ Even{\isacharsemicolon}\ {\isadigit{2}}\ dvd\ n{\isasymrbrakk}\ {\isasymLongrightarrow}\ {\isadigit{2}}\ dvd\ Suc\ {\isacharparenleft}Suc\ n{\isacharparenright}%
+\end{isabelle}
+The first two subgoals are proved by simplification and the final one can be
+proved in the same manner as in \S\ref{sec:rule-induction}
+where the same subgoal was encountered before.
+We do not show the proof script.%
+\end{isamarkuptxt}%
+\isamarkuptrue%
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isamarkupsubsection{Inductively Defined Predicates\label{sec:ind-predicates}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\index{inductive predicates|(}
+Instead of a set of even numbers one can also define a predicate on \isa{nat}:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{inductive}\isamarkupfalse%
+\ evn\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}nat\ {\isasymRightarrow}\ bool{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+zero{\isacharcolon}\ {\isachardoublequoteopen}evn\ {\isadigit{0}}{\isachardoublequoteclose}\ {\isacharbar}\isanewline
+step{\isacharcolon}\ {\isachardoublequoteopen}evn\ n\ {\isasymLongrightarrow}\ evn{\isacharparenleft}Suc{\isacharparenleft}Suc\ n{\isacharparenright}{\isacharparenright}{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent Everything works as before, except that
+you write \commdx{inductive} instead of \isacommand{inductive\_set} and
+\isa{evn\ n} instead of \isa{n\ {\isasymin}\ even}. The notation is more
+lightweight but the usual set-theoretic operations, e.g. \isa{Even\ {\isasymunion}\ Odd},
+are not directly available on predicates.
+
+When defining an n-ary relation as a predicate it is recommended to curry
+the predicate: its type should be \isa{{\isasymtau}\isactrlisub {\isadigit{1}}\ {\isasymRightarrow}\ {\isasymdots}\ {\isasymRightarrow}\ {\isasymtau}\isactrlisub n\ {\isasymRightarrow}\ bool} rather than
+\isa{{\isasymtau}\isactrlisub {\isadigit{1}}\ {\isasymtimes}\ {\isasymdots}\ {\isasymtimes}\ {\isasymtau}\isactrlisub n\ {\isasymRightarrow}\ bool}. The curried version facilitates inductions.
+\index{inductive predicates|)}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

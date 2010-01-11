@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+#
+# Author: Makarius
+#
+# DESCRIPTION: Update standard keyword files for Emacs Proof General
+
+ISABELLE_HOME="$(isabelle getenv -b ISABELLE_HOME)"
+LOG="$(isabelle getenv -b ISABELLE_OUTPUT)"/log
+
+
+cd "$ISABELLE_HOME/etc"
+
+isabelle keywords \
+  "$LOG/Pure.gz" "$LOG/Pure-ProofGeneral.gz" "$LOG/HOL.gz" "$LOG/HOLCF.gz" \
+  "$LOG/IOA.gz" "$LOG/HOL-Boogie.gz" "$LOG/HOL-Nominal.gz" "$LOG/HOL-SMT.gz" \
+  "$LOG/HOL-Statespace.gz"
+
+isabelle keywords -k ZF \
+  "$LOG/Pure.gz" "$LOG/Pure-ProofGeneral.gz" "$LOG/FOL.gz" "$LOG/ZF.gz"
+

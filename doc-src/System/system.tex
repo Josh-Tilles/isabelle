@@ -1,0 +1,42 @@
+\documentclass[12pt,a4paper]{report}
+\usepackage{supertabular}
+\usepackage{graphicx}
+\usepackage{../iman,../extra,../isar,../ttbox}
+\usepackage[nohyphen,strings]{../underscore}
+\usepackage{../isabelle,../isabellesym}
+\usepackage{../IsarRef/style}
+\usepackage{../pdfsetup}
+
+\hyphenation{Isabelle}
+\hyphenation{Isar}
+
+\isadroptag{theory}
+
+\isabellestyle{it}
+
+\title{\includegraphics[scale=0.5]{isabelle} \\[4ex] The Isabelle System Manual}
+
+\author{\emph{Makarius Wenzel} and \emph{Stefan Berghofer} \\
+  TU M\"unchen}
+
+\makeindex
+
+
+\begin{document}
+
+\maketitle 
+\pagenumbering{roman} \tableofcontents \clearfirst
+
+\input{Thy/document/Basics.tex}
+\input{Thy/document/Interfaces.tex}
+\input{Thy/document/Presentation.tex}
+\input{Thy/document/Misc.tex}
+
+\begingroup
+  \bibliographystyle{abbrv} \small\raggedright\frenchspacing
+  \bibliography{../manual}
+\endgroup
+
+\printindex
+
+\end{document}

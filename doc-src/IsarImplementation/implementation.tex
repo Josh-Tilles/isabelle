@@ -1,0 +1,95 @@
+\documentclass[12pt,a4paper,fleqn]{report}
+\usepackage{latexsym,graphicx}
+\usepackage[refpage]{nomencl}
+\usepackage{../iman,../extra,../isar,../proof}
+\usepackage[nohyphen,strings]{../underscore}
+\usepackage{../isabelle,../isabellesym}
+\usepackage{style}
+\usepackage{../pdfsetup}
+
+
+\hyphenation{Isabelle}
+\hyphenation{Isar}
+
+\isadroptag{theory}
+\title{\includegraphics[scale=0.5]{isabelle_isar}
+  \\[4ex] The Isabelle/Isar Implementation}
+\author{\emph{Makarius Wenzel}  \\[3ex]
+  With Contributions by
+  Florian Haftmann
+  and Larry Paulson
+}
+
+\makeindex
+
+
+\begin{document}
+
+\maketitle 
+
+\begin{abstract}
+  We describe the key concepts underlying the Isabelle/Isar
+  implementation, including ML references for the most important
+  functions.  The aim is to give some insight into the overall system
+  architecture, and provide clues on implementing applications within
+  this framework.
+\end{abstract}
+
+\vspace*{2.5cm}
+\begin{quote}
+  
+  {\small\em Isabelle was not designed; it evolved.  Not everyone
+    likes this idea.  Specification experts rightly abhor
+    trial-and-error programming.  They suggest that no one should
+    write a program without first writing a complete formal
+    specification. But university departments are not software houses.
+    Programs like Isabelle are not products: when they have served
+    their purpose, they are discarded.}
+  
+  Lawrence C. Paulson, ``Isabelle: The Next 700 Theorem Provers''
+
+  \vspace*{1cm}
+  
+  {\small\em As I did 20 years ago, I still fervently believe that the
+    only way to make software secure, reliable, and fast is to make it
+    small.  Fight features.}
+  
+  Andrew S. Tanenbaum
+
+\end{quote}
+
+\thispagestyle{empty}\clearpage
+
+\pagenumbering{roman}
+\tableofcontents
+\listoffigures
+\clearfirst
+
+\input{Thy/document/Prelim.tex}
+\input{Thy/document/Logic.tex}
+\input{Thy/document/Tactic.tex}
+\input{Thy/document/Proof.tex}
+\input{Thy/document/Syntax.tex}
+\input{Thy/document/Isar.tex}
+\input{Thy/document/Local_Theory.tex}
+\input{Thy/document/Integration.tex}
+
+\appendix
+\input{Thy/document/ML.tex}
+
+\begingroup
+\tocentry{\bibname}
+\bibliographystyle{abbrv} \small\raggedright\frenchspacing
+\bibliography{../manual}
+\endgroup
+
+\tocentry{\indexname}
+\printindex
+
+\end{document}
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 

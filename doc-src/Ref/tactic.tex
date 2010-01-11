@@ -1,0 +1,330 @@
+
+\chapter{Tactics} \label{tactics}
+\index{tactics|(}
+
+\section{Other basic tactics}
+
+\subsection{Inserting premises and facts}\label{cut_facts_tac}
+\index{tactics!for inserting facts}\index{assumptions!inserting}
+\begin{ttbox} 
+cut_facts_tac : thm list -> int -> tactic
+cut_inst_tac  : (string*string)list -> thm -> int -> tactic
+subgoal_tac   : string -> int -> tactic
+subgoals_tac  : string list -> int -> tactic
+\end{ttbox}
+These tactics add assumptions to a subgoal.
+\begin{ttdescription}
+\item[\ttindexbold{cut_facts_tac} {\it thms} {\it i}] 
+  adds the {\it thms} as new assumptions to subgoal~$i$.  Once they have
+  been inserted as assumptions, they become subject to tactics such as {\tt
+    eresolve_tac} and {\tt rewrite_goals_tac}.  Only rules with no premises
+  are inserted: Isabelle cannot use assumptions that contain $\Imp$
+  or~$\Forall$.  Sometimes the theorems are premises of a rule being
+  derived, returned by~{\tt goal}; instead of calling this tactic, you
+  could state the goal with an outermost meta-quantifier.
+
+\item[\ttindexbold{cut_inst_tac} {\it insts} {\it thm} {\it i}]
+  instantiates the {\it thm} with the instantiations {\it insts}, as
+  described in {\S}\ref{res_inst_tac}.  It adds the resulting theorem as a
+  new assumption to subgoal~$i$. 
+
+\item[\ttindexbold{subgoal_tac} {\it formula} {\it i}] 
+adds the {\it formula} as an assumption to subgoal~$i$, and inserts the same
+{\it formula} as a new subgoal, $i+1$.
+
+\item[\ttindexbold{subgoals_tac} {\it formulae} {\it i}] 
+  uses {\tt subgoal_tac} to add the members of the list of {\it
+    formulae} as assumptions to subgoal~$i$. 
+\end{ttdescription}
+
+
+\subsection{``Putting off'' a subgoal}
+\begin{ttbox} 
+defer_tac : int -> tactic
+\end{ttbox}
+\begin{ttdescription}
+\item[\ttindexbold{defer_tac} {\it i}] 
+  moves subgoal~$i$ to the last position in the proof state.  It can be
+  useful when correcting a proof script: if the tactic given for subgoal~$i$
+  fails, calling {\tt defer_tac} instead will let you continue with the rest
+  of the script.
+
+  The tactic fails if subgoal~$i$ does not exist or if the proof state
+  contains type unknowns. 
+\end{ttdescription}
+
+
+\subsection{Definitions and meta-level rewriting} \label{sec:rewrite_goals}
+\index{tactics!meta-rewriting|bold}\index{meta-rewriting|bold}
+\index{definitions}
+
+Definitions in Isabelle have the form $t\equiv u$, where $t$ is typically a
+constant or a constant applied to a list of variables, for example $\it
+sqr(n)\equiv n\times n$.  Conditional definitions, $\phi\Imp t\equiv u$,
+are also supported.  {\bf Unfolding} the definition ${t\equiv u}$ means using
+it as a rewrite rule, replacing~$t$ by~$u$ throughout a theorem.  {\bf
+Folding} $t\equiv u$ means replacing~$u$ by~$t$.  Rewriting continues until
+no rewrites are applicable to any subterm.
+
+There are rules for unfolding and folding definitions; Isabelle does not do
+this automatically.  The corresponding tactics rewrite the proof state,
+yielding a single next state.  See also the {\tt goalw} command, which is the
+easiest way of handling definitions.
+\begin{ttbox} 
+rewrite_goals_tac : thm list -> tactic
+rewrite_tac       : thm list -> tactic
+fold_goals_tac    : thm list -> tactic
+fold_tac          : thm list -> tactic
+\end{ttbox}
+\begin{ttdescription}
+\item[\ttindexbold{rewrite_goals_tac} {\it defs}]  
+unfolds the {\it defs} throughout the subgoals of the proof state, while
+leaving the main goal unchanged.  Use \ttindex{SELECT_GOAL} to restrict it to a
+particular subgoal.
+
+\item[\ttindexbold{rewrite_tac} {\it defs}]  
+unfolds the {\it defs} throughout the proof state, including the main goal
+--- not normally desirable!
+
+\item[\ttindexbold{fold_goals_tac} {\it defs}]  
+folds the {\it defs} throughout the subgoals of the proof state, while
+leaving the main goal unchanged.
+
+\item[\ttindexbold{fold_tac} {\it defs}]  
+folds the {\it defs} throughout the proof state.
+\end{ttdescription}
+
+\begin{warn}
+  These tactics only cope with definitions expressed as meta-level
+  equalities ($\equiv$).  More general equivalences are handled by the
+  simplifier, provided that it is set up appropriately for your logic
+  (see Chapter~\ref{chap:simplification}).
+\end{warn}
+
+\subsection{Theorems useful with tactics}
+\index{theorems!of pure theory}
+\begin{ttbox} 
+asm_rl: thm 
+cut_rl: thm 
+\end{ttbox}
+\begin{ttdescription}
+\item[\tdx{asm_rl}] 
+is $\psi\Imp\psi$.  Under elim-resolution it does proof by assumption, and
+\hbox{\tt eresolve_tac (asm_rl::{\it thms}) {\it i}} is equivalent to
+\begin{ttbox} 
+assume_tac {\it i}  ORELSE  eresolve_tac {\it thms} {\it i}
+\end{ttbox}
+
+\item[\tdx{cut_rl}] 
+is $\List{\psi\Imp\theta,\psi}\Imp\theta$.  It is useful for inserting
+assumptions; it underlies {\tt forward_tac}, {\tt cut_facts_tac}
+and {\tt subgoal_tac}.
+\end{ttdescription}
+
+
+\section{Obscure tactics}
+
+\subsection{Manipulating assumptions}
+\index{assumptions!rotating}
+\begin{ttbox} 
+thin_tac   : string -> int -> tactic
+rotate_tac : int -> int -> tactic
+\end{ttbox}
+\begin{ttdescription}
+\item[\ttindexbold{thin_tac} {\it formula} $i$]  
+\index{assumptions!deleting}
+deletes the specified assumption from subgoal $i$.  Often the assumption
+can be abbreviated, replacing subformul{\ae} by unknowns; the first matching
+assumption will be deleted.  Removing useless assumptions from a subgoal
+increases its readability and can make search tactics run faster.
+
+\item[\ttindexbold{rotate_tac} $n$ $i$]  
+\index{assumptions!rotating}
+rotates the assumptions of subgoal $i$ by $n$ positions: from right to left
+if $n$ is positive, and from left to right if $n$ is negative.  This is 
+sometimes necessary in connection with \ttindex{asm_full_simp_tac}, which 
+processes assumptions from left to right.
+\end{ttdescription}
+
+
+\subsection{Tidying the proof state}
+\index{duplicate subgoals!removing}
+\index{parameters!removing unused}
+\index{flex-flex constraints}
+\begin{ttbox} 
+distinct_subgoals_tac : tactic
+prune_params_tac      : tactic
+flexflex_tac          : tactic
+\end{ttbox}
+\begin{ttdescription}
+\item[\ttindexbold{distinct_subgoals_tac}] removes duplicate subgoals from a
+  proof state.  (These arise especially in ZF, where the subgoals are
+  essentially type constraints.)
+
+\item[\ttindexbold{prune_params_tac}]  
+  removes unused parameters from all subgoals of the proof state.  It works
+  by rewriting with the theorem $(\Forall x. V)\equiv V$.  This tactic can
+  make the proof state more readable.  It is used with
+  \ttindex{rule_by_tactic} to simplify the resulting theorem.
+
+\item[\ttindexbold{flexflex_tac}]  
+  removes all flex-flex pairs from the proof state by applying the trivial
+  unifier.  This drastic step loses information, and should only be done as
+  the last step of a proof.
+
+  Flex-flex constraints arise from difficult cases of higher-order
+  unification.  To prevent this, use \ttindex{res_inst_tac} to instantiate
+  some variables in a rule~({\S}\ref{res_inst_tac}).  Normally flex-flex
+  constraints can be ignored; they often disappear as unknowns get
+  instantiated.
+\end{ttdescription}
+
+
+\subsection{Composition: resolution without lifting}
+\index{tactics!for composition}
+\begin{ttbox}
+compose_tac: (bool * thm * int) -> int -> tactic
+\end{ttbox}
+{\bf Composing} two rules means resolving them without prior lifting or
+renaming of unknowns.  This low-level operation, which underlies the
+resolution tactics, may occasionally be useful for special effects.
+A typical application is \ttindex{res_inst_tac}, which lifts and instantiates a
+rule, then passes the result to {\tt compose_tac}.
+\begin{ttdescription}
+\item[\ttindexbold{compose_tac} ($flag$, $rule$, $m$) $i$] 
+refines subgoal~$i$ using $rule$, without lifting.  The $rule$ is taken to
+have the form $\List{\psi@1; \ldots; \psi@m} \Imp \psi$, where $\psi$ need
+not be atomic; thus $m$ determines the number of new subgoals.  If
+$flag$ is {\tt true} then it performs elim-resolution --- it solves the
+first premise of~$rule$ by assumption and deletes that assumption.
+\end{ttdescription}
+
+
+\section{*Managing lots of rules}
+These operations are not intended for interactive use.  They are concerned
+with the processing of large numbers of rules in automatic proof
+strategies.  Higher-order resolution involving a long list of rules is
+slow.  Filtering techniques can shorten the list of rules given to
+resolution, and can also detect whether a subgoal is too flexible,
+with too many rules applicable.
+
+\subsection{Combined resolution and elim-resolution} \label{biresolve_tac}
+\index{tactics!resolution}
+\begin{ttbox} 
+biresolve_tac   : (bool*thm)list -> int -> tactic
+bimatch_tac     : (bool*thm)list -> int -> tactic
+subgoals_of_brl : bool*thm -> int
+lessb           : (bool*thm) * (bool*thm) -> bool
+\end{ttbox}
+{\bf Bi-resolution} takes a list of $\it (flag,rule)$ pairs.  For each
+pair, it applies resolution if the flag is~{\tt false} and
+elim-resolution if the flag is~{\tt true}.  A single tactic call handles a
+mixture of introduction and elimination rules.
+
+\begin{ttdescription}
+\item[\ttindexbold{biresolve_tac} {\it brls} {\it i}] 
+refines the proof state by resolution or elim-resolution on each rule, as
+indicated by its flag.  It affects subgoal~$i$ of the proof state.
+
+\item[\ttindexbold{bimatch_tac}] 
+is like {\tt biresolve_tac}, but performs matching: unknowns in the
+proof state are never updated (see~{\S}\ref{match_tac}).
+
+\item[\ttindexbold{subgoals_of_brl}({\it flag},{\it rule})] 
+returns the number of new subgoals that bi-res\-o\-lu\-tion would yield for the
+pair (if applied to a suitable subgoal).  This is $n$ if the flag is
+{\tt false} and $n-1$ if the flag is {\tt true}, where $n$ is the number
+of premises of the rule.  Elim-resolution yields one fewer subgoal than
+ordinary resolution because it solves the major premise by assumption.
+
+\item[\ttindexbold{lessb} ({\it brl1},{\it brl2})] 
+returns the result of 
+\begin{ttbox}
+subgoals_of_brl{\it brl1} < subgoals_of_brl{\it brl2}
+\end{ttbox}
+\end{ttdescription}
+Note that \hbox{\tt sort lessb {\it brls}} sorts a list of $\it
+(flag,rule)$ pairs by the number of new subgoals they will yield.  Thus,
+those that yield the fewest subgoals should be tried first.
+
+
+\subsection{Discrimination nets for fast resolution}\label{filt_resolve_tac}
+\index{discrimination nets|bold}
+\index{tactics!resolution}
+\begin{ttbox} 
+net_resolve_tac  : thm list -> int -> tactic
+net_match_tac    : thm list -> int -> tactic
+net_biresolve_tac: (bool*thm) list -> int -> tactic
+net_bimatch_tac  : (bool*thm) list -> int -> tactic
+filt_resolve_tac : thm list -> int -> int -> tactic
+could_unify      : term*term->bool
+filter_thms      : (term*term->bool) -> int*term*thm list -> thm{\ts}list
+\end{ttbox}
+The module {\tt Net} implements a discrimination net data structure for
+fast selection of rules \cite[Chapter 14]{charniak80}.  A term is
+classified by the symbol list obtained by flattening it in preorder.
+The flattening takes account of function applications, constants, and free
+and bound variables; it identifies all unknowns and also regards
+\index{lambda abs@$\lambda$-abstractions}
+$\lambda$-abstractions as unknowns, since they could $\eta$-contract to
+anything.  
+
+A discrimination net serves as a polymorphic dictionary indexed by terms.
+The module provides various functions for inserting and removing items from
+nets.  It provides functions for returning all items whose term could match
+or unify with a target term.  The matching and unification tests are
+overly lax (due to the identifications mentioned above) but they serve as
+useful filters.
+
+A net can store introduction rules indexed by their conclusion, and
+elimination rules indexed by their major premise.  Isabelle provides
+several functions for `compiling' long lists of rules into fast
+resolution tactics.  When supplied with a list of theorems, these functions
+build a discrimination net; the net is used when the tactic is applied to a
+goal.  To avoid repeatedly constructing the nets, use currying: bind the
+resulting tactics to \ML{} identifiers.
+
+\begin{ttdescription}
+\item[\ttindexbold{net_resolve_tac} {\it thms}] 
+builds a discrimination net to obtain the effect of a similar call to {\tt
+resolve_tac}.
+
+\item[\ttindexbold{net_match_tac} {\it thms}] 
+builds a discrimination net to obtain the effect of a similar call to {\tt
+match_tac}.
+
+\item[\ttindexbold{net_biresolve_tac} {\it brls}] 
+builds a discrimination net to obtain the effect of a similar call to {\tt
+biresolve_tac}.
+
+\item[\ttindexbold{net_bimatch_tac} {\it brls}] 
+builds a discrimination net to obtain the effect of a similar call to {\tt
+bimatch_tac}.
+
+\item[\ttindexbold{filt_resolve_tac} {\it thms} {\it maxr} {\it i}] 
+uses discrimination nets to extract the {\it thms} that are applicable to
+subgoal~$i$.  If more than {\it maxr\/} theorems are applicable then the
+tactic fails.  Otherwise it calls {\tt resolve_tac}.  
+
+This tactic helps avoid runaway instantiation of unknowns, for example in
+type inference.
+
+\item[\ttindexbold{could_unify} ({\it t},{\it u})] 
+returns {\tt false} if~$t$ and~$u$ are `obviously' non-unifiable, and
+otherwise returns~{\tt true}.  It assumes all variables are distinct,
+reporting that {\tt ?a=?a} may unify with {\tt 0=1}.
+
+\item[\ttindexbold{filter_thms} $could\; (limit,prem,thms)$] 
+returns the list of potentially resolvable rules (in {\it thms\/}) for the
+subgoal {\it prem}, using the predicate {\it could\/} to compare the
+conclusion of the subgoal with the conclusion of each rule.  The resulting list
+is no longer than {\it limit}.
+\end{ttdescription}
+
+\index{tactics|)}
+
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "ref"
+%%% End: 

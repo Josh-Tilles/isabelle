@@ -1,0 +1,232 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{natsum}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\begin{isamarkuptext}%
+\noindent
+In particular, there are \isa{case}-expressions, for example
+\begin{isabelle}%
+\ \ \ \ \ case\ n\ of\ {\isadigit{0}}\ {\isasymRightarrow}\ {\isadigit{0}}\ {\isacharbar}\ Suc\ m\ {\isasymRightarrow}\ m%
+\end{isabelle}
+primitive recursion, for example%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{primrec}\isamarkupfalse%
+\ sum\ {\isacharcolon}{\isacharcolon}\ {\isachardoublequoteopen}nat\ {\isasymRightarrow}\ nat{\isachardoublequoteclose}\ \isakeyword{where}\isanewline
+{\isachardoublequoteopen}sum\ {\isadigit{0}}\ {\isacharequal}\ {\isadigit{0}}{\isachardoublequoteclose}\ {\isacharbar}\isanewline
+{\isachardoublequoteopen}sum\ {\isacharparenleft}Suc\ n{\isacharparenright}\ {\isacharequal}\ Suc\ n\ {\isacharplus}\ sum\ n{\isachardoublequoteclose}%
+\begin{isamarkuptext}%
+\noindent
+and induction, for example%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}sum\ n\ {\isacharplus}\ sum\ n\ {\isacharequal}\ n{\isacharasterisk}{\isacharparenleft}Suc\ n{\isacharparenright}{\isachardoublequoteclose}\isanewline
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}induct{\isacharunderscore}tac\ n{\isacharparenright}\isanewline
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}auto{\isacharparenright}\isanewline
+\isacommand{done}\isamarkupfalse%
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\newcommand{\mystar}{*%
+}
+\index{arithmetic operations!for \protect\isa{nat}}%
+The arithmetic operations \isadxboldpos{+}{$HOL2arithfun},
+\isadxboldpos{-}{$HOL2arithfun}, \isadxboldpos{\mystar}{$HOL2arithfun},
+\sdx{div}, \sdx{mod}, \cdx{min} and
+\cdx{max} are predefined, as are the relations
+\isadxboldpos{\isasymle}{$HOL2arithrel} and
+\isadxboldpos{<}{$HOL2arithrel}. As usual, \isa{m\ {\isacharminus}\ n\ {\isacharequal}\ {\isadigit{0}}} if
+\isa{m\ {\isacharless}\ n}. There is even a least number operation
+\sdx{LEAST}\@.  For example, \isa{{\isacharparenleft}LEAST\ n{\isachardot}\ {\isadigit{0}}\ {\isacharless}\ n{\isacharparenright}\ {\isacharequal}\ Suc\ {\isadigit{0}}}.
+\begin{warn}\index{overloading}
+  The constants \cdx{0} and \cdx{1} and the operations
+  \isadxboldpos{+}{$HOL2arithfun}, \isadxboldpos{-}{$HOL2arithfun},
+  \isadxboldpos{\mystar}{$HOL2arithfun}, \cdx{min},
+  \cdx{max}, \isadxboldpos{\isasymle}{$HOL2arithrel} and
+  \isadxboldpos{<}{$HOL2arithrel} are overloaded: they are available
+  not just for natural numbers but for other types as well.
+  For example, given the goal \isa{x\ {\isacharplus}\ {\isadigit{0}}\ {\isacharequal}\ x}, there is nothing to indicate
+  that you are talking about natural numbers. Hence Isabelle can only infer
+  that \isa{x} is of some arbitrary type where \isa{{\isadigit{0}}} and \isa{{\isacharplus}} are
+  declared. As a consequence, you will be unable to prove the
+  goal. To alert you to such pitfalls, Isabelle flags numerals without a
+  fixed type in its output: \isa{x\ {\isacharplus}\ {\isacharparenleft}{\isadigit{0}}{\isasymColon}{\isacharprime}a{\isacharparenright}\ {\isacharequal}\ x}. (In the absence of a numeral,
+  it may take you some time to realize what has happened if \pgmenu{Show
+  Types} is not set).  In this particular example, you need to include
+  an explicit type constraint, for example \isa{x{\isacharplus}{\isadigit{0}}\ {\isacharequal}\ {\isacharparenleft}x{\isacharcolon}{\isacharcolon}nat{\isacharparenright}}. If there
+  is enough contextual information this may not be necessary: \isa{Suc\ x\ {\isacharequal}\ x} automatically implies \isa{x{\isacharcolon}{\isacharcolon}nat} because \isa{Suc} is not
+  overloaded.
+
+  For details on overloading see \S\ref{sec:overloading}.
+  Table~\ref{tab:overloading} in the appendix shows the most important
+  overloaded operations.
+\end{warn}
+\begin{warn}
+  The symbols \isadxboldpos{>}{$HOL2arithrel} and
+  \isadxboldpos{\isasymge}{$HOL2arithrel} are merely syntax: \isa{x\ {\isachargreater}\ y}
+  stands for \isa{y\ {\isacharless}\ x} and similary for \isa{{\isasymge}} and
+  \isa{{\isasymle}}.
+\end{warn}
+\begin{warn}
+  Constant \isa{{\isadigit{1}}{\isacharcolon}{\isacharcolon}nat} is defined to equal \isa{Suc\ {\isadigit{0}}}. This definition
+  (see \S\ref{sec:ConstDefinitions}) is unfolded automatically by some
+  tactics (like \isa{auto}, \isa{simp} and \isa{arith}) but not by
+  others (especially the single step tactics in Chapter~\ref{chap:rules}).
+  If you need the full set of numerals, see~\S\ref{sec:numerals}.
+  \emph{Novices are advised to stick to \isa{{\isadigit{0}}} and \isa{Suc}.}
+\end{warn}
+
+Both \isa{auto} and \isa{simp}
+(a method introduced below, \S\ref{sec:Simplification}) prove 
+simple arithmetic goals automatically:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}{\isasymlbrakk}\ {\isasymnot}\ m\ {\isacharless}\ n{\isacharsemicolon}\ m\ {\isacharless}\ n\ {\isacharplus}\ {\isacharparenleft}{\isadigit{1}}{\isacharcolon}{\isacharcolon}nat{\isacharparenright}\ {\isasymrbrakk}\ {\isasymLongrightarrow}\ m\ {\isacharequal}\ n{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\noindent
+For efficiency's sake, this built-in prover ignores quantified formulae,
+many logical connectives, and all arithmetic operations apart from addition.
+In consequence, \isa{auto} and \isa{simp} cannot prove this slightly more complex goal:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}m\ {\isasymnoteq}\ {\isacharparenleft}n{\isacharcolon}{\isacharcolon}nat{\isacharparenright}\ {\isasymLongrightarrow}\ m\ {\isacharless}\ n\ {\isasymor}\ n\ {\isacharless}\ m{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\noindent The method \methdx{arith} is more general.  It attempts to
+prove the first subgoal provided it is a \textbf{linear arithmetic} formula.
+Such formulas may involve the usual logical connectives (\isa{{\isasymnot}},
+\isa{{\isasymand}}, \isa{{\isasymor}}, \isa{{\isasymlongrightarrow}}, \isa{{\isacharequal}},
+\isa{{\isasymforall}}, \isa{{\isasymexists}}), the relations \isa{{\isacharequal}},
+\isa{{\isasymle}} and \isa{{\isacharless}}, and the operations \isa{{\isacharplus}}, \isa{{\isacharminus}},
+\isa{min} and \isa{max}.  For example,%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}min\ i\ {\isacharparenleft}max\ j\ {\isacharparenleft}k{\isacharasterisk}k{\isacharparenright}{\isacharparenright}\ {\isacharequal}\ max\ {\isacharparenleft}min\ {\isacharparenleft}k{\isacharasterisk}k{\isacharparenright}\ i{\isacharparenright}\ {\isacharparenleft}min\ i\ {\isacharparenleft}j{\isacharcolon}{\isacharcolon}nat{\isacharparenright}{\isacharparenright}{\isachardoublequoteclose}\isanewline
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}arith{\isacharparenright}%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\noindent
+succeeds because \isa{k\ {\isacharasterisk}\ k} can be treated as atomic. In contrast,%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}n{\isacharasterisk}n\ {\isacharequal}\ n{\isacharplus}{\isadigit{1}}\ {\isasymLongrightarrow}\ n{\isacharequal}{\isadigit{0}}{\isachardoublequoteclose}%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+\noindent
+is not proved by \isa{arith} because the proof relies 
+on properties of multiplication. Only multiplication by numerals (which is
+the same as iterated addition) is taken into account.
+
+\begin{warn} The running time of \isa{arith} is exponential in the number
+  of occurrences of \ttindexboldpos{-}{$HOL2arithfun}, \cdx{min} and
+  \cdx{max} because they are first eliminated by case distinctions.
+
+If \isa{k} is a numeral, \sdx{div}~\isa{k}, \sdx{mod}~\isa{k} and
+\isa{k}~\sdx{dvd} are also supported, where the former two are eliminated
+by case distinctions, again blowing up the running time.
+
+If the formula involves quantifiers, \isa{arith} may take
+super-exponential time and space.
+\end{warn}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

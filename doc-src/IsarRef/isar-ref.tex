@@ -1,0 +1,114 @@
+\documentclass[12pt,a4paper,fleqn]{report}
+\usepackage{amssymb}
+\usepackage[greek,english]{babel}
+\usepackage[latin1]{inputenc}
+\usepackage[only,bigsqcap]{stmaryrd}
+\usepackage{textcomp}
+\usepackage{latexsym}
+\usepackage{graphicx}
+\let\intorig=\int  %iman.sty redefines \int
+\usepackage{../iman,../extra,../isar,../proof}
+\usepackage[nohyphen,strings]{../underscore}
+\usepackage{../isabelle,../isabellesym}
+\usepackage{../ttbox,,../rail,../railsetup}
+\usepackage{supertabular}
+\usepackage{style}
+\usepackage{../pdfsetup}
+
+\hyphenation{Isabelle}
+\hyphenation{Isar}
+
+\isadroptag{theory}
+\title{\includegraphics[scale=0.5]{isabelle_isar} \\[4ex] The Isabelle/Isar Reference Manual}
+\author{\emph{Makarius Wenzel} \\[3ex]
+  With Contributions by
+  Clemens Ballarin,
+  Stefan Berghofer, \\
+  Timothy Bourke,
+  Lucas Dixon,
+  Florian Haftmann, \\
+  Gerwin Klein,
+  Alexander Krauss,
+  Tobias Nipkow, \\
+  David von Oheimb,
+  Larry Paulson,
+  and Sebastian Skalberg
+}
+
+\makeindex
+
+\railterm{percent,ppercent,underscore,lbrace,rbrace,atsign}
+\railterm{ident,longident,symident,var,textvar,typefree,typevar,nat,string,verbatim,keyword}
+\railterm{name,nameref,text,type,term,prop,atom}
+
+\railalias{ident}{\railtok{ident}}
+\railalias{longident}{\railtok{longident}}
+\railalias{symident}{\railtok{symident}}
+\railalias{var}{\railtok{var}}
+\railalias{textvar}{\railtok{textvar}}
+\railalias{typefree}{\railtok{typefree}}
+\railalias{typevar}{\railtok{typevar}}
+\railalias{nat}{\railtok{nat}}
+\railalias{string}{\railtok{string}}
+\railalias{verbatim}{\railtok{verbatim}}
+\railalias{keyword}{\railtok{keyword}}
+
+\railalias{name}{\railqtok{name}}
+\railalias{nameref}{\railqtok{nameref}}
+\railalias{text}{\railqtok{text}}
+\railalias{type}{\railqtok{type}}
+\railalias{term}{\railqtok{term}}
+\railalias{prop}{\railqtok{prop}}
+\railalias{atom}{\railqtok{atom}}
+
+\railalias{subseteq}{\isasymsubseteq}\railterm{subseteq}
+\railalias{equiv}{\isasymequiv}\railterm{equiv}
+\railalias{rightleftharpoons}{\isasymrightleftharpoons}\railterm{rightleftharpoons}
+\railalias{rightharpoonup}{\isasymrightharpoonup}\railterm{rightharpoonup}
+\railalias{leftharpoondown}{\isasymleftharpoondown}\railterm{leftharpoondown}
+\railalias{verblbrace}{\texttt{\ttlbrace*}}\railterm{verblbrace}
+\railalias{verbrbrace}{\texttt{*\ttrbrace}}\railterm{verbrbrace}
+
+
+\chardef\charbackquote=`\`
+\newcommand{\backquote}{\mbox{\tt\charbackquote}}
+
+
+\begin{document}
+
+\maketitle 
+
+\pagenumbering{roman} \tableofcontents \clearfirst
+
+\part{Basic Concepts}
+\input{Thy/document/Introduction.tex}
+\input{Thy/document/Framework.tex}
+\input{Thy/document/First_Order_Logic.tex}
+\part{General Language Elements}
+\input{Thy/document/Outer_Syntax.tex}
+\input{Thy/document/Document_Preparation.tex}
+\input{Thy/document/Spec.tex}
+\input{Thy/document/Proof.tex}
+\input{Thy/document/Inner_Syntax.tex}
+\input{Thy/document/Misc.tex}
+\input{Thy/document/Generic.tex}
+\part{Object-Logics}
+\input{Thy/document/HOL_Specific.tex}
+\input{Thy/document/HOLCF_Specific.tex}
+\input{Thy/document/ZF_Specific.tex}
+
+\part{Appendix}
+\appendix
+\input{Thy/document/Quick_Reference.tex}
+\let\int\intorig
+\input{Thy/document/Symbols.tex}
+\input{Thy/document/ML_Tactic.tex}
+
+\begingroup
+  \bibliographystyle{abbrv} \small\raggedright\frenchspacing
+  \bibliography{../manual}
+\endgroup
+
+\printindex
+
+\end{document}

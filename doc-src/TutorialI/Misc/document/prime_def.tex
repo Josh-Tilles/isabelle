@@ -1,0 +1,53 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{prime{\isacharunderscore}def}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\begin{isamarkuptext}%
+\begin{warn}
+A common mistake when writing definitions is to introduce extra free
+variables on the right-hand side.  Consider the following, flawed definition
+(where \isa{dvd} means ``divides''):
+\begin{isabelle}%
+\ \ \ \ \ {\isachardoublequote}prime\ p\ {\isasymequiv}\ {\isadigit{1}}\ {\isacharless}\ p\ {\isasymand}\ {\isacharparenleft}m\ dvd\ p\ {\isasymlongrightarrow}\ m\ {\isacharequal}\ {\isadigit{1}}\ {\isasymor}\ m\ {\isacharequal}\ p{\isacharparenright}{\isachardoublequote}%
+\end{isabelle}
+\par\noindent\hangindent=0pt
+Isabelle rejects this ``definition'' because of the extra \isa{m} on the
+right-hand side, which would introduce an inconsistency (why?). 
+The correct version is
+\begin{isabelle}%
+\ \ \ \ \ {\isachardoublequote}prime\ p\ {\isasymequiv}\ {\isadigit{1}}\ {\isacharless}\ p\ {\isasymand}\ {\isacharparenleft}{\isasymforall}m{\isachardot}\ m\ dvd\ p\ {\isasymlongrightarrow}\ m\ {\isacharequal}\ {\isadigit{1}}\ {\isasymor}\ m\ {\isacharequal}\ p{\isacharparenright}{\isachardoublequote}%
+\end{isabelle}
+\end{warn}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

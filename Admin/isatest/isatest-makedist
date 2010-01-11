@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+#
+# Author: Gerwin Klein, TU Muenchen
+#
+# DESCRIPTION: Build distribution and run isatest-make for lots of platforms.
+
+## global settings
+. ~/admin/isatest/isatest-settings
+
+TMP=/tmp/isatest-makedist.$$
+MAIL=$HOME/bin/pmail
+
+MAKEDIST=$HOME/bin/makedist
+MAKEALL=$HOME/bin/isatest-makeall
+TAR=tar
+
+SSH="ssh -f"
+
+## diagnostics
+
+PRG="$(basename "$0")"
+
+function usage()
+{
+  echo
+  echo "Usage: $PRG"
+  echo
+  echo "   Build distribution and run isatest-make for lots of platforms."
+  echo
+  exit 1
+}
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+## main
+
+# cleanup old error log and test-still-running files
+rm -f $ERRORLOG
+rm -f $ERRORDIR/isatest-*.log
+rm -f $RUNNING/*.runnning
+
+export DISTPREFIX
+
+DATE=$(date "+%Y-%m-%d")
+DISTLOG=$LOGPREFIX/isatest-makedist-$DATE.log
+
+echo ------------------- preparing test release --- `date` --- $HOSTNAME > $DISTLOG 2>&1
+
+echo "### cleaning up old dist directory"  >> $DISTLOG 2>&1
+rm -rf $DISTPREFIX >> $DISTLOG 2>&1
+
+echo "### cleaning up old isabelle-* directories" >> $DISTLOG 2>&1
+rm -rf $HOME/isabelle-*
+
+echo "### building distribution"  >> $DISTLOG 2>&1
+mkdir -p $DISTPREFIX
+$MAKEDIST >> $DISTLOG 2>&1
+
+if [ $? -ne 0 ]
+then
+    echo ------------------- DIST BUILD FAILED --- `date` --- $HOSTNAME >> $DISTLOG 2>&1
+    ELAPSED=$("$HOME/bin/showtime" "$SECONDS")
+    log "dist build FAILED, elapsed time $ELAPSED."
+
+    echo "Could not build isabelle distribution. Log file available at" > $TMP
+    echo "$HOSTNAME:$DISTLOG" >> $TMP
+
+    for R in $MAILTO; do
+        $MAIL "isabelle dist build failed" $R $TMP
+    done
+
+    rm $TMP
+
+    exit 1
+fi
+
+cd $DISTPREFIX >> $DISTLOG 2>&1
+$TAR xvzf `cat $DISTPREFIX/ISABELLE_DIST` >> $DISTLOG 2>&1
+
+echo ------------------- prepared test successfully --- `date` --- $HOSTNAME >> $DISTLOG 2>&1
+
+ELAPSED=$("$HOME/bin/showtime" "$SECONDS")
+log "dist build successful, elapsed time $ELAPSED."
+
+## clean up var/running
+rm -f $RUNNING/*
+
+## spawn test runs
+
+$SSH sunbroy2 "$MAKEALL $HOME/settings/sun-poly"
+# give test some time to copy settings and start
+sleep 15
+$SSH macbroy22 "$MAKEALL $HOME/settings/at-poly"
+sleep 15
+$SSH macbroy20 "$MAKEALL $HOME/settings/at-poly-5.1-para-e"
+sleep 15
+#$SSH macbroy24 "$MAKEALL -l HOL proofterms $HOME/settings/at-sml-dev-p"
+#sleep 15
+$SSH macbroy21 "$MAKEALL $HOME/settings/at64-poly-5.1-para"
+sleep 15
+$SSH macbroy23 "$MAKEALL -l HOL HOL-ex $HOME/settings/at-sml-dev-e"
+sleep 15
+$SSH macbroy24 "$MAKEALL $HOME/settings/at64-poly"
+sleep 15
+$SSH macbroy2 "$MAKEALL $HOME/settings/mac-poly64-M4; $MAKEALL $HOME/settings/mac-poly64-M8; $MAKEALL $HOME/settings/mac-poly-M4; $MAKEALL $HOME/settings/mac-poly-M8"
+sleep 15
+$SSH macbroy5 "$MAKEALL $HOME/settings/mac-poly"
+sleep 15
+$SSH macbroy6 "sleep 10800; $MAKEALL $HOME/settings/at-mac-poly-5.1-para"
+#sleep 15
+#$SSH atbroy51 "$HOME/admin/isatest/isatest-annomaly"
+
+echo ------------------- spawned tests successfully --- `date` --- $HOSTNAME >> $DISTLOG 2>&1
+
+gzip -f $DISTLOG
+
+## end

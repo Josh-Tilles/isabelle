@@ -1,0 +1,137 @@
+%
+\begin{isabellebody}%
+\def\isabellecontext{case{\isacharunderscore}exprs}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\begin{isamarkuptext}%
+\subsection{Case Expressions}
+\label{sec:case-expressions}\index{*case expressions}%
+HOL also features \isa{case}-expressions for analyzing
+elements of a datatype. For example,
+\begin{isabelle}%
+\ \ \ \ \ case\ xs\ of\ {\isacharbrackleft}{\isacharbrackright}\ {\isasymRightarrow}\ {\isacharbrackleft}{\isacharbrackright}\ {\isacharbar}\ y\ {\isacharhash}\ ys\ {\isasymRightarrow}\ y%
+\end{isabelle}
+evaluates to \isa{{\isacharbrackleft}{\isacharbrackright}} if \isa{xs} is \isa{{\isacharbrackleft}{\isacharbrackright}} and to \isa{y} if 
+\isa{xs} is \isa{y\ {\isacharhash}\ ys}. (Since the result in both branches must be of
+the same type, it follows that \isa{y} is of type \isa{{\isacharprime}a\ list} and hence
+that \isa{xs} is of type \isa{{\isacharprime}a\ list\ list}.)
+
+In general, case expressions are of the form
+\[
+\begin{array}{c}
+\isa{case}~e~\isa{of}\ pattern@1~\isa{{\isasymRightarrow}}~e@1\ \isa{{\isacharbar}}\ \dots\
+ \isa{{\isacharbar}}~pattern@m~\isa{{\isasymRightarrow}}~e@m
+\end{array}
+\]
+Like in functional programming, patterns are expressions consisting of
+datatype constructors (e.g. \isa{{\isacharbrackleft}{\isacharbrackright}} and \isa{{\isacharhash}})
+and variables, including the wildcard ``\verb$_$''.
+Not all cases need to be covered and the order of cases matters.
+However, one is well-advised not to wallow in complex patterns because
+complex case distinctions tend to induce complex proofs.
+
+\begin{warn}
+Internally Isabelle only knows about exhaustive case expressions with
+non-nested patterns: $pattern@i$ must be of the form
+$C@i~x@ {i1}~\dots~x@ {ik@i}$ and $C@1, \dots, C@m$ must be exactly the
+constructors of the type of $e$.
+%
+More complex case expressions are automatically
+translated into the simpler form upon parsing but are not translated
+back for printing. This may lead to surprising output.
+\end{warn}
+
+\begin{warn}
+Like \isa{if}, \isa{case}-expressions may need to be enclosed in
+parentheses to indicate their scope.
+\end{warn}
+
+\subsection{Structural Induction and Case Distinction}
+\label{sec:struct-ind-case}
+\index{case distinctions}\index{induction!structural}%
+Induction is invoked by \methdx{induct_tac}, as we have seen above; 
+it works for any datatype.  In some cases, induction is overkill and a case
+distinction over all constructors of the datatype suffices.  This is performed
+by \methdx{case_tac}.  Here is a trivial example:%
+\end{isamarkuptext}%
+\isamarkuptrue%
+\isacommand{lemma}\isamarkupfalse%
+\ {\isachardoublequoteopen}{\isacharparenleft}case\ xs\ of\ {\isacharbrackleft}{\isacharbrackright}\ {\isasymRightarrow}\ {\isacharbrackleft}{\isacharbrackright}\ {\isacharbar}\ y{\isacharhash}ys\ {\isasymRightarrow}\ xs{\isacharparenright}\ {\isacharequal}\ xs{\isachardoublequoteclose}\isanewline
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\isatagproof
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}case{\isacharunderscore}tac\ xs{\isacharparenright}%
+\begin{isamarkuptxt}%
+\noindent
+results in the proof state
+\begin{isabelle}%
+\ {\isadigit{1}}{\isachardot}\ xs\ {\isacharequal}\ {\isacharbrackleft}{\isacharbrackright}\ {\isasymLongrightarrow}\ {\isacharparenleft}case\ xs\ of\ {\isacharbrackleft}{\isacharbrackright}\ {\isasymRightarrow}\ {\isacharbrackleft}{\isacharbrackright}\ {\isacharbar}\ y\ {\isacharhash}\ ys\ {\isasymRightarrow}\ xs{\isacharparenright}\ {\isacharequal}\ xs\isanewline
+\ {\isadigit{2}}{\isachardot}\ {\isasymAnd}a\ list{\isachardot}\isanewline
+\isaindent{\ {\isadigit{2}}{\isachardot}\ \ \ \ }xs\ {\isacharequal}\ a\ {\isacharhash}\ list\ {\isasymLongrightarrow}\ {\isacharparenleft}case\ xs\ of\ {\isacharbrackleft}{\isacharbrackright}\ {\isasymRightarrow}\ {\isacharbrackleft}{\isacharbrackright}\ {\isacharbar}\ y\ {\isacharhash}\ ys\ {\isasymRightarrow}\ xs{\isacharparenright}\ {\isacharequal}\ xs%
+\end{isabelle}
+which is solved automatically:%
+\end{isamarkuptxt}%
+\isamarkuptrue%
+\isacommand{apply}\isamarkupfalse%
+{\isacharparenleft}auto{\isacharparenright}%
+\endisatagproof
+{\isafoldproof}%
+%
+\isadelimproof
+%
+\endisadelimproof
+%
+\begin{isamarkuptext}%
+Note that we do not need to give a lemma a name if we do not intend to refer
+to it explicitly in the future.
+Other basic laws about a datatype are applied automatically during
+simplification, so no special methods are provided for them.
+
+\begin{warn}
+  Induction is only allowed on free (or \isasymAnd-bound) variables that
+  should not occur among the assumptions of the subgoal; see
+  \S\ref{sec:ind-var-in-prems} for details. Case distinction
+  (\isa{case{\isacharunderscore}tac}) works for arbitrary terms, which need to be
+  quoted if they are non-atomic. However, apart from \isa{{\isasymAnd}}-bound
+  variables, the terms must not contain variables that are bound outside.
+  For example, given the goal \isa{{\isasymforall}xs{\isachardot}\ xs\ {\isacharequal}\ {\isacharbrackleft}{\isacharbrackright}\ {\isasymor}\ {\isacharparenleft}{\isasymexists}y\ ys{\isachardot}\ xs\ {\isacharequal}\ y\ {\isacharhash}\ ys{\isacharparenright}},
+  \isa{case{\isacharunderscore}tac\ xs} will not work as expected because Isabelle interprets
+  the \isa{xs} as a new free variable distinct from the bound
+  \isa{xs} in the goal.
+\end{warn}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+%
+\isatagtheory
+%
+\endisatagtheory
+{\isafoldtheory}%
+%
+\isadelimtheory
+%
+\endisadelimtheory
+\end{isabellebody}%
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: "root"
+%%% End:

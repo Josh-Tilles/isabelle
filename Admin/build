@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+#
+# Administrative build for Isabelle source distribution.
+
+## directory layout
+
+if [ -z "$ISABELLE_HOME" ]; then
+  ISABELLE_HOME="$(cd "$(dirname "$0")"; cd "$(pwd -P)"; cd ..; pwd)"
+  ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
+fi
+
+
+## diagnostics
+
+PRG="$(basename "$0")"
+
+function usage()
+{
+  cat <<EOF
+
+Usage: $PRG [MODULES]
+
+  Produce Isabelle distribution modules from current repository sources.
+  The MODULES list may contain any of the following:
+
+    all             all modules below
+    browser         graph browser (requires jdk)
+    doc             documentation (requires latex and rail)
+    jars            Scala/JVM components (requires scala in SCALA_HOME)
+
+EOF
+  exit 1
+}
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+
+## process command line
+
+[ "$#" -eq 0 ] && usage
+
+MODULES="$@"; shift "$#"
+
+
+## modules
+
+function build_all ()
+{
+  build_doc
+  build_browser
+  build_jars
+}
+
+
+function build_browser ()
+{
+  pushd "$ISABELLE_HOME/lib/browser" >/dev/null
+  "$ISABELLE_TOOL" env ./build || exit $?
+  popd >/dev/null
+}
+
+
+function build_doc ()
+{
+  echo "###"
+  echo "### Building documentation ..."
+  echo "###"
+
+  cd "$ISABELLE_HOME/doc-src"
+  for DOC in $(cat Dirs)
+  do
+    pushd "$DOC" >/dev/null
+    make clean dvi || fail "DVI document for $DOC failed!"
+    make clean pdf || fail "PDF document for $DOC failed!"
+    popd >/dev/null
+  done
+}
+
+
+function build_jars ()
+{
+  pushd "$ISABELLE_HOME/src/Pure" >/dev/null
+  "$ISABELLE_TOOL" env ./build-jars || exit $?
+  popd >/dev/null
+}
+
+
+## main
+
+for MODULE in $MODULES
+do
+  case $MODULE in
+    all) build_all;;
+    browser) build_browser;;
+    doc) build_doc;;
+    jars) build_jars;;
+    *) fail "Bad module $MODULE"
+  esac
+done

@@ -1,0 +1,134 @@
+# -*- shell-script -*- :mode=shellscript:
+#
+# Author: Markus Wenzel, TU Muenchen
+#
+# getsettings - bash source script to augment current env.
+
+if [ -z "$ISABELLE_SETTINGS_PRESENT" ]
+then
+
+set -o allexport
+
+ISABELLE_SETTINGS_PRESENT=true
+
+export ISABELLE_HOME
+if { echo -n "$ISABELLE_HOME" | fgrep " " >/dev/null; }
+then
+  echo 1>&2 "### White space in ISABELLE_HOME may cause strange problems later on!"
+  echo 1>&2 "### ISABELLE_HOME=\"$ISABELLE_HOME\""
+fi
+
+#key executables
+ISABELLE_PROCESS="$ISABELLE_HOME/bin/isabelle-process"
+ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
+
+function isabelle ()
+{
+  "$ISABELLE_TOOL" "$@"
+}
+
+#Isabelle distribution identifier -- filled in automatically!
+ISABELLE_IDENTIFIER=""
+
+#users tend to put strange things in here ...
+unset ENV
+unset BASH_ENV
+
+#support easy settings
+function choosefrom ()
+{
+  local RESULT=""
+  local FILE=""
+
+  for FILE in "$@"
+  do
+    [ -z "$RESULT" -a -e "$FILE" ] && RESULT="$FILE"
+  done
+
+  [ -z "$RESULT" ] && RESULT="$FILE"
+  echo "$RESULT"
+}
+
+#JVM path wrapper
+if [ "$OSTYPE" = cygwin ]; then
+  CLASSPATH="$(cygpath -u -p "$CLASSPATH")"
+  function jvmpath() { cygpath -w -p "$@"; }
+  CYGWIN_ROOT="$(jvmpath "/")"
+else
+  function jvmpath() { echo "$@"; }
+fi
+HOME_JVM="$HOME"
+
+#CLASSPATH convenience
+function classpath () {
+  for X in "$@"
+  do
+    if [ -z "$CLASSPATH" ]; then
+      CLASSPATH="$X"
+    else
+      CLASSPATH="$CLASSPATH:$X"
+    fi
+  done
+}
+
+#arrays
+function splitarray ()
+{
+  SPLITARRAY=()
+  local IFS="$1"; shift
+  for X in $*
+  do
+    SPLITARRAY["${#SPLITARRAY[@]}"]="$X"
+  done
+}
+
+#nested components
+ISABELLE_COMPONENTS=""
+function init_component ()
+{
+  local COMPONENT="$1"
+
+  if [ ! -d "$COMPONENT" ]; then
+    echo >&2 "Bad Isabelle component: \"$COMPONENT\""
+    exit 2
+  elif [ -z "$ISABELLE_COMPONENTS" ]; then
+    ISABELLE_COMPONENTS="$COMPONENT"
+  else
+    ISABELLE_COMPONENTS="$ISABELLE_COMPONENTS:$COMPONENT"
+  fi
+  if [ -f "$COMPONENT/etc/settings" ]; then
+    source "$COMPONENT/etc/settings" || exit 2
+  fi
+  if [ -f "$COMPONENT/etc/components" ]; then
+    {
+      while { unset REPLY; read -r; test "$?" = 0 -o -n "$REPLY"; }
+      do
+        case "$REPLY" in
+          \#* | "") ;;
+          /*) init_component "$REPLY" ;;
+          *) init_component "$COMPONENT/$REPLY" ;;
+        esac
+      done
+    } < "$COMPONENT/etc/components"
+  fi
+}
+
+#main components
+init_component "$ISABELLE_HOME"
+
+[ "$ISABELLE_HOME" -ef "$ISABELLE_HOME_USER" ] && \
+  { echo >&2 "### ISABELLE_HOME and ISABELLE_HOME_USER must not be the same directory!"; }
+[ -d "$ISABELLE_HOME_USER" ] && init_component "$ISABELLE_HOME_USER"
+
+#ML system identifier
+if [ -z "$ML_PLATFORM" ]; then
+  ML_IDENTIFIER="$ML_SYSTEM"
+else
+  ML_IDENTIFIER="${ML_SYSTEM}_${ML_PLATFORM}"
+fi
+
+ISABELLE_OUTPUT="$ISABELLE_OUTPUT/$ML_IDENTIFIER"
+
+set +o allexport
+
+fi
