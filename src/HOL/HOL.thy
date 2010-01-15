@@ -1903,10 +1903,9 @@ code_datatype "prop" Trueprop
 text {* Code equations *}
 
 lemma [code]:
-  shows "(False \<Longrightarrow> P) \<equiv> Trueprop True" 
-    and "(True \<Longrightarrow> PROP Q) \<equiv> PROP Q" 
-    and "(P \<Longrightarrow> False) \<equiv> Trueprop (\<not> P)"
-    and "(PROP Q \<Longrightarrow> True) \<equiv> Trueprop True" by (auto intro!: equal_intr_rule)
+  shows "(True \<Longrightarrow> PROP Q) \<equiv> PROP Q" 
+    and "(PROP Q \<Longrightarrow> True) \<equiv> Trueprop True"
+    and "(P \<Longrightarrow> R) \<equiv> Trueprop (P \<longrightarrow> R)" by (auto intro!: equal_intr_rule)
 
 lemma [code]:
   shows "False \<and> P \<longleftrightarrow> False"
@@ -2012,9 +2011,9 @@ code_const True and False and Not and "op &" and "op |" and If
   (Haskell "True" and "False" and "not"
     and infixl 3 "&&" and infixl 2 "||"
     and "!(if (_)/ then (_)/ else (_))")
-
-code_const True and False
-  (Scala "true" and "false")
+  (Scala "true" and "false" and "'! _"
+    and infixl 3 "&&" and infixl 1 "||"
+    and "!(if ((_))/ (_)/ else (_))")
 
 code_reserved SML
   bool true false not
@@ -2042,6 +2041,7 @@ code_const undefined
   (SML "!(raise/ Fail/ \"undefined\")")
   (OCaml "failwith/ \"undefined\"")
   (Haskell "error/ \"undefined\"")
+  (Scala "!error(\"undefined\")")
 
 subsubsection {* Evaluation and normalization by evaluation *}
 

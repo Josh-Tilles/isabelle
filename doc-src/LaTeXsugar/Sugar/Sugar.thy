@@ -131,9 +131,9 @@ results in @{thm conjI[no_vars]}.
 
 This \verb!no_vars! business can become a bit tedious.
 If you would rather never see question marks, simply put
-\begin{verbatim}
-show_question_marks := false;
-\end{verbatim}
+\begin{quote}
+@{ML "Unsynchronized.reset show_question_marks"}\verb!;!
+\end{quote}
 at the beginning of your file \texttt{ROOT.ML}.
 The rest of this document is produced with this flag set to \texttt{false}.
 
@@ -144,7 +144,7 @@ e.g. @{text"x1.0"}, their internal index. This can be avoided by
 turning the last digit into a subscript: write \verb!x\<^isub>1! and
 obtain the much nicer @{text"x\<^isub>1"}. *}
 
-(*<*)ML"show_question_marks := false"(*>*)
+(*<*)ML "Unsynchronized.reset show_question_marks"(*>*)
 
 subsection {*Qualified names*}
 
@@ -154,9 +154,9 @@ theory it is defined in, to distinguish it from the predefined @{const[source]
 "List.length"}. In case there is no danger of confusion, you can insist on
 short names (no qualifiers) by setting \verb!short_names!, typically
 in \texttt{ROOT.ML}:
-\begin{verbatim}
-set short_names;
-\end{verbatim}
+\begin{quote}
+@{ML "Unsynchronized.set short_names"}\verb!;!
+\end{quote}
 *}
 
 subsection {*Variable names\label{sec:varnames}*}

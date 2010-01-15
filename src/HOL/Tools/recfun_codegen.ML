@@ -36,15 +36,18 @@ fun avoid_value thy [thm] =
       let val (_, T) = Code.const_typ_eqn thy thm
       in if null (Term.add_tvarsT T []) orelse (null o fst o strip_type) T
         then [thm]
-        else [Code_Thingol.expand_eta thy 1 thm]
+        else [Code.expand_eta thy 1 thm]
       end
   | avoid_value thy thms = thms;
 
 fun get_equations thy defs (raw_c, T) = if raw_c = @{const_name "op ="} then ([], "") else
   let
     val c = AxClass.unoverload_const thy (raw_c, T);
-    val raw_thms = Code.these_eqns thy c
-      |> map_filter (fn (thm, linear) => if linear then SOME thm else NONE)
+    val raw_thms = Code.get_cert thy (Code_Preproc.preprocess_functrans thy) c
+      |> Code.equations_thms_cert thy
+      |> snd
+      |> map_filter (fn (_, (thm, proper)) => if proper then SOME thm else NONE)
+      |> map (AxClass.overload thy)
       |> filter (is_instance T o snd o const_of o prop_of);
     val module_name = case Symtab.lookup (ModuleData.get thy) c
      of SOME module_name => module_name
@@ -55,7 +58,6 @@ fun get_equations thy defs (raw_c, T) = if raw_c = @{const_name "op ="} then ([]
     raw_thms
     |> preprocess thy
     |> avoid_value thy
-    |> Code_Thingol.canonize_thms thy
     |> rpair module_name
   end;
 

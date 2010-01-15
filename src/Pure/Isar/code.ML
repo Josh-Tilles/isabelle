@@ -23,17 +23,21 @@ sig
   val constrset_of_consts: theory -> (string * typ) list
     -> string * ((string * sort) list * (string * typ list) list)
 
-  (*code equations*)
+  (*code equations and certificates*)
   val mk_eqn: theory -> thm * bool -> thm * bool
   val mk_eqn_warning: theory -> thm -> (thm * bool) option
   val mk_eqn_liberal: theory -> thm -> (thm * bool) option
   val assert_eqn: theory -> thm * bool -> thm * bool
-  val assert_eqns_const: theory -> string
-    -> (thm * bool) list -> (thm * bool) list
   val const_typ_eqn: theory -> thm -> string * typ
-  val typscheme_eqn: theory -> thm -> (string * sort) list * typ
-  val typscheme_eqns: theory -> string -> thm list -> (string * sort) list * typ
-  val standard_typscheme: theory -> thm list -> thm list
+  val expand_eta: theory -> int -> thm -> thm
+  type cert
+  val empty_cert: theory -> string -> cert
+  val cert_of_eqns: theory -> string -> (thm * bool) list -> cert
+  val constrain_cert: theory -> sort list -> cert -> cert
+  val typscheme_cert: theory -> cert -> (string * sort) list * typ
+  val equations_cert: theory -> cert -> ((string * sort) list * typ) * (term list * term) list
+  val equations_thms_cert: theory -> cert -> ((string * sort) list * typ) * ((term list * term) * (thm * bool)) list
+  val pretty_cert: theory -> cert -> Pretty.T list
 
   (*executable code*)
   val add_type: string -> theory -> theory
@@ -56,8 +60,7 @@ sig
   val add_undefined: string -> theory -> theory
   val get_datatype: theory -> string -> ((string * sort) list * (string * typ list) list)
   val get_datatype_of_constr: theory -> string -> string option
-  val these_eqns: theory -> string -> (thm * bool) list
-  val all_eqns: theory -> (thm * bool) list
+  val get_cert: theory -> ((thm * bool) list -> (thm * bool) list) -> string -> cert
   val get_case_scheme: theory -> string -> (int * (int * string list)) option
   val undefineds: theory -> string list
   val print_codesetup: theory -> unit
@@ -414,7 +417,7 @@ fun get_datatype_of_constr thy c =
 fun is_constr thy = is_some o get_datatype_of_constr thy;
 
 
-(* code equations *)
+(* bare code equations *)
 
 exception BAD_THM of string;
 fun bad_thm msg = raise BAD_THM msg;
@@ -427,88 +430,73 @@ fun is_linear thm =
   in not (has_duplicates (op =) ((fold o fold_aterms)
     (fn Var (v, _) => cons v | _ => I) args [])) end;
 
-fun gen_assert_eqn thy is_constr_pat (thm, proper) =
+fun gen_assert_eqn thy check_patterns (thm, proper) =
   let
+    fun bad s = bad_thm (s ^ ":\n" ^ Display.string_of_thm_global thy thm);
     val (lhs, rhs) = (Logic.dest_equals o Thm.plain_prop_of) thm
-      handle TERM _ => bad_thm ("Not an equation: " ^ Display.string_of_thm_global thy thm)
-           | THM _ => bad_thm ("Not an equation: " ^ Display.string_of_thm_global thy thm);
+      handle TERM _ => bad "Not an equation"
+           | THM _ => bad "Not an equation";
     fun vars_of t = fold_aterms (fn Var (v, _) => insert (op =) v
-      | Free _ => bad_thm ("Illegal free variable in equation\n"
-          ^ Display.string_of_thm_global thy thm)
+      | Free _ => bad "Illegal free variable in equation"
       | _ => I) t [];
     fun tvars_of t = fold_term_types (fn _ =>
       fold_atyps (fn TVar (v, _) => insert (op =) v
-        | TFree _ => bad_thm 
-      ("Illegal free type variable in equation\n" ^ Display.string_of_thm_global thy thm))) t [];
+        | TFree _ => bad "Illegal free type variable in equation")) t [];
     val lhs_vs = vars_of lhs;
     val rhs_vs = vars_of rhs;
     val lhs_tvs = tvars_of lhs;
     val rhs_tvs = tvars_of rhs;
     val _ = if null (subtract (op =) lhs_vs rhs_vs)
       then ()
-      else bad_thm ("Free variables on right hand side of equation\n"
-        ^ Display.string_of_thm_global thy thm);
+      else bad "Free variables on right hand side of equation";
     val _ = if null (subtract (op =) lhs_tvs rhs_tvs)
       then ()
-      else bad_thm ("Free type variables on right hand side of equation\n"
-        ^ Display.string_of_thm_global thy thm)
-    val (head, args) = (strip_comb o fst o Logic.dest_equals o Thm.plain_prop_of) thm;
+      else bad "Free type variables on right hand side of equation";
+    val (head, args) = strip_comb lhs;
     val (c, ty) = case head
      of Const (c_ty as (_, ty)) => (AxClass.unoverload_const thy c_ty, ty)
-      | _ => bad_thm ("Equation not headed by constant\n" ^ Display.string_of_thm_global thy thm);
-    fun check _ (Abs _) = bad_thm
-          ("Abstraction on left hand side of equation\n"
-            ^ Display.string_of_thm_global thy thm)
+      | _ => bad "Equation not headed by constant";
+    fun check _ (Abs _) = bad "Abstraction on left hand side of equation"
       | check 0 (Var _) = ()
-      | check _ (Var _) = bad_thm
-          ("Variable with application on left hand side of equation\n"
-            ^ Display.string_of_thm_global thy thm)
+      | check _ (Var _) = bad "Variable with application on left hand side of equation"
       | check n (t1 $ t2) = (check (n+1) t1; check 0 t2)
-      | check n (Const (c_ty as (_, ty))) =
+      | check n (Const (c_ty as (c, ty))) =
           let
             val c' = AxClass.unoverload_const thy c_ty
           in if n = (length o fst o strip_type o subst_signature thy c') ty
-            then if not proper orelse is_constr_pat c'
+            then if not proper orelse not check_patterns orelse is_constr thy c'
               then ()
-              else bad_thm (quote c ^ " is not a constructor, on left hand side of equation\n"
-                ^ Display.string_of_thm_global thy thm)
-            else bad_thm
-              ("Partially applied constant " ^ quote c ^ " on left hand side of equation\n"
-                 ^ Display.string_of_thm_global thy thm)
+              else bad (quote c ^ " is not a constructor, on left hand side of equation")
+            else bad ("Partially applied constant " ^ quote c ^ " on left hand side of equation")
           end;
     val _ = map (check 0) args;
     val _ = if not proper orelse is_linear thm then ()
-      else bad_thm ("Duplicate variables on left hand side of equation\n"
-        ^ Display.string_of_thm_global thy thm);
-    val _ = if (is_none o AxClass.class_of_param thy) c
-      then ()
-      else bad_thm ("Overloaded constant as head in equation\n"
-        ^ Display.string_of_thm_global thy thm)
-    val _ = if not (is_constr thy c)
-      then ()
-      else bad_thm ("Constructor as head in equation\n"
-        ^ Display.string_of_thm_global thy thm)
+      else bad "Duplicate variables on left hand side of equation";
+    val _ = if (is_none o AxClass.class_of_param thy) c then ()
+      else bad "Overloaded constant as head in equation";
+    val _ = if not (is_constr thy c) then ()
+      else bad "Constructor as head in equation";
     val ty_decl = Sign.the_const_type thy c;
     val _ = if Sign.typ_equiv thy (Type.strip_sorts ty_decl, Type.strip_sorts ty)
       then () else bad_thm ("Type\n" ^ string_of_typ thy ty
-           ^ "\nof equation\n"
-           ^ Display.string_of_thm_global thy thm
-           ^ "\nis incompatible with declared function type\n"
-           ^ string_of_typ thy ty_decl)
+        ^ "\nof equation\n"
+        ^ Display.string_of_thm_global thy thm
+        ^ "\nis incompatible with declared function type\n"
+        ^ string_of_typ thy ty_decl)
   in (thm, proper) end;
 
-fun assert_eqn thy = error_thm (gen_assert_eqn thy (is_constr thy));
+fun assert_eqn thy = error_thm (gen_assert_eqn thy true);
 
 fun meta_rewrite thy = LocalDefs.meta_rewrite_rule (ProofContext.init thy);
 
-fun mk_eqn thy = error_thm (gen_assert_eqn thy (K true)) o
+fun mk_eqn thy = error_thm (gen_assert_eqn thy false) o
   apfst (meta_rewrite thy);
 
 fun mk_eqn_warning thy = Option.map (fn (thm, _) => (thm, is_linear thm))
-  o warning_thm (gen_assert_eqn thy (K true)) o rpair false o meta_rewrite thy;
+  o warning_thm (gen_assert_eqn thy false) o rpair false o meta_rewrite thy;
 
 fun mk_eqn_liberal thy = Option.map (fn (thm, _) => (thm, is_linear thm))
-  o try_thm (gen_assert_eqn thy (K true)) o rpair false o meta_rewrite thy;
+  o try_thm (gen_assert_eqn thy false) o rpair false o meta_rewrite thy;
 
 val head_eqn = dest_Const o fst o strip_comb o fst o Logic.dest_equals o Thm.plain_prop_of;
 
@@ -521,53 +509,171 @@ fun const_typ_eqn thy thm =
 
 fun const_eqn thy = fst o const_typ_eqn thy;
 
-fun raw_typscheme thy (c, ty) =
+fun logical_typscheme thy (c, ty) =
   (map dest_TFree (Sign.const_typargs thy (c, ty)), Type.strip_sorts ty);
 
-fun typscheme thy (c, ty) = raw_typscheme thy (c, subst_signature thy c ty);
+fun typscheme thy (c, ty) = logical_typscheme thy (c, subst_signature thy c ty);
 
-fun typscheme_eqn thy = typscheme thy o apsnd Logic.unvarifyT o const_typ_eqn thy;
 
-fun typscheme_eqns thy c [] = 
+(* technical transformations of code equations *)
+
+fun expand_eta thy k thm =
+  let
+    val (lhs, rhs) = (Logic.dest_equals o Thm.plain_prop_of) thm;
+    val (_, args) = strip_comb lhs;
+    val l = if k = ~1
+      then (length o fst o strip_abs) rhs
+      else Int.max (0, k - length args);
+    val (raw_vars, _) = Term.strip_abs_eta l rhs;
+    val vars = burrow_fst (Name.variant_list (map (fst o fst) (Term.add_vars lhs [])))
+      raw_vars;
+    fun expand (v, ty) thm = Drule.fun_cong_rule thm
+      (Thm.cterm_of thy (Var ((v, 0), ty)));
+  in
+    thm
+    |> fold expand vars
+    |> Conv.fconv_rule Drule.beta_eta_conversion
+  end;
+
+fun same_arity thy thms =
+  let
+    val num_args_of = length o snd o strip_comb o fst o Logic.dest_equals;
+    val k = fold (Integer.max o num_args_of o Thm.prop_of) thms 0;
+  in map (expand_eta thy k) thms end;
+
+fun mk_desymbolization pre post mk vs =
+  let
+    val names = map (pre o fst o fst) vs
+      |> map (Name.desymbolize false)
+      |> Name.variant_list []
+      |> map post;
+  in map_filter (fn (((v, i), x), v') =>
+    if v = v' andalso i = 0 then NONE
+    else SOME (((v, i), x), mk ((v', 0), x))) (vs ~~ names)
+  end;
+
+fun desymbolize_tvars thy thms =
+  let
+    val tvs = fold (Term.add_tvars o Thm.prop_of) thms [];
+    val tvar_subst = mk_desymbolization (unprefix "'") (prefix "'") TVar tvs;
+  in map (Thm.certify_instantiate (tvar_subst, [])) thms end;
+
+fun desymbolize_vars thy thm =
+  let
+    val vs = Term.add_vars (Thm.prop_of thm) [];
+    val var_subst = mk_desymbolization I I Var vs;
+  in Thm.certify_instantiate ([], var_subst) thm end;
+
+fun canonize_thms thy = desymbolize_tvars thy #> same_arity thy #> map (desymbolize_vars thy);
+
+
+(* code equation certificates *)
+
+fun build_head thy (c, ty) =
+  Thm.cterm_of thy (Logic.mk_equals (Free ("HEAD", ty), Const (c, ty)));
+
+fun get_head thy cert_thm =
+  let
+    val [head] = (#hyps o Thm.crep_thm) cert_thm;
+    val (_, Const (c, ty)) = (Logic.dest_equals o Thm.term_of) head;
+  in (typscheme thy (c, ty), head) end;
+
+abstype cert = Cert of thm * bool list with
+
+fun empty_cert thy c = 
+  let
+    val raw_ty = const_typ thy c;
+    val tvars = Term.add_tvar_namesT raw_ty [];
+    val tvars' = case AxClass.class_of_param thy c
+     of SOME class => [TFree (Name.aT, [class])]
+      | NONE => Name.invent_list [] Name.aT (length tvars)
+          |> map (fn v => TFree (v, []));
+    val ty = typ_subst_TVars (tvars ~~ tvars') raw_ty;
+    val chead = build_head thy (c, ty);
+  in Cert (Thm.weaken chead Drule.dummy_thm, []) end;
+
+fun cert_of_eqns thy c [] = empty_cert thy c
+  | cert_of_eqns thy c raw_eqns = 
       let
-        val raw_ty = const_typ thy c;
-        val tvars = Term.add_tvar_namesT raw_ty [];
-        val tvars' = case AxClass.class_of_param thy c
-         of SOME class => [TFree (Name.aT, [class])]
-          | NONE => Name.invent_list [] Name.aT (length tvars)
-              |> map (fn v => TFree (v, []));
-        val ty = typ_subst_TVars (tvars ~~ tvars') raw_ty;
-      in raw_typscheme thy (c, ty) end
-  | typscheme_eqns thy c (thm :: _) = typscheme_eqn thy thm;
+        val eqns = burrow_fst (canonize_thms thy) raw_eqns;
+        val _ = map (assert_eqn thy) eqns;
+        val (thms, propers) = split_list eqns;
+        val _ = map (fn thm => if c = const_eqn thy thm then ()
+          else error ("Wrong head of code equation,\nexpected constant "
+            ^ string_of_const thy c ^ "\n" ^ Display.string_of_thm_global thy thm)) thms;
+        fun tvars_of T = rev (Term.add_tvarsT T []);
+        val vss = map (tvars_of o snd o head_eqn) thms;
+        fun inter_sorts vs =
+          fold (curry (Sorts.inter_sort (Sign.classes_of thy)) o snd) vs [];
+        val sorts = map_transpose inter_sorts vss;
+        val vts = Name.names Name.context Name.aT sorts;
+        val thms as thm :: _ =
+          map2 (fn vs => Thm.certify_instantiate (vs ~~ map TFree vts, [])) vss thms;
+        val head_thm = Thm.symmetric (Thm.assume (build_head thy (head_eqn (hd thms))));
+        fun head_conv ct = if can Thm.dest_comb ct
+          then Conv.fun_conv head_conv ct
+          else Conv.rewr_conv head_thm ct;
+        val rewrite_head = Conv.fconv_rule (Conv.arg1_conv head_conv);
+        val cert_thm = Conjunction.intr_balanced (map rewrite_head thms);
+      in Cert (cert_thm, propers) end;
 
-fun assert_eqns_const thy c eqns =
+fun constrain_cert thy sorts (Cert (cert_thm, propers)) =
   let
-    fun cert (eqn as (thm, _)) = if c = const_eqn thy thm
-      then eqn else error ("Wrong head of code equation,\nexpected constant "
-        ^ string_of_const thy c ^ "\n" ^ Display.string_of_thm_global thy thm)
-  in map (cert o assert_eqn thy) eqns end;
+    val ((vs, _), head) = get_head thy cert_thm;
+    val subst = map2 (fn (v, sort) => fn sort' =>
+      (v, Sorts.inter_sort (Sign.classes_of thy) (sort, sort'))) vs sorts;
+    val head' = Thm.term_of head
+      |> (map_types o map_atyps)
+          (fn TFree (v, _) => TFree (v, the (AList.lookup (op =) subst v)))
+      |> Thm.cterm_of thy;
+    val inst = map2 (fn (v, sort) => fn (_, sort') =>
+      (((v, 0), sort), TFree (v, sort'))) vs subst;
+    val cert_thm' = cert_thm
+      |> Thm.implies_intr head
+      |> Thm.varifyT
+      |> Thm.certify_instantiate (inst, [])
+      |> Thm.elim_implies (Thm.assume head');
+  in (Cert (cert_thm', propers)) end;
 
-fun standard_typscheme thy thms =
+fun typscheme_cert thy (Cert (cert_thm, _)) =
+  fst (get_head thy cert_thm);
+
+fun equations_cert thy (cert as Cert (cert_thm, propers)) =
   let
-    fun tvars_of T = rev (Term.add_tvarsT T []);
-    val vss = map (tvars_of o snd o head_eqn) thms;
-    fun inter_sorts vs =
-      fold (curry (Sorts.inter_sort (Sign.classes_of thy)) o snd) vs [];
-    val sorts = map_transpose inter_sorts vss;
-    val vts = Name.names Name.context Name.aT sorts
-      |> map (fn (v, sort) => TVar ((v, 0), sort));
-  in map2 (fn vs => Thm.certify_instantiate (vs ~~ vts, [])) vss thms end;
+    val tyscm = typscheme_cert thy cert;
+    val equations = if null propers then [] else
+      Thm.prop_of cert_thm
+      |> Logic.dest_conjunction_balanced (length propers)
+      |> map Logic.dest_equals
+      |> (map o apfst) (snd o strip_comb)
+  in (tyscm, equations) end;
 
-fun these_eqns thy c =
+fun equations_thms_cert thy (cert as Cert (cert_thm, propers)) =
+  let
+    val (tyscm, equations) = equations_cert thy cert;
+    val thms = if null propers then [] else
+      cert_thm
+      |> LocalDefs.expand [snd (get_head thy cert_thm)]
+      |> Thm.varifyT
+      |> Conjunction.elim_balanced (length propers)
+  in (tyscm, equations ~~ (thms ~~ propers)) end;
+
+fun pretty_cert thy = map (Display.pretty_thm_global thy o AxClass.overload thy o fst o snd)
+  o snd o equations_thms_cert thy;
+
+end;
+
+
+(* code equation access *)
+
+fun get_cert thy f c =
   Symtab.lookup ((the_eqns o the_exec) thy) c
   |> Option.map (snd o snd o fst)
   |> these
   |> (map o apfst) (Thm.transfer thy)
-  |> burrow_fst (standard_typscheme thy);
-
-fun all_eqns thy =
-  Symtab.dest ((the_eqns o the_exec) thy)
-  |> maps (snd o snd o fst o snd);
+  |> f
+  |> (map o apfst) (AxClass.unoverload thy)
+  |> cert_of_eqns thy c;
 
 
 (* cases *)
@@ -640,6 +746,10 @@ fun print_codesetup thy =
                           :: Pretty.str "of"
                           :: map (Pretty.quote o Syntax.pretty_typ_global thy) tys)) cos)
           );
+    fun pretty_case (const, (_, (_, []))) = Pretty.str (string_of_const thy const)
+      | pretty_case (const, (_, (_, cos))) = (Pretty.block o Pretty.breaks) [
+          Pretty.str (string_of_const thy const), Pretty.str "with",
+          (Pretty.block o Pretty.commas o map (Pretty.str o string_of_const thy)) cos];
     val eqns = the_eqns exec
       |> Symtab.dest
       |> (map o apfst) (string_of_const thy)
@@ -649,18 +759,26 @@ fun print_codesetup thy =
       |> Symtab.dest
       |> map (fn (dtco, (_, (vs, cos)) :: _) =>
           (string_of_typ thy (Type (dtco, map TFree vs)), cos))
-      |> sort (string_ord o pairself fst)
+      |> sort (string_ord o pairself fst);
+    val cases = Symtab.dest ((fst o the_cases o the_exec) thy);
+    val undefineds = Symtab.keys ((snd o the_cases o the_exec) thy);
   in
     (Pretty.writeln o Pretty.chunks) [
       Pretty.block (
-        Pretty.str "code equations:"
-        :: Pretty.fbrk
+        Pretty.str "code equations:" :: Pretty.fbrk
         :: (Pretty.fbreaks o map pretty_eqns) eqns
       ),
       Pretty.block (
-        Pretty.str "datatypes:"
-        :: Pretty.fbrk
+        Pretty.str "datatypes:" :: Pretty.fbrk
         :: (Pretty.fbreaks o map pretty_dtyp) dtyps
+      ),
+      Pretty.block (
+        Pretty.str "cases:" :: Pretty.fbrk
+        :: (Pretty.fbreaks o map pretty_case) cases
+      ),
+      Pretty.block (
+        Pretty.str "undefined:" :: Pretty.fbrk
+        :: (Pretty.commas o map (Pretty.str o string_of_const thy)) undefineds
       )
     ]
   end;
