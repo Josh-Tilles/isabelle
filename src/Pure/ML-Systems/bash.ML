@@ -1,8 +1,8 @@
-(*  Title:      Pure/ML-Systems/system_shell.ML
+(*  Title:      Pure/ML-Systems/bash.ML
     Author:     Makarius
 
-Generic system shell processes (no provisions to propagate interrupts;
-might still work via the controlling tty).
+Generic GNU bash processes (no provisions to propagate interrupts, but
+could work via the controlling tty).
 *)
 
 local
@@ -17,7 +17,7 @@ fun write_file name txt =
 
 in
 
-fun system_out script =
+fun bash_output script =
   let
     val script_name = OS.FileSys.tmpName ();
     val _ = write_file script_name script;
@@ -25,7 +25,7 @@ fun system_out script =
     val output_name = OS.FileSys.tmpName ();
 
     val status =
-      OS.Process.system ("perl -w \"$ISABELLE_HOME/lib/scripts/system.pl\" nogroup " ^
+      OS.Process.system ("exec \"$ISABELLE_HOME/lib/scripts/bash\" nogroup " ^
         script_name ^ " /dev/null " ^ output_name);
     val rc =
       (case Posix.Process.fromStatus status of
