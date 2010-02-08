@@ -1004,7 +1004,7 @@ fun read_output_file path =
   read_next_problems (Substring.full (File.read path), [], []) |>> rev ||> rev
 
 (* The fudge term below is to account for Kodkodi's slow start-up time, which
-   is partly due to the JVM and partly due to the ML "system" function. *)
+   is partly due to the JVM and partly due to the ML "bash" function. *)
 val fudge_ms = 250
 
 (* bool -> Time.time option -> int -> int -> problem list -> outcome *)
@@ -1053,7 +1053,7 @@ fun solve_any_problem overlord deadline max_threads max_solutions problems =
           val outcome =
             let
               val code =
-                system ("cd " ^ temp_dir ^ ";\n" ^
+                bash ("cd " ^ File.shell_quote temp_dir ^ ";\n" ^
                         "env CLASSPATH=\"$KODKODI_CLASSPATH:$CLASSPATH\" \
                         \JAVA_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
                         \$JAVA_LIBRARY_PATH\" \
@@ -1068,9 +1068,9 @@ fun solve_any_problem overlord deadline max_threads max_solutions problems =
                            " -max-threads " ^ string_of_int max_threads
                          else
                            "") ^
-                        " < " ^ Path.implode in_path ^
-                        " > " ^ Path.implode out_path ^
-                        " 2> " ^ Path.implode err_path)
+                        " < " ^ File.shell_path in_path ^
+                        " > " ^ File.shell_path out_path ^
+                        " 2> " ^ File.shell_path err_path)
               val (ps, nontriv_js) = read_output_file out_path
                                      |>> map (apfst reindex) ||> map reindex
               val js = triv_js @ nontriv_js
