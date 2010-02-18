@@ -9,7 +9,8 @@ signature NITPICK_PREPROC =
 sig
   type hol_context = Nitpick_HOL.hol_context
   val preprocess_term :
-    hol_context -> term -> ((term list * term list) * (bool * bool)) * term
+    hol_context -> term
+    -> ((term list * term list) * (bool * bool)) * term * bool
 end
 
 structure Nitpick_Preproc : NITPICK_PREPROC =
@@ -53,15 +54,6 @@ fun should_use_binary_ints (t1 $ t2) =
      end)
   | should_use_binary_ints (Abs (_, _, t')) = should_use_binary_ints t'
   | should_use_binary_ints _ = false
-
-(* typ -> typ *)
-fun binarize_nat_and_int_in_type @{typ nat} = @{typ "unsigned_bit word"}
-  | binarize_nat_and_int_in_type @{typ int} = @{typ "signed_bit word"}
-  | binarize_nat_and_int_in_type (Type (s, Ts)) =
-    Type (s, map binarize_nat_and_int_in_type Ts)
-  | binarize_nat_and_int_in_type T = T
-(* term -> term *)
-val binarize_nat_and_int_in_term = map_types binarize_nat_and_int_in_type
 
 (** Uncurrying **)
 
@@ -517,8 +509,7 @@ fun destroy_pulled_out_constrs (hol_ctxt as {thy, ...}) axiom t =
         | (Const (x as (s, T)), args) =>
           let val arg_Ts = binder_types T in
             if length arg_Ts = length args andalso
-               (is_constr thy x orelse s = @{const_name Pair} orelse
-                x = (@{const_name Suc}, nat_T --> nat_T)) andalso
+               (is_constr thy x orelse s = @{const_name Pair}) andalso
                (not careful orelse not (is_Var t1) orelse
                 String.isPrefix val_var_prefix (fst (fst (dest_Var t1)))) then
               discriminate_value hol_ctxt x t1 ::
@@ -1384,7 +1375,8 @@ fun push_quantifiers_inward thy =
 
 (** Preprocessor entry point **)
 
-(* hol_context -> term -> ((term list * term list) * (bool * bool)) * term *)
+(* hol_context -> term
+   -> ((term list * term list) * (bool * bool)) * term * bool *)
 fun preprocess_term (hol_ctxt as {thy, binary_ints, destroy_constrs, boxes,
                                   skolemize, uncurry, ...}) t =
   let
@@ -1425,7 +1417,7 @@ fun preprocess_term (hol_ctxt as {thy, binary_ints, destroy_constrs, boxes,
   in
     (((map (do_rest true false) def_ts, map (do_rest false false) nondef_ts),
       (got_all_mono_user_axioms, no_poly_user_axioms)),
-     do_rest false true core_t)
+     do_rest false true core_t, binarize)
   end
 
 end;

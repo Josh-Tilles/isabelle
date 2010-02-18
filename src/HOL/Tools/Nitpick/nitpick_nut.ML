@@ -747,10 +747,10 @@ fun choose_reps_for_consts scope all_exact vs table =
 
 (* scope -> styp -> int -> nut list * rep NameTable.table
    -> nut list * rep NameTable.table *)
-fun choose_rep_for_nth_sel_for_constr (scope as {hol_ctxt, ...}) (x as (_, T)) n
-                                      (vs, table) =
+fun choose_rep_for_nth_sel_for_constr (scope as {hol_ctxt, binarize, ...})
+                                      (x as (_, T)) n (vs, table) =
   let
-    val (s', T') = boxed_nth_sel_for_constr hol_ctxt x n
+    val (s', T') = binarized_and_boxed_nth_sel_for_constr hol_ctxt binarize x n
     val R' = if n = ~1 orelse is_word_type (body_type T) orelse
                 (is_fun_type (range_type T') andalso
                  is_boolean_type (body_type T')) then
@@ -892,7 +892,7 @@ fun untuple f (Tuple (_, _, us)) = maps (untuple f) us
 (* scope -> bool -> rep NameTable.table -> bool -> nut -> nut *)
 fun choose_reps_in_nut (scope as {hol_ctxt as {thy, ctxt, ...}, card_assigns,
                                   bits, datatypes, ofs, ...})
-                       liberal table def =
+                       unsound table def =
   let
     val bool_atom_R = Atom (2, offset_of_type ofs bool_T)
     (* polarity -> bool -> rep *)
@@ -1036,7 +1036,7 @@ fun choose_reps_in_nut (scope as {hol_ctxt as {thy, ctxt, ...}, card_assigns,
               if is_constructive u then s_op2 Eq T (Formula Neut) u1' u2'
               else opt_opt_case ()
           in
-            if liberal orelse polar = Neg orelse
+            if unsound orelse polar = Neg orelse
                is_concrete_type datatypes (type_of u1) then
               case (is_opt_rep (rep_of u1'), is_opt_rep (rep_of u2')) of
                 (true, true) => opt_opt_case ()
@@ -1138,7 +1138,7 @@ fun choose_reps_in_nut (scope as {hol_ctxt as {thy, ctxt, ...}, card_assigns,
               else
                 let val quant_u = s_op2 oper T (Formula polar) u1' u2' in
                   if def orelse
-                     (liberal andalso (polar = Pos) = (oper = All)) orelse
+                     (unsound andalso (polar = Pos) = (oper = All)) orelse
                      is_complete_type datatypes (type_of u1) then
                     quant_u
                   else
