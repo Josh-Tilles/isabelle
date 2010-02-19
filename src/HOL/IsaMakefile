@@ -52,6 +52,7 @@ test: \
   HOL-Nominal-Examples \
   HOL-Number_Theory \
   HOL-Old_Number_Theory \
+  HOL-Quotient_Examples \
   HOL-Probability \
   HOL-Prolog \
   HOL-Proofs-Extraction \
@@ -145,15 +146,16 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES)\
   Complete_Lattice.thy \
   Datatype.thy \
   Extraction.thy \
+  Fields.thy \
   Finite_Set.thy \
   Fun.thy \
   FunDef.thy \
+  Groups.thy \
   Inductive.thy \
   Lattices.thy \
   Nat.thy \
   Nitpick.thy \
   Option.thy \
-  OrderedGroup.thy \
   Orderings.thy \
   Plain.thy \
   Power.thy \
@@ -162,7 +164,7 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES)\
   Record.thy \
   Refute.thy \
   Relation.thy \
-  Ring_and_Field.thy \
+  Rings.thy \
   SAT.thy \
   Set.thy \
   Sum_Type.thy \
@@ -206,6 +208,7 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES)\
   Tools/Nitpick/nitpick_mono.ML \
   Tools/Nitpick/nitpick_nut.ML \
   Tools/Nitpick/nitpick_peephole.ML \
+  Tools/Nitpick/nitpick_preproc.ML \
   Tools/Nitpick/nitpick_rep.ML \
   Tools/Nitpick/nitpick_scope.ML \
   Tools/Nitpick/nitpick_tests.ML \
@@ -263,6 +266,7 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Presburger.thy \
   Predicate_Compile.thy \
   Quickcheck.thy \
+  Quotient.thy \
   Random.thy \
   Random_Sequence.thy \
   Recdef.thy \
@@ -305,6 +309,11 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Tools/Qelim/generated_cooper.ML \
   Tools/Qelim/presburger.ML \
   Tools/Qelim/qelim.ML \
+  Tools/Quotient/quotient_def.ML \
+  Tools/Quotient/quotient_info.ML \
+  Tools/Quotient/quotient_tacs.ML \
+  Tools/Quotient/quotient_term.ML \
+  Tools/Quotient/quotient_typ.ML \
   Tools/recdef.ML \
   Tools/res_atp.ML \
   Tools/res_axioms.ML \
@@ -384,17 +393,17 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Permutations.thy Library/Bit.thy Library/FrechetDeriv.thy	\
   Library/Fraction_Field.thy Library/Fundamental_Theorem_Algebra.thy	\
   Library/Inner_Product.thy Library/Kleene_Algebra.thy			\
-  Library/Lattice_Syntax.thy Library/Library.thy			\
-  Library/List_Prefix.thy Library/List_Set.thy Library/State_Monad.thy	\
-  Library/Nat_Int_Bij.thy Library/Multiset.thy Library/Permutation.thy	\
-  Library/Quotient.thy Library/Quicksort.thy Library/Nat_Infinity.thy	\
-  Library/Word.thy Library/README.html Library/Continuity.thy		\
+  Library/Lattice_Algebras.thy Library/Lattice_Syntax.thy		\
+  Library/Library.thy Library/List_Prefix.thy Library/List_Set.thy	\
+  Library/State_Monad.thy Library/Nat_Int_Bij.thy Library/Multiset.thy	\
+  Library/Permutation.thy Library/Quotient_Type.thy			\
+  Library/Quicksort.thy Library/Nat_Infinity.thy Library/Word.thy	\
+  Library/README.html Library/Continuity.thy				\
   Library/Order_Relation.thy Library/Nested_Environment.thy		\
   Library/Ramsey.thy Library/Zorn.thy Library/Library/ROOT.ML		\
   Library/Library/document/root.tex Library/Library/document/root.bib	\
   Library/Transitive_Closure_Table.thy Library/While_Combinator.thy	\
   Library/Product_ord.thy Library/Char_nat.thy				\
-  Library/Char_ord.thy Library/Option_ord.thy				\
   Library/Sublist_Order.thy Library/List_lexord.thy			\
   Library/Coinductive_List.thy Library/AssocList.thy			\
   Library/Formal_Power_Series.thy Library/Binomial.thy			\
@@ -405,7 +414,10 @@ $(LOG)/HOL-Library.gz: $(OUT)/HOL Library/SetsAndFunctions.thy		\
   Library/Diagonalize.thy Library/RBT.thy Library/Univ_Poly.thy		\
   Library/Poly_Deriv.thy Library/Polynomial.thy Library/Preorder.thy	\
   Library/Product_plus.thy Library/Product_Vector.thy Library/Tree.thy	\
-  Library/Enum.thy Library/Float.thy $(SRC)/Tools/float.ML		\
+  Library/Enum.thy Library/Float.thy Library/Quotient_List.thy          \
+  Library/Quotient_Option.thy Library/Quotient_Product.thy              \
+  Library/Quotient_Sum.thy Library/Quotient_Syntax.thy                  \
+  $(SRC)/Tools/float.ML                                                 \
   $(SRC)/HOL/Tools/float_arith.ML Library/positivstellensatz.ML		\
   Library/reify_data.ML Library/reflection.ML Library/LaTeXsugar.thy	\
   Library/OptionalSugar.thy Library/SML_Quickcheck.thy
@@ -622,12 +634,13 @@ HOL-Nitpick_Examples: HOL $(LOG)/HOL-Nitpick_Examples.gz
 
 $(LOG)/HOL-Nitpick_Examples.gz: $(OUT)/HOL Nitpick_Examples/ROOT.ML \
   Nitpick_Examples/Core_Nits.thy Nitpick_Examples/Datatype_Nits.thy \
-  Nitpick_Examples/Induct_Nits.thy Nitpick_Examples/Integer_Nits.thy \
-  Nitpick_Examples/Manual_Nits.thy Nitpick_Examples/Mini_Nits.thy \
-  Nitpick_Examples/Mono_Nits.thy Nitpick_Examples/Nitpick_Examples.thy \
-  Nitpick_Examples/Pattern_Nits.thy Nitpick_Examples/Record_Nits.thy \
-  Nitpick_Examples/Refute_Nits.thy Nitpick_Examples/Special_Nits.thy \
-  Nitpick_Examples/Tests_Nits.thy Nitpick_Examples/Typedef_Nits.thy
+  Nitpick_Examples/Hotel_Nits.thy Nitpick_Examples/Induct_Nits.thy \
+  Nitpick_Examples/Integer_Nits.thy Nitpick_Examples/Manual_Nits.thy \
+  Nitpick_Examples/Mini_Nits.thy Nitpick_Examples/Mono_Nits.thy \
+  Nitpick_Examples/Nitpick_Examples.thy Nitpick_Examples/Pattern_Nits.thy \
+  Nitpick_Examples/Record_Nits.thy Nitpick_Examples/Refute_Nits.thy \
+  Nitpick_Examples/Special_Nits.thy Nitpick_Examples/Tests_Nits.thy \
+  Nitpick_Examples/Typedef_Nits.thy
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Nitpick_Examples
 
 
@@ -785,18 +798,21 @@ $(LOG)/HOL-Decision_Procs.gz: $(OUT)/HOL \
   Decision_Procs/Approximation.thy \
   Decision_Procs/Commutative_Ring.thy \
   Decision_Procs/Commutative_Ring_Complete.thy \
-  Decision_Procs/commutative_ring_tac.ML \
   Decision_Procs/Cooper.thy \
-  Decision_Procs/cooper_tac.ML \
+  Decision_Procs/Decision_Procs.thy \
   Decision_Procs/Dense_Linear_Order.thy \
   Decision_Procs/Ferrack.thy \
-  Decision_Procs/ferrack_tac.ML \
   Decision_Procs/MIR.thy \
-  Decision_Procs/mir_tac.ML \
-  Decision_Procs/Decision_Procs.thy \
-  Decision_Procs/ex/Dense_Linear_Order_Ex.thy \
+  Decision_Procs/Parametric_Ferrante_Rackoff.thy \
+  Decision_Procs/Polynomial_List.thy \
+  Decision_Procs/Reflected_Multivariate_Polynomial.thy \
+  Decision_Procs/commutative_ring_tac.ML \
+  Decision_Procs/cooper_tac.ML \
   Decision_Procs/ex/Approximation_Ex.thy \
   Decision_Procs/ex/Commutative_Ring_Ex.thy \
+  Decision_Procs/ex/Dense_Linear_Order_Ex.thy \
+  Decision_Procs/ferrack_tac.ML \
+  Decision_Procs/mir_tac.ML \
   Decision_Procs/ROOT.ML
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Decision_Procs
 
@@ -1220,7 +1236,8 @@ $(OUT)/HOL-SMT: $(OUT)/HOL-Word SMT/ROOT.ML SMT/SMT_Base.thy SMT/Z3.thy \
   SMT/Tools/smt_solver.ML SMT/Tools/cvc3_solver.ML                      \
   SMT/Tools/yices_solver.ML SMT/Tools/z3_proof_terms.ML                 \
   SMT/Tools/z3_proof_rules.ML SMT/Tools/z3_proof.ML                     \
-  SMT/Tools/z3_model.ML SMT/Tools/z3_interface.ML SMT/Tools/z3_solver.ML
+  SMT/Tools/z3_model.ML SMT/Tools/z3_interface.ML			\
+  SMT/Tools/z3_solver.ML $(SRC)/Tools/Cache_IO/cache_io.ML
 	@cd SMT; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL-Word HOL-SMT
 
 
@@ -1264,6 +1281,15 @@ $(LOG)/HOL-Mutabelle.gz: $(OUT)/HOL Mutabelle/MutabelleExtra.thy	\
   Mutabelle/ROOT.ML Mutabelle/mutabelle.ML			\
   Mutabelle/mutabelle_extra.ML
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Mutabelle
+
+
+## HOL-Quotient_Examples
+
+HOL-Quotient_Examples: HOL $(LOG)/HOL-Quotient_Examples.gz
+
+$(LOG)/HOL-Quotient_Examples.gz: $(OUT)/HOL	      			\
+  Quotient_Examples/LarryInt.thy Quotient_Examples/LarryDatatype.thy
+	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Quotient_Examples
 
 
 ## clean

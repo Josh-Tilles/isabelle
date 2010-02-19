@@ -180,7 +180,7 @@ val abs_strict = ax_rep_iso RS (allI RS retraction_strict);
 val rep_strict = ax_abs_iso RS (allI RS retraction_strict);
 val abs_defin' = iso_locale RS iso_abs_defin';
 val rep_defin' = iso_locale RS iso_rep_defin';
-val iso_rews = map Drule.standard [ax_abs_iso,ax_rep_iso,abs_strict,rep_strict];
+val iso_rews = map Drule.export_without_context [ax_abs_iso, ax_rep_iso, abs_strict, rep_strict];
 
 (* ----- generating beta reduction rules from definitions-------------------- *)
 
@@ -263,7 +263,7 @@ in
   val exhaust = pg con_appls (mk_trp exh) (K tacs);
   val _ = trace " Proving casedist...";
   val casedist =
-    Drule.standard (rewrite_rule exh_casedists (exhaust RS exh_casedist0));
+    Drule.export_without_context (rewrite_rule exh_casedists (exhaust RS exh_casedist0));
 end;
 
 local 
@@ -512,18 +512,19 @@ end;
 val sel_rews = sel_stricts @ sel_defins @ sel_apps;
 
 val _ = trace " Proving dist_les...";
-val distincts_le =
+val dist_les =
   let
     fun dist (con1, args1) (con2, args2) =
       let
-        val goal = lift_defined %: (nonlazy args1,
-                        mk_trp (con_app con1 args1 ~<< con_app con2 args2));
-        fun tacs ctxt = [
-          rtac @{thm rev_contrapos} 1,
-          eres_inst_tac ctxt [(("f", 0), dis_name con1)] monofun_cfun_arg 1]
-          @ map (case_UU_tac ctxt (con_stricts @ dis_rews) 1) (nonlazy args2)
-          @ [asm_simp_tac (HOLCF_ss addsimps dis_rews) 1];
-      in pg [] goal tacs end;
+        fun iff_disj (t, []) = HOLogic.mk_not t
+          | iff_disj (t, ts) = t === foldr1 HOLogic.mk_disj ts;
+        val lhs = con_app con1 args1 << con_app con2 args2;
+        val rhss = map (fn x => %:x === UU) (nonlazy args1);
+        val goal = mk_trp (iff_disj (lhs, rhss));
+        val rule1 = iso_locale RS @{thm iso.abs_below};
+        val rules = rule1 :: @{thms con_below_iff_rules};
+        val tacs = [simp_tac (HOL_ss addsimps rules) 1];
+      in pg con_appls goal (K tacs) end;
 
     fun distinct (con1, args1) (con2, args2) =
         let
@@ -533,28 +534,40 @@ val distincts_le =
               (args2, Name.variant_list (map vname args1) (map vname args2)));
         in [dist arg1 arg2, dist arg2 arg1] end;
     fun distincts []      = []
-      | distincts (c::cs) = (map (distinct c) cs) :: distincts cs;
+      | distincts (c::cs) = maps (distinct c) cs @ distincts cs;
   in distincts cons end;
-val dist_les = flat (flat distincts_le);
 
 val _ = trace " Proving dist_eqs...";
 val dist_eqs =
   let
-    fun distinct (_,args1) ((_,args2), leqs) =
+    fun dist (con1, args1) (con2, args2) =
       let
-        val (le1,le2) = (hd leqs, hd(tl leqs));
-        val (eq1,eq2) = (le1 RS dist_eqI, le2 RS dist_eqI)
-      in
-        if nonlazy args1 = [] then [eq1, eq1 RS not_sym] else
-        if nonlazy args2 = [] then [eq2, eq2 RS not_sym] else
-          [eq1, eq2]
-      end;
+        fun iff_disj (t, [], us) = HOLogic.mk_not t
+          | iff_disj (t, ts, []) = HOLogic.mk_not t
+          | iff_disj (t, ts, us) =
+            let
+              val disj1 = foldr1 HOLogic.mk_disj ts;
+              val disj2 = foldr1 HOLogic.mk_disj us;
+            in t === HOLogic.mk_conj (disj1, disj2) end;
+        val lhs = con_app con1 args1 === con_app con2 args2;
+        val rhss1 = map (fn x => %:x === UU) (nonlazy args1);
+        val rhss2 = map (fn x => %:x === UU) (nonlazy args2);
+        val goal = mk_trp (iff_disj (lhs, rhss1, rhss2));
+        val rule1 = iso_locale RS @{thm iso.abs_eq};
+        val rules = rule1 :: @{thms con_eq_iff_rules};
+        val tacs = [simp_tac (HOL_ss addsimps rules) 1];
+      in pg con_appls goal (K tacs) end;
+
+    fun distinct (con1, args1) (con2, args2) =
+        let
+          val arg1 = (con1, args1);
+          val arg2 =
+            (con2, ListPair.map (fn (arg,vn) => upd_vname (K vn) arg)
+              (args2, Name.variant_list (map vname args1) (map vname args2)));
+        in [dist arg1 arg2, dist arg2 arg1] end;
     fun distincts []      = []
-      | distincts ((c,leqs)::cs) =
-        flat
-          (ListPair.map (distinct c) ((map #1 cs),leqs)) @
-        distincts cs;
-  in map Drule.standard (distincts (cons ~~ distincts_le)) end;
+      | distincts (c::cs) = maps (distinct c) cs @ distincts cs;
+  in distincts cons end;
 
 local 
   fun pgterm rel con args =
@@ -593,7 +606,12 @@ val copy_strict =
     val goal = mk_trp (strict (dc_copy `% "f"));
     val rules = [abs_strict, rep_strict] @ @{thms domain_map_stricts};
     val tacs = [asm_simp_tac (HOLCF_ss addsimps rules) 1];
-  in pg [ax_copy_def] goal (K tacs) end;
+  in
+    SOME (pg [ax_copy_def] goal (K tacs))
+    handle
+      THM (s, _, _) => (trace s; NONE)
+    | ERROR s => (trace s; NONE)
+  end;
 
 local
   fun copy_app (con, args) =
@@ -605,6 +623,9 @@ local
                  (proj (%:"f") eqs) (dtyp_of arg) ` (%# arg)
           else (%# arg);
       val rhs = con_app2 con one_rhs args;
+      fun is_rec arg = Datatype_Aux.is_rec_type (dtyp_of arg);
+      fun is_nonlazy_rec arg = is_rec arg andalso not (is_lazy arg);
+      fun nonlazy_rec args = map vname (filter is_nonlazy_rec args);
       val goal = lift_defined %: (nonlazy_rec args, mk_trp (lhs === rhs));
       val args' = filter_out (fn a => is_rec a orelse is_lazy a) args;
       val stricts = abs_strict :: rep_strict :: @{thms domain_map_stricts};
@@ -621,18 +642,23 @@ local
   fun one_strict (con, args) = 
     let
       val goal = mk_trp (dc_copy`UU`(con_app con args) === UU);
-      val rews = copy_strict :: copy_apps @ con_rews;
+      val rews = the_list copy_strict @ copy_apps @ con_rews;
       fun tacs ctxt = map (case_UU_tac ctxt rews 1) (nonlazy args) @
         [asm_simp_tac (HOLCF_ss addsimps rews) 1];
-    in pg [] goal tacs end;
+    in
+      SOME (pg [] goal tacs)
+      handle
+        THM (s, _, _) => (trace s; NONE)
+      | ERROR s => (trace s; NONE)
+    end;
 
   fun has_nonlazy_rec (_, args) = exists is_nonlazy_rec args;
 in
   val _ = trace " Proving copy_stricts...";
-  val copy_stricts = map one_strict (filter has_nonlazy_rec cons);
+  val copy_stricts = map_filter one_strict (filter has_nonlazy_rec cons);
 end;
 
-val copy_rews = copy_strict :: copy_apps @ copy_stricts;
+val copy_rews = the_list copy_strict @ copy_apps @ copy_stricts;
 
 in
   thy
@@ -706,57 +732,48 @@ local
   val copy_take_defs =
     (if n_eqs = 1 then [] else [ax_copy2_def]) @ axs_take_def;
   val _ = trace " Proving take_stricts...";
-  val take_stricts =
+  fun one_take_strict ((dn, args), _) =
     let
-      fun one_eq ((dn, args), _) = strict (dc_take dn $ %:"n");
-      val goal = mk_trp (foldr1 mk_conj (map one_eq eqs));
-      fun tacs ctxt = [
-        InductTacs.induct_tac ctxt [[SOME "n"]] 1,
-        simp_tac iterate_Cprod_ss 1,
-        asm_simp_tac (iterate_Cprod_ss addsimps copy_rews) 1];
-    in pg copy_take_defs goal tacs end;
-
-  val take_stricts' = rewrite_rule copy_take_defs take_stricts;
+      val goal = mk_trp (strict (dc_take dn $ %:"n"));
+      val rules = [
+        @{thm monofun_fst [THEN monofunE]},
+        @{thm monofun_snd [THEN monofunE]}];
+      val tacs = [
+        rtac @{thm UU_I} 1,
+        rtac @{thm below_eq_trans} 1,
+        resolve_tac axs_reach 2,
+        rtac @{thm monofun_cfun_fun} 1,
+        REPEAT (resolve_tac rules 1),
+        rtac @{thm iterate_below_fix} 1];
+    in pg axs_take_def goal (K tacs) end;
+  val take_stricts = map one_take_strict eqs;
   fun take_0 n dn =
     let
-      val goal = mk_trp ((dc_take dn $ %%: @{const_name Algebras.zero}) `% x_name n === UU);
+      val goal = mk_trp ((dc_take dn $ @{term "0::nat"}) `% x_name n === UU);
     in pg axs_take_def goal (K [simp_tac iterate_Cprod_ss 1]) end;
   val take_0s = mapn take_0 1 dnames;
-  fun c_UU_tac ctxt = case_UU_tac ctxt (take_stricts'::copy_con_rews) 1;
   val _ = trace " Proving take_apps...";
-  val take_apps =
+  fun one_take_app dn (con, args) =
     let
-      fun mk_eqn dn (con, args) =
-        let
-          fun mk_take n = dc_take (List.nth (dnames, n)) $ %:"n";
-          fun one_rhs arg =
-              if Datatype_Aux.is_rec_type (dtyp_of arg)
-              then Domain_Axioms.copy_of_dtyp map_tab
-                     mk_take (dtyp_of arg) ` (%# arg)
-              else (%# arg);
-          val lhs = (dc_take dn $ (%%:"Suc" $ %:"n"))`(con_app con args);
-          val rhs = con_app2 con one_rhs args;
-        in Library.foldr mk_all (map vname args, lhs === rhs) end;
-      fun mk_eqns ((dn, _), cons) = map (mk_eqn dn) cons;
-      val goal = mk_trp (foldr1 mk_conj (maps mk_eqns eqs));
-      val simps = filter (has_fewer_prems 1) copy_rews;
-      fun con_tac ctxt (con, args) =
-        if nonlazy_rec args = []
-        then all_tac
-        else EVERY (map (c_UU_tac ctxt) (nonlazy_rec args)) THEN
-          asm_full_simp_tac (HOLCF_ss addsimps copy_rews) 1;
-      fun eq_tacs ctxt ((dn, _), cons) = map (con_tac ctxt) cons;
-      fun tacs ctxt =
-        simp_tac iterate_Cprod_ss 1 ::
-        InductTacs.induct_tac ctxt [[SOME "n"]] 1 ::
-        simp_tac (iterate_Cprod_ss addsimps copy_con_rews) 1 ::
-        asm_full_simp_tac (HOLCF_ss addsimps simps) 1 ::
-        TRY (safe_tac HOL_cs) ::
-        maps (eq_tacs ctxt) eqs;
-    in pg copy_take_defs goal tacs end;
+      fun mk_take n = dc_take (List.nth (dnames, n)) $ %:"n";
+      fun one_rhs arg =
+          if Datatype_Aux.is_rec_type (dtyp_of arg)
+          then Domain_Axioms.copy_of_dtyp map_tab
+                 mk_take (dtyp_of arg) ` (%# arg)
+          else (%# arg);
+      val lhs = (dc_take dn $ (%%:"Suc" $ %:"n"))`(con_app con args);
+      val rhs = con_app2 con one_rhs args;
+      fun is_rec arg = Datatype_Aux.is_rec_type (dtyp_of arg);
+      fun is_nonlazy_rec arg = is_rec arg andalso not (is_lazy arg);
+      fun nonlazy_rec args = map vname (filter is_nonlazy_rec args);
+      val goal = lift_defined %: (nonlazy_rec args, mk_trp (lhs === rhs));
+      val tacs = [asm_simp_tac (HOLCF_ss addsimps copy_con_rews) 1];
+    in pg copy_take_defs goal (K tacs) end;
+  fun one_take_apps ((dn, _), cons) = map (one_take_app dn) cons;
+  val take_apps = maps one_take_apps eqs;
 in
-  val take_rews = map Drule.standard
-    (atomize global_ctxt take_stricts @ take_0s @ atomize global_ctxt take_apps);
+  val take_rews = map Drule.export_without_context
+    (take_stricts @ take_0s @ take_apps);
 end; (* local *)
 
 local

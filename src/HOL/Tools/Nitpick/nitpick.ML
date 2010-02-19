@@ -69,6 +69,7 @@ struct
 
 open Nitpick_Util
 open Nitpick_HOL
+open Nitpick_Preproc
 open Nitpick_Mono
 open Nitpick_Scope
 open Nitpick_Peephole
@@ -129,7 +130,7 @@ type problem_extension = {
   sel_names: nut list,
   nonsel_names: nut list,
   rel_table: nut NameTable.table,
-  liberal: bool,
+  unsound: bool,
   scope: scope,
   core: KK.formula,
   defs: KK.formula list}
@@ -156,15 +157,15 @@ fun install_kodkodi_message () =
       (Path.variable "ISABELLE_HOME_USER" ::
        map Path.basic ["etc", "components"]))) ^ "\"."
 
-val max_liberal_delay_ms = 200
-val max_liberal_delay_percent = 2
+val max_unsound_delay_ms = 200
+val max_unsound_delay_percent = 2
 
 (* Time.time option -> int *)
-fun liberal_delay_for_timeout NONE = max_liberal_delay_ms
-  | liberal_delay_for_timeout (SOME timeout) =
-    Int.max (0, Int.min (max_liberal_delay_ms,
+fun unsound_delay_for_timeout NONE = max_unsound_delay_ms
+  | unsound_delay_for_timeout (SOME timeout) =
+    Int.max (0, Int.min (max_unsound_delay_ms,
                          Time.toMilliseconds timeout
-                         * max_liberal_delay_percent div 100))
+                         * max_unsound_delay_percent div 100))
 
 (* Time.time option -> bool *)
 fun passed_deadline NONE = false
@@ -246,7 +247,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                 (if i <> 1 orelse n <> 1 then
                    "subgoal " ^ string_of_int i ^ " of " ^ string_of_int n
                  else
-                   "goal")) [orig_t]))
+                   "goal")) [Logic.list_implies (orig_assm_ts, orig_t)]))
     val neg_t = if falsify then Logic.mk_implies (orig_t, @{prop False})
                 else orig_t
     val assms_t = if assms orelse auto then
@@ -264,7 +265,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                      orig_assm_ts
 *)
     val max_bisim_depth = fold Integer.max bisim_depths ~1
-    val case_names = case_const_names thy
+    val case_names = case_const_names thy stds
     val (defs, built_in_nondefs, user_nondefs) = all_axioms_of thy
     val def_table = const_def_table ctxt defs
     val nondef_table = const_nondef_table (built_in_nondefs @ user_nondefs)
@@ -273,7 +274,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
     val intro_table = inductive_intro_table ctxt def_table
     val ground_thm_table = ground_theorem_table thy
     val ersatz_table = ersatz_table thy
-    val (ext_ctxt as {wf_cache, ...}) =
+    val (hol_ctxt as {wf_cache, ...}) =
       {thy = thy, ctxt = ctxt, max_bisim_depth = max_bisim_depth, boxes = boxes,
        stds = stds, wfs = wfs, user_axioms = user_axioms, debug = debug,
        binary_ints = binary_ints, destroy_constrs = destroy_constrs,
@@ -292,7 +293,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
     val _ = null (Term.add_tvars assms_t []) orelse
             raise NOT_SUPPORTED "schematic type variables"
     val (((def_ts, nondef_ts), (got_all_mono_user_axioms, no_poly_user_axioms)),
-         core_t) = preprocess_term ext_ctxt assms_t
+         core_t, binarize) = preprocess_term hol_ctxt assms_t
     val got_all_user_axioms =
       got_all_mono_user_axioms andalso no_poly_user_axioms
 
@@ -319,9 +320,9 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
             handle TYPE (_, Ts, ts) =>
                    raise TYPE ("Nitpick.pick_them_nits_in_term", Ts, ts)
 
-    val core_u = nut_from_term ext_ctxt Eq core_t
-    val def_us = map (nut_from_term ext_ctxt DefEq) def_ts
-    val nondef_us = map (nut_from_term ext_ctxt Eq) nondef_ts
+    val core_u = nut_from_term hol_ctxt Eq core_t
+    val def_us = map (nut_from_term hol_ctxt DefEq) def_ts
+    val nondef_us = map (nut_from_term hol_ctxt Eq) nondef_ts
     val (free_names, const_names) =
       fold add_free_and_const_names (core_u :: def_us @ nondef_us) ([], [])
     val (sel_names, nonsel_names) =
@@ -336,20 +337,21 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
     val unique_scope = forall (curry (op =) 1 o length o snd) cards_assigns
     (* typ -> bool *)
     fun is_type_always_monotonic T =
-      (is_datatype thy T andalso not (is_quot_type thy T) andalso
+      (is_datatype thy stds T andalso not (is_quot_type thy T) andalso
        (not (is_pure_typedef thy T) orelse is_univ_typedef thy T)) orelse
-      is_number_type thy T orelse is_bit_type T orelse T = @{typ \<xi>}
+      is_number_type thy T orelse is_bit_type T
     fun is_type_monotonic T =
       unique_scope orelse
       case triple_lookup (type_match thy) monos T of
         SOME (SOME b) => b
       | _ => is_type_always_monotonic T orelse
-             formulas_monotonic ext_ctxt T Plus def_ts nondef_ts core_t
+             formulas_monotonic hol_ctxt binarize T Plus def_ts nondef_ts core_t
     fun is_deep_datatype T =
-      is_datatype thy T andalso
-      (is_word_type T orelse
+      is_datatype thy stds T andalso
+      (not standard orelse T = nat_T orelse is_word_type T orelse
        exists (curry (op =) T o domain_type o type_of) sel_names)
-    val all_Ts = ground_types_in_terms ext_ctxt (core_t :: def_ts @ nondef_ts)
+    val all_Ts = ground_types_in_terms hol_ctxt binarize
+                                       (core_t :: def_ts @ nondef_ts)
                  |> sort TermOrd.typ_ord
     val _ = if verbose andalso binary_ints = SOME true andalso
                exists (member (op =) [nat_T, int_T]) all_Ts then
@@ -381,29 +383,22 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
       else
         ()
     val deep_dataTs = filter is_deep_datatype all_Ts
-    (* FIXME: Implement proper detection of induction datatypes. *)
+    (* This detection code is an ugly hack. Fortunately, it is used only to
+       provide a hint to the user. *)
     (* string * (Rule_Cases.T * bool) -> bool *)
-    fun is_inductive_case (_, (Rule_Cases.Case {fixes, assumes, ...}, _)) =
-      false
-(*
-      not (null fixes) andalso exists (String.isSuffix ".hyps" o fst) assumes
-*)
-    (* unit -> typ list *)
-    val induct_dataTs =
-      if exists is_inductive_case (ProofContext.cases_of ctxt) then
-        filter (is_datatype thy) all_Ts
-      else
-        []
-    val _ = if standard andalso not (null induct_dataTs) then
+    fun is_struct_induct_step (name, (Rule_Cases.Case {fixes, assumes, ...}, _)) =
+      not (null fixes) andalso
+      exists (String.isSuffix ".hyps" o fst) assumes andalso
+      exists (exists (curry (op =) name o shortest_name o fst)
+              o datatype_constrs hol_ctxt) deep_dataTs
+    val likely_in_struct_induct_step =
+      exists is_struct_induct_step (ProofContext.cases_of ctxt)
+    val _ = if standard andalso likely_in_struct_induct_step then
               pprint_m (fn () => Pretty.blk (0,
                   pstrs "Hint: To check that the induction hypothesis is \
-                        \general enough, try the following command: " @
+                        \general enough, try this command: " @
                   [Pretty.mark Markup.sendback (Pretty.blk (0,
-                       pstrs ("nitpick [" ^
-                              commas (map (prefix "non_std " o maybe_quote
-                                           o unyxml o string_for_type ctxt)
-                                          induct_dataTs) ^
-                              ", show_consts]")))] @ pstrs "."))
+                       pstrs ("nitpick [non_std, show_all]")))] @ pstrs "."))
             else
               ()
 (*
@@ -440,7 +435,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
     val too_big_scopes = Unsynchronized.ref []
 
     (* bool -> scope -> rich_problem option *)
-    fun problem_for_scope liberal
+    fun problem_for_scope unsound
             (scope as {card_assigns, bits, bisim_depth, datatypes, ofs, ...}) =
       let
         val _ = not (exists (fn other => scope_less_eq other scope)
@@ -475,10 +470,10 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                          (univ_card nat_card int_card main_j0 [] KK.True)
         val _ = check_arity min_univ_card min_highest_arity
 
-        val core_u = choose_reps_in_nut scope liberal rep_table false core_u
-        val def_us = map (choose_reps_in_nut scope liberal rep_table true)
+        val core_u = choose_reps_in_nut scope unsound rep_table false core_u
+        val def_us = map (choose_reps_in_nut scope unsound rep_table true)
                          def_us
-        val nondef_us = map (choose_reps_in_nut scope liberal rep_table false)
+        val nondef_us = map (choose_reps_in_nut scope unsound rep_table false)
                             nondef_us
 (*
         val _ = List.app (priority o string_for_nut ctxt)
@@ -494,21 +489,19 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
         val core_u = rename_vars_in_nut pool rel_table core_u
         val def_us = map (rename_vars_in_nut pool rel_table) def_us
         val nondef_us = map (rename_vars_in_nut pool rel_table) nondef_us
-        (* nut -> KK.formula *)
-        val to_f = kodkod_formula_from_nut bits ofs liberal kk
-        val core_f = to_f core_u
-        val def_fs = map to_f def_us
-        val nondef_fs = map to_f nondef_us
+        val core_f = kodkod_formula_from_nut bits ofs kk core_u
+        val def_fs = map (kodkod_formula_from_nut bits ofs kk) def_us
+        val nondef_fs = map (kodkod_formula_from_nut bits ofs kk) nondef_us
         val formula = fold (fold s_and) [def_fs, nondef_fs] core_f
-        val comment = (if liberal then "liberal" else "conservative") ^ "\n" ^
+        val comment = (if unsound then "unsound" else "sound") ^ "\n" ^
                       PrintMode.setmp [] multiline_string_for_scope scope
         val kodkod_sat_solver =
-          Kodkod_SAT.sat_solver_spec overlord effective_sat_solver |> snd
+          Kodkod_SAT.sat_solver_spec effective_sat_solver |> snd
         val bit_width = if bits = 0 then 16 else bits + 1
-        val delay = if liberal then
+        val delay = if unsound then
                       Option.map (fn time => Time.- (time, Time.now ()))
                                  deadline
-                      |> liberal_delay_for_timeout
+                      |> unsound_delay_for_timeout
                     else
                       0
         val settings = [("solver", commas (map quote kodkod_sat_solver)),
@@ -522,11 +515,13 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
         val plain_bounds = map (bound_for_plain_rel ctxt debug) plain_rels
         val plain_axioms = map (declarative_axiom_for_plain_rel kk) plain_rels
         val sel_bounds = map (bound_for_sel_rel ctxt debug datatypes) sel_rels
-        val dtype_axioms = declarative_axioms_for_datatypes ext_ctxt bits ofs kk
-                                                            rel_table datatypes
+        val dtype_axioms =
+          declarative_axioms_for_datatypes hol_ctxt binarize bits ofs kk
+                                           rel_table datatypes
         val declarative_axioms = plain_axioms @ dtype_axioms
-        val univ_card = univ_card nat_card int_card main_j0
-                                  (plain_bounds @ sel_bounds) formula
+        val univ_card = Int.max (univ_card nat_card int_card main_j0
+                                     (plain_bounds @ sel_bounds) formula,
+                                 main_j0 |> bits > 0 ? Integer.add (bits + 1))
         val built_in_bounds = bounds_for_built_in_rels_in_formula debug
                                   univ_card nat_card int_card main_j0 formula
         val bounds = built_in_bounds @ plain_bounds @ sel_bounds
@@ -546,29 +541,30 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                expr_assigns = [], formula = formula},
               {free_names = free_names, sel_names = sel_names,
                nonsel_names = nonsel_names, rel_table = rel_table,
-               liberal = liberal, scope = scope, core = core_f,
+               unsound = unsound, scope = scope, core = core_f,
                defs = nondef_fs @ def_fs @ declarative_axioms})
       end
       handle TOO_LARGE (loc, msg) =>
              if loc = "Nitpick_Kodkod.check_arity" andalso
                 not (Typtab.is_empty ofs) then
-               problem_for_scope liberal
-                   {ext_ctxt = ext_ctxt, card_assigns = card_assigns,
-                    bits = bits, bisim_depth = bisim_depth,
-                    datatypes = datatypes, ofs = Typtab.empty}
+               problem_for_scope unsound
+                   {hol_ctxt = hol_ctxt, binarize = binarize,
+                    card_assigns = card_assigns, bits = bits,
+                    bisim_depth = bisim_depth, datatypes = datatypes,
+                    ofs = Typtab.empty}
              else if loc = "Nitpick.pick_them_nits_in_term.\
                            \problem_for_scope" then
                NONE
              else
                (Unsynchronized.change too_big_scopes (cons scope);
                 print_v (fn () => ("Limit reached: " ^ msg ^
-                                   ". Skipping " ^ (if liberal then "potential"
+                                   ". Skipping " ^ (if unsound then "potential"
                                                     else "genuine") ^
                                    " component of scope."));
                 NONE)
            | TOO_SMALL (loc, msg) =>
              (print_v (fn () => ("Limit reached: " ^ msg ^
-                                 ". Skipping " ^ (if liberal then "potential"
+                                 ". Skipping " ^ (if unsound then "potential"
                                                   else "genuine") ^
                                  " component of scope."));
               NONE)
@@ -583,7 +579,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
 
     val scopes = Unsynchronized.ref []
     val generated_scopes = Unsynchronized.ref []
-    val generated_problems = Unsynchronized.ref []
+    val generated_problems = Unsynchronized.ref ([] : rich_problem list)
     val checked_problems = Unsynchronized.ref (SOME [])
     val met_potential = Unsynchronized.ref 0
 
@@ -634,7 +630,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
               | NONE => print "No confirmation by \"auto\".")
            else
              ();
-           if not standard andalso not (null induct_dataTs) then
+           if not standard andalso likely_in_struct_induct_step then
              print "The existence of a nonstandard model suggests that the \
                    \induction hypothesis is not general enough or perhaps even \
                    \wrong. See the \"Inductive Properties\" section of the \
@@ -717,7 +713,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
           | KK.Normal (sat_ps, unsat_js) =>
             let
               val (lib_ps, con_ps) =
-                List.partition (#liberal o snd o nth problems o fst) sat_ps
+                List.partition (#unsound o snd o nth problems o fst) sat_ps
             in
               update_checked_problems problems (unsat_js @ map fst lib_ps);
               if null con_ps then
@@ -734,9 +730,9 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                     (0, 0, donno)
                   else
                     let
-                      (* "co_js" is the list of conservative problems whose
-                         liberal pendants couldn't be satisfied and hence that
-                         most probably can't be satisfied themselves. *)
+                      (* "co_js" is the list of sound problems whose unsound
+                         pendants couldn't be satisfied and hence that most
+                         probably can't be satisfied themselves. *)
                       val co_js =
                         map (fn j => j - 1) unsat_js
                         |> filter (fn j =>
@@ -749,7 +745,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                       val problems =
                         problems |> filter_out_indices bye_js
                                  |> max_potential <= 0
-                                    ? filter_out (#liberal o snd)
+                                    ? filter_out (#unsound o snd)
                     in
                       solve_any_problem max_potential max_genuine donno false
                                         problems
@@ -769,7 +765,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                                                  (map fst sat_ps @ unsat_js)
                       val problems =
                         problems |> filter_out_indices bye_js
-                                 |> filter_out (#liberal o snd)
+                                 |> filter_out (#unsound o snd)
                     in solve_any_problem 0 max_genuine donno false problems end
                 end
             end
@@ -813,10 +809,10 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
             ()
         (* scope * bool -> rich_problem list * bool
            -> rich_problem list * bool *)
-        fun add_problem_for_scope (scope as {datatypes, ...}, liberal)
+        fun add_problem_for_scope (scope as {datatypes, ...}, unsound)
                                   (problems, donno) =
           (check_deadline ();
-           case problem_for_scope liberal scope of
+           case problem_for_scope unsound scope of
              SOME problem =>
              (problems
               |> (null problems orelse
@@ -832,6 +828,29 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
                ([], donno)
         val _ = Unsynchronized.change generated_problems (append problems)
         val _ = Unsynchronized.change generated_scopes (append scopes)
+        val _ =
+          if j + 1 = n then
+            let
+              val (unsound_problems, sound_problems) =
+                List.partition (#unsound o snd) (!generated_problems)
+            in
+              if not (null sound_problems) andalso
+                 forall (KK.is_problem_trivially_false o fst)
+                        sound_problems then
+                print_m (fn () =>
+                    "Warning: The conjecture either trivially holds for the \
+                    \given scopes or (more likely) lies outside Nitpick's \
+                    \supported fragment." ^
+                    (if exists (not o KK.is_problem_trivially_false o fst)
+                               unsound_problems then
+                       " Only potential counterexamples may be found."
+                     else
+                       ""))
+              else
+                ()
+            end
+          else
+            ()
       in
         solve_any_problem max_potential max_genuine donno true (rev problems)
       end
@@ -844,7 +863,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
       let
         (* rich_problem list -> rich_problem list *)
         val do_filter =
-          if !met_potential = max_potential then filter_out (#liberal o snd)
+          if !met_potential = max_potential then filter_out (#unsound o snd)
           else I
         val total = length (!scopes)
         val unsat =
@@ -873,7 +892,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
           if max_potential = original_max_potential then
             (print_m (fn () =>
                  "Nitpick found no " ^ das_wort_model ^ "." ^
-                 (if not standard andalso not (null induct_dataTs) then
+                 (if not standard andalso likely_in_struct_induct_step then
                     " This suggests that the induction hypothesis might be \
                     \general enough to prove this subgoal."
                   else
@@ -891,8 +910,8 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
         end
 
     val (skipped, the_scopes) =
-      all_scopes ext_ctxt sym_break cards_assigns maxes_assigns iters_assigns
-                 bitss bisim_depths mono_Ts nonmono_Ts deep_dataTs
+      all_scopes hol_ctxt binarize sym_break cards_assigns maxes_assigns
+                 iters_assigns bitss bisim_depths mono_Ts nonmono_Ts deep_dataTs
     val _ = if skipped > 0 then
               print_m (fn () => "Too many scopes. Skipping " ^
                                 string_of_int skipped ^ " scope" ^

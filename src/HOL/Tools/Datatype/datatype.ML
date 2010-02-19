@@ -253,9 +253,11 @@ fun representation_proofs (config : config) (dt_info : info Symtab.table)
         val rep_const = cterm_of thy
           (Const (Sign.intern_const thy ("Rep_" ^ tname), T --> Univ_elT));
         val cong' =
-          Drule.standard (cterm_instantiate [(cterm_of thy cong_f, rep_const)] arg_cong);
+          Drule.export_without_context
+            (cterm_instantiate [(cterm_of thy cong_f, rep_const)] arg_cong);
         val dist =
-          Drule.standard (cterm_instantiate [(cterm_of thy distinct_f, rep_const)] distinct_lemma);
+          Drule.export_without_context
+            (cterm_instantiate [(cterm_of thy distinct_f, rep_const)] distinct_lemma);
         val (thy', defs', eqns', _) = fold ((make_constr_def tname T) (length constrs))
           (constrs ~~ constr_syntax) (Sign.add_path tname thy, defs, [], 1);
       in
@@ -532,7 +534,7 @@ fun representation_proofs (config : config) (dt_info : info Symtab.table)
               let
                 val dist_thm = Skip_Proof.prove_global thy5 [] [] t (fn _ =>
                   EVERY [simp_tac (HOL_ss addsimps dist_rewrites') 1])
-              in dist_thm :: Drule.standard (dist_thm RS not_sym) :: prove ts end;
+              in dist_thm :: Drule.export_without_context (dist_thm RS not_sym) :: prove ts end;
       in prove ts end;
 
     val distinct_thms = map2 (prove_distinct_thms)
@@ -649,7 +651,7 @@ fun gen_add_datatype prep_typ config new_type_names dts thy =
 
     val (tyvars, _, _, _)::_ = dts;
     val (new_dts, types_syntax) = ListPair.unzip (map (fn (tvs, tname, mx, _) =>
-      let val full_tname = Sign.full_name tmp_thy (Binding.map_name (Syntax.type_name mx) tname)
+      let val full_tname = Sign.full_name tmp_thy tname
       in
         (case duplicates (op =) tvs of
           [] =>
@@ -673,10 +675,10 @@ fun gen_add_datatype prep_typ config new_type_names dts thy =
             val _ =
               (case subtract (op =) tvs (fold (curry OldTerm.add_typ_tfree_names) cargs' []) of
                 [] => ()
-              | vs => error ("Extra type variables on rhs: " ^ commas vs))
-          in (constrs @ [(Sign.full_name_path tmp_thy tname'
-                  (Binding.map_name (Syntax.const_name mx') cname),
-                   map (dtyp_of_typ new_dts) cargs')],
+              | vs => error ("Extra type variables on rhs: " ^ commas vs));
+            val c = Sign.full_name_path tmp_thy tname' cname;
+          in
+            (constrs @ [(c, map (dtyp_of_typ new_dts) cargs')],
               constr_syntax' @ [(cname, mx')], sorts'')
           end handle ERROR msg => cat_error msg
            ("The error above occured in constructor " ^ quote (Binding.str_of cname) ^
@@ -684,14 +686,12 @@ fun gen_add_datatype prep_typ config new_type_names dts thy =
 
         val (constrs', constr_syntax', sorts') =
           fold prep_constr constrs ([], [], sorts)
-
       in
         case duplicates (op =) (map fst constrs') of
-           [] =>
-             (dts' @ [(i, (Sign.full_name tmp_thy (Binding.map_name (Syntax.type_name mx) tname),
-                map DtTFree tvs, constrs'))],
+          [] =>
+            (dts' @ [(i, (Sign.full_name tmp_thy tname, map DtTFree tvs, constrs'))],
               constr_syntax @ [constr_syntax'], sorts', i + 1)
-         | dups => error ("Duplicate constructors " ^ commas dups ^
+        | dups => error ("Duplicate constructors " ^ commas dups ^
              " in datatype " ^ quote (Binding.str_of tname))
       end;
 

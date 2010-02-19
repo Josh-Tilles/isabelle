@@ -7,15 +7,40 @@ Simprocs for linear arithmetic.
 structure Int_Numeral_Simprocs =
 struct
 
+(* abstract syntax operations *)
+
+fun mk_bit 0 = @{term "0"}
+  | mk_bit 1 = @{term "succ(0)"}
+  | mk_bit _ = sys_error "mk_bit";
+
+fun dest_bit @{term "0"} = 0
+  | dest_bit @{term "succ(0)"} = 1
+  | dest_bit _ = raise Match;
+
+fun mk_bin i =
+  let
+    fun term_of [] = @{term Pls}
+      | term_of [~1] = @{term Min}
+      | term_of (b :: bs) = @{term Bit} $ term_of bs $ mk_bit b;
+  in term_of (Numeral_Syntax.make_binary i) end;
+
+fun dest_bin tm =
+  let
+    fun bin_of @{term Pls} = []
+      | bin_of @{term Min} = [~1]
+      | bin_of (@{term Bit} $ bs $ b) = dest_bit b :: bin_of bs
+      | bin_of _ = sys_error "dest_bin";
+  in Numeral_Syntax.dest_binary (bin_of tm) end;
+
+
 (*Utilities*)
 
-fun mk_numeral n = @{const integ_of} $ NumeralSyntax.mk_bin n;
+fun mk_numeral i = @{const integ_of} $ mk_bin i;
 
 (*Decodes a binary INTEGER*)
 fun dest_numeral (Const(@{const_name integ_of}, _) $ w) =
-     (NumeralSyntax.dest_bin w
-      handle Match => raise TERM("Int_Numeral_Simprocs.dest_numeral:1", [w]))
-  | dest_numeral t =  raise TERM("Int_Numeral_Simprocs.dest_numeral:2", [t]);
+     (dest_bin w handle SYS_ERROR _ => raise TERM("Int_Numeral_Simprocs.dest_numeral:1", [w]))
+  | dest_numeral t = raise TERM("Int_Numeral_Simprocs.dest_numeral:2", [t]);
 
 fun find_first_numeral past (t::terms) =
         ((dest_numeral t, rev past @ terms)
@@ -110,9 +135,8 @@ val zminus_simps = @{thms NCons_simps} @
 (*To let us treat subtraction as addition*)
 val diff_simps = [@{thm zdiff_def}, @{thm zminus_zadd_distrib}, @{thm zminus_zminus}];
 
-(*push the unary minus down: - x * y = x * - y *)
-val int_minus_mult_eq_1_to_2 =
-    [@{thm zmult_zminus}, @{thm zmult_zminus_right} RS sym] MRS trans |> Drule.standard;
+(*push the unary minus down*)
+val int_minus_mult_eq_1_to_2 = @{lemma "$- w $* z = w $* $- z" by simp};
 
 (*to extract again any uncancelled minuses*)
 val int_minus_from_mult_simps =

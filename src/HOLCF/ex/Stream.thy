@@ -1,5 +1,4 @@
 (*  Title:      HOLCF/ex/Stream.thy
-    ID:         $Id$
     Author:     Franz Regensburger, David von Oheimb, Borislav Gajanovic
 *)
 
@@ -53,8 +52,6 @@ definition
                           Fin n \<Rightarrow> constr_sconc' n s1 s2
                         | \<infinity>    \<Rightarrow> s1)"
 
-
-declare stream.rews [simp add]
 
 (* ----------------------------------------------------------------------- *)
 (* theorems about scons                                                    *)
@@ -149,13 +146,13 @@ lemma stream_reach2: "(LUB i. stream_take i$s) = s"
 apply (insert stream.reach [of s], erule subst) back
 apply (simp add: fix_def2 stream.take_def)
 apply (insert contlub_cfun_fun [of "%i. iterate i$stream_copy$UU" s,THEN sym])
-by (simp add: chain_iterate)
+by simp
 
 lemma chain_stream_take: "chain (%i. stream_take i$s)"
 apply (rule chainI)
 apply (rule monofun_cfun_fun)
 apply (simp add: stream.take_def del: iterate_Suc)
-by (rule chainE, simp add: chain_iterate)
+by (rule chainE, simp)
 
 lemma stream_take_prefix [simp]: "stream_take n$s << s"
 apply (insert stream_reach2 [of s])
@@ -361,8 +358,7 @@ apply (simp add: slen_def, auto)
 by (drule stream_finite_lemma1,auto)
 
 lemma slen_less_1_eq: "(#x < Fin (Suc 0)) = (x = \<bottom>)"
-by (rule stream.casedist [of x], auto simp del: iSuc_Fin
-    simp add: Fin_0 iSuc_Fin[THEN sym] i0_iless_iSuc iSuc_mono)
+by (rule stream.casedist [of x], auto simp add: Fin_0 iSuc_Fin[THEN sym])
 
 lemma slen_empty_eq: "(#x = 0) = (x = \<bottom>)"
 by (rule stream.casedist [of x], auto)

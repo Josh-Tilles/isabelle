@@ -416,7 +416,7 @@ end
 
 subsection{*The Reals Form an Ordered Field*}
 
-instance real :: ordered_field
+instance real :: linordered_field
 proof
   fix x y z :: real
   show "x \<le> y ==> z + x \<le> z + y" by (rule real_add_left_mono)
@@ -425,8 +425,6 @@ proof
   show "sgn x = (if x=0 then 0 else if 0<x then 1 else - 1)"
     by (simp only: real_sgn_def)
 qed
-
-instance real :: lordered_ab_group_add ..
 
 text{*The function @{term real_of_preal} requires many proofs, but it seems
 to be essential for proving completeness of the reals from that of the
@@ -523,7 +521,7 @@ by auto
 
 lemma real_mult_less_iff1 [simp]: "(0::real) < z ==> (x*z < y*z) = (x < y)"
   by (force elim: order_less_asym
-            simp add: Ring_and_Field.mult_less_cancel_right)
+            simp add: mult_less_cancel_right)
 
 lemma real_mult_le_cancel_iff1 [simp]: "(0::real) < z ==> (x*z \<le> y*z) = (x\<le>y)"
 apply (simp add: mult_le_cancel_right)
@@ -769,7 +767,8 @@ by (simp add: add: real_of_nat_def)
 lemma not_real_of_nat_less_zero [simp]: "~ real (n::nat) < 0"
 by (simp add: add: real_of_nat_def)
 
-lemma real_of_nat_ge_zero_cancel_iff [simp]: "(0 \<le> real (n::nat))"
+(* FIXME: duplicates real_of_nat_ge_zero *)
+lemma real_of_nat_ge_zero_cancel_iff: "(0 \<le> real (n::nat))"
 by (simp add: add: real_of_nat_def)
 
 lemma nat_less_real_le: "((n::nat) < m) = (real n + 1 <= real m)"
@@ -953,13 +952,13 @@ lemma [code_unfold_post]:
 
 text{*Collapse applications of @{term real} to @{term number_of}*}
 lemma real_number_of [simp]: "real (number_of v :: int) = number_of v"
-by (simp add:  real_of_int_def of_int_number_of_eq)
+by (simp add: real_of_int_def)
 
 lemma real_of_nat_number_of [simp]:
      "real (number_of v :: nat) =  
         (if neg (number_of v :: int) then 0  
          else (number_of v :: real))"
-by (simp add: real_of_int_real_of_nat [symmetric] int_nat_number_of)
+by (simp add: real_of_int_real_of_nat [symmetric])
 
 declaration {*
   K (Lin_Arith.add_inj_thms [@{thm real_of_nat_le_iff} RS iffD2, @{thm real_of_nat_inject} RS iffD2]
@@ -1017,7 +1016,7 @@ apply (simp add: min_def)
 done
 
 
-text{*Similar results are proved in @{text Ring_and_Field}*}
+text{*Similar results are proved in @{text Fields}*}
 lemma real_less_half_sum: "x < y ==> x < (x+y) / (2::real)"
   by auto
 
@@ -1032,7 +1031,7 @@ by (simp add: abs_if)
 
 (* FIXME: redundant, but used by Integration/RealRandVar.thy in AFP *)
 lemma abs_le_interval_iff: "(abs x \<le> r) = (-r\<le>x & x\<le>(r::real))"
-by (force simp add: OrderedGroup.abs_le_iff)
+by (force simp add: abs_le_iff)
 
 lemma abs_add_one_gt_zero [simp]: "(0::real) < 1 + abs(x)"
 by (simp add: abs_if)
@@ -1045,13 +1044,6 @@ by simp
  
 lemma abs_sum_triangle_ineq: "abs ((x::real) + y + (-l + -m)) \<le> abs(x + -l) + abs(y + -m)"
 by simp
-
-instance real :: lordered_ring
-proof
-  fix a::real
-  show "abs a = sup a (-a)"
-    by (auto simp add: real_abs_def sup_real_def)
-qed
 
 
 subsection {* Implementation of rational real numbers *}

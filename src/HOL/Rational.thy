@@ -428,7 +428,7 @@ next
   fix q :: rat
   assume "q \<noteq> 0"
   then show "inverse q * q = 1" by (cases q rule: Rat_cases_nonzero)
-   (simp_all add: mult_rat  inverse_rat rat_number_expand eq_rat)
+   (simp_all add: rat_number_expand eq_rat)
 next
   fix q r :: rat
   show "q / r = q * inverse r" by (simp add: divide_rat_def)
@@ -592,7 +592,7 @@ definition
   abs_rat_def [code del]: "\<bar>q\<bar> = (if q < 0 then -q else (q::rat))"
 
 lemma abs_rat [simp, code]: "\<bar>Fract a b\<bar> = Fract \<bar>a\<bar> \<bar>b\<bar>"
-  by (auto simp add: abs_rat_def zabs_def Zero_rat_def less_rat not_less le_less minus_rat eq_rat zero_compare_simps)
+  by (auto simp add: abs_rat_def zabs_def Zero_rat_def not_less le_less eq_rat zero_less_mult_iff)
 
 definition
   sgn_rat_def [code del]: "sgn (q::rat) = (if q = 0 then 0 else if 0 < q then 1 else - 1)"
@@ -613,7 +613,7 @@ instance by intro_classes
 
 end
 
-instance rat :: ordered_field
+instance rat :: linordered_field
 proof
   fix q r s :: rat
   show "q \<le> r ==> s + q \<le> s + r"
@@ -760,7 +760,7 @@ subsection {* Embedding from Rationals to other Fields *}
 
 class field_char_0 = field + ring_char_0
 
-subclass (in ordered_field) field_char_0 ..
+subclass (in linordered_field) field_char_0 ..
 
 context field_char_0
 begin
@@ -832,7 +832,7 @@ apply (simp only: of_int_mult [symmetric] of_int_eq_iff)
 done
 
 lemma of_rat_less:
-  "(of_rat r :: 'a::ordered_field) < of_rat s \<longleftrightarrow> r < s"
+  "(of_rat r :: 'a::linordered_field) < of_rat s \<longleftrightarrow> r < s"
 proof (induct r, induct s)
   fix a b c d :: int
   assume not_zero: "b > 0" "d > 0"
@@ -841,14 +841,14 @@ proof (induct r, induct s)
     "(of_int a :: 'a) / of_int b < of_int c / of_int d
       \<longleftrightarrow> (of_int a :: 'a) * of_int d < of_int c * of_int b"
     using not_zero by (simp add: pos_less_divide_eq pos_divide_less_eq)
-  show "(of_rat (Fract a b) :: 'a::ordered_field) < of_rat (Fract c d)
+  show "(of_rat (Fract a b) :: 'a::linordered_field) < of_rat (Fract c d)
     \<longleftrightarrow> Fract a b < Fract c d"
     using not_zero `b * d > 0`
     by (simp add: of_rat_rat of_int_divide_less_eq of_int_mult [symmetric] del: of_int_mult)
 qed
 
 lemma of_rat_less_eq:
-  "(of_rat r :: 'a::ordered_field) \<le> of_rat s \<longleftrightarrow> r \<le> s"
+  "(of_rat r :: 'a::linordered_field) \<le> of_rat s \<longleftrightarrow> r \<le> s"
   unfolding le_less by (auto simp add: of_rat_less)
 
 lemmas of_rat_eq_0_iff [simp] = of_rat_eq_iff [of _ 0, simplified]
@@ -1082,14 +1082,6 @@ proof -
     by (simp add: abs_sgn mult_ac)
   finally show ?thesis using assms by simp
 qed
-
-lemma (in ordered_idom) sgn_greater [simp]:
-  "0 < sgn a \<longleftrightarrow> 0 < a"
-  unfolding sgn_if by auto
-
-lemma (in ordered_idom) sgn_less [simp]:
-  "sgn a < 0 \<longleftrightarrow> a < 0"
-  unfolding sgn_if by auto
 
 lemma rat_le_eq_code [code]:
   "Fract a b < Fract c d \<longleftrightarrow> (if b = 0

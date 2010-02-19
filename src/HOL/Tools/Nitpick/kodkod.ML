@@ -167,6 +167,7 @@ sig
 
   val max_arity : int -> int
   val arity_of_rel_expr : rel_expr -> int
+  val is_problem_trivially_false : problem -> bool
   val problems_equivalent : problem -> problem -> bool
   val solve_any_problem :
     bool -> Time.time option -> int -> int -> problem list -> outcome
@@ -490,6 +491,10 @@ and arity_of_decl (DeclNo ((n, _), _)) = n
   | arity_of_decl (DeclOne ((n, _), _)) = n
   | arity_of_decl (DeclSome ((n, _), _)) = n
   | arity_of_decl (DeclSet ((n, _), _)) = n
+
+(* problem -> bool *)
+fun is_problem_trivially_false ({formula = False, ...} : problem) = true
+  | is_problem_trivially_false _ = false
 
 (* string -> bool *)
 val is_relevant_setting = not o member (op =) ["solver", "delay"]
@@ -1004,7 +1009,7 @@ fun read_output_file path =
   read_next_problems (Substring.full (File.read path), [], []) |>> rev ||> rev
 
 (* The fudge term below is to account for Kodkodi's slow start-up time, which
-   is partly due to the JVM and partly due to the ML "system" function. *)
+   is partly due to the JVM and partly due to the ML "bash" function. *)
 val fudge_ms = 250
 
 (* bool -> Time.time option -> int -> int -> problem list -> outcome *)
@@ -1014,8 +1019,8 @@ fun solve_any_problem overlord deadline max_threads max_solutions problems =
     val indexed_problems = if j >= 0 then
                              [(j, nth problems j)]
                            else
-                             filter (not_equal False o #formula o snd)
-                                    (0 upto length problems - 1 ~~ problems)
+                             filter_out (is_problem_trivially_false o snd)
+                                        (0 upto length problems - 1 ~~ problems)
     val triv_js = filter_out (AList.defined (op =) indexed_problems)
                              (0 upto length problems - 1)
     (* int -> int *)
@@ -1053,24 +1058,24 @@ fun solve_any_problem overlord deadline max_threads max_solutions problems =
           val outcome =
             let
               val code =
-                system ("cd " ^ temp_dir ^ ";\n" ^
-                        "env CLASSPATH=\"$KODKODI_CLASSPATH:$CLASSPATH\" \
-                        \JAVA_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
-                        \$JAVA_LIBRARY_PATH\" \
-                        \LD_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
-                        \$LD_LIBRARY_PATH\" \
-                        \\"$KODKODI\"/bin/kodkodi" ^
-                        (if ms >= 0 then " -max-msecs " ^ string_of_int ms
-                         else "") ^
-                        (if max_solutions > 1 then " -solve-all" else "") ^
-                        " -max-solutions " ^ string_of_int max_solutions ^
-                        (if max_threads > 0 then
-                           " -max-threads " ^ string_of_int max_threads
-                         else
-                           "") ^
-                        " < " ^ Path.implode in_path ^
-                        " > " ^ Path.implode out_path ^
-                        " 2> " ^ Path.implode err_path)
+                bash ("cd " ^ File.shell_quote temp_dir ^ ";\n" ^
+                      "env CLASSPATH=\"$KODKODI_CLASSPATH:$CLASSPATH\" \
+                      \JAVA_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
+                      \$JAVA_LIBRARY_PATH\" \
+                      \LD_LIBRARY_PATH=\"$KODKODI_JAVA_LIBRARY_PATH:\
+                      \$LD_LIBRARY_PATH\" \
+                      \\"$KODKODI\"/bin/kodkodi" ^
+                      (if ms >= 0 then " -max-msecs " ^ string_of_int ms
+                       else "") ^
+                      (if max_solutions > 1 then " -solve-all" else "") ^
+                      " -max-solutions " ^ string_of_int max_solutions ^
+                      (if max_threads > 0 then
+                         " -max-threads " ^ string_of_int max_threads
+                       else
+                         "") ^
+                      " < " ^ File.shell_path in_path ^
+                      " > " ^ File.shell_path out_path ^
+                      " 2> " ^ File.shell_path err_path)
               val (ps, nontriv_js) = read_output_file out_path
                                      |>> map (apfst reindex) ||> map reindex
               val js = triv_js @ nontriv_js

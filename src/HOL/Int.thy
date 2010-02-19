@@ -208,7 +208,7 @@ instance
 
 end
 
-instance int :: pordered_cancel_ab_semigroup_add
+instance int :: ordered_cancel_ab_semigroup_add
 proof
   fix i j k :: int
   show "i \<le> j \<Longrightarrow> k + i \<le> k + j"
@@ -245,7 +245,7 @@ apply (auto simp add: zmult_zless_mono2_lemma)
 done
 
 text{*The integers form an ordered integral domain*}
-instance int :: ordered_idom
+instance int :: linordered_idom
 proof
   fix i j k :: int
   show "i < j \<Longrightarrow> 0 < k \<Longrightarrow> k * i < k * j"
@@ -254,13 +254,6 @@ proof
     by (simp only: zabs_def)
   show "sgn (i\<Colon>int) = (if i=0 then 0 else if 0<i then 1 else - 1)"
     by (simp only: zsgn_def)
-qed
-
-instance int :: lordered_ring
-proof  
-  fix k :: int
-  show "abs k = sup k (- k)"
-    by (auto simp add: sup_int_def zabs_def less_minus_self_iff [symmetric])
 qed
 
 lemma zless_imp_add1_zle: "w < z \<Longrightarrow> w + (1\<Colon>int) \<le> z"
@@ -314,7 +307,7 @@ lemma of_int_minus [simp]: "of_int (-z) = - (of_int z)"
 by (cases z, simp add: algebra_simps of_int minus)
 
 lemma of_int_diff [simp]: "of_int (w - z) = of_int w - of_int z"
-by (simp add: OrderedGroup.diff_minus diff_minus)
+by (simp add: diff_minus Groups.diff_minus)
 
 lemma of_int_mult [simp]: "of_int (w*z) = of_int w * of_int z"
 apply (cases w, cases z)
@@ -331,7 +324,7 @@ lemma of_int_power:
 
 end
 
-context ordered_idom
+context linordered_idom
 begin
 
 lemma of_int_le_iff [simp]:
@@ -370,8 +363,8 @@ lemmas of_int_eq_0_iff [simp] = of_int_eq_iff [of _ 0, simplified]
 
 end
 
-text{*Every @{text ordered_idom} has characteristic zero.*}
-subclass (in ordered_idom) ring_char_0 by intro_locales
+text{*Every @{text linordered_idom} has characteristic zero.*}
+subclass (in linordered_idom) ring_char_0 by intro_locales
 
 lemma of_int_eq_id [simp]: "of_int = id"
 proof
@@ -398,6 +391,7 @@ qed
 lemma nat_int [simp]: "nat (of_nat n) = n"
 by (simp add: nat int_def)
 
+(* FIXME: duplicates nat_0 *)
 lemma nat_zero [simp]: "nat 0 = 0"
 by (simp add: Zero_int_def nat)
 
@@ -526,10 +520,10 @@ by simp
 
 text{*This version is proved for all ordered rings, not just integers!
       It is proved here because attribute @{text arith_split} is not available
-      in theory @{text Ring_and_Field}.
+      in theory @{text Rings}.
       But is it really better than just rewriting with @{text abs_if}?*}
 lemma abs_split [arith_split,noatp]:
-     "P(abs(a::'a::ordered_idom)) = ((0 \<le> a --> P a) & (a < 0 --> P(-a)))"
+     "P(abs(a::'a::linordered_idom)) = ((0 \<le> a --> P a) & (a < 0 --> P(-a)))"
 by (force dest: order_less_le_trans simp add: abs_if linorder_not_less)
 
 lemma negD: "(x \<Colon> int) < 0 \<Longrightarrow> \<exists>n. x = - (of_nat (Suc n))"
@@ -611,7 +605,7 @@ syntax
   "_Numeral" :: "num_const \<Rightarrow> 'a"    ("_")
 
 use "Tools/numeral_syntax.ML"
-setup NumeralSyntax.setup
+setup Numeral_Syntax.setup
 
 abbreviation
   "Numeral0 \<equiv> number_of Pls"
@@ -633,10 +627,10 @@ definition
 
 lemmas
   max_number_of [simp] = max_def
-    [of "number_of u" "number_of v", standard, simp]
+    [of "number_of u" "number_of v", standard]
 and
   min_number_of [simp] = min_def 
-    [of "number_of u" "number_of v", standard, simp]
+    [of "number_of u" "number_of v", standard]
   -- {* unfolding @{text minx} and @{text max} on numerals *}
 
 lemmas numeral_simps = 
@@ -804,7 +798,7 @@ subsubsection {* Binary comparisons *}
 text {* Preliminaries *}
 
 lemma even_less_0_iff:
-  "a + a < 0 \<longleftrightarrow> a < (0::'a::ordered_idom)"
+  "a + a < 0 \<longleftrightarrow> a < (0::'a::linordered_idom)"
 proof -
   have "a + a < 0 \<longleftrightarrow> (1+1)*a < 0" by (simp add: left_distrib)
   also have "(1+1)*a < 0 \<longleftrightarrow> a < 0"
@@ -1067,7 +1061,7 @@ by (simp add: iszero_def)
 lemma not_iszero_1: "~ iszero 1"
 by (simp add: iszero_def eq_commute)
 
-lemma eq_number_of_eq:
+lemma eq_number_of_eq [simp]:
   "((number_of x::'a::number_ring) = number_of y) =
    iszero (number_of (x + uminus y) :: 'a)"
 unfolding iszero_def number_of_add number_of_minus
@@ -1137,7 +1131,7 @@ proof -
     by (auto simp add: iszero_def number_of_eq numeral_simps)
 qed
 
-lemmas iszero_simps =
+lemmas iszero_simps [simp] =
   iszero_0 not_iszero_1
   iszero_number_of_Pls nonzero_number_of_Min
   iszero_number_of_Bit0 iszero_number_of_Bit1
@@ -1147,7 +1141,7 @@ lemmas iszero_simps =
 subsubsection {* The Less-Than Relation *}
 
 lemma double_less_0_iff:
-  "(a + a < 0) = (a < (0::'a::ordered_idom))"
+  "(a + a < 0) = (a < (0::'a::linordered_idom))"
 proof -
   have "(a + a < 0) = ((1+1)*a < 0)" by (simp add: left_distrib)
   also have "... = (a < 0)"
@@ -1180,7 +1174,7 @@ lemmas le_number_of_eq_not_less =
 text {* Absolute value (@{term abs}) *}
 
 lemma abs_number_of:
-  "abs(number_of x::'a::{ordered_idom,number_ring}) =
+  "abs(number_of x::'a::{linordered_idom,number_ring}) =
    (if number_of x < (0::'a) then -number_of x else number_of x)"
   by (simp add: abs_if)
 
@@ -1214,18 +1208,18 @@ lemmas arith_simps =
 text {* Simplification of relational operations *}
 
 lemma less_number_of [simp]:
-  "(number_of x::'a::{ordered_idom,number_ring}) < number_of y \<longleftrightarrow> x < y"
+  "(number_of x::'a::{linordered_idom,number_ring}) < number_of y \<longleftrightarrow> x < y"
   unfolding number_of_eq by (rule of_int_less_iff)
 
 lemma le_number_of [simp]:
-  "(number_of x::'a::{ordered_idom,number_ring}) \<le> number_of y \<longleftrightarrow> x \<le> y"
+  "(number_of x::'a::{linordered_idom,number_ring}) \<le> number_of y \<longleftrightarrow> x \<le> y"
   unfolding number_of_eq by (rule of_int_le_iff)
 
 lemma eq_number_of [simp]:
   "(number_of x::'a::{ring_char_0,number_ring}) = number_of y \<longleftrightarrow> x = y"
   unfolding number_of_eq by (rule of_int_eq_iff)
 
-lemmas rel_simps [simp] = 
+lemmas rel_simps =
   less_number_of less_bin_simps
   le_number_of le_bin_simps
   eq_number_of_eq eq_bin_simps
@@ -1247,7 +1241,7 @@ lemma mult_number_of_left [simp]:
 lemma add_number_of_diff1:
   "number_of v + (number_of w - c) = 
   number_of(v + w) - (c::'a::number_ring)"
-  by (simp add: diff_minus add_number_of_left)
+  by (simp add: diff_minus)
 
 lemma add_number_of_diff2 [simp]:
   "number_of v + (c - number_of w) =
@@ -1362,7 +1356,7 @@ lemma Ints_number_of:
 
 lemma Ints_odd_less_0: 
   assumes in_Ints: "a \<in> Ints"
-  shows "(1 + a + a < 0) = (a < (0::'a::ordered_idom))"
+  shows "(1 + a + a < 0) = (a < (0::'a::linordered_idom))"
 proof -
   from in_Ints have "a \<in> range of_int" unfolding Ints_def [symmetric] .
   then obtain z where a: "a = of_int z" ..
@@ -1444,7 +1438,7 @@ lemmas add_number_of_eq = number_of_add [symmetric]
 
 text{*Allow 1 on either or both sides*}
 lemma one_add_one_is_two: "1 + 1 = (2::'a::number_ring)"
-by (simp del: numeral_1_eq_1 add: numeral_1_eq_1 [symmetric] add_number_of_eq)
+by (simp del: numeral_1_eq_1 add: numeral_1_eq_1 [symmetric])
 
 lemmas add_special =
     one_add_one_is_two
@@ -1519,11 +1513,11 @@ proof -
   finally show ?thesis .
 qed
 
-lemma abs_minus_one [simp]: "abs (-1) = (1::'a::{ordered_idom,number_ring})"
+lemma abs_minus_one [simp]: "abs (-1) = (1::'a::{linordered_idom,number_ring})"
 by (simp add: abs_if)
 
 lemma abs_power_minus_one [simp]:
-  "abs(-1 ^ n) = (1::'a::{ordered_idom,number_ring})"
+  "abs(-1 ^ n) = (1::'a::{linordered_idom,number_ring})"
 by (simp add: power_abs)
 
 lemma of_int_number_of_eq [simp]:
@@ -1565,6 +1559,7 @@ declare One_int_def [symmetric, simp]
 
 lemmas diff_int_def_symmetric = diff_int_def [symmetric, simp]
 
+(* FIXME: duplicates nat_zero *)
 lemma nat_0: "nat 0 = 0"
 by (simp add: nat_eq_iff)
 
@@ -1906,12 +1901,12 @@ lemmas minus_equation_iff_number_of [simp, noatp] =
 text{*To Simplify Inequalities Where One Side is the Constant 1*}
 
 lemma less_minus_iff_1 [simp,noatp]:
-  fixes b::"'b::{ordered_idom,number_ring}"
+  fixes b::"'b::{linordered_idom,number_ring}"
   shows "(1 < - b) = (b < -1)"
 by auto
 
 lemma le_minus_iff_1 [simp,noatp]:
-  fixes b::"'b::{ordered_idom,number_ring}"
+  fixes b::"'b::{linordered_idom,number_ring}"
   shows "(1 \<le> - b) = (b \<le> -1)"
 by auto
 
@@ -1921,12 +1916,12 @@ lemma equation_minus_iff_1 [simp,noatp]:
 by (subst equation_minus_iff, auto)
 
 lemma minus_less_iff_1 [simp,noatp]:
-  fixes a::"'b::{ordered_idom,number_ring}"
+  fixes a::"'b::{linordered_idom,number_ring}"
   shows "(- a < 1) = (-1 < a)"
 by auto
 
 lemma minus_le_iff_1 [simp,noatp]:
-  fixes a::"'b::{ordered_idom,number_ring}"
+  fixes a::"'b::{linordered_idom,number_ring}"
   shows "(- a \<le> 1) = (-1 \<le> a)"
 by auto
 
@@ -1987,10 +1982,10 @@ by simp
 
 lemma minus1_divide [simp]:
      "-1 / (x::'a::{field,division_by_zero,number_ring}) = - (1/x)"
-by (simp add: divide_inverse inverse_minus_eq)
+by (simp add: divide_inverse)
 
 lemma half_gt_zero_iff:
-     "(0 < r/2) = (0 < (r::'a::{ordered_field,division_by_zero,number_ring}))"
+     "(0 < r/2) = (0 < (r::'a::{linordered_field,division_by_zero,number_ring}))"
 by auto
 
 lemmas half_gt_zero [simp] = half_gt_zero_iff [THEN iffD2, standard]
@@ -2105,7 +2100,7 @@ lemma zdvd_mult_cancel1:
   assumes mp:"m \<noteq>(0::int)" shows "(m * n dvd m) = (\<bar>n\<bar> = 1)"
 proof
   assume n1: "\<bar>n\<bar> = 1" thus "m * n dvd m" 
-    by (cases "n >0", auto simp add: minus_dvd_iff minus_equation_iff)
+    by (cases "n >0", auto simp add: minus_equation_iff)
 next
   assume H: "m * n dvd m" hence H2: "m * n dvd m * 1" by simp
   from zdvd_mult_cancel[OF H2 mp] show "\<bar>n\<bar> = 1" by (simp only: zdvd1_eq)
@@ -2324,9 +2319,9 @@ lemmas zadd_commute = add_commute [of "z::int" "w", standard]
 lemmas zadd_assoc = add_assoc [of "z1::int" "z2" "z3", standard]
 lemmas zadd_left_commute = add_left_commute [of "x::int" "y" "z", standard]
 lemmas zadd_ac = zadd_assoc zadd_commute zadd_left_commute
-lemmas zmult_ac = OrderedGroup.mult_ac
-lemmas zadd_0 = OrderedGroup.add_0_left [of "z::int", standard]
-lemmas zadd_0_right = OrderedGroup.add_0_left [of "z::int", standard]
+lemmas zmult_ac = mult_ac
+lemmas zadd_0 = add_0_left [of "z::int", standard]
+lemmas zadd_0_right = add_0_right [of "z::int", standard]
 lemmas zadd_zminus_inverse2 = left_minus [of "z::int", standard]
 lemmas zmult_zminus = mult_minus_left [of "z::int" "w", standard]
 lemmas zmult_commute = mult_commute [of "z::int" "w", standard]

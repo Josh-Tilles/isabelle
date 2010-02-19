@@ -355,7 +355,7 @@ lemma finite_vimageI: "[|finite F; inj h|] ==> finite (h -` F)"
   apply (induct set: finite)
    apply simp_all
   apply (subst vimage_insert)
-  apply (simp add: finite_Un finite_subset [OF inj_vimage_singleton])
+  apply (simp add: finite_subset [OF inj_vimage_singleton])
   done
 
 lemma finite_vimageD:
@@ -485,7 +485,7 @@ proof
 next
   assume "finite A"
   thus "finite (Pow A)"
-    by induct (simp_all add: finite_UnI finite_imageI Pow_insert)
+    by induct (simp_all add: Pow_insert)
 qed
 
 lemma finite_Collect_subsets[simp,intro]: "finite A \<Longrightarrow> finite{B. B \<subseteq> A}"
@@ -634,7 +634,7 @@ next
   from aA obtain k where hkeq: "h k = a" and klessn: "k<n" by (blast elim!: equalityE)
   let ?hm = "Fun.swap k m h"
   have inj_hm: "inj_on ?hm {i. i < n}" using klessn mlessn 
-    by (simp add: inj_on_swap_iff inj_on)
+    by (simp add: inj_on)
   show ?thesis
   proof (intro exI conjI)
     show "inj_on ?hm {i. i < m}" using inj_hm
@@ -764,7 +764,7 @@ qed
 
 lemma fold_insert2:
   "finite A \<Longrightarrow> x \<notin> A \<Longrightarrow> fold f z (insert x A) = fold f (f x z) A"
-by (simp add: fold_insert fold_fun_comm)
+by (simp add: fold_fun_comm)
 
 lemma fold_rec:
 assumes "finite A" and "x \<in> A"
@@ -824,13 +824,13 @@ begin
 
 lemma fun_left_comm_idem: "fun_left_comm_idem(op *)"
 apply unfold_locales
- apply (simp add: mult_ac)
-apply (simp add: mult_idem mult_assoc[symmetric])
+ apply (rule mult_left_commute)
+apply (rule mult_left_idem)
 done
 
 end
 
-context lower_semilattice
+context semilattice_inf
 begin
 
 lemma ab_semigroup_idem_mult_inf: "ab_semigroup_idem_mult inf"
@@ -857,20 +857,20 @@ qed
 
 end
 
-context upper_semilattice
+context semilattice_sup
 begin
 
 lemma ab_semigroup_idem_mult_sup: "ab_semigroup_idem_mult sup"
-by (rule lower_semilattice.ab_semigroup_idem_mult_inf)(rule dual_semilattice)
+by (rule semilattice_inf.ab_semigroup_idem_mult_inf)(rule dual_semilattice)
 
 lemma fold_sup_insert[simp]: "finite A \<Longrightarrow> fold sup b (insert a A) = sup a (fold sup b A)"
-by(rule lower_semilattice.fold_inf_insert)(rule dual_semilattice)
+by(rule semilattice_inf.fold_inf_insert)(rule dual_semilattice)
 
 lemma fold_sup_le_sup: "finite A \<Longrightarrow> ALL a:A. a \<le> b \<Longrightarrow> fold sup c A \<le> sup b c"
-by(rule lower_semilattice.inf_le_fold_inf)(rule dual_semilattice)
+by(rule semilattice_inf.inf_le_fold_inf)(rule dual_semilattice)
 
 lemma sup_le_fold_sup: "finite A \<Longrightarrow> a \<in> A \<Longrightarrow> sup a b \<le> fold sup b A"
-by(rule lower_semilattice.fold_inf_le_inf)(rule dual_semilattice)
+by(rule semilattice_inf.fold_inf_le_inf)(rule dual_semilattice)
 
 end
 
@@ -1095,13 +1095,16 @@ translations
 
 print_translation {*
 let
-  fun setsum_tr' [Abs(x,Tx,t), Const ("Collect",_) $ Abs(y,Ty,P)] = 
-    if x<>y then raise Match
-    else let val x' = Syntax.mark_bound x
-             val t' = subst_bound(x',t)
-             val P' = subst_bound(x',P)
-         in Syntax.const "_qsetsum" $ Syntax.mark_bound x $ P' $ t' end
-in [("setsum", setsum_tr')] end
+  fun setsum_tr' [Abs (x, Tx, t), Const (@{const_syntax Collect}, _) $ Abs (y, Ty, P)] =
+        if x <> y then raise Match
+        else
+          let
+            val x' = Syntax.mark_bound x;
+            val t' = subst_bound (x', t);
+            val P' = subst_bound (x', P);
+          in Syntax.const @{syntax_const "_qsetsum"} $ Syntax.mark_bound x $ P' $ t' end
+    | setsum_tr' _ = raise Match;
+in [(@{const_syntax setsum}, setsum_tr')] end
 *}
 
 
@@ -1363,7 +1366,7 @@ by (subst setsum_Un_Int [symmetric], auto simp add: algebra_simps)
 
 lemma (in comm_monoid_mult) fold_image_1: "finite S \<Longrightarrow> (\<forall>x\<in>S. f x = 1) \<Longrightarrow> fold_image op * f 1 S = 1"
   apply (induct set: finite)
-  apply simp by (auto simp add: fold_image_insert)
+  apply simp by auto
 
 lemma (in comm_monoid_mult) fold_image_Un_one:
   assumes fS: "finite S" and fT: "finite T"
@@ -1409,8 +1412,8 @@ proof(induct rule: finite_induct[OF fS])
 next
   case (2 T F)
   then have fTF: "finite T" "\<forall>T\<in>F. finite T" "finite F" and TF: "T \<notin> F" 
-    and H: "setsum f (\<Union> F) = setsum (setsum f) F" by (auto simp add: finite_insert)
-  from fTF have fUF: "finite (\<Union>F)" by (auto intro: finite_Union)
+    and H: "setsum f (\<Union> F) = setsum (setsum f) F" by auto
+  from fTF have fUF: "finite (\<Union>F)" by auto
   from "2.prems" TF fTF
   show ?case 
     by (auto simp add: H[symmetric] intro: setsum_Un_zero[OF fTF(1) fUF, of f])
@@ -1486,7 +1489,7 @@ proof -
 qed
 
 lemma setsum_mono:
-  assumes le: "\<And>i. i\<in>K \<Longrightarrow> f (i::'a) \<le> ((g i)::('b::{comm_monoid_add, pordered_ab_semigroup_add}))"
+  assumes le: "\<And>i. i\<in>K \<Longrightarrow> f (i::'a) \<le> ((g i)::('b::{comm_monoid_add, ordered_ab_semigroup_add}))"
   shows "(\<Sum>i\<in>K. f i) \<le> (\<Sum>i\<in>K. g i)"
 proof (cases "finite K")
   case True
@@ -1505,7 +1508,7 @@ next
 qed
 
 lemma setsum_strict_mono:
-  fixes f :: "'a \<Rightarrow> 'b::{pordered_cancel_ab_semigroup_add,comm_monoid_add}"
+  fixes f :: "'a \<Rightarrow> 'b::{ordered_cancel_ab_semigroup_add,comm_monoid_add}"
   assumes "finite A"  "A \<noteq> {}"
     and "!!x. x:A \<Longrightarrow> f x < g x"
   shows "setsum f A < setsum g A"
@@ -1534,7 +1537,7 @@ next
 qed
 
 lemma setsum_nonneg:
-  assumes nn: "\<forall>x\<in>A. (0::'a::{pordered_ab_semigroup_add,comm_monoid_add}) \<le> f x"
+  assumes nn: "\<forall>x\<in>A. (0::'a::{ordered_ab_semigroup_add,comm_monoid_add}) \<le> f x"
   shows "0 \<le> setsum f A"
 proof (cases "finite A")
   case True thus ?thesis using nn
@@ -1550,7 +1553,7 @@ next
 qed
 
 lemma setsum_nonpos:
-  assumes np: "\<forall>x\<in>A. f x \<le> (0::'a::{pordered_ab_semigroup_add,comm_monoid_add})"
+  assumes np: "\<forall>x\<in>A. f x \<le> (0::'a::{ordered_ab_semigroup_add,comm_monoid_add})"
   shows "setsum f A \<le> 0"
 proof (cases "finite A")
   case True thus ?thesis using np
@@ -1566,7 +1569,7 @@ next
 qed
 
 lemma setsum_mono2:
-fixes f :: "'a \<Rightarrow> 'b :: {pordered_ab_semigroup_add_imp_le,comm_monoid_add}"
+fixes f :: "'a \<Rightarrow> 'b :: {ordered_ab_semigroup_add_imp_le,comm_monoid_add}"
 assumes fin: "finite B" and sub: "A \<subseteq> B" and nn: "\<And>b. b \<in> B-A \<Longrightarrow> 0 \<le> f b"
 shows "setsum f A \<le> setsum f B"
 proof -
@@ -1580,7 +1583,7 @@ qed
 
 lemma setsum_mono3: "finite B ==> A <= B ==> 
     ALL x: B - A. 
-      0 <= ((f x)::'a::{comm_monoid_add,pordered_ab_semigroup_add}) ==>
+      0 <= ((f x)::'a::{comm_monoid_add,ordered_ab_semigroup_add}) ==>
         setsum f A <= setsum f B"
   apply (subgoal_tac "setsum f B = setsum f A + setsum f (B - A)")
   apply (erule ssubst)
@@ -1640,7 +1643,7 @@ next
 qed
 
 lemma setsum_abs[iff]: 
-  fixes f :: "'a => ('b::pordered_ab_group_add_abs)"
+  fixes f :: "'a => ('b::ordered_ab_group_add_abs)"
   shows "abs (setsum f A) \<le> setsum (%i. abs(f i)) A"
 proof (cases "finite A")
   case True
@@ -1656,7 +1659,7 @@ next
 qed
 
 lemma setsum_abs_ge_zero[iff]: 
-  fixes f :: "'a => ('b::pordered_ab_group_add_abs)"
+  fixes f :: "'a => ('b::ordered_ab_group_add_abs)"
   shows "0 \<le> setsum (%i. abs(f i)) A"
 proof (cases "finite A")
   case True
@@ -1671,7 +1674,7 @@ next
 qed
 
 lemma abs_setsum_abs[simp]: 
-  fixes f :: "'a => ('b::pordered_ab_group_add_abs)"
+  fixes f :: "'a => ('b::ordered_ab_group_add_abs)"
   shows "abs (\<Sum>a\<in>A. abs(f a)) = (\<Sum>a\<in>A. abs(f a))"
 proof (cases "finite A")
   case True
@@ -1946,10 +1949,10 @@ apply (erule disjE, auto)
 done
 
 lemma setprod_nonneg [rule_format]:
-   "(ALL x: A. (0::'a::ordered_semidom) \<le> f x) --> 0 \<le> setprod f A"
+   "(ALL x: A. (0::'a::linordered_semidom) \<le> f x) --> 0 \<le> setprod f A"
 by (cases "finite A", induct set: finite, simp_all add: mult_nonneg_nonneg)
 
-lemma setprod_pos [rule_format]: "(ALL x: A. (0::'a::ordered_semidom) < f x)
+lemma setprod_pos [rule_format]: "(ALL x: A. (0::'a::linordered_semidom) < f x)
   --> 0 < setprod f A"
 by (cases "finite A", induct set: finite, simp_all add: mult_pos_pos)
 
@@ -2030,6 +2033,31 @@ lemma dvd_setsum [rule_format]: "(ALL i : A. d dvd f i) \<longrightarrow>
   apply (induct set: finite)
   apply auto
 done
+
+lemma setprod_mono:
+  fixes f :: "'a \<Rightarrow> 'b\<Colon>linordered_semidom"
+  assumes "\<forall>i\<in>A. 0 \<le> f i \<and> f i \<le> g i"
+  shows "setprod f A \<le> setprod g A"
+proof (cases "finite A")
+  case True
+  hence ?thesis "setprod f A \<ge> 0" using subset_refl[of A]
+  proof (induct A rule: finite_subset_induct)
+    case (insert a F)
+    thus "setprod f (insert a F) \<le> setprod g (insert a F)" "0 \<le> setprod f (insert a F)"
+      unfolding setprod_insert[OF insert(1,3)]
+      using assms[rule_format,OF insert(2)] insert
+      by (auto intro: mult_mono mult_nonneg_nonneg)
+  qed auto
+  thus ?thesis by simp
+qed auto
+
+lemma abs_setprod:
+  fixes f :: "'a \<Rightarrow> 'b\<Colon>{linordered_field,abs}"
+  shows "abs (setprod f A) = setprod (\<lambda>x. abs (f x)) A"
+proof (cases "finite A")
+  case True thus ?thesis
+    by induct (auto simp add: field_simps abs_mult)
+qed auto
 
 
 subsection {* Finite cardinality *}
@@ -2187,7 +2215,7 @@ lemma card_partition [rule_format]:
      (\<forall>c1 \<in> C. \<forall>c2 \<in> C. c1 \<noteq> c2 --> c1 \<inter> c2 = {}) -->
      k * card(C) = card (\<Union> C)"
 apply (erule finite_induct, simp)
-apply (simp add: card_insert_disjoint card_Un_disjoint insert_partition 
+apply (simp add: card_Un_disjoint insert_partition 
        finite_subset [of _ "\<Union> (insert x F)"])
 done
 
@@ -2257,7 +2285,7 @@ done
 
 lemma setprod_constant: "finite A ==> (\<Prod>x\<in> A. (y::'a::{comm_monoid_mult})) = y^(card A)"
 apply (erule finite_induct)
-apply (auto simp add: power_Suc)
+apply auto
 done
 
 lemma setprod_gen_delta:
@@ -2289,7 +2317,7 @@ qed
 
 
 lemma setsum_bounded:
-  assumes le: "\<And>i. i\<in>A \<Longrightarrow> f i \<le> (K::'a::{semiring_1, pordered_ab_semigroup_add})"
+  assumes le: "\<And>i. i\<in>A \<Longrightarrow> f i \<le> (K::'a::{semiring_1, ordered_ab_semigroup_add})"
   shows "setsum f A \<le> of_nat(card A) * K"
 proof (cases "finite A")
   case True
@@ -2342,7 +2370,7 @@ qed
 lemma card_image_le: "finite A ==> card (f ` A) <= card A"
 apply (induct set: finite)
  apply simp
-apply (simp add: le_SucI finite_imageI card_insert_if)
+apply (simp add: le_SucI card_insert_if)
 done
 
 lemma card_image: "inj_on f A ==> card (f ` A) = card A"
@@ -2445,7 +2473,7 @@ apply(frule finite_UnionD)
 apply(rotate_tac -1)
 apply (induct set: finite, simp_all, clarify)
 apply (subst card_Un_disjoint)
-   apply (auto simp add: dvd_add disjoint_eq_subset_Compl)
+   apply (auto simp add: disjoint_eq_subset_Compl)
 done
 
 
@@ -2486,7 +2514,7 @@ proof
   ultimately have "finite (UNIV::nat set)"
     by (rule finite_imageD)
   then show "False"
-    by (simp add: infinite_UNIV_nat)
+    by simp
 qed
 
 subsection{* A fold functional for non-empty sets *}
@@ -2514,7 +2542,7 @@ inductive_cases insert_fold1SetE [elim!]: "fold1Set f (insert a X) x"
 
 
 lemma fold1Set_sing [iff]: "(fold1Set f {a} b) = (a = b)"
-by (blast intro: fold_graph.intros elim: fold_graph.cases)
+by (blast elim: fold_graph.cases)
 
 lemma fold1_singleton [simp]: "fold1 f {a} = a"
 by (unfold fold1_def) blast
@@ -2584,9 +2612,9 @@ apply (rule the_equality)
 apply (best intro: fold_graph_determ theI dest: finite_imp_fold_graph [of _ times])
 apply (rule sym, clarify)
 apply (case_tac "Aa=A")
- apply (best intro: the_equality fold_graph_determ)
+ apply (best intro: fold_graph_determ)
 apply (subgoal_tac "fold_graph times a A x")
- apply (best intro: the_equality fold_graph_determ)
+ apply (best intro: fold_graph_determ)
 apply (subgoal_tac "insert aa (Aa - {a}) = A")
  prefer 2 apply (blast elim: equalityE)
 apply (auto dest: fold_graph_permute_diff [where a=a])
@@ -2630,16 +2658,16 @@ proof -
     thus ?thesis
     proof cases
       assume "A' = {}"
-      with prems show ?thesis by (simp add: mult_idem)
+      with prems show ?thesis by simp
     next
       assume "A' \<noteq> {}"
       with prems show ?thesis
-        by (simp add: fold1_insert mult_assoc [symmetric] mult_idem)
+        by (simp add: fold1_insert mult_assoc [symmetric])
     qed
   next
     assume "a \<noteq> x"
     with prems show ?thesis
-      by (simp add: insert_commute fold1_eq_fold fold_insert_idem)
+      by (simp add: insert_commute fold1_eq_fold)
   qed
 qed
 
@@ -2682,7 +2710,7 @@ end
 text{* Now the recursion rules for definitions: *}
 
 lemma fold1_singleton_def: "g = fold1 f \<Longrightarrow> g {a} = a"
-by(simp add:fold1_singleton)
+by simp
 
 lemma (in ab_semigroup_mult) fold1_insert_def:
   "\<lbrakk> g = fold1 times; finite A; x \<notin> A; A \<noteq> {} \<rbrakk> \<Longrightarrow> g (insert x A) = x * g A"
@@ -2791,7 +2819,7 @@ text{*
   over (non-empty) sets by means of @{text fold1}.
 *}
 
-context lower_semilattice
+context semilattice_inf
 begin
 
 lemma below_fold1_iff:
@@ -2859,7 +2887,7 @@ prefer 2 apply blast
 apply(erule exE)
 apply(rule order_trans)
 apply(erule (1) fold1_belowI)
-apply(erule (1) lower_semilattice.fold1_belowI [OF dual_semilattice])
+apply(erule (1) semilattice_inf.fold1_belowI [OF dual_semilattice])
 done
 
 lemma sup_Inf_absorb [simp]:
@@ -2871,7 +2899,7 @@ done
 lemma inf_Sup_absorb [simp]:
   "finite A \<Longrightarrow> a \<in> A \<Longrightarrow> inf a (\<Squnion>\<^bsub>fin\<^esub>A) = a"
 by (simp add: Sup_fin_def inf_absorb1
-  lower_semilattice.fold1_belowI [OF dual_semilattice])
+  semilattice_inf.fold1_belowI [OF dual_semilattice])
 
 end
 
@@ -2991,7 +3019,7 @@ lemma ab_semigroup_idem_mult_max:
   proof qed (auto simp add: max_def)
 
 lemma max_lattice:
-  "lower_semilattice (op \<ge>) (op >) max"
+  "semilattice_inf (op \<ge>) (op >) max"
   by (fact min_max.dual_semilattice)
 
 lemma dual_max:
@@ -3158,7 +3186,7 @@ lemma Max_ge [simp]:
   assumes "finite A" and "x \<in> A"
   shows "x \<le> Max A"
 proof -
-  interpret lower_semilattice "op \<ge>" "op >" max
+  interpret semilattice_inf "op \<ge>" "op >" max
     by (rule max_lattice)
   from assms show ?thesis by (simp add: Max_def fold1_belowI)
 qed
@@ -3172,7 +3200,7 @@ lemma Max_le_iff [simp, noatp]:
   assumes "finite A" and "A \<noteq> {}"
   shows "Max A \<le> x \<longleftrightarrow> (\<forall>a\<in>A. a \<le> x)"
 proof -
-  interpret lower_semilattice "op \<ge>" "op >" max
+  interpret semilattice_inf "op \<ge>" "op >" max
     by (rule max_lattice)
   from assms show ?thesis by (simp add: Max_def below_fold1_iff)
 qed
@@ -3293,7 +3321,7 @@ by(rule linorder.finite_linorder_max_induct[OF dual_linorder])
 
 end
 
-context ordered_ab_semigroup_add
+context linordered_ab_semigroup_add
 begin
 
 lemma add_Min_commute:
@@ -3324,6 +3352,19 @@ qed
 
 end
 
+context linordered_ab_group_add
+begin
+
+lemma minus_Max_eq_Min [simp]:
+  "finite S \<Longrightarrow> S \<noteq> {} \<Longrightarrow> - (Max S) = Min (uminus ` S)"
+  by (induct S rule: finite_ne_induct) (simp_all add: minus_max_eq_min)
+
+lemma minus_Min_eq_Max [simp]:
+  "finite S \<Longrightarrow> S \<noteq> {} \<Longrightarrow> - (Min S) = Max (uminus ` S)"
+  by (induct S rule: finite_ne_induct) (simp_all add: minus_min_eq_max)
+
+end
+
 
 subsection {* Expressing set operations via @{const fold} *}
 
@@ -3347,12 +3388,12 @@ lemma fun_left_comm_idem_remove:
 proof
 qed auto
 
-lemma (in lower_semilattice) fun_left_comm_idem_inf:
+lemma (in semilattice_inf) fun_left_comm_idem_inf:
   "fun_left_comm_idem inf"
 proof
 qed (auto simp add: inf_left_commute)
 
-lemma (in upper_semilattice) fun_left_comm_idem_sup:
+lemma (in semilattice_sup) fun_left_comm_idem_sup:
   "fun_left_comm_idem sup"
 proof
 qed (auto simp add: sup_left_commute)

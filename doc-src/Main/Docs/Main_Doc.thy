@@ -48,8 +48,8 @@ preorder, partial order, linear order, dense linear order and wellorder.
 \smallskip
 
 \begin{supertabular}{@ {} l @ {~::~} l l @ {}}
-@{const HOL.less_eq} & @{typeof HOL.less_eq} & (\verb$<=$)\\
-@{const HOL.less} & @{typeof HOL.less}\\
+@{const Algebras.less_eq} & @{typeof Algebras.less_eq} & (\verb$<=$)\\
+@{const Algebras.less} & @{typeof Algebras.less}\\
 @{const Orderings.Least} & @{typeof Orderings.Least}\\
 @{const Orderings.min} & @{typeof Orderings.min}\\
 @{const Orderings.max} & @{typeof Orderings.max}\\
@@ -297,7 +297,7 @@ e.g.\ \mbox{@{prop"ALL (x,y):A. P"},} @{term"{(x,y). P}"}, etc.
 
 \section{Algebra}
 
-Theories @{theory OrderedGroup}, @{theory Ring_and_Field} and @{theory
+Theories @{theory Groups}, @{theory Rings}, @{theory Fields} and @{theory
 Divides} define a large collection of classes describing common algebraic
 structures from semigroups up to fields. Everything is done in terms of
 overloaded operators:

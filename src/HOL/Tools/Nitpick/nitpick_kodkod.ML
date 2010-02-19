@@ -7,7 +7,7 @@ Kodkod problem generator part of Kodkod.
 
 signature NITPICK_KODKOD =
 sig
-  type extended_context = Nitpick_HOL.extended_context
+  type hol_context = Nitpick_HOL.hol_context
   type dtype_spec = Nitpick_Scope.dtype_spec
   type kodkod_constrs = Nitpick_Peephole.kodkod_constrs
   type nut = Nitpick_Nut.nut
@@ -33,10 +33,10 @@ sig
   val merge_bounds : Kodkod.bound list -> Kodkod.bound list
   val declarative_axiom_for_plain_rel : kodkod_constrs -> nut -> Kodkod.formula
   val declarative_axioms_for_datatypes :
-    extended_context -> int -> int Typtab.table -> kodkod_constrs
+    hol_context -> bool -> int -> int Typtab.table -> kodkod_constrs
     -> nut NameTable.table -> dtype_spec list -> Kodkod.formula list
   val kodkod_formula_from_nut :
-    int -> int Typtab.table -> bool -> kodkod_constrs -> nut -> Kodkod.formula
+    int -> int Typtab.table -> kodkod_constrs -> nut -> Kodkod.formula
 end;
 
 structure Nitpick_Kodkod : NITPICK_KODKOD =
@@ -131,8 +131,7 @@ fun pow_of_two_int_bounds bits j0 univ_card =
   let
     (* int -> int -> int -> KK.int_bound list *)
     fun aux 0  _ _ = []
-      | aux 1 pow_of_two j =
-        if j < univ_card then [(SOME (~ pow_of_two), [single_atom j])] else []
+      | aux 1 pow_of_two j = [(SOME (~ pow_of_two), [single_atom j])]
       | aux iter pow_of_two j =
         (SOME pow_of_two, [single_atom j]) ::
         aux (iter - 1) (2 * pow_of_two) (j + 1)
@@ -316,7 +315,17 @@ fun bound_for_sel_rel ctxt debug dtypes
            if R2 = Formula Neut then
              [ts] |> not exclusive ? cons (KK.TupleSet [])
            else
-             [KK.TupleSet [], KK.TupleProduct (ts, upper_bound_for_rep R2)]
+             [KK.TupleSet [],
+              if T1 = T2 andalso epsilon > delta andalso
+                 (datatype_spec dtypes T1 |> the |> pairf #co #standard)
+                 = (false, true) then
+                index_seq delta (epsilon - delta)
+                |> map (fn j =>
+                           KK.TupleProduct (KK.TupleSet [Kodkod.Tuple [j + j0]],
+                                            KK.TupleAtomSeq (j, j0)))
+                |> foldl1 KK.TupleUnion
+              else
+                KK.TupleProduct (ts, upper_bound_for_rep R2)]
          end)
     end
   | bound_for_sel_rel _ _ _ u =
@@ -732,12 +741,14 @@ fun const_triple rel_table (x as (s, T)) =
 (* nut NameTable.table -> styp -> KK.rel_expr *)
 fun discr_rel_expr rel_table = #1 o const_triple rel_table o discr_for_constr
 
-(* extended_context -> kodkod_constrs -> nut NameTable.table -> dtype_spec list
-   -> styp -> int -> nfa_transition list *)
-fun nfa_transitions_for_sel ext_ctxt ({kk_project, ...} : kodkod_constrs)
-                            rel_table (dtypes : dtype_spec list) constr_x n =
+(* hol_context -> bool -> kodkod_constrs -> nut NameTable.table
+   -> dtype_spec list -> styp -> int -> nfa_transition list *)
+fun nfa_transitions_for_sel hol_ctxt binarize
+                            ({kk_project, ...} : kodkod_constrs) rel_table
+                            (dtypes : dtype_spec list) constr_x n =
   let
-    val x as (_, T) = boxed_nth_sel_for_constr ext_ctxt constr_x n
+    val x as (_, T) =
+      binarized_and_boxed_nth_sel_for_constr hol_ctxt binarize constr_x n
     val (r, R, arity) = const_triple rel_table x
     val type_schema = type_schema_of_rep T R
   in
@@ -746,61 +757,66 @@ fun nfa_transitions_for_sel ext_ctxt ({kk_project, ...} : kodkod_constrs)
                    else SOME (kk_project r (map KK.Num [0, j]), T))
                (index_seq 1 (arity - 1) ~~ tl type_schema)
   end
-(* extended_context -> kodkod_constrs -> nut NameTable.table -> dtype_spec list
-   -> styp -> nfa_transition list *)
-fun nfa_transitions_for_constr ext_ctxt kk rel_table dtypes (x as (_, T)) =
-  maps (nfa_transitions_for_sel ext_ctxt kk rel_table dtypes x)
+(* hol_context -> bool -> kodkod_constrs -> nut NameTable.table
+   -> dtype_spec list -> styp -> nfa_transition list *)
+fun nfa_transitions_for_constr hol_ctxt binarize kk rel_table dtypes
+                               (x as (_, T)) =
+  maps (nfa_transitions_for_sel hol_ctxt binarize kk rel_table dtypes x)
        (index_seq 0 (num_sels_for_constr_type T))
-(* extended_context -> kodkod_constrs -> nut NameTable.table -> dtype_spec list
-   -> dtype_spec -> nfa_entry option *)
-fun nfa_entry_for_datatype _ _ _ _ ({co = true, ...} : dtype_spec) = NONE
-  | nfa_entry_for_datatype _ _ _ _ {deep = false, ...} = NONE
-  | nfa_entry_for_datatype ext_ctxt kk rel_table dtypes {typ, constrs, ...} =
-    SOME (typ, maps (nfa_transitions_for_constr ext_ctxt kk rel_table dtypes
-                     o #const) constrs)
+(* hol_context -> bool -> kodkod_constrs -> nut NameTable.table
+   -> dtype_spec list -> dtype_spec -> nfa_entry option *)
+fun nfa_entry_for_datatype _ _ _ _ _ ({co = true, ...} : dtype_spec) = NONE
+  | nfa_entry_for_datatype _ _ _ _ _ {standard = false, ...} = NONE
+  | nfa_entry_for_datatype _ _ _ _ _ {deep = false, ...} = NONE
+  | nfa_entry_for_datatype hol_ctxt binarize kk rel_table dtypes
+                           {typ, constrs, ...} =
+    SOME (typ, maps (nfa_transitions_for_constr hol_ctxt binarize kk rel_table
+                                                dtypes o #const) constrs)
 
 val empty_rel = KK.Product (KK.None, KK.None)
 
 (* nfa_table -> typ -> typ -> KK.rel_expr list *)
-fun direct_path_rel_exprs nfa start final =
-  case AList.lookup (op =) nfa final of
-    SOME trans => map fst (filter (curry (op =) start o snd) trans)
+fun direct_path_rel_exprs nfa start_T final_T =
+  case AList.lookup (op =) nfa final_T of
+    SOME trans => map fst (filter (curry (op =) start_T o snd) trans)
   | NONE => []
 (* kodkod_constrs -> nfa_table -> typ list -> typ -> typ -> KK.rel_expr *)
-and any_path_rel_expr ({kk_union, ...} : kodkod_constrs) nfa [] start final =
-    fold kk_union (direct_path_rel_exprs nfa start final)
-         (if start = final then KK.Iden else empty_rel)
-  | any_path_rel_expr (kk as {kk_union, ...}) nfa (q :: qs) start final =
-    kk_union (any_path_rel_expr kk nfa qs start final)
-             (knot_path_rel_expr kk nfa qs start q final)
+and any_path_rel_expr ({kk_union, ...} : kodkod_constrs) nfa [] start_T
+                      final_T =
+    fold kk_union (direct_path_rel_exprs nfa start_T final_T)
+         (if start_T = final_T then KK.Iden else empty_rel)
+  | any_path_rel_expr (kk as {kk_union, ...}) nfa (T :: Ts) start_T final_T =
+    kk_union (any_path_rel_expr kk nfa Ts start_T final_T)
+             (knot_path_rel_expr kk nfa Ts start_T T final_T)
 (* kodkod_constrs -> nfa_table -> typ list -> typ -> typ -> typ
    -> KK.rel_expr *)
-and knot_path_rel_expr (kk as {kk_join, kk_reflexive_closure, ...}) nfa qs start
-                       knot final =
-  kk_join (kk_join (any_path_rel_expr kk nfa qs knot final)
-                   (kk_reflexive_closure (loop_path_rel_expr kk nfa qs knot)))
-          (any_path_rel_expr kk nfa qs start knot)
+and knot_path_rel_expr (kk as {kk_join, kk_reflexive_closure, ...}) nfa Ts
+                       start_T knot_T final_T =
+  kk_join (kk_join (any_path_rel_expr kk nfa Ts knot_T final_T)
+                   (kk_reflexive_closure (loop_path_rel_expr kk nfa Ts knot_T)))
+          (any_path_rel_expr kk nfa Ts start_T knot_T)
 (* kodkod_constrs -> nfa_table -> typ list -> typ -> KK.rel_expr *)
-and loop_path_rel_expr ({kk_union, ...} : kodkod_constrs) nfa [] start =
-    fold kk_union (direct_path_rel_exprs nfa start start) empty_rel
-  | loop_path_rel_expr (kk as {kk_union, kk_closure, ...}) nfa (q :: qs) start =
-    if start = q then
-      kk_closure (loop_path_rel_expr kk nfa qs start)
+and loop_path_rel_expr ({kk_union, ...} : kodkod_constrs) nfa [] start_T =
+    fold kk_union (direct_path_rel_exprs nfa start_T start_T) empty_rel
+  | loop_path_rel_expr (kk as {kk_union, kk_closure, ...}) nfa (T :: Ts)
+                       start_T =
+    if start_T = T then
+      kk_closure (loop_path_rel_expr kk nfa Ts start_T)
     else
-      kk_union (loop_path_rel_expr kk nfa qs start)
-               (knot_path_rel_expr kk nfa qs start q start)
+      kk_union (loop_path_rel_expr kk nfa Ts start_T)
+               (knot_path_rel_expr kk nfa Ts start_T T start_T)
 
 (* nfa_table -> unit NfaGraph.T *)
 fun graph_for_nfa nfa =
   let
     (* typ -> unit NfaGraph.T -> unit NfaGraph.T *)
-    fun new_node q = perhaps (try (NfaGraph.new_node (q, ())))
+    fun new_node T = perhaps (try (NfaGraph.new_node (T, ())))
     (* nfa_table -> unit NfaGraph.T -> unit NfaGraph.T *)
     fun add_nfa [] = I
       | add_nfa ((_, []) :: nfa) = add_nfa nfa
-      | add_nfa ((q, ((_, q') :: transitions)) :: nfa) =
-        add_nfa ((q, transitions) :: nfa) o NfaGraph.add_edge (q, q') o
-        new_node q' o new_node q
+      | add_nfa ((T, ((_, T') :: transitions)) :: nfa) =
+        add_nfa ((T, transitions) :: nfa) o NfaGraph.add_edge (T, T') o
+        new_node T' o new_node T
   in add_nfa nfa NfaGraph.empty end
 
 (* nfa_table -> nfa_table list *)
@@ -808,27 +824,29 @@ fun strongly_connected_sub_nfas nfa =
   nfa |> graph_for_nfa |> NfaGraph.strong_conn
       |> map (fn keys => filter (member (op =) keys o fst) nfa)
 
-(* dtype_spec list -> kodkod_constrs -> nfa_table -> typ -> KK.formula *)
-fun acyclicity_axiom_for_datatype dtypes kk nfa start =
+(* kodkod_constrs -> dtype_spec list -> nfa_table -> typ -> KK.formula *)
+fun acyclicity_axiom_for_datatype kk dtypes nfa start_T =
   #kk_no kk (#kk_intersect kk
-                 (loop_path_rel_expr kk nfa (map fst nfa) start) KK.Iden)
-(* extended_context -> kodkod_constrs -> nut NameTable.table -> dtype_spec list
-   -> KK.formula list *)
-fun acyclicity_axioms_for_datatypes ext_ctxt kk rel_table dtypes =
-  map_filter (nfa_entry_for_datatype ext_ctxt kk rel_table dtypes) dtypes
+                 (loop_path_rel_expr kk nfa (map fst nfa) start_T) KK.Iden)
+(* hol_context -> bool -> kodkod_constrs -> nut NameTable.table
+   -> dtype_spec list -> KK.formula list *)
+fun acyclicity_axioms_for_datatypes hol_ctxt binarize kk rel_table dtypes =
+  map_filter (nfa_entry_for_datatype hol_ctxt binarize kk rel_table dtypes)
+             dtypes
   |> strongly_connected_sub_nfas
-  |> maps (fn nfa => map (acyclicity_axiom_for_datatype dtypes kk nfa o fst)
-                         nfa)
+  |> maps (fn nfa =>
+              map (acyclicity_axiom_for_datatype kk dtypes nfa o fst) nfa)
 
-(* extended_context -> int -> kodkod_constrs -> nut NameTable.table
+(* hol_context -> bool -> int -> kodkod_constrs -> nut NameTable.table
    -> KK.rel_expr -> constr_spec -> int -> KK.formula *)
-fun sel_axiom_for_sel ext_ctxt j0
-        (kk as {kk_all, kk_implies, kk_formula_if, kk_subset, kk_rel_eq, kk_no,
+fun sel_axiom_for_sel hol_ctxt binarize j0
+        (kk as {kk_all, kk_formula_if, kk_implies, kk_subset, kk_rel_eq, kk_no,
                 kk_join, ...}) rel_table dom_r
         ({const, delta, epsilon, exclusive, explicit_max, ...} : constr_spec)
         n =
   let
-    val x as (_, T) = boxed_nth_sel_for_constr ext_ctxt const n
+    val x as (_, T) =
+      binarized_and_boxed_nth_sel_for_constr hol_ctxt binarize const n
     val (r, R, arity) = const_triple rel_table x
     val R2 = dest_Func R |> snd
     val z = (epsilon - delta, delta + j0)
@@ -842,9 +860,9 @@ fun sel_axiom_for_sel ext_ctxt j0
                               (kk_n_ary_function kk R2 r') (kk_no r'))
       end
   end
-(* extended_context -> int -> int -> kodkod_constrs -> nut NameTable.table
+(* hol_context -> bool -> int -> int -> kodkod_constrs -> nut NameTable.table
    -> constr_spec -> KK.formula list *)
-fun sel_axioms_for_constr ext_ctxt bits j0 kk rel_table
+fun sel_axioms_for_constr hol_ctxt binarize bits j0 kk rel_table
         (constr as {const, delta, epsilon, explicit_max, ...}) =
   let
     val honors_explicit_max =
@@ -854,31 +872,31 @@ fun sel_axioms_for_constr ext_ctxt bits j0 kk rel_table
       [formula_for_bool honors_explicit_max]
     else
       let
-        val ran_r = discr_rel_expr rel_table const
+        val dom_r = discr_rel_expr rel_table const
         val max_axiom =
           if honors_explicit_max then
             KK.True
           else if is_twos_complement_representable bits (epsilon - delta) then
-            KK.LE (KK.Cardinality ran_r, KK.Num explicit_max)
+            KK.LE (KK.Cardinality dom_r, KK.Num explicit_max)
           else
             raise TOO_SMALL ("Nitpick_Kodkod.sel_axioms_for_constr",
                              "\"bits\" value " ^ string_of_int bits ^
                              " too small for \"max\"")
       in
         max_axiom ::
-        map (sel_axiom_for_sel ext_ctxt j0 kk rel_table ran_r constr)
+        map (sel_axiom_for_sel hol_ctxt binarize j0 kk rel_table dom_r constr)
             (index_seq 0 (num_sels_for_constr_type (snd const)))
       end
   end
-(* extended_context -> int -> int -> kodkod_constrs -> nut NameTable.table
+(* hol_context -> bool -> int -> int -> kodkod_constrs -> nut NameTable.table
    -> dtype_spec -> KK.formula list *)
-fun sel_axioms_for_datatype ext_ctxt bits j0 kk rel_table
+fun sel_axioms_for_datatype hol_ctxt binarize bits j0 kk rel_table
                             ({constrs, ...} : dtype_spec) =
-  maps (sel_axioms_for_constr ext_ctxt bits j0 kk rel_table) constrs
+  maps (sel_axioms_for_constr hol_ctxt binarize bits j0 kk rel_table) constrs
 
-(* extended_context -> kodkod_constrs -> nut NameTable.table -> constr_spec
+(* hol_context -> bool -> kodkod_constrs -> nut NameTable.table -> constr_spec
    -> KK.formula list *)
-fun uniqueness_axiom_for_constr ext_ctxt
+fun uniqueness_axiom_for_constr hol_ctxt binarize
         ({kk_all, kk_implies, kk_and, kk_rel_eq, kk_lone, kk_join, ...}
          : kodkod_constrs) rel_table ({const, ...} : constr_spec) =
   let
@@ -886,9 +904,10 @@ fun uniqueness_axiom_for_constr ext_ctxt
     fun conjunct_for_sel r =
       kk_rel_eq (kk_join (KK.Var (1, 0)) r) (kk_join (KK.Var (1, 1)) r)
     val num_sels = num_sels_for_constr_type (snd const)
-    val triples = map (const_triple rel_table
-                       o boxed_nth_sel_for_constr ext_ctxt const)
-                      (~1 upto num_sels - 1)
+    val triples =
+      map (const_triple rel_table
+           o binarized_and_boxed_nth_sel_for_constr hol_ctxt binarize const)
+          (~1 upto num_sels - 1)
     val j0 = case triples |> hd |> #2 of
                Func (Atom (_, j0), _) => j0
              | R => raise REP ("Nitpick_Kodkod.uniqueness_axiom_for_constr",
@@ -903,11 +922,11 @@ fun uniqueness_axiom_for_constr ext_ctxt
                   (fold1 kk_and (map (conjunct_for_sel o #1) (tl triples)))
                   (kk_rel_eq (KK.Var (1, 0)) (KK.Var (1, 1))))
   end
-(* extended_context -> kodkod_constrs -> nut NameTable.table -> dtype_spec
+(* hol_context -> bool -> kodkod_constrs -> nut NameTable.table -> dtype_spec
    -> KK.formula list *)
-fun uniqueness_axioms_for_datatype ext_ctxt kk rel_table
+fun uniqueness_axioms_for_datatype hol_ctxt binarize kk rel_table
                                    ({constrs, ...} : dtype_spec) =
-  map (uniqueness_axiom_for_constr ext_ctxt kk rel_table) constrs
+  map (uniqueness_axiom_for_constr hol_ctxt binarize kk rel_table) constrs
 
 (* constr_spec -> int *)
 fun effective_constr_max ({delta, epsilon, ...} : constr_spec) = epsilon - delta
@@ -924,31 +943,33 @@ fun partition_axioms_for_datatype j0 (kk as {kk_rel_eq, kk_union, ...})
        kk_disjoint_sets kk rs]
     end
 
-(* extended_context -> int -> int Typtab.table -> kodkod_constrs
+(* hol_context -> bool -> int -> int Typtab.table -> kodkod_constrs
    -> nut NameTable.table -> dtype_spec -> KK.formula list *)
-fun other_axioms_for_datatype _ _ _ _ _ {deep = false, ...} = []
-  | other_axioms_for_datatype ext_ctxt bits ofs kk rel_table
+fun other_axioms_for_datatype _ _ _ _ _ _ {deep = false, ...} = []
+  | other_axioms_for_datatype hol_ctxt binarize bits ofs kk rel_table
                               (dtype as {typ, ...}) =
     let val j0 = offset_of_type ofs typ in
-      sel_axioms_for_datatype ext_ctxt bits j0 kk rel_table dtype @
-      uniqueness_axioms_for_datatype ext_ctxt kk rel_table dtype @
+      sel_axioms_for_datatype hol_ctxt binarize bits j0 kk rel_table dtype @
+      uniqueness_axioms_for_datatype hol_ctxt binarize kk rel_table dtype @
       partition_axioms_for_datatype j0 kk rel_table dtype
     end
 
-(* extended_context -> int -> int Typtab.table -> kodkod_constrs
+(* hol_context -> bool -> int -> int Typtab.table -> kodkod_constrs
    -> nut NameTable.table -> dtype_spec list -> KK.formula list *)
-fun declarative_axioms_for_datatypes ext_ctxt bits ofs kk rel_table dtypes =
-  acyclicity_axioms_for_datatypes ext_ctxt kk rel_table dtypes @
-  maps (other_axioms_for_datatype ext_ctxt bits ofs kk rel_table) dtypes
+fun declarative_axioms_for_datatypes hol_ctxt binarize bits ofs kk rel_table
+                                     dtypes =
+  acyclicity_axioms_for_datatypes hol_ctxt binarize kk rel_table dtypes @
+  maps (other_axioms_for_datatype hol_ctxt binarize bits ofs kk rel_table)
+       dtypes
 
-(* int -> int Typtab.table -> bool -> kodkod_constrs -> nut -> KK.formula *)
-fun kodkod_formula_from_nut bits ofs liberal
+(* int -> int Typtab.table -> kodkod_constrs -> nut -> KK.formula *)
+fun kodkod_formula_from_nut bits ofs
         (kk as {kk_all, kk_exist, kk_formula_let, kk_formula_if, kk_or, kk_not,
-                kk_iff, kk_implies, kk_and, kk_subset, kk_rel_eq, kk_no, kk_one,
-                kk_some, kk_rel_let, kk_rel_if, kk_union, kk_difference,
-                kk_intersect, kk_product, kk_join, kk_closure, kk_comprehension,
-                kk_project, kk_project_seq, kk_not3, kk_nat_less, kk_int_less,
-                ...}) u =
+                kk_iff, kk_implies, kk_and, kk_subset, kk_rel_eq, kk_no,
+                kk_lone, kk_one, kk_some, kk_rel_let, kk_rel_if, kk_union,
+                kk_difference, kk_intersect, kk_product, kk_join, kk_closure,
+                kk_comprehension, kk_project, kk_project_seq, kk_not3,
+                kk_nat_less, kk_int_less, ...}) u =
   let
     val main_j0 = offset_of_type ofs bool_T
     val bool_j0 = main_j0
@@ -1108,7 +1129,7 @@ fun kodkod_formula_from_nut bits ofs liberal
                      else
                        if is_lone_rep min_R then
                          if arity_of_rep min_R = 1 then
-                           kk_subset (kk_product r1 r2) KK.Iden
+                           kk_lone (kk_union r1 r2)
                          else if not both_opt then
                            (r1, r2) |> is_opt_rep (rep_of u2) ? swap
                                     |-> kk_subset

@@ -8,10 +8,10 @@ Monotonicity predicate for higher-order logic.
 signature NITPICK_MONO =
 sig
   datatype sign = Plus | Minus
-  type extended_context = Nitpick_HOL.extended_context
+  type hol_context = Nitpick_HOL.hol_context
 
   val formulas_monotonic :
-    extended_context -> typ -> sign -> term list -> term list -> term -> bool
+    hol_context -> bool -> typ -> sign -> term list -> term list -> term -> bool
 end;
 
 structure Nitpick_Mono : NITPICK_MONO =
@@ -35,7 +35,8 @@ datatype ctype =
   CRec of string * typ list
 
 type cdata =
-  {ext_ctxt: extended_context,
+  {hol_ctxt: hol_context,
+   binarize: bool,
    alpha_T: typ,
    max_fresh: int Unsynchronized.ref,
    datatype_cache: ((string * typ list) * ctype) list Unsynchronized.ref,
@@ -114,10 +115,10 @@ fun flatten_ctype (CPair (C1, C2)) = maps flatten_ctype [C1, C2]
   | flatten_ctype (CType (_, Cs)) = maps flatten_ctype Cs
   | flatten_ctype C = [C]
 
-(* extended_context -> typ -> cdata *)
-fun initial_cdata ext_ctxt alpha_T =
-  ({ext_ctxt = ext_ctxt, alpha_T = alpha_T, max_fresh = Unsynchronized.ref 0,
-    datatype_cache = Unsynchronized.ref [],
+(* hol_context -> bool -> typ -> cdata *)
+fun initial_cdata hol_ctxt binarize alpha_T =
+  ({hol_ctxt = hol_ctxt, binarize = binarize, alpha_T = alpha_T,
+    max_fresh = Unsynchronized.ref 0, datatype_cache = Unsynchronized.ref [],
     constr_cache = Unsynchronized.ref []} : cdata)
 
 (* typ -> typ -> bool *)
@@ -129,7 +130,7 @@ fun could_exist_alpha_subtype alpha_T (T as Type (_, Ts)) =
 fun could_exist_alpha_sub_ctype _ (alpha_T as TFree _) T =
     could_exist_alpha_subtype alpha_T T
   | could_exist_alpha_sub_ctype thy alpha_T T =
-    (T = alpha_T orelse is_datatype thy T)
+    (T = alpha_T orelse is_datatype thy [(NONE, true)] T)
 
 (* ctype -> bool *)
 fun exists_alpha_sub_ctype CAlpha = true
@@ -188,7 +189,7 @@ fun repair_constr_cache dtype_cache constr_cache =
   in List.app repair_one (!constr_cache) end
 
 (* cdata -> typ -> ctype *)
-fun fresh_ctype_for_type ({ext_ctxt as {thy, ...}, alpha_T, max_fresh,
+fun fresh_ctype_for_type ({hol_ctxt as {thy, ...}, binarize, alpha_T, max_fresh,
                            datatype_cache, constr_cache, ...} : cdata) =
   let
     (* typ -> typ -> ctype *)
@@ -217,7 +218,7 @@ fun fresh_ctype_for_type ({ext_ctxt as {thy, ...}, alpha_T, max_fresh,
           | NONE =>
             let
               val _ = Unsynchronized.change datatype_cache (cons (z, CRec z))
-              val xs = datatype_constrs ext_ctxt T
+              val xs = binarized_and_boxed_datatype_constrs hol_ctxt binarize T
               val (all_Cs, constr_Cs) =
                 fold_rev (fn (_, T') => fn (all_Cs, constr_Cs) =>
                              let
@@ -264,23 +265,18 @@ fun sel_ctype_from_constr_ctype s C =
   end
 
 (* cdata -> styp -> ctype *)
-fun ctype_for_constr (cdata as {ext_ctxt as {thy, ...}, alpha_T, constr_cache,
+fun ctype_for_constr (cdata as {hol_ctxt as {thy, ...}, alpha_T, constr_cache,
                                 ...}) (x as (_, T)) =
   if could_exist_alpha_sub_ctype thy alpha_T T then
     case AList.lookup (op =) (!constr_cache) x of
       SOME C => C
-    | NONE => if T = alpha_T then
-                let val C = fresh_ctype_for_type cdata T in
-                  (Unsynchronized.change constr_cache (cons (x, C)); C)
-                end
-              else
-                (fresh_ctype_for_type cdata (body_type T);
-                 AList.lookup (op =) (!constr_cache) x |> the)
+    | NONE => (fresh_ctype_for_type cdata (body_type T);
+               AList.lookup (op =) (!constr_cache) x |> the)
   else
     fresh_ctype_for_type cdata T
-fun ctype_for_sel (cdata as {ext_ctxt, ...}) (x as (s, _)) =
-  x |> boxed_constr_for_sel ext_ctxt |> ctype_for_constr cdata
-    |> sel_ctype_from_constr_ctype s
+fun ctype_for_sel (cdata as {hol_ctxt, binarize, ...}) (x as (s, _)) =
+  x |> binarized_and_boxed_constr_for_sel hol_ctxt binarize
+    |> ctype_for_constr cdata |> sel_ctype_from_constr_ctype s
 
 (* literal list -> ctype -> ctype *)
 fun instantiate_ctype lits =
@@ -549,8 +545,9 @@ fun pop_bound {bounds, frees, consts} =
   handle List.Empty => initial_gamma
 
 (* cdata -> term -> accumulator -> ctype * accumulator *)
-fun consider_term (cdata as {ext_ctxt as {ctxt, thy, def_table, ...}, alpha_T,
-                             max_fresh, ...}) =
+fun consider_term (cdata as {hol_ctxt as {thy, ctxt, stds, fast_descrs,
+                                          def_table, ...},
+                             alpha_T, max_fresh, ...}) =
   let
     (* typ -> ctype *)
     val ctype_for = fresh_ctype_for_type cdata
@@ -667,10 +664,6 @@ fun consider_term (cdata as {ext_ctxt as {ctxt, thy, def_table, ...}, alpha_T,
                 in (CFun (ab_set_C, S Minus, ba_set_C), accum) end
               | @{const_name trancl} => do_fragile_set_operation T accum
               | @{const_name rtrancl} => (print_g "*** rtrancl"; unsolvable)
-              | @{const_name lower_semilattice_fun_inst.inf_fun} =>
-                do_robust_set_operation T accum
-              | @{const_name upper_semilattice_fun_inst.sup_fun} =>
-                do_robust_set_operation T accum
               | @{const_name finite} =>
                 let val C1 = ctype_for (domain_type (domain_type T)) in
                   (CFun (pos_set_ctype_for_dom C1, S Minus, bool_C), accum)
@@ -714,19 +707,6 @@ fun consider_term (cdata as {ext_ctxt as {ctxt, thy, def_table, ...}, alpha_T,
                   (CFun (a_set_C, S Minus,
                          CFun (a_to_b_set_C, S Minus, ab_set_C)), accum)
                 end
-              | @{const_name minus_fun_inst.minus_fun} =>
-                let
-                  val set_T = domain_type T
-                  val left_set_C = ctype_for set_T
-                  val right_set_C = ctype_for set_T
-                in
-                  (CFun (left_set_C, S Minus,
-                         CFun (right_set_C, S Minus, left_set_C)),
-                   (gamma, cset |> add_ctype_is_right_unique right_set_C
-                                |> add_is_sub_ctype right_set_C left_set_C))
-                end
-              | @{const_name ord_fun_inst.less_eq_fun} =>
-                do_fragile_set_operation T accum
               | @{const_name Tha} =>
                 let
                   val a_C = ctype_for (domain_type (domain_type T))
@@ -736,24 +716,44 @@ fun consider_term (cdata as {ext_ctxt as {ctxt, thy, def_table, ...}, alpha_T,
                 let val dom_C = ctype_for (domain_type T) in
                   (CFun (dom_C, S Minus, dom_C), accum)
                 end
-              | _ => if is_sel s then
-                       if constr_name_for_sel_like s = @{const_name FunBox} then
-                         let val dom_C = ctype_for (domain_type T) in
-                           (CFun (dom_C, S Minus, dom_C), accum)
-                         end
-                       else
-                         (ctype_for_sel cdata x, accum)
-                     else if is_constr thy x then
-                       (ctype_for_constr cdata x, accum)
-                     else if is_built_in_const true x then
-                       case def_of_const thy def_table x of
-                         SOME t' => do_term t' accum
-                       | NONE => (print_g ("*** built-in " ^ s); unsolvable)
-                     else
-                       let val C = ctype_for T in
-                         (C, ({bounds = bounds, frees = frees,
-                               consts = (x, C) :: consts}, cset))
-                       end)
+              | _ =>
+                if s = @{const_name minus_class.minus} andalso
+                   is_set_type (domain_type T) then
+                  let
+                    val set_T = domain_type T
+                    val left_set_C = ctype_for set_T
+                    val right_set_C = ctype_for set_T
+                  in
+                    (CFun (left_set_C, S Minus,
+                           CFun (right_set_C, S Minus, left_set_C)),
+                     (gamma, cset |> add_ctype_is_right_unique right_set_C
+                                  |> add_is_sub_ctype right_set_C left_set_C))
+                  end
+                else if s = @{const_name ord_class.less_eq} andalso
+                        is_set_type (domain_type T) then
+                  do_fragile_set_operation T accum
+                else if (s = @{const_name semilattice_inf_class.inf} orelse
+                         s = @{const_name semilattice_sup_class.sup}) andalso
+                        is_set_type (domain_type T) then
+                  do_robust_set_operation T accum
+                else if is_sel s then
+                  if constr_name_for_sel_like s = @{const_name FunBox} then
+                    let val dom_C = ctype_for (domain_type T) in
+                      (CFun (dom_C, S Minus, dom_C), accum)
+                    end
+                  else
+                    (ctype_for_sel cdata x, accum)
+                else if is_constr thy stds x then
+                  (ctype_for_constr cdata x, accum)
+                else if is_built_in_const thy stds fast_descrs x then
+                  case def_of_const thy def_table x of
+                    SOME t' => do_term t' accum
+                  | NONE => (print_g ("*** built-in " ^ s); unsolvable)
+                else
+                  let val C = ctype_for T in
+                    (C, ({bounds = bounds, frees = frees,
+                          consts = (x, C) :: consts}, cset))
+                  end)
          | Free (x as (_, T)) =>
            (case AList.lookup (op =) frees x of
               SOME C => (C, accum)
@@ -806,7 +806,7 @@ fun consider_term (cdata as {ext_ctxt as {ctxt, thy, def_table, ...}, alpha_T,
   in do_term end
 
 (* cdata -> sign -> term -> accumulator -> accumulator *)
-fun consider_general_formula (cdata as {ext_ctxt as {ctxt, ...}, ...}) =
+fun consider_general_formula (cdata as {hol_ctxt as {ctxt, ...}, ...}) =
   let
     (* typ -> ctype *)
     val ctype_for = fresh_ctype_for_type cdata
@@ -885,20 +885,21 @@ val harmless_consts =
 val bounteous_consts = [@{const_name bisim}]
 
 (* term -> bool *)
-fun is_harmless_axiom t =
-  Term.add_consts t [] |> filter_out (is_built_in_const true)
+fun is_harmless_axiom ({thy, stds, fast_descrs, ...} : hol_context) t =
+  Term.add_consts t []
+  |> filter_out (is_built_in_const thy stds fast_descrs)
   |> (forall (member (op =) harmless_consts o original_name o fst)
       orf exists (member (op =) bounteous_consts o fst))
 
 (* cdata -> sign -> term -> accumulator -> accumulator *)
-fun consider_nondefinitional_axiom cdata sn t =
-  not (is_harmless_axiom t) ? consider_general_formula cdata sn t
+fun consider_nondefinitional_axiom (cdata as {hol_ctxt, ...}) sn t =
+  not (is_harmless_axiom hol_ctxt t) ? consider_general_formula cdata sn t
 
 (* cdata -> term -> accumulator -> accumulator *)
-fun consider_definitional_axiom (cdata as {ext_ctxt as {thy, ...}, ...}) t =
+fun consider_definitional_axiom (cdata as {hol_ctxt as {thy, ...}, ...}) t =
   if not (is_constr_pattern_formula thy t) then
     consider_nondefinitional_axiom cdata Plus t
-  else if is_harmless_axiom t then
+  else if is_harmless_axiom hol_ctxt t then
     I
   else
     let
@@ -945,13 +946,14 @@ fun print_ctype_context ctxt lits ({frees, consts, ...} : ctype_context) =
   map (fn (x, C) => string_for_ctype_of_term ctxt lits (Const x) C) consts
   |> cat_lines |> print_g
 
-(* extended_context -> typ -> sign -> term list -> term list -> term -> bool *)
-fun formulas_monotonic (ext_ctxt as {ctxt, ...}) alpha_T sn def_ts nondef_ts
-                       core_t =
+(* hol_context -> bool -> typ -> sign -> term list -> term list -> term
+   -> bool *)
+fun formulas_monotonic (hol_ctxt as {ctxt, ...}) binarize alpha_T sn def_ts
+                       nondef_ts core_t =
   let
     val _ = print_g ("****** " ^ string_for_ctype CAlpha ^ " is " ^
                      Syntax.string_of_typ ctxt alpha_T)
-    val cdata as {max_fresh, ...} = initial_cdata ext_ctxt alpha_T
+    val cdata as {max_fresh, ...} = initial_cdata hol_ctxt binarize alpha_T
     val (gamma, cset) =
       (initial_gamma, slack)
       |> fold (consider_definitional_axiom cdata) def_ts

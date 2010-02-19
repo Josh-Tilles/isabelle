@@ -59,7 +59,7 @@ fun gen_add_repdef
       (prep_term: Proof.context -> 'a -> term)
       (def: bool)
       (name: binding)
-      (typ as (t, vs, mx) : binding * string list * mixfix)
+      (typ as (tname, vs, mx) : binding * string list * mixfix)
       (raw_defl: 'a)
       (opt_morphs: (binding * binding) option)
       (thy: theory)
@@ -79,7 +79,6 @@ fun gen_add_repdef
     val defS = Sign.defaultS thy;
     val lhs_tfrees = map (fn v => (v, the_default defS (AList.lookup (op =) rhs_tfrees v))) vs;
     val lhs_sorts = map snd lhs_tfrees;
-    val tname = Binding.map_name (Syntax.type_name mx) t;
     val full_tname = Sign.full_name thy tname;
     val newT = Type (full_tname, map TFree lhs_tfrees);
 
@@ -139,8 +138,8 @@ fun gen_add_repdef
       |> Sign.add_path (Binding.name_of name)
       |> PureThy.add_thms
         [((Binding.prefix_name "REP_" name,
-          Drule.standard (@{thm typedef_REP} OF typedef_thms')), [])]
-      ||> Sign.parent_path;
+          Drule.export_without_context (@{thm typedef_REP} OF typedef_thms')), [])]
+      ||> Sign.restore_naming thy4;
 
     val rep_info =
       { emb_def = emb_def, prj_def = prj_def, approx_def = approx_def, REP = REP_thm };
@@ -172,8 +171,7 @@ val repdef_decl =
     Scan.option (P.$$$ "morphisms" |-- P.!!! (P.binding -- P.binding));
 
 fun mk_repdef ((((((def, opt_name), (vs, t)), mx), A), morphs)) =
-  repdef_cmd
-    ((def, the_default (Binding.map_name (Syntax.type_name mx) t) opt_name), (t, vs, mx), A, morphs);
+  repdef_cmd ((def, the_default t opt_name), (t, vs, mx), A, morphs);
 
 val _ =
   OuterSyntax.command "repdef" "HOLCF definition of representable domains" K.thy_decl

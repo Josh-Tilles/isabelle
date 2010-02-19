@@ -89,7 +89,7 @@ fun prove_cpo
           (Tactic.rtac (@{thm typedef_cpo} OF cpo_thms) 1);
     (* transfer thms so that they will know about the new cpo instance *)
     val cpo_thms' = map (Thm.transfer thy2) cpo_thms;
-    fun make thm = Drule.standard (thm OF cpo_thms');
+    fun make thm = Drule.export_without_context (thm OF cpo_thms');
     val ([adm, cont_Rep, cont_Abs, lub, thelub, compact], thy3) =
       thy2
       |> Sign.add_path (Binding.name_of name)
@@ -100,7 +100,7 @@ fun prove_cpo
           ((Binding.prefix_name "lub_" name, make @{thm typedef_lub}), []),
           ((Binding.prefix_name "thelub_" name, make @{thm typedef_thelub}), []),
           ((Binding.prefix_name "compact_" name, make @{thm typedef_compact}), [])])
-      ||> Sign.parent_path;
+      ||> Sign.restore_naming thy2;
     val cpo_info : cpo_info =
       { below_def = below_def, adm = admissible', cont_Rep = cont_Rep,
         cont_Abs = cont_Abs, lub = lub, thelub = thelub, compact = compact };
@@ -127,7 +127,7 @@ fun prove_pcpo
       |> AxClass.prove_arity (full_tname, lhs_sorts, @{sort pcpo})
         (Tactic.rtac (@{thm typedef_pcpo} OF pcpo_thms) 1);
     val pcpo_thms' = map (Thm.transfer thy2) pcpo_thms;
-    fun make thm = Drule.standard (thm OF pcpo_thms');
+    fun make thm = Drule.export_without_context (thm OF pcpo_thms');
     val ([Rep_strict, Abs_strict, Rep_strict_iff, Abs_strict_iff,
           Rep_defined, Abs_defined], thy3) =
       thy2
@@ -139,7 +139,7 @@ fun prove_pcpo
           ((Binding.suffix_name "_strict_iff" Abs_name, make @{thm typedef_Abs_strict_iff}), []),
           ((Binding.suffix_name "_defined" Rep_name, make @{thm typedef_Rep_defined}), []),
           ((Binding.suffix_name "_defined" Abs_name, make @{thm typedef_Abs_defined}), [])])
-      ||> Sign.parent_path;
+      ||> Sign.restore_naming thy2;
     val pcpo_info =
       { Rep_strict = Rep_strict, Abs_strict = Abs_strict,
         Rep_strict_iff = Rep_strict_iff, Abs_strict_iff = Abs_strict_iff,
@@ -153,7 +153,7 @@ fun prove_pcpo
 fun declare_type_name a =
   Variable.declare_constraints (Logic.mk_type (TFree (a, dummyS)));
 
-fun prepare prep_term name (t, vs, mx) raw_set opt_morphs thy =
+fun prepare prep_term name (tname, vs, mx) raw_set opt_morphs thy =
   let
     val _ = Theory.requires thy "Pcpodef" "pcpodefs";
     val ctxt = ProofContext.init thy;
@@ -168,7 +168,6 @@ fun prepare prep_term name (t, vs, mx) raw_set opt_morphs thy =
     (*lhs*)
     val defS = Sign.defaultS thy;
     val lhs_tfrees = map (fn v => (v, the_default defS (AList.lookup (op =) rhs_tfrees v))) vs;
-    val tname = Binding.map_name (Syntax.type_name mx) t;
     val full_tname = Sign.full_name thy tname;
     val newT = Type (full_tname, map TFree lhs_tfrees);
 
@@ -346,7 +345,7 @@ val typedef_proof_decl =
 
 fun mk_pcpodef_proof pcpo ((((((def, opt_name), (vs, t)), mx), A), morphs)) =
   (if pcpo then pcpodef_proof_cmd else cpodef_proof_cmd)
-    ((def, the_default (Binding.map_name (Syntax.type_name mx) t) opt_name), (t, vs, mx), A, morphs);
+    ((def, the_default t opt_name), (t, vs, mx), A, morphs);
 
 val _ =
   OuterSyntax.command "pcpodef" "HOLCF type definition (requires admissibility proof)" K.thy_goal

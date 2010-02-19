@@ -657,7 +657,7 @@ structure CancelDivMod = CancelDivModFun(struct
   val trans = trans;
 
   val prove_eq_sums = Arith_Data.prove_conv2 all_tac (Arith_Data.simp_all_tac
-    (@{thm monoid_add_class.add_0_left} :: @{thm monoid_add_class.add_0_right} :: @{thms add_ac}))
+    (@{thm add_0_left} :: @{thm add_0_right} :: @{thms add_ac}))
 
 end)
 
@@ -1090,7 +1090,7 @@ by (simp add: nat_mult_2 [symmetric])
 lemma mod2_Suc_Suc [simp]: "Suc(Suc(m)) mod 2 = m mod 2"
 apply (subgoal_tac "m mod 2 < 2")
 apply (erule less_2_cases [THEN disjE])
-apply (simp_all (no_asm_simp) add: Let_def mod_Suc nat_1)
+apply (simp_all (no_asm_simp) add: Let_def mod_Suc)
 done
 
 lemma mod2_gr_0 [simp]: "0 < (m\<Colon>nat) mod 2 \<longleftrightarrow> m mod 2 = 1"
@@ -1655,8 +1655,8 @@ lemmas divmod_int_rel_mod_eq = divmod_int_relI [THEN divmod_int_rel_mod, THEN eq
 lemmas arithmetic_simps =
   arith_simps
   add_special
-  OrderedGroup.add_0_left
-  OrderedGroup.add_0_right
+  add_0_left
+  add_0_right
   mult_zero_left
   mult_zero_right
   mult_1_left
@@ -1929,7 +1929,7 @@ apply (subgoal_tac "b * (c - q mod c) < r * 1")
 apply (rule order_le_less_trans)
  apply (erule_tac [2] mult_strict_right_mono)
  apply (rule mult_left_mono_neg)
-  using add1_zle_eq[of "q mod c"]apply(simp add: algebra_simps pos_mod_bound)
+  using add1_zle_eq[of "q mod c"]apply(simp add: algebra_simps)
  apply (simp)
 apply (simp)
 done
@@ -1954,7 +1954,7 @@ apply (rule order_less_le_trans)
  apply (erule mult_strict_right_mono)
  apply (rule_tac [2] mult_left_mono)
   apply simp
- using add1_zle_eq[of "q mod c"] apply (simp add: algebra_simps pos_mod_bound)
+ using add1_zle_eq[of "q mod c"] apply (simp add: algebra_simps)
 apply simp
 done
 

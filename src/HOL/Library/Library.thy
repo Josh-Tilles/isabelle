@@ -28,6 +28,7 @@ imports
   Fundamental_Theorem_Algebra
   Infinite_Set
   Inner_Product
+  Lattice_Algebras
   Lattice_Syntax
   ListVector
   Kleene_Algebra
@@ -44,7 +45,12 @@ imports
   Preorder
   Product_Vector
   Quicksort
-  Quotient
+  Quotient_List
+  Quotient_Option
+  Quotient_Product
+  Quotient_Sum
+  Quotient_Syntax
+  Quotient_Type
   Ramsey
   Reflection
   RBT

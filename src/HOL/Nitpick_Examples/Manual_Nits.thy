@@ -1,6 +1,6 @@
 (*  Title:      HOL/Nitpick_Examples/Manual_Nits.thy
     Author:     Jasmin Blanchette, TU Muenchen
-    Copyright   2009
+    Copyright   2009, 2010
 
 Examples from the Nitpick manual.
 *)
@@ -13,7 +13,7 @@ begin
 
 chapter {* 3. First Steps *}
 
-nitpick_params [sat_solver = MiniSatJNI, max_threads = 1]
+nitpick_params [sat_solver = MiniSat_JNI, max_threads = 1]
 
 subsection {* 3.1. Propositional Logic *}
 
@@ -259,14 +259,14 @@ primrec swap where
  (if c = a then Leaf b else if c = b then Leaf a else Leaf c)" |
 "swap (Branch t u) a b = Branch (swap t a b) (swap u a b)"
 
-lemma "\<lbrakk>a \<in> labels t; b \<in> labels t; a \<noteq> b\<rbrakk> \<Longrightarrow> labels (swap t a b) = labels t"
+lemma "{a, b} \<subseteq> labels t \<Longrightarrow> labels (swap t a b) = labels t"
 nitpick
 proof (induct t)
   case Leaf thus ?case by simp
 next
   case (Branch t u) thus ?case
   nitpick
-  nitpick [non_std "'a bin_tree", show_consts]
+  nitpick [non_std, show_all]
 oops
 
 lemma "labels (swap t a b) =

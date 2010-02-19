@@ -6,38 +6,6 @@ theory SupInf
 imports RComplete
 begin
 
-lemma minus_max_eq_min:
-  fixes x :: "'a::{lordered_ab_group_add, linorder}"
-  shows "- (max x y) = min (-x) (-y)"
-by (metis le_imp_neg_le linorder_linear min_max.inf_absorb2 min_max.le_iff_inf min_max.le_iff_sup min_max.sup_absorb1)
-
-lemma minus_min_eq_max:
-  fixes x :: "'a::{lordered_ab_group_add, linorder}"
-  shows "- (min x y) = max (-x) (-y)"
-by (metis minus_max_eq_min minus_minus)
-
-lemma minus_Max_eq_Min [simp]:
-  fixes S :: "'a::{lordered_ab_group_add, linorder} set"
-  shows "finite S \<Longrightarrow> S \<noteq> {} \<Longrightarrow> - (Max S) = Min (uminus ` S)"
-proof (induct S rule: finite_ne_induct)
-  case (singleton x)
-  thus ?case by simp
-next
-  case (insert x S)
-  thus ?case by (simp add: minus_max_eq_min) 
-qed
-
-lemma minus_Min_eq_Max [simp]:
-  fixes S :: "'a::{lordered_ab_group_add, linorder} set"
-  shows "finite S \<Longrightarrow> S \<noteq> {} \<Longrightarrow> - (Min S) = Max (uminus ` S)"
-proof (induct S rule: finite_ne_induct)
-  case (singleton x)
-  thus ?case by simp
-next
-  case (insert x S)
-  thus ?case by (simp add: minus_min_eq_max) 
-qed
-
 instantiation real :: Sup 
 begin
 definition
@@ -281,7 +249,7 @@ lemma Inf_greatest [intro]:
       and z: "\<And>x. x \<in> X \<Longrightarrow> z \<le> x"
   shows "z \<le> Inf X"
 proof -
-  have "Sup (uminus ` X) \<le> -z" using x z by (force intro: Sup_least)
+  have "Sup (uminus ` X) \<le> -z" using x z by force
   hence "z \<le> - Sup (uminus ` X)"
     by simp
   thus ?thesis 
@@ -338,7 +306,7 @@ proof (cases "a \<le> Inf X")
   case True
   thus ?thesis
     by (simp add: min_def)
-       (blast intro: Inf_eq_minimum Inf_lower real_le_refl real_le_trans z) 
+       (blast intro: Inf_eq_minimum real_le_refl real_le_trans z)
 next
   case False
   hence 1:"Inf X < a" by simp
@@ -473,7 +441,7 @@ lemma reals_complete_interval:
 proof (rule exI [where x = "Sup {d. \<forall>x. a \<le> x & x < d --> P x}"], auto)
   show "a \<le> Sup {d. \<forall>c. a \<le> c \<and> c < d \<longrightarrow> P c}"
     by (rule SupInf.Sup_upper [where z=b], auto)
-       (metis prems real_le_linear real_less_def) 
+       (metis `a < b` `\<not> P b` real_le_linear real_less_def)
 next
   show "Sup {d. \<forall>c. a \<le> c \<and> c < d \<longrightarrow> P c} \<le> b"
     apply (rule SupInf.Sup_least) 

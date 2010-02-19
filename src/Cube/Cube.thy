@@ -1,5 +1,4 @@
 (*  Title:      Cube/Cube.thy
-    ID:         $Id$
     Author:     Tobias Nipkow
 *)
 
@@ -43,9 +42,9 @@ syntax
 
 translations
   ("prop") "x:X" == ("prop") "|- x:X"
-  "Lam x:A. B"   == "Abs(A, %x. B)"
-  "Pi x:A. B"    => "Prod(A, %x. B)"
-  "A -> B"       => "Prod(A, %_. B)"
+  "Lam x:A. B"   == "CONST Abs(A, %x. B)"
+  "Pi x:A. B"    => "CONST Prod(A, %x. B)"
+  "A -> B"       => "CONST Prod(A, %_. B)"
 
 syntax (xsymbols)
   Trueprop      :: "[context', typing'] => prop"        ("(_/ \<turnstile> _)")
@@ -54,7 +53,9 @@ syntax (xsymbols)
   Pi            :: "[idt, term, term] => term"          ("(3\<Pi> _:_./ _)" [0, 0] 10)
   arrow         :: "[term, term] => term"               (infixr "\<rightarrow>" 10)
 
-print_translation {* [("Prod", dependent_tr' ("Pi", "arrow"))] *}
+print_translation {*
+  [(@{const_syntax Prod}, dependent_tr' (@{syntax_const Pi}, @{syntax_const arrow}))]
+*}
 
 axioms
   s_b:          "*: []"

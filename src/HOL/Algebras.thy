@@ -10,15 +10,30 @@ begin
 
 subsection {* Generic algebraic structures *}
 
+text {*
+  These locales provide basic structures for interpretation into
+  bigger structures;  extensions require careful thinking, otherwise
+  undesired effects may occur due to interpretation.
+*}
+
+ML {*
+structure Ac_Simps = Named_Thms(
+  val name = "ac_simps"
+  val description = "associativity and commutativity simplification rules"
+)
+*}
+
+setup Ac_Simps.setup
+
 locale semigroup =
   fixes f :: "'a \<Rightarrow> 'a \<Rightarrow> 'a" (infixl "*" 70)
-  assumes assoc: "a * b * c = a * (b * c)"
+  assumes assoc [ac_simps]: "a * b * c = a * (b * c)"
 
 locale abel_semigroup = semigroup +
-  assumes commute: "a * b = b * a"
+  assumes commute [ac_simps]: "a * b = b * a"
 begin
 
-lemma left_commute:
+lemma left_commute [ac_simps]:
   "b * (a * c) = a * (b * c)"
 proof -
   have "(b * a) * c = (a * b) * c"
@@ -39,33 +54,21 @@ lemma left_idem [simp]:
 
 end
 
-locale lattice = inf!: abel_semigroup inf + sup!: abel_semigroup sup
-  for inf (infixl "\<sqinter>" 70) and sup (infixl "\<squnion>" 70) +
-  assumes sup_inf_absorb: "a \<squnion> (a \<sqinter> b) = a"
-  and inf_sup_absorb: "a \<sqinter> (a \<squnion> b) = a"
 
-sublocale lattice < inf!: semilattice inf
-proof
-  fix a
-  have "a \<sqinter> (a \<squnion> (a \<sqinter> a)) = a" by (fact inf_sup_absorb)
-  then show "a \<sqinter> a = a" by (simp add: sup_inf_absorb)
-qed
-
-sublocale lattice < sup!: semilattice sup
-proof
-  fix a
-  have "a \<squnion> (a \<sqinter> (a \<squnion> a)) = a" by (fact sup_inf_absorb)
-  then show "a \<squnion> a = a" by (simp add: inf_sup_absorb)
-qed
-
-
-subsection {* Generic algebraic operations *}
+subsection {* Generic syntactic operations *}
 
 class zero = 
   fixes zero :: 'a  ("0")
 
 class one =
   fixes one  :: 'a  ("1")
+
+hide (open) const zero one
+
+syntax
+  "_index1"  :: index    ("\<^sub>1")
+translations
+  (index) "\<^sub>1" => (index) "\<^bsub>\<struct>\<^esub>"
 
 lemma Let_0 [simp]: "Let 0 f = f 0"
   unfolding Let_def ..
@@ -93,8 +96,6 @@ let
 in map tr' [@{const_syntax Algebras.one}, @{const_syntax Algebras.zero}] end;
 *} -- {* show types that are presumably too general *}
 
-hide (open) const zero one
-
 class plus =
   fixes plus :: "'a \<Rightarrow> 'a \<Rightarrow> 'a"  (infixl "+" 65)
 
@@ -106,61 +107,5 @@ class uminus =
 
 class times =
   fixes times :: "'a \<Rightarrow> 'a \<Rightarrow> 'a"  (infixl "*" 70)
-
-class inverse =
-  fixes inverse :: "'a \<Rightarrow> 'a"
-    and divide :: "'a \<Rightarrow> 'a \<Rightarrow> 'a"  (infixl "'/" 70)
-
-class abs =
-  fixes abs :: "'a \<Rightarrow> 'a"
-begin
-
-notation (xsymbols)
-  abs  ("\<bar>_\<bar>")
-
-notation (HTML output)
-  abs  ("\<bar>_\<bar>")
-
-end
-
-class sgn =
-  fixes sgn :: "'a \<Rightarrow> 'a"
-
-class ord =
-  fixes less_eq :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-    and less :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-begin
-
-notation
-  less_eq  ("op <=") and
-  less_eq  ("(_/ <= _)" [51, 51] 50) and
-  less  ("op <") and
-  less  ("(_/ < _)"  [51, 51] 50)
-  
-notation (xsymbols)
-  less_eq  ("op \<le>") and
-  less_eq  ("(_/ \<le> _)"  [51, 51] 50)
-
-notation (HTML output)
-  less_eq  ("op \<le>") and
-  less_eq  ("(_/ \<le> _)"  [51, 51] 50)
-
-abbreviation (input)
-  greater_eq  (infix ">=" 50) where
-  "x >= y \<equiv> y <= x"
-
-notation (input)
-  greater_eq  (infix "\<ge>" 50)
-
-abbreviation (input)
-  greater  (infix ">" 50) where
-  "x > y \<equiv> y < x"
-
-end
-
-syntax
-  "_index1"  :: index    ("\<^sub>1")
-translations
-  (index) "\<^sub>1" => (index) "\<^bsub>\<struct>\<^esub>"
 
 end

@@ -606,7 +606,7 @@ fun atomize_spec thy ts =
 
 fun aprop_tr' n c = (Syntax.constN ^ c, fn ctxt => fn args =>
   if length args = n then
-    Syntax.const "_aprop" $
+    Syntax.const "_aprop" $   (* FIXME avoid old-style early externing (!??) *)
       Term.list_comb (Syntax.free (Consts.extern (ProofContext.consts_of ctxt) c), args)
   else raise Match);
 
@@ -681,7 +681,7 @@ fun define_preds binding parms (((exts, exts'), (ints, ints')), defs) thy =
             |> def_pred abinding parms defs' exts exts';
           val (_, thy'') =
             thy'
-            |> Sign.mandatory_path (Binding.name_of abinding)
+            |> Sign.qualified_path true abinding
             |> PureThy.note_thmss ""
               [((Binding.conceal (Binding.name introN), []), [([intro], [Locale.unfold_add])])]
             ||> Sign.restore_naming thy';
@@ -695,11 +695,11 @@ fun define_preds binding parms (((exts, exts'), (ints, ints')), defs) thy =
             |> def_pred binding parms defs' (ints @ the_list a_pred) (ints' @ the_list a_pred);
           val (_, thy'''') =
             thy'''
-            |> Sign.mandatory_path (Binding.name_of binding)
+            |> Sign.qualified_path true binding
             |> PureThy.note_thmss ""
                  [((Binding.conceal (Binding.name introN), []), [([intro], [Locale.intro_add])]),
                   ((Binding.conceal (Binding.name axiomsN), []),
-                    [(map (Drule.standard o Element.conclude_witness) axioms, [])])]
+                    [(map (Drule.export_without_context o Element.conclude_witness) axioms, [])])]
             ||> Sign.restore_naming thy''';
         in (SOME statement, SOME intro, axioms, thy'''') end;
   in ((a_pred, a_intro, a_axioms), (b_pred, b_intro, b_axioms), thy'''') end;
