@@ -16,9 +16,8 @@ definition comb :: "['a \<Rightarrow> 'b list \<times> 'c, 'c \<Rightarrow> 'b l
 definition comb_nil :: "'a \<Rightarrow> 'b list \<times> 'a" where
   "comb_nil a == ([], a)"
 
-syntax (xsymbols)
-  "comb" :: "['a \<Rightarrow> 'b list \<times> 'c, 'c \<Rightarrow> 'b list \<times> 'd, 'a] \<Rightarrow> 'b list \<times> 'd"    
-            (infixr "\<box>" 55)
+notation (xsymbols)
+  comb  (infixr "\<box>" 55)
 
 lemma comb_nil_left [simp]: "comb_nil \<box> f = f"
 by (simp add: comb_def comb_nil_def split_beta)

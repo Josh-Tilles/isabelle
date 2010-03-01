@@ -77,9 +77,9 @@ definition hupd       :: "loc => obj => state => state"   ("hupd'(_|->_')" [10,1
 definition lupd       :: "vname => val => state => state" ("lupd'(_|->_')" [10,10] 1000) where
  "lupd x v s   \<equiv> s (| locals := ((locals s)(x\<mapsto>v  ))|)"
 
-syntax (xsymbols)
-  hupd       :: "loc => obj => state => state"   ("hupd'(_\<mapsto>_')" [10,10] 1000)
-  lupd       :: "vname => val => state => state" ("lupd'(_\<mapsto>_')" [10,10] 1000)
+notation (xsymbols)
+  hupd  ("hupd'(_\<mapsto>_')" [10,10] 1000) and
+  lupd  ("lupd'(_\<mapsto>_')" [10,10] 1000)
 
 definition new_obj :: "loc => cname => state => state" where
  "new_obj a C   \<equiv> hupd(a\<mapsto>(C,init_vars (field C)))"
