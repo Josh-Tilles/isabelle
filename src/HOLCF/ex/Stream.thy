@@ -143,16 +143,10 @@ section "stream_take"
 
 
 lemma stream_reach2: "(LUB i. stream_take i$s) = s"
-apply (insert stream.reach [of s], erule subst) back
-apply (simp add: fix_def2 stream.take_def)
-apply (insert contlub_cfun_fun [of "%i. iterate i$stream_copy$UU" s,THEN sym])
-by simp
+by (rule stream.reach)
 
 lemma chain_stream_take: "chain (%i. stream_take i$s)"
-apply (rule chainI)
-apply (rule monofun_cfun_fun)
-apply (simp add: stream.take_def del: iterate_Suc)
-by (rule chainE, simp)
+by (simp add: stream.chain_take)
 
 lemma stream_take_prefix [simp]: "stream_take n$s << s"
 apply (insert stream_reach2 [of s])
@@ -259,10 +253,9 @@ by (drule stream_exhaust_eq [THEN iffD1],clarsimp)
 lemma stream_ind2:
 "[| adm P; P UU; !!a. a ~= UU ==> P (a && UU); !!a b s. [| a ~= UU; b ~= UU; P s |] ==> P (a && b && s) |] ==> P x"
 apply (insert stream.reach [of x],erule subst)
-apply (frule adm_impl_admw, rule wfix_ind, auto)
-apply (rule adm_subst [THEN adm_impl_admw],auto)
+apply (erule admD, rule chain_stream_take)
 apply (insert stream_finite_ind2 [of P])
-by (simp add: stream.take_def)
+by simp
 
 
 
@@ -275,16 +268,9 @@ section "coinduction"
 
 lemma stream_coind_lemma2: "!s1 s2. R s1 s2 --> ft$s1 = ft$s2 &  R (rt$s1) (rt$s2) ==> stream_bisim R"
  apply (simp add: stream.bisim_def,clarsimp)
- apply (case_tac "x=UU",clarsimp)
-  apply (erule_tac x="UU" in allE,simp)
-  apply (case_tac "x'=UU",simp)
-  apply (drule stream_exhaust_eq [THEN iffD1],auto)+
- apply (case_tac "x'=UU",auto)
-  apply (erule_tac x="a && y" in allE)
-  apply (erule_tac x="UU" in allE)+
-  apply (auto,drule stream_exhaust_eq [THEN iffD1],clarsimp)
- apply (erule_tac x="a && y" in allE)
- apply (erule_tac x="aa && ya" in allE) back
+ apply (drule spec, drule spec, drule (1) mp)
+ apply (case_tac "x", simp)
+ apply (case_tac "x'", simp)
 by auto
 
 
@@ -379,8 +365,8 @@ by (simp add: slen_def)
 lemma slen_scons_eq_rev: "(#x < Fin (Suc (Suc n))) = (!a y. x ~= a && y |  a = \<bottom> |  #y < Fin (Suc n))"
  apply (rule stream.casedist [of x], auto)
    apply (simp add: zero_inat_def)
-  apply (case_tac "#s") apply (simp_all add: iSuc_Fin)
- apply (case_tac "#s") apply (simp_all add: iSuc_Fin)
+  apply (case_tac "#stream") apply (simp_all add: iSuc_Fin)
+ apply (case_tac "#stream") apply (simp_all add: iSuc_Fin)
 done
 
 lemma slen_take_lemma4 [rule_format]:
