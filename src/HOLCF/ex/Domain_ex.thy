@@ -99,7 +99,7 @@ by (rule flattree.ind) -- "no admissibility requirement"
 
 text {* Trivial datatypes will produce a warning message. *}
 
-domain triv = triv1 triv triv
+domain triv = Triv triv triv
   -- "domain Domain_ex.triv is empty!"
 
 lemma "(x::triv) = \<bottom>" by (induct x, simp_all)
@@ -122,7 +122,7 @@ thm tree.iso_rews
 text {* Rules about constructors *}
 term Leaf
 term Node
-thm tree.Leaf_def tree.Node_def
+thm Leaf_def Node_def
 thm tree.exhaust
 thm tree.casedist
 thm tree.compacts
@@ -134,7 +134,7 @@ thm tree.injects
 
 text {* Rules about case combinator *}
 term tree_when
-thm tree.when_def
+thm tree.tree_when_def
 thm tree.when_rews
 
 text {* Rules about selectors *}
@@ -157,16 +157,17 @@ term match_Leaf
 term match_Node
 thm tree.match_rews
 
-text {* Rules about copy function *}
-term tree_copy
-thm tree.copy_def
-thm tree.copy_rews
-
 text {* Rules about take function *}
 term tree_take
 thm tree.take_def
+thm tree.take_0
+thm tree.take_Suc
 thm tree.take_rews
+thm tree.chain_take
+thm tree.take_take
+thm tree.deflation_take
 thm tree.take_lemmas
+thm tree.reach
 thm tree.finite_ind
 
 text {* Rules about finiteness predicate *}

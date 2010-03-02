@@ -150,29 +150,26 @@ fun gen_add_domain
     val eqs' : ((string * typ list) *
         (binding * (bool * binding option * typ) list * mixfix) list) list =
       check_and_sort_domain false dtnvs' cons'' thy'';
-    val thy' = thy'' |> Domain_Syntax.add_syntax false comp_dnam eqs';
+    val thy' = thy'' |> Domain_Syntax.add_syntax false eqs';
     val dts  = map (Type o fst) eqs';
     val new_dts = map (fn ((s,Ts),_) => (s, map (fst o dest_TFree) Ts)) eqs';
     fun strip ss = drop (find_index (fn s => s = "'") ss + 1) ss;
-    fun typid (Type  (id,_)) =
-        let val c = hd (Symbol.explode (Long_Name.base_name id))
-        in if Symbol.is_letter c then c else "t" end
-      | typid (TFree (id,_)   ) = hd (strip (tl (Symbol.explode id)))
-      | typid (TVar ((id,_),_)) = hd (tl (Symbol.explode id));
     fun one_con (con,args,mx) =
         (Binding.name_of con,  (* FIXME preverse binding (!?) *)
          mx,
          ListPair.map (fn ((lazy,sel,tp),vn) =>
            mk_arg ((lazy, Datatype_Aux.dtyp_of_typ new_dts tp),
                    Option.map Binding.name_of sel,vn))
-                      (args,(mk_var_names(map (typid o third) args)))
+                      (args, Datatype_Prop.make_tnames (map third args))
         ) : cons;
     val eqs : eq list =
         map (fn (dtnvs,cons') => (dtnvs, map one_con cons')) eqs';
-    val thy = thy' |> Domain_Axioms.add_axioms false comp_dnam eqs;
+    val thy = thy' |> Domain_Axioms.add_axioms false eqs' eqs;
     val ((rewss, take_rews), theorems_thy) =
         thy
-          |> fold_map (fn eq => Domain_Theorems.theorems (eq, eqs)) eqs
+          |> fold_map (fn (eq, (x,cs)) =>
+                Domain_Theorems.theorems (eq, eqs) (Type x, cs))
+             (eqs ~~ eqs')
           ||>> Domain_Theorems.comp_theorems (comp_dnam, eqs);
   in
     theorems_thy
@@ -220,35 +217,32 @@ fun gen_add_new_domain
         if null args then oneT else foldr1 mk_sprodT (map mk_arg_typ args);
     fun mk_eq_typ (_, cons) = foldr1 mk_ssumT (map mk_con_typ cons);
     
-    val thy'' = thy''' |>
+    val (iso_infos, thy'') = thy''' |>
       Domain_Isomorphism.domain_isomorphism
         (map (fn ((vs, dname, mx, _), eq) =>
                  (map fst vs, dname, mx, mk_eq_typ eq, NONE))
              (eqs''' ~~ eqs'))
 
-    val thy' = thy'' |> Domain_Syntax.add_syntax true comp_dnam eqs';
+    val thy' = thy'' |> Domain_Syntax.add_syntax true eqs';
     val dts  = map (Type o fst) eqs';
     val new_dts = map (fn ((s,Ts),_) => (s, map (fst o dest_TFree) Ts)) eqs';
     fun strip ss = drop (find_index (fn s => s = "'") ss + 1) ss;
-    fun typid (Type  (id,_)) =
-        let val c = hd (Symbol.explode (Long_Name.base_name id))
-        in if Symbol.is_letter c then c else "t" end
-      | typid (TFree (id,_)   ) = hd (strip (tl (Symbol.explode id)))
-      | typid (TVar ((id,_),_)) = hd (tl (Symbol.explode id));
     fun one_con (con,args,mx) =
         (Binding.name_of con,   (* FIXME preverse binding (!?) *)
          mx,
          ListPair.map (fn ((lazy,sel,tp),vn) =>
            mk_arg ((lazy, Datatype_Aux.dtyp_of_typ new_dts tp),
                    Option.map Binding.name_of sel,vn))
-                      (args,(mk_var_names(map (typid o third) args)))
+                      (args, Datatype_Prop.make_tnames (map third args))
         ) : cons;
     val eqs : eq list =
         map (fn (dtnvs,cons') => (dtnvs, map one_con cons')) eqs';
-    val thy = thy' |> Domain_Axioms.add_axioms true comp_dnam eqs;
+    val thy = thy' |> Domain_Axioms.add_axioms true eqs' eqs;
     val ((rewss, take_rews), theorems_thy) =
         thy
-          |> fold_map (fn eq => Domain_Theorems.theorems (eq, eqs)) eqs
+          |> fold_map (fn (eq, (x,cs)) =>
+               Domain_Theorems.theorems (eq, eqs) (Type x, cs))
+             (eqs ~~ eqs')
           ||>> Domain_Theorems.comp_theorems (comp_dnam, eqs);
   in
     theorems_thy
