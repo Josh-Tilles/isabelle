@@ -9,8 +9,8 @@ imports Ssum Sprod Up One Tr Fixrec Representable
 uses
   ("Tools/cont_consts.ML")
   ("Tools/cont_proc.ML")
+  ("Tools/Domain/domain_constructors.ML")
   ("Tools/Domain/domain_library.ML")
-  ("Tools/Domain/domain_syntax.ML")
   ("Tools/Domain/domain_axioms.ML")
   ("Tools/Domain/domain_theorems.ML")
   ("Tools/Domain/domain_extender.ML")
@@ -86,7 +86,10 @@ lemma abs_defined_iff: "(abs\<cdot>x = \<bottom>) = (x = \<bottom>)"
 lemma rep_defined_iff: "(rep\<cdot>x = \<bottom>) = (x = \<bottom>)"
   by (rule iso.abs_defined_iff [OF iso.swap]) (rule iso_axioms)
 
-lemma (in iso) compact_abs_rev: "compact (abs\<cdot>x) \<Longrightarrow> compact x"
+lemma casedist_rule: "rep\<cdot>x = \<bottom> \<or> P \<Longrightarrow> x = \<bottom> \<or> P"
+  by (simp add: rep_defined_iff)
+
+lemma compact_abs_rev: "compact (abs\<cdot>x) \<Longrightarrow> compact x"
 proof (unfold compact_def)
   assume "adm (\<lambda>y. \<not> abs\<cdot>x \<sqsubseteq> y)"
   with cont_Rep_CFun2
@@ -228,11 +231,50 @@ lemmas con_below_iff_rules =
 lemmas con_eq_iff_rules =
   sinl_eq sinr_eq sinl_eq_sinr sinr_eq_sinl con_defined_iff_rules
 
+lemmas sel_strict_rules =
+  cfcomp2 sscase1 sfst_strict ssnd_strict fup1
+
+lemma sel_app_extra_rules:
+  "sscase\<cdot>ID\<cdot>\<bottom>\<cdot>(sinr\<cdot>x) = \<bottom>"
+  "sscase\<cdot>ID\<cdot>\<bottom>\<cdot>(sinl\<cdot>x) = x"
+  "sscase\<cdot>\<bottom>\<cdot>ID\<cdot>(sinl\<cdot>x) = \<bottom>"
+  "sscase\<cdot>\<bottom>\<cdot>ID\<cdot>(sinr\<cdot>x) = x"
+  "fup\<cdot>ID\<cdot>(up\<cdot>x) = x"
+by (cases "x = \<bottom>", simp, simp)+
+
+lemmas sel_app_rules =
+  sel_strict_rules sel_app_extra_rules
+  ssnd_spair sfst_spair up_defined spair_defined
+
+lemmas sel_defined_iff_rules =
+  cfcomp2 sfst_defined_iff ssnd_defined_iff
+
+lemmas take_con_rules =
+  ID1 ssum_map_sinl' ssum_map_sinr' ssum_map_strict
+  sprod_map_spair' sprod_map_strict u_map_up u_map_strict
+
+lemma lub_ID_take_lemma:
+  assumes "chain t" and "(\<Squnion>n. t n) = ID"
+  assumes "\<And>n. t n\<cdot>x = t n\<cdot>y" shows "x = y"
+proof -
+  have "(\<Squnion>n. t n\<cdot>x) = (\<Squnion>n. t n\<cdot>y)"
+    using assms(3) by simp
+  then have "(\<Squnion>n. t n)\<cdot>x = (\<Squnion>n. t n)\<cdot>y"
+    using assms(1) by (simp add: lub_distribs)
+  then show "x = y"
+    using assms(2) by simp
+qed
+
+lemma lub_ID_reach:
+  assumes "chain t" and "(\<Squnion>n. t n) = ID"
+  shows "(\<Squnion>n. t n\<cdot>x) = x"
+using assms by (simp add: lub_distribs)
+
 use "Tools/cont_consts.ML"
 use "Tools/cont_proc.ML"
 use "Tools/Domain/domain_library.ML"
-use "Tools/Domain/domain_syntax.ML"
 use "Tools/Domain/domain_axioms.ML"
+use "Tools/Domain/domain_constructors.ML"
 use "Tools/Domain/domain_theorems.ML"
 use "Tools/Domain/domain_extender.ML"
 

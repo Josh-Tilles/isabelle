@@ -51,6 +51,7 @@ $(OUT)/HOLCF: $(OUT)/HOL \
   Pcpodef.thy \
   Pcpo.thy \
   Porder.thy \
+  Powerdomains.thy \
   Product_Cpo.thy \
   Representable.thy \
   Sprod.thy \
@@ -63,11 +64,13 @@ $(OUT)/HOLCF: $(OUT)/HOL \
   Tools/adm_tac.ML \
   Tools/cont_consts.ML \
   Tools/cont_proc.ML \
+  Tools/holcf_library.ML \
   Tools/Domain/domain_extender.ML \
   Tools/Domain/domain_axioms.ML \
+  Tools/Domain/domain_constructors.ML \
   Tools/Domain/domain_isomorphism.ML \
   Tools/Domain/domain_library.ML \
-  Tools/Domain/domain_syntax.ML \
+  Tools/Domain/domain_take_proofs.ML \
   Tools/Domain/domain_theorems.ML \
   Tools/fixrec.ML \
   Tools/pcpodef.ML \

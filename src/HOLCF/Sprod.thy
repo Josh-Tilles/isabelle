@@ -12,20 +12,20 @@ defaultsort pcpo
 
 subsection {* Definition of strict product type *}
 
-pcpodef (Sprod)  ('a, 'b) "**" (infixr "**" 20) =
+pcpodef (Sprod)  ('a, 'b) sprod (infixr "**" 20) =
         "{p::'a \<times> 'b. p = \<bottom> \<or> (fst p \<noteq> \<bottom> \<and> snd p \<noteq> \<bottom>)}"
 by simp_all
 
-instance "**" :: ("{finite_po,pcpo}", "{finite_po,pcpo}") finite_po
+instance sprod :: ("{finite_po,pcpo}", "{finite_po,pcpo}") finite_po
 by (rule typedef_finite_po [OF type_definition_Sprod])
 
-instance "**" :: ("{chfin,pcpo}", "{chfin,pcpo}") chfin
+instance sprod :: ("{chfin,pcpo}", "{chfin,pcpo}") chfin
 by (rule typedef_chfin [OF type_definition_Sprod below_Sprod_def])
 
 syntax (xsymbols)
-  "**"          :: "[type, type] => type"        ("(_ \<otimes>/ _)" [21,20] 20)
+  sprod          :: "[type, type] => type"        ("(_ \<otimes>/ _)" [21,20] 20)
 syntax (HTML output)
-  "**"          :: "[type, type] => type"        ("(_ \<otimes>/ _)" [21,20] 20)
+  sprod          :: "[type, type] => type"        ("(_ \<otimes>/ _)" [21,20] 20)
 
 lemma spair_lemma:
   "(strictify\<cdot>(\<Lambda> b. a)\<cdot>b, strictify\<cdot>(\<Lambda> a. b)\<cdot>a) \<in> Sprod"
@@ -80,11 +80,11 @@ apply (simp add: strictify_conv_if)
 apply fast
 done
 
-lemma sprodE [cases type: **]:
+lemma sprodE [cases type: sprod]:
   "\<lbrakk>p = \<bottom> \<Longrightarrow> Q; \<And>x y. \<lbrakk>p = (:x, y:); x \<noteq> \<bottom>; y \<noteq> \<bottom>\<rbrakk> \<Longrightarrow> Q\<rbrakk> \<Longrightarrow> Q"
 by (cut_tac z=p in Exh_Sprod, auto)
 
-lemma sprod_induct [induct type: **]:
+lemma sprod_induct [induct type: sprod]:
   "\<lbrakk>P \<bottom>; \<And>x y. \<lbrakk>x \<noteq> \<bottom>; y \<noteq> \<bottom>\<rbrakk> \<Longrightarrow> P (:x, y:)\<rbrakk> \<Longrightarrow> P x"
 by (cases x, simp_all)
 
@@ -221,7 +221,7 @@ by (cases z, simp_all)
 
 subsection {* Strict product preserves flatness *}
 
-instance "**" :: (flat, flat) flat
+instance sprod :: (flat, flat) flat
 proof
   fix x y :: "'a \<otimes> 'b"
   assume "x \<sqsubseteq> y" thus "x = \<bottom> \<or> x = y"
@@ -244,6 +244,10 @@ unfolding sprod_map_def by simp
 lemma sprod_map_spair [simp]:
   "x \<noteq> \<bottom> \<Longrightarrow> y \<noteq> \<bottom> \<Longrightarrow> sprod_map\<cdot>f\<cdot>g\<cdot>(:x, y:) = (:f\<cdot>x, g\<cdot>y:)"
 by (simp add: sprod_map_def)
+
+lemma sprod_map_spair':
+  "f\<cdot>\<bottom> = \<bottom> \<Longrightarrow> g\<cdot>\<bottom> = \<bottom> \<Longrightarrow> sprod_map\<cdot>f\<cdot>g\<cdot>(:x, y:) = (:f\<cdot>x, g\<cdot>y:)"
+by (cases "x = \<bottom> \<or> y = \<bottom>") auto
 
 lemma sprod_map_ID: "sprod_map\<cdot>ID\<cdot>ID = ID"
 unfolding sprod_map_def by (simp add: expand_cfun_eq eta_cfun)
@@ -308,7 +312,7 @@ qed
 
 subsection {* Strict product is a bifinite domain *}
 
-instantiation "**" :: (bifinite, bifinite) bifinite
+instantiation sprod :: (bifinite, bifinite) bifinite
 begin
 
 definition

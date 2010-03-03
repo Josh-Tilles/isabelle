@@ -163,8 +163,7 @@ by (simp add: Last_def)
 
 lemma Last_cons: "Last$(x>>xs)= (if xs=nil then Def x else Last$xs)"
 apply (simp add: Last_def Consq_def)
-apply (rule_tac x="xs" in seq.casedist)
-apply simp
+apply (cases xs)
 apply simp_all
 done
 
@@ -208,7 +207,7 @@ done
 lemma Zip_UU2: "x~=nil ==> Zip$x$UU =UU"
 apply (subst Zip_unfold)
 apply simp
-apply (rule_tac x="x" in seq.casedist)
+apply (cases x)
 apply simp_all
 done
 
@@ -902,15 +901,10 @@ lemma take_lemma_less1:
   shows "s1<<s2"
 apply (rule_tac t="s1" in seq.reach [THEN subst])
 apply (rule_tac t="s2" in seq.reach [THEN subst])
-apply (rule fix_def2 [THEN ssubst])
-apply (subst contlub_cfun_fun)
-apply (rule chain_iterate)
-apply (subst contlub_cfun_fun)
-apply (rule chain_iterate)
 apply (rule lub_mono)
-apply (rule chain_iterate [THEN ch2ch_Rep_CFunL])
-apply (rule chain_iterate [THEN ch2ch_Rep_CFunL])
-apply (rule prems [unfolded seq.take_def])
+apply (rule seq.chain_take [THEN ch2ch_Rep_CFunL])
+apply (rule seq.chain_take [THEN ch2ch_Rep_CFunL])
+apply (rule assms)
 done
 
 
