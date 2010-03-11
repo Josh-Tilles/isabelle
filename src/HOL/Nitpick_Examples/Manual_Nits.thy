@@ -118,10 +118,11 @@ nitpick [show_datatypes, expect = genuine]
 oops
 
 ML {*
-(* Proof.context -> typ -> term -> term *)
-fun my_int_postproc _ T (Const _ $ (Const _ $ t1 $ t2)) =
-    HOLogic.mk_number T (snd (HOLogic.dest_number t1) - snd (HOLogic.dest_number t2))
-  | my_int_postproc _ _ t = t
+(* Proof.context -> string -> (typ -> term list) -> typ -> term -> term *)
+fun my_int_postproc _ _ _ T (Const _ $ (Const _ $ t1 $ t2)) =
+    HOLogic.mk_number T (snd (HOLogic.dest_number t1)
+                         - snd (HOLogic.dest_number t2))
+  | my_int_postproc _ _ _ _ t = t
 *}
 
 setup {* Nitpick.register_term_postprocessor @{typ my_int} my_int_postproc *}
@@ -279,19 +280,19 @@ inductive_set reach where
 "n \<in> reach \<Longrightarrow> n + 2 \<in> reach"
 
 lemma "n \<in> reach \<Longrightarrow> 2 dvd n"
-nitpick [unary_ints, expect = none]
+nitpick [card = 1\<midarrow>5, bits = 1\<midarrow>5, expect = none]
 apply (induct set: reach)
   apply auto
- nitpick [expect = none]
+ nitpick [card = 1\<midarrow>5, bits = 1\<midarrow>5, expect = none]
  apply (thin_tac "n \<in> reach")
  nitpick [expect = genuine]
 oops
 
 lemma "n \<in> reach \<Longrightarrow> 2 dvd n \<and> n \<noteq> 0"
-nitpick [unary_ints, expect = none]
+nitpick [card = 1\<midarrow>5, bits = 1\<midarrow>5, expect = none]
 apply (induct set: reach)
   apply auto
- nitpick [expect = none]
+ nitpick [card = 1\<midarrow>5, bits = 1\<midarrow>5, expect = none]
  apply (thin_tac "n \<in> reach")
  nitpick [expect = genuine]
 oops
