@@ -33,27 +33,40 @@ fun is_positive_existential polar quant_s =
    binary coding. *)
 val binary_int_threshold = 3
 
+(* bool -> term -> bool *)
+val may_use_binary_ints =
+  let
+    (* bool -> term -> bool *)
+    fun aux def (Const (@{const_name "=="}, _) $ t1 $ t2) =
+        aux def t1 andalso aux false t2
+      | aux def (@{const "==>"} $ t1 $ t2) = aux false t1 andalso aux def t2
+      | aux def (Const (@{const_name "op ="}, _) $ t1 $ t2) =
+        aux def t1 andalso aux false t2
+      | aux def (@{const "op -->"} $ t1 $ t2) = aux false t1 andalso aux def t2
+      | aux def (t1 $ t2) = aux def t1 andalso aux def t2
+      | aux def (t as Const (s, _)) =
+        (not def orelse t <> @{const Suc}) andalso
+        not (member (op =) [@{const_name Abs_Frac}, @{const_name Rep_Frac},
+                            @{const_name nat_gcd}, @{const_name nat_lcm},
+                            @{const_name Frac}, @{const_name norm_frac}] s)
+      | aux def (Abs (_, _, t')) = aux def t'
+      | aux _ _ = true
+  in aux end
 (* term -> bool *)
-fun may_use_binary_ints (t1 $ t2) =
-    may_use_binary_ints t1 andalso may_use_binary_ints t2
-  | may_use_binary_ints (t as Const (s, _)) =
-    t <> @{const Suc} andalso
-    not (member (op =) [@{const_name Abs_Frac}, @{const_name Rep_Frac},
-                        @{const_name nat_gcd}, @{const_name nat_lcm},
-                        @{const_name Frac}, @{const_name norm_frac}] s)
-  | may_use_binary_ints (Abs (_, _, t')) = may_use_binary_ints t'
-  | may_use_binary_ints _ = true
-fun should_use_binary_ints (t1 $ t2) =
-    should_use_binary_ints t1 orelse should_use_binary_ints t2
-  | should_use_binary_ints (Const (s, T)) =
-    ((s = @{const_name times} orelse s = @{const_name div}) andalso
-     is_integer_type (body_type T)) orelse
-    (String.isPrefix numeral_prefix s andalso
-     let val n = the (Int.fromString (unprefix numeral_prefix s)) in
-       n < ~ binary_int_threshold orelse n > binary_int_threshold
-     end)
-  | should_use_binary_ints (Abs (_, _, t')) = should_use_binary_ints t'
-  | should_use_binary_ints _ = false
+val should_use_binary_ints =
+  let
+    (* term -> bool *)
+    fun aux (t1 $ t2) = aux t1 orelse aux t2
+      | aux (Const (s, T)) =
+        ((s = @{const_name times} orelse s = @{const_name div}) andalso
+         is_integer_type (body_type T)) orelse
+        (String.isPrefix numeral_prefix s andalso
+         let val n = the (Int.fromString (unprefix numeral_prefix s)) in
+           n < ~ binary_int_threshold orelse n > binary_int_threshold
+         end)
+      | aux (Abs (_, _, t')) = aux t'
+      | aux _ = false
+  in aux end
 
 (** Uncurrying **)
 
@@ -221,7 +234,8 @@ fun box_fun_and_pair_in_term (hol_ctxt as {thy, stds, fast_descrs, ...}) def
         $ do_term new_Ts old_Ts polar t2
       | Const (s as @{const_name The}, T) => do_description_operator s T
       | Const (s as @{const_name Eps}, T) => do_description_operator s T
-      | Const (s as @{const_name Tha}, T) => do_description_operator s T
+      | Const (s as @{const_name safe_The}, T) => do_description_operator s T
+      | Const (s as @{const_name safe_Eps}, T) => do_description_operator s T
       | Const (x as (s, T)) =>
         Const (s, if s = @{const_name converse} orelse
                      s = @{const_name trancl} then
@@ -1341,6 +1355,8 @@ fun finitize_all_types_of_funs (hol_ctxt as {thy, ...}) binarize finitizes monos
   let
     val Ts = ground_types_in_terms hol_ctxt binarize (nondef_ts @ def_ts)
              |> filter_out (fn Type (@{type_name fun_box}, _) => true
+                             | @{typ signed_bit} => true
+                             | @{typ unsigned_bit} => true
                              | T => is_small_finite_type hol_ctxt T orelse
                                     triple_lookup (type_match thy) monos T
                                     = SOME (SOME false))
@@ -1366,7 +1382,8 @@ fun preprocess_term (hol_ctxt as {thy, stds, binary_ints, destroy_constrs,
       is_standard_datatype thy stds nat_T andalso
       case binary_ints of
         SOME false => false
-      | _ => forall may_use_binary_ints (nondef_ts @ def_ts) andalso
+      | _ => forall (may_use_binary_ints false) nondef_ts andalso
+             forall (may_use_binary_ints true) def_ts andalso
              (binary_ints = SOME true orelse
               exists should_use_binary_ints (nondef_ts @ def_ts))
     val box = exists (not_equal (SOME false) o snd) boxes

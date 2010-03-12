@@ -1,18 +1,17 @@
-(*  Title:      HOL/IMP/Hoare.thy
+(*  Title:      HOL/IMP/Hoare_Op.thy
     ID:         $Id$
     Author:     Tobias Nipkow
-    Copyright   1995 TUM
 *)
 
-header "Inductive Definition of Hoare Logic"
+header "Hoare Logic (justified wrt operational semantics)"
 
-theory Hoare imports Denotation begin
+theory Hoare_Op imports Natural begin
 
 types assn = "state => bool"
 
 definition
   hoare_valid :: "[assn,com,assn] => bool" ("|= {(1_)}/ (_)/ {(1_)}" 50) where
-  "|= {P}c{Q} = (!s t. (s,t) : C(c) --> P s --> Q t)"
+  "|= {P}c{Q} = (!s t. \<langle>c,s\<rangle> \<longrightarrow>\<^sub>c t --> P s --> Q t)"
 
 inductive
   hoare :: "assn => com => assn => bool" ("|- ({(1_)}/ (_)/ {(1_)})" 50)
@@ -27,14 +26,7 @@ where
 | conseq: "[| !s. P' s --> P s; |- {P}c{Q}; !s. Q s --> Q' s |] ==>
           |- {P'}c{Q'}"
 
-definition
-  wp :: "com => assn => assn" where
-  "wp c Q = (%s. !t. (s,t) : C(c) --> Q t)"
-
-(*
-Soundness (and part of) relative completeness of Hoare rules
-wrt denotational semantics
-*)
+lemmas [simp] = skip ass semi If
 
 lemma strengthen_pre: "[| !s. P' s --> P s; |- {P}c{Q} |] ==> |- {P'}c{Q}"
 by (blast intro: conseq)
@@ -46,20 +38,23 @@ lemma hoare_sound: "|- {P}c{Q} ==> |= {P}c{Q}"
 proof(induct rule: hoare.induct)
   case (While P b c)
   { fix s t
-    let ?G = "Gamma b (C c)"
-    assume "(s,t) \<in> lfp ?G"
+    assume "\<langle>WHILE b DO c,s\<rangle> \<longrightarrow>\<^sub>c t"
     hence "P s \<longrightarrow> P t \<and> \<not> b t"
-    proof(rule lfp_induct2)
-      show "mono ?G" by(rule Gamma_mono)
+    proof(induct "WHILE b DO c" s t)
+      case WhileFalse thus ?case by blast
     next
-      fix s t assume "(s,t) \<in> ?G (lfp ?G \<inter> {(s,t). P s \<longrightarrow> P t \<and> \<not> b t})"
-      thus "P s \<longrightarrow> P t \<and> \<not> b t" using While.hyps
-        by(auto simp: hoare_valid_def Gamma_def)
+      case WhileTrue thus ?case
+        using While(2) unfolding hoare_valid_def by blast
     qed
+
   }
-  thus ?case by(simp add:hoare_valid_def)
+  thus ?case unfolding hoare_valid_def by blast
 qed (auto simp: hoare_valid_def)
 
+
+definition
+  wp :: "com => assn => assn" where
+  "wp c Q = (%s. !t. \<langle>c,s\<rangle> \<longrightarrow>\<^sub>c t --> Q t)"
 
 lemma wp_SKIP: "wp \<SKIP> Q = Q"
 by (simp add: wp_def)
@@ -77,45 +72,16 @@ by (rule ext) (auto simp: wp_def)
 lemma wp_While_If:
  "wp (\<WHILE> b \<DO> c) Q s =
   wp (IF b THEN c;\<WHILE> b \<DO> c ELSE SKIP) Q s"
-by(simp only: wp_def C_While_If)
-
-(*Not suitable for rewriting: LOOPS!*)
-lemma wp_While_if:
-  "wp (\<WHILE> b \<DO> c) Q s = (if b s then wp (c;\<WHILE> b \<DO> c) Q s else Q s)"
-by(simp add:wp_While_If wp_If wp_SKIP)
+unfolding wp_def by (metis equivD1 equivD2 unfold_while)
 
 lemma wp_While_True: "b s ==>
   wp (\<WHILE> b \<DO> c) Q s = wp (c;\<WHILE> b \<DO> c) Q s"
-by(simp add: wp_While_if)
+by(simp add: wp_While_If wp_If wp_SKIP)
 
 lemma wp_While_False: "~b s ==> wp (\<WHILE> b \<DO> c) Q s = Q s"
-by(simp add: wp_While_if)
+by(simp add: wp_While_If wp_If wp_SKIP)
 
 lemmas [simp] = wp_SKIP wp_Ass wp_Semi wp_If wp_While_True wp_While_False
-
-lemma wp_While: "wp (\<WHILE> b \<DO> c) Q s =
-   (s : gfp(%S.{s. if b s then wp c (%s. s:S) s else Q s}))"
-apply (simp (no_asm))
-apply (rule iffI)
- apply (rule weak_coinduct)
-  apply (erule CollectI)
- apply safe
-  apply simp
- apply simp
-apply (simp add: wp_def Gamma_def)
-apply (intro strip)
-apply (rule mp)
- prefer 2 apply (assumption)
-apply (erule lfp_induct2)
-apply (fast intro!: monoI)
-apply (subst gfp_unfold)
- apply (fast intro!: monoI)
-apply fast
-done
-
-declare C_while [simp del]
-
-lemmas [intro!] = hoare.skip hoare.ass hoare.semi hoare.If
 
 lemma wp_is_pre: "|- {wp c Q} c {Q}"
 proof(induct c arbitrary: Q)
@@ -123,7 +89,7 @@ proof(induct c arbitrary: Q)
 next
   case Assign show ?case by auto
 next
-  case Semi thus ?case by auto
+  case Semi thus ?case by(auto intro: semi)
 next
   case (Cond b c1 c2)
   let ?If = "IF b THEN c1 ELSE c2"
@@ -155,11 +121,10 @@ next
 qed
 
 lemma hoare_relative_complete: assumes "|= {P}c{Q}" shows "|- {P}c{Q}"
-proof(rule conseq)
+proof(rule strengthen_pre)
   show "\<forall>s. P s \<longrightarrow> wp c Q s" using assms
     by (auto simp: hoare_valid_def wp_def)
   show "|- {wp c Q} c {Q}" by(rule wp_is_pre)
-  show "\<forall>s. Q s \<longrightarrow> Q s" by auto
 qed
 
 end

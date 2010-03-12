@@ -25,8 +25,57 @@ lemma nonneg_neg_part[intro!]:
   shows "nonneg (neg_part f)"
   unfolding nonneg_def neg_part_def min_def by auto
 
+lemma (in measure_space)
+  assumes "f \<in> borel_measurable M"
+  shows pos_part_borel_measurable: "pos_part f \<in> borel_measurable M"
+  and neg_part_borel_measurable: "neg_part f \<in> borel_measurable M"
+using assms
+proof -
+  { fix a :: real
+    { assume asm: "0 \<le> a"
+      from asm have pp: "\<And> w. (pos_part f w \<le> a) = (f w \<le> a)" unfolding pos_part_def by auto
+      have "{w | w. w \<in> space M \<and> f w \<le> a} \<in> sets M"
+        unfolding pos_part_def using assms borel_measurable_le_iff by auto
+      hence "{w . w \<in> space M \<and> pos_part f w \<le> a} \<in> sets M" using pp by auto }
+    moreover have "a < 0 \<Longrightarrow> {w \<in> space M. pos_part f w \<le> a} \<in> sets M"
+      unfolding pos_part_def using empty_sets by auto
+    ultimately have "{w . w \<in> space M \<and> pos_part f w \<le> a} \<in> sets M"
+      using le_less_linear by auto
+  } hence pos: "pos_part f \<in> borel_measurable M" using borel_measurable_le_iff by auto
+  { fix a :: real
+    { assume asm: "0 \<le> a"
+      from asm have pp: "\<And> w. (neg_part f w \<le> a) = (f w \<ge> - a)" unfolding neg_part_def by auto
+      have "{w | w. w \<in> space M \<and> f w \<ge> - a} \<in> sets M"
+        unfolding neg_part_def using assms borel_measurable_ge_iff by auto
+      hence "{w . w \<in> space M \<and> neg_part f w \<le> a} \<in> sets M" using pp by auto }
+    moreover have "a < 0 \<Longrightarrow> {w \<in> space M. neg_part f w \<le> a} = {}" unfolding neg_part_def by auto
+    moreover hence "a < 0 \<Longrightarrow> {w \<in> space M. neg_part f w \<le> a} \<in> sets M" by (simp only: empty_sets)
+    ultimately have "{w . w \<in> space M \<and> neg_part f w \<le> a} \<in> sets M"
+      using le_less_linear by auto
+  } hence neg: "neg_part f \<in> borel_measurable M" using borel_measurable_le_iff by auto
+  from pos neg show "pos_part f \<in> borel_measurable M" and "neg_part f \<in> borel_measurable M" by auto
+qed
+
+lemma (in measure_space) pos_part_neg_part_borel_measurable_iff:
+  "f \<in> borel_measurable M \<longleftrightarrow>
+  pos_part f \<in> borel_measurable M \<and> neg_part f \<in> borel_measurable M"
+proof -
+  { fix x
+    have "f x = pos_part f x - neg_part f x"
+      unfolding pos_part_def neg_part_def unfolding max_def min_def
+      by auto }
+  hence "(\<lambda> x. f x) = (\<lambda> x. pos_part f x - neg_part f x)" by auto
+  hence "f = (\<lambda> x. pos_part f x - neg_part f x)" by blast
+  from pos_part_borel_measurable[of f] neg_part_borel_measurable[of f]
+    borel_measurable_diff_borel_measurable[of "pos_part f" "neg_part f"]
+    this
+  show ?thesis by auto
+qed
+
 context measure_space
 begin
+
+section "Simple discrete step function"
 
 definition
  "pos_simple f =
@@ -39,29 +88,6 @@ definition
 
 definition
   "psfis f = pos_simple_integral ` (pos_simple f)"
-
-definition
-  "nnfis f = { y. \<exists>u x. mono_convergent u f (space M) \<and>
-                        (\<forall>n. x n \<in> psfis (u n)) \<and> x ----> y }"
-
-definition
-  "integrable f \<longleftrightarrow> (\<exists>x. x \<in> nnfis (pos_part f)) \<and> (\<exists>y. y \<in> nnfis (neg_part f))"
-
-definition
-  "integral f = (THE i :: real. i \<in> nnfis (pos_part f)) - (THE j. j \<in> nnfis (neg_part f))"
-
-definition
-  "enumerate s \<equiv> SOME f. bij_betw f UNIV s"
-
-definition
-  "countable_space_integral f \<equiv>
-    let e = enumerate (f ` space M) in
-      suminf (\<lambda>r. e r * measure M (f -` {e r} \<inter> space M))"
-
-definition
-  "RN_deriv v \<equiv> SOME f. measure_space (M\<lparr>measure := v\<rparr>) \<and>
-    f \<in> borel_measurable M \<and>
-    (\<forall>a \<in> sets M. (integral (\<lambda>x. f x * indicator_fn a x) = v a))"
 
 lemma pos_simpleE[consumes 1]:
   assumes ps: "(s, a, x) \<in> pos_simple f"
@@ -105,6 +131,11 @@ lemma psfis_cong:
   shows "psfis f = psfis g"
   unfolding psfis_def using pos_simple_cong[OF assms] by simp
 
+lemma psfis_0: "0 \<in> psfis (\<lambda>x. 0)"
+  unfolding psfis_def pos_simple_def pos_simple_integral_def
+  by (auto simp: nonneg_def
+      intro: image_eqI[where x="({0}, (\<lambda>i. space M), (\<lambda>i. 0))"])
+
 lemma pos_simple_setsum_indicator_fn:
   assumes ps: "(s, a, x) \<in> pos_simple f"
   and "t \<in> space M"
@@ -121,28 +152,7 @@ proof -
     using `i \<in> s` by simp
 qed
 
-lemma (in measure_space) measure_setsum_split:
-  assumes "finite r" and "a \<in> sets M" and br_in_M: "b ` r \<subseteq> sets M"
-  assumes "(\<Union>i \<in> r. b i) = space M"
-  assumes "disjoint_family_on b r"
-  shows "(measure M) a = (\<Sum> i \<in> r. measure M (a \<inter> (b i)))"
-proof -
-  have *: "measure M a = measure M (\<Union>i \<in> r. a \<inter> b i)"
-    using assms by auto
-  show ?thesis unfolding *
-  proof (rule measure_finitely_additive''[symmetric])
-    show "finite r" using `finite r` by auto
-    { fix i assume "i \<in> r"
-      hence "b i \<in> sets M" using br_in_M by auto
-      thus "a \<inter> b i \<in> sets M" using `a \<in> sets M` by auto
-    }
-    show "disjoint_family_on (\<lambda>i. a \<inter> b i) r"
-      using `disjoint_family_on b r`
-      unfolding disjoint_family_on_def by auto
-  qed
-qed
-
-lemma (in measure_space) pos_simple_common_partition:
+lemma pos_simple_common_partition:
   assumes psf: "(s, a, x) \<in> pos_simple f"
   assumes psg: "(s', b, y) \<in> pos_simple g"
   obtains z z' c k where "(k, c, z) \<in> pos_simple f" "(k, c, z') \<in> pos_simple g"
@@ -229,7 +239,7 @@ proof -
   qed
 qed
 
-lemma (in measure_space) pos_simple_integral_equal:
+lemma pos_simple_integral_equal:
   assumes psx: "(s, a, x) \<in> pos_simple f"
   assumes psy: "(s', b, y) \<in> pos_simple f"
   shows "pos_simple_integral (s, a, x) = pos_simple_integral (s', b, y)"
@@ -269,7 +279,7 @@ proof simp
   finally show "?left = ?right" .
 qed
 
-lemma (in measure_space)psfis_present:
+lemma psfis_present:
   assumes "A \<in> psfis f"
   assumes "B \<in> psfis g"
   obtains z z' c k where
@@ -295,7 +305,7 @@ proof -
   qed
 qed
 
-lemma (in measure_space) pos_simple_integral_add:
+lemma pos_simple_integral_add:
   assumes "(s, a, x) \<in> pos_simple f"
   assumes "(s', b, y) \<in> pos_simple g"
   obtains s'' c z where
@@ -468,70 +478,6 @@ proof -
   thus ?thesis using r unfolding psfis_def image_def by auto
 qed
 
-lemma pos_simple_integral_setsum_image:
-  assumes "finite P"
-  assumes "\<And> i. i \<in> P \<Longrightarrow> (s i, a i, x i) \<in> pos_simple (f i)"
-  obtains s' a' x' where
-  "(s', a', x') \<in> pos_simple (\<lambda>t. (\<Sum> i \<in> P. f i t))"
-  "pos_simple_integral (s', a', x') = (\<Sum> i \<in> P. pos_simple_integral (s i, a i, x i))"
-using assms that
-proof (induct P arbitrary:thesis rule:finite.induct)
-  case emptyI note asms = this
-  def s' == "{0 :: nat}"
-  def a' == "\<lambda> x. if x = (0 :: nat) then space M else {}"
-  def x' == "\<lambda> x :: nat. (0 :: real)"
-  have "(s', a', x') \<in> pos_simple (\<lambda> t. 0)"
-    unfolding s'_def a'_def x'_def pos_simple_def nonneg_def by auto
-  moreover have "pos_simple_integral (s', a', x') = 0"
-    unfolding s'_def a'_def x'_def pos_simple_integral_def by auto
-  ultimately show ?case using asms by auto
-next
-
-  case (insertI P c) note asms = this
-  then obtain s' a' x' where
-    sax: "(s', a', x') \<in> pos_simple (\<lambda>t. \<Sum>i\<in>P. f i t)"
-         "pos_simple_integral (s', a', x') =
-             (\<Sum>i\<in>P. pos_simple_integral (s i, a i, x i))"
-    by auto
-
-  { assume "c \<in> P"
-    hence "P = insert c P" by auto
-    hence thesis using asms sax by auto
-  }
-  moreover
-  { assume "c \<notin> P"
-    from asms obtain s'' a'' x'' where
-      sax': "s'' = s c" "a'' = a c" "x'' = x c"
-            "(s'', a'', x'') \<in> pos_simple (f c)" by auto
-    from sax sax' obtain k :: "nat \<Rightarrow> bool" and b :: "nat \<Rightarrow> 'a \<Rightarrow> bool" and z :: "nat \<Rightarrow> real" where
-      tybbie:
-      "(k, b, z) \<in> pos_simple (\<lambda>t. ((\<Sum>i\<in>P. f i t) + f c t))"
-      "(pos_simple_integral (s', a', x') +
-      pos_simple_integral (s'', a'', x'') =
-      pos_simple_integral (k, b, z))"
-      using pos_simple_integral_add by blast
-
-    from tybbie have
-      "pos_simple_integral (k, b, z) =
-      pos_simple_integral (s', a', x') +
-      pos_simple_integral (s'', a'', x'')" by simp
-    also have "\<dots> = (\<Sum> i \<in> P. pos_simple_integral (s i, a i, x i))
-                  + pos_simple_integral (s c, a c, x c)"
-      using sax sax' by auto
-    also have "\<dots> = (\<Sum> i \<in> insert c P. pos_simple_integral (s i, a i, x i))"
-      using asms `c \<notin> P` by auto
-    finally have A: "pos_simple_integral (k, b, z) = (\<Sum> i \<in> insert c P. pos_simple_integral (s i, a i, x i))"
-      by simp
-
-    have "\<And> t. (\<Sum> i \<in> P. f i t) + f c t = (\<Sum> i \<in> insert c P. f i t)"
-      using `c \<notin> P` `finite P` by auto
-    hence B: "(k, b, z) \<in> pos_simple (\<lambda> t. (\<Sum> i \<in> insert c P. f i t))"
-      using tybbie by simp
-
-    from A B have thesis using asms by auto
-    } ultimately show thesis by blast
-qed
-
 lemma psfis_setsum_image:
   assumes "finite P"
   assumes "\<And>i. i \<in> P \<Longrightarrow> a i \<in> psfis (f i)"
@@ -577,57 +523,6 @@ lemma pos_psfis: "r \<in> psfis f \<Longrightarrow> 0 \<le> r"
 unfolding psfis_def pos_simple_integral_def image_def pos_simple_def nonneg_def
 using positive[unfolded positive_def] by (auto intro!:setsum_nonneg mult_nonneg_nonneg)
 
-lemma pos_part_neg_part_borel_measurable:
-  assumes "f \<in> borel_measurable M"
-  shows "pos_part f \<in> borel_measurable M" and "neg_part f \<in> borel_measurable M"
-using assms
-proof -
-  { fix a :: real
-    { assume asm: "0 \<le> a"
-      from asm have pp: "\<And> w. (pos_part f w \<le> a) = (f w \<le> a)" unfolding pos_part_def by auto
-      have "{w | w. w \<in> space M \<and> f w \<le> a} \<in> sets M"
-        unfolding pos_part_def using assms borel_measurable_le_iff by auto
-      hence "{w . w \<in> space M \<and> pos_part f w \<le> a} \<in> sets M" using pp by auto }
-    moreover have "a < 0 \<Longrightarrow> {w \<in> space M. pos_part f w \<le> a} \<in> sets M"
-      unfolding pos_part_def using empty_sets by auto
-    ultimately have "{w . w \<in> space M \<and> pos_part f w \<le> a} \<in> sets M"
-      using le_less_linear by auto
-  } hence pos: "pos_part f \<in> borel_measurable M" using borel_measurable_le_iff by auto
-  { fix a :: real
-    { assume asm: "0 \<le> a"
-      from asm have pp: "\<And> w. (neg_part f w \<le> a) = (f w \<ge> - a)" unfolding neg_part_def by auto
-      have "{w | w. w \<in> space M \<and> f w \<ge> - a} \<in> sets M"
-        unfolding neg_part_def using assms borel_measurable_ge_iff by auto
-      hence "{w . w \<in> space M \<and> neg_part f w \<le> a} \<in> sets M" using pp by auto }
-    moreover have "a < 0 \<Longrightarrow> {w \<in> space M. neg_part f w \<le> a} = {}" unfolding neg_part_def by auto
-    moreover hence "a < 0 \<Longrightarrow> {w \<in> space M. neg_part f w \<le> a} \<in> sets M" by (simp only: empty_sets)
-    ultimately have "{w . w \<in> space M \<and> neg_part f w \<le> a} \<in> sets M"
-      using le_less_linear by auto
-  } hence neg: "neg_part f \<in> borel_measurable M" using borel_measurable_le_iff by auto
-  from pos neg show "pos_part f \<in> borel_measurable M" and "neg_part f \<in> borel_measurable M" by auto
-qed
-
-lemma pos_part_neg_part_borel_measurable_iff:
-  "f \<in> borel_measurable M \<longleftrightarrow>
-  pos_part f \<in> borel_measurable M \<and> neg_part f \<in> borel_measurable M"
-proof -
-  { fix x
-    have "f x = pos_part f x - neg_part f x"
-      unfolding pos_part_def neg_part_def unfolding max_def min_def
-      by auto }
-  hence "(\<lambda> x. f x) = (\<lambda> x. pos_part f x - neg_part f x)" by auto
-  hence "f = (\<lambda> x. pos_part f x - neg_part f x)" by blast
-  from pos_part_neg_part_borel_measurable[of f]
-    borel_measurable_diff_borel_measurable[of "pos_part f" "neg_part f"]
-    this
-  show ?thesis by auto
-qed
-
-lemma borel_measurable_cong:
-  assumes "\<And> w. w \<in> space M \<Longrightarrow> f w = g w"
-  shows "f \<in> borel_measurable M \<longleftrightarrow> g \<in> borel_measurable M"
-using assms unfolding in_borel_measurable by (simp cong: vimage_inter_cong)
-
 lemma psfis_borel_measurable:
   assumes "a \<in> psfis f"
   shows "f \<in> borel_measurable M"
@@ -654,21 +549,6 @@ proof -
   show ?thesis by simp
 qed
 
-lemma mono_conv_outgrow:
-  assumes "incseq x" "x ----> y" "z < y"
-  shows "\<exists>b. \<forall> a \<ge> b. z < x a"
-using assms
-proof -
-  from assms have "y - z > 0" by simp
-  hence A: "\<exists>n. (\<forall> m \<ge> n. \<bar> x m + - y \<bar> < y - z)" using assms
-    unfolding incseq_def LIMSEQ_def dist_real_def real_diff_def
-    by simp
-  have "\<forall>m. x m \<le> y" using incseq_le assms by auto
-  hence B: "\<forall>m. \<bar> x m + - y \<bar> = y - x m"
-    by (metis abs_if abs_minus_add_cancel less_iff_diff_less_0 linorder_not_le real_diff_def)
-  from A B show ?thesis by auto
-qed
-
 lemma psfis_mono_conv_mono:
   assumes mono: "mono_convergent u f (space M)"
   and ps_u: "\<And>n. x n \<in> psfis (u n)"
@@ -679,7 +559,6 @@ lemma psfis_mono_conv_mono:
 proof (rule field_le_mult_one_interval)
   fix z :: real assume "0 < z" and "z < 1"
   hence "0 \<le> z" by auto
-(*  def B' \<equiv> "\<lambda>n. {w \<in> space M. z * s w <= u n w}" *)
   let "?B' n" = "{w \<in> space M. z * s w <= u n w}"
 
   have "incseq x" unfolding incseq_def
@@ -783,10 +662,19 @@ proof (rule field_le_mult_one_interval)
   qed
 qed
 
+section "Continuous posititve integration"
+
+definition
+  "nnfis f = { y. \<exists>u x. mono_convergent u f (space M) \<and>
+                        (\<forall>n. x n \<in> psfis (u n)) \<and> x ----> y }"
+
 lemma psfis_nnfis:
   "a \<in> psfis f \<Longrightarrow> a \<in> nnfis f"
   unfolding nnfis_def mono_convergent_def incseq_def
   by (auto intro!: exI[of _ "\<lambda>n. f"] exI[of _ "\<lambda>n. a"] LIMSEQ_const)
+
+lemma nnfis_0: "0 \<in> nnfis (\<lambda> x. 0)"
+  by (rule psfis_nnfis[OF psfis_0])
 
 lemma nnfis_times:
   assumes "a \<in> nnfis f" and "0 \<le> z"
@@ -951,7 +839,7 @@ lemma nnfis_pos_on_mspace:
 using assms
 proof -
   from assms[unfolded nnfis_def] guess u y by auto note uy = this
-  hence "\<And> n. 0 \<le> u n x" 
+  hence "\<And> n. 0 \<le> u n x"
     unfolding nnfis_def psfis_def pos_simple_def nonneg_def mono_convergent_def
     by auto
   thus "0 \<le> f x" using uy[rule_format]
@@ -1136,11 +1024,6 @@ proof -
   show ?thesis unfolding nnfis_def by auto
 qed
 
-lemma psfis_0: "0 \<in> psfis (\<lambda>x. 0)"
-  unfolding psfis_def pos_simple_def pos_simple_integral_def
-  by (auto simp: nonneg_def
-      intro: image_eqI[where x="({0}, (\<lambda>i. space M), (\<lambda>i. 0))"])
-
 lemma the_nnfis[simp]: "a \<in> nnfis f \<Longrightarrow> (THE a. a \<in> nnfis f) = a"
   by (auto intro: the_equality nnfis_unique)
 
@@ -1157,6 +1040,14 @@ proof -
   from this[OF cong] this[OF cong[symmetric]]
   show ?thesis by safe
 qed
+
+section "Lebesgue Integral"
+
+definition
+  "integrable f \<longleftrightarrow> (\<exists>x. x \<in> nnfis (pos_part f)) \<and> (\<exists>y. y \<in> nnfis (neg_part f))"
+
+definition
+  "integral f = (THE i :: real. i \<in> nnfis (pos_part f)) - (THE j. j \<in> nnfis (neg_part f))"
 
 lemma integral_cong:
   assumes cong: "\<And>x. x \<in> space M \<Longrightarrow> f x = g x"
@@ -1203,7 +1094,7 @@ proof -
     (is "\<exists>x. x \<in> nnfis ?pp \<and> _")
   proof (rule nnfis_dom_conv)
     show "?pp \<in> borel_measurable M"
-      using borel by (rule pos_part_neg_part_borel_measurable)
+      using borel by (rule pos_part_borel_measurable neg_part_borel_measurable)
     show "a + b \<in> nnfis (\<lambda>t. f t + g t)" using assms by (rule nnfis_add)
     fix t assume "t \<in> space M"
     with assms nnfis_add assms[THEN nnfis_pos_on_mspace[OF _ this]]
@@ -1217,7 +1108,7 @@ proof -
     (is "\<exists>x. x \<in> nnfis ?np \<and> _")
   proof (rule nnfis_dom_conv)
     show "?np \<in> borel_measurable M"
-      using borel by (rule pos_part_neg_part_borel_measurable)
+      using borel by (rule pos_part_borel_measurable neg_part_borel_measurable)
     show "a + b \<in> nnfis (\<lambda>t. f t + g t)" using assms by (rule nnfis_add)
     fix t assume "t \<in> space M"
     with assms nnfis_add assms[THEN nnfis_pos_on_mspace[OF _ this]]
@@ -1419,6 +1310,192 @@ proof -
     by (auto intro!: mult_imp_le_div_pos[OF `0 < a ^ n`], simp add: real_mult_commute)
 qed
 
+section "Lebesgue integration on countable spaces"
+
+lemma nnfis_on_countable:
+  assumes borel: "f \<in> borel_measurable M"
+  and bij: "bij_betw enum S (f ` space M - {0})"
+  and enum_zero: "enum ` (-S) \<subseteq> {0}"
+  and nn_enum: "\<And>n. 0 \<le> enum n"
+  and sums: "(\<lambda>r. enum r * measure M (f -` {enum r} \<inter> space M)) sums x" (is "?sum sums x")
+  shows "x \<in> nnfis f"
+proof -
+  have inj_enum: "inj_on enum S"
+    and range_enum: "enum ` S = f ` space M - {0}"
+    using bij by (auto simp: bij_betw_def)
+
+  let "?x n z" = "\<Sum>i = 0..<n. enum i * indicator_fn (f -` {enum i} \<inter> space M) z"
+
+  show ?thesis
+  proof (rule nnfis_mon_conv)
+    show "(\<lambda>n. \<Sum>i = 0..<n. ?sum i) ----> x" using sums unfolding sums_def .
+  next
+    fix n
+    show "(\<Sum>i = 0..<n. ?sum i) \<in> nnfis (?x n)"
+    proof (induct n)
+      case 0 thus ?case by (simp add: nnfis_0)
+    next
+      case (Suc n) thus ?case using nn_enum
+        by (auto intro!: nnfis_add nnfis_times psfis_nnfis[OF psfis_indicator] borel_measurable_vimage[OF borel])
+    qed
+  next
+    show "mono_convergent ?x f (space M)"
+    proof (rule mono_convergentI)
+      fix x
+      show "incseq (\<lambda>n. ?x n x)"
+        by (rule incseq_SucI, auto simp: indicator_fn_def nn_enum)
+
+      have fin: "\<And>n. finite (enum ` ({0..<n} \<inter> S))" by auto
+
+      assume "x \<in> space M"
+      hence "f x \<in> enum ` S \<or> f x = 0" using range_enum by auto
+      thus "(\<lambda>n. ?x n x) ----> f x"
+      proof (rule disjE)
+        assume "f x \<in> enum ` S"
+        then obtain i where "i \<in> S" and "f x = enum i" by auto
+
+        { fix n
+          have sum_ranges:
+            "i < n \<Longrightarrow> enum`({0..<n} \<inter> S) \<inter> {z. enum i = z \<and> x\<in>space M} = {enum i}"
+            "\<not> i < n \<Longrightarrow> enum`({0..<n} \<inter> S) \<inter> {z. enum i = z \<and> x\<in>space M} = {}"
+            using `x \<in> space M` `i \<in> S` inj_enum[THEN inj_on_iff] by auto
+          have "?x n x =
+            (\<Sum>i \<in> {0..<n} \<inter> S. enum i * indicator_fn (f -` {enum i} \<inter> space M) x)"
+            using enum_zero by (auto intro!: setsum_mono_zero_cong_right)
+          also have "... =
+            (\<Sum>z \<in> enum`({0..<n} \<inter> S). z * indicator_fn (f -` {z} \<inter> space M) x)"
+            using inj_enum[THEN subset_inj_on] by (auto simp: setsum_reindex)
+          also have "... = (if i < n then f x else 0)"
+            unfolding indicator_fn_def if_distrib[where x=1 and y=0]
+              setsum_cases[OF fin]
+            using sum_ranges `f x = enum i`
+            by auto
+          finally have "?x n x = (if i < n then f x else 0)" . }
+        note sum_equals_if = this
+
+        show ?thesis unfolding sum_equals_if
+          by (rule LIMSEQ_offset[where k="i + 1"]) (auto intro!: LIMSEQ_const)
+      next
+        assume "f x = 0"
+        { fix n have "?x n x = 0"
+            unfolding indicator_fn_def if_distrib[where x=1 and y=0]
+              setsum_cases[OF finite_atLeastLessThan]
+            using `f x = 0` `x \<in> space M`
+            by (auto split: split_if) }
+        thus ?thesis using `f x = 0` by (auto intro!: LIMSEQ_const)
+      qed
+    qed
+  qed
+qed
+
+lemma integral_on_countable:
+  assumes borel: "f \<in> borel_measurable M"
+  and bij: "bij_betw enum S (f ` space M)"
+  and enum_zero: "enum ` (-S) \<subseteq> {0}"
+  and abs_summable: "summable (\<lambda>r. \<bar>enum r * measure M (f -` {enum r} \<inter> space M)\<bar>)"
+  shows "integrable f"
+  and "integral f = (\<Sum>r. enum r * measure M (f -` {enum r} \<inter> space M))" (is "_ = suminf (?sum f enum)")
+proof -
+  { fix f enum
+    assume borel: "f \<in> borel_measurable M"
+      and bij: "bij_betw enum S (f ` space M)"
+      and enum_zero: "enum ` (-S) \<subseteq> {0}"
+      and abs_summable: "summable (\<lambda>r. \<bar>enum r * measure M (f -` {enum r} \<inter> space M)\<bar>)"
+    have inj_enum: "inj_on enum S" and range_enum: "f ` space M = enum ` S"
+      using bij unfolding bij_betw_def by auto
+
+    have [simp, intro]: "\<And>X. 0 \<le> measure M (f -` {X} \<inter> space M)"
+      by (rule positive, rule borel_measurable_vimage[OF borel])
+
+    have "(\<Sum>r. ?sum (pos_part f) (pos_part enum) r) \<in> nnfis (pos_part f) \<and>
+          summable (\<lambda>r. ?sum (pos_part f) (pos_part enum) r)"
+    proof (rule conjI, rule nnfis_on_countable)
+      have pos_f_image: "pos_part f ` space M - {0} = f ` space M \<inter> {0<..}"
+        unfolding pos_part_def max_def by auto
+
+      show "bij_betw (pos_part enum) {x \<in> S. 0 < enum x} (pos_part f ` space M - {0})"
+        unfolding bij_betw_def pos_f_image
+        unfolding pos_part_def max_def range_enum
+        by (auto intro!: inj_onI simp: inj_enum[THEN inj_on_eq_iff])
+
+      show "\<And>n. 0 \<le> pos_part enum n" unfolding pos_part_def max_def by auto
+
+      show "pos_part f \<in> borel_measurable M"
+        by (rule pos_part_borel_measurable[OF borel])
+
+      show "pos_part enum ` (- {x \<in> S. 0 < enum x}) \<subseteq> {0}"
+        unfolding pos_part_def max_def using enum_zero by auto
+
+      show "summable (\<lambda>r. ?sum (pos_part f) (pos_part enum) r)"
+      proof (rule summable_comparison_test[OF _ abs_summable], safe intro!: exI[of _ 0])
+        fix n :: nat
+        have "pos_part enum n \<noteq> 0 \<Longrightarrow> (pos_part f -` {enum n} \<inter> space M) =
+          (if 0 < enum n then (f -` {enum n} \<inter> space M) else {})"
+          unfolding pos_part_def max_def by (auto split: split_if_asm)
+        thus "norm (?sum (pos_part f) (pos_part enum) n) \<le> \<bar>?sum f enum n \<bar>"
+          by (cases "pos_part enum n = 0",
+            auto simp: pos_part_def max_def abs_mult not_le split: split_if_asm intro!: mult_nonpos_nonneg)
+      qed
+      thus "(\<lambda>r. ?sum (pos_part f) (pos_part enum) r) sums (\<Sum>r. ?sum (pos_part f) (pos_part enum) r)"
+        by (rule summable_sums)
+    qed }
+  note pos = this
+
+  note pos_part = pos[OF assms(1-4)]
+  moreover
+  have neg_part_to_pos_part:
+    "\<And>f :: _ \<Rightarrow> real. neg_part f = pos_part (uminus \<circ> f)"
+    by (auto simp: pos_part_def neg_part_def min_def max_def expand_fun_eq)
+
+  have neg_part: "(\<Sum>r. ?sum (neg_part f) (neg_part enum) r) \<in> nnfis (neg_part f) \<and>
+    summable (\<lambda>r. ?sum (neg_part f) (neg_part enum) r)"
+    unfolding neg_part_to_pos_part
+  proof (rule pos)
+    show "uminus \<circ> f \<in> borel_measurable M" unfolding comp_def
+      by (rule borel_measurable_uminus_borel_measurable[OF borel])
+
+    show "bij_betw (uminus \<circ> enum) S ((uminus \<circ> f) ` space M)"
+      using bij unfolding bij_betw_def
+      by (auto intro!: comp_inj_on simp: image_compose)
+
+    show "(uminus \<circ> enum) ` (- S) \<subseteq> {0}"
+      using enum_zero by auto
+
+    have minus_image: "\<And>r. (uminus \<circ> f) -` {(uminus \<circ> enum) r} \<inter> space M = f -` {enum r} \<inter> space M"
+      by auto
+    show "summable (\<lambda>r. \<bar>(uminus \<circ> enum) r * measure_space.measure M ((uminus \<circ> f) -` {(uminus \<circ> enum) r} \<inter> space M)\<bar>)"
+      unfolding minus_image using abs_summable by simp
+  qed
+  ultimately show "integrable f" unfolding integrable_def by auto
+
+  { fix r
+    have "?sum (pos_part f) (pos_part enum) r - ?sum (neg_part f) (neg_part enum) r = ?sum f enum r"
+    proof (cases rule: linorder_cases)
+      assume "0 < enum r"
+      hence "pos_part f -` {enum r} \<inter> space M = f -` {enum r} \<inter> space M"
+        unfolding pos_part_def max_def by (auto split: split_if_asm)
+      with `0 < enum r` show ?thesis unfolding pos_part_def neg_part_def min_def max_def expand_fun_eq
+        by auto
+    next
+      assume "enum r < 0"
+      hence "neg_part f -` {- enum r} \<inter> space M = f -` {enum r} \<inter> space M"
+        unfolding neg_part_def min_def by (auto split: split_if_asm)
+      with `enum r < 0` show ?thesis unfolding pos_part_def neg_part_def min_def max_def expand_fun_eq
+        by auto
+    qed (simp add: neg_part_def pos_part_def) }
+  note sum_diff_eq_sum = this
+
+  have "(\<Sum>r. ?sum (pos_part f) (pos_part enum) r) - (\<Sum>r. ?sum (neg_part f) (neg_part enum) r)
+    = (\<Sum>r. ?sum (pos_part f) (pos_part enum) r - ?sum (neg_part f) (neg_part enum) r)"
+    using neg_part pos_part by (auto intro: suminf_diff)
+  also have "... = (\<Sum>r. ?sum f enum r)" unfolding sum_diff_eq_sum ..
+  finally show "integral f = suminf (?sum f enum)"
+    unfolding integral_def using pos_part neg_part
+    by (auto dest: the_nnfis)
+qed
+
+section "Lebesgue integration on finite space"
+
 lemma integral_finite_on_sets:
   assumes "f \<in> borel_measurable M" and "finite (space M)" and "a \<in> sets M"
   shows "integral (\<lambda>x. f x * indicator_fn a x) =
@@ -1489,51 +1566,12 @@ proof -
   qed (auto intro!: image_eqI inj_onI)
 qed
 
-lemma borel_measurable_inverse:
-  assumes "f \<in> borel_measurable M"
-  shows "(\<lambda>x. inverse (f x)) \<in> borel_measurable M"
-  unfolding borel_measurable_ge_iff
-proof (safe, rule linorder_cases)
-  fix a :: real assume "0 < a"
-  { fix w
-    from `0 < a` have "a \<le> inverse (f w) \<longleftrightarrow> 0 < f w \<and> f w \<le> 1 / a"
-      by (metis inverse_eq_divide inverse_inverse_eq le_imp_inverse_le
-                linorder_not_le real_le_refl real_le_trans real_less_def
-                xt1(7) zero_less_divide_1_iff) }
-  hence "{w \<in> space M. a \<le> inverse (f w)} =
-    {w \<in> space M. 0 < f w} \<inter> {w \<in> space M. f w \<le> 1 / a}" by auto
-  with Int assms[unfolded borel_measurable_gr_iff]
-    assms[unfolded borel_measurable_le_iff]
-  show "{w \<in> space M. a \<le> inverse (f w)} \<in> sets M" by simp
-next
-  fix a :: real assume "0 = a"
-  { fix w have "a \<le> inverse (f w) \<longleftrightarrow> 0 \<le> f w"
-      unfolding `0 = a`[symmetric] by auto }
-  thus "{w \<in> space M. a \<le> inverse (f w)} \<in> sets M"
-    using assms[unfolded borel_measurable_ge_iff] by simp
-next
-  fix a :: real assume "a < 0"
-  { fix w
-    from `a < 0` have "a \<le> inverse (f w) \<longleftrightarrow> f w \<le> 1 / a \<or> 0 \<le> f w"
-      apply (cases "0 \<le> f w")
-      apply (metis inverse_eq_divide linorder_not_le xt1(8) xt1(9)
-                   zero_le_divide_1_iff)
-      apply (metis inverse_eq_divide inverse_inverse_eq inverse_le_imp_le_neg
-                   linorder_not_le real_le_refl real_le_trans)
-      done }
-  hence "{w \<in> space M. a \<le> inverse (f w)} =
-    {w \<in> space M. f w \<le> 1 / a} \<union> {w \<in> space M. 0 \<le> f w}" by auto
-  with Un assms[unfolded borel_measurable_ge_iff]
-    assms[unfolded borel_measurable_le_iff]
-  show "{w \<in> space M. a \<le> inverse (f w)} \<in> sets M" by simp
-qed
+section "Radon–Nikodym derivative"
 
-lemma borel_measurable_divide:
-  assumes "f \<in> borel_measurable M"
-  and "g \<in> borel_measurable M"
-  shows "(\<lambda>x. f x / g x) \<in> borel_measurable M"
-  unfolding field_divide_inverse
-  by (rule borel_measurable_inverse borel_measurable_times_borel_measurable assms)+
+definition
+  "RN_deriv v \<equiv> SOME f. measure_space (M\<lparr>measure := v\<rparr>) \<and>
+    f \<in> borel_measurable M \<and>
+    (\<forall>a \<in> sets M. (integral (\<lambda>x. f x * indicator_fn a x) = v a))"
 
 lemma RN_deriv_finite_singleton:
   fixes v :: "'a set \<Rightarrow> real"
@@ -1576,214 +1614,6 @@ next
   finally show "w x = v {x} / measure M {x}"
     using `measure M {x} \<noteq> 0` by (simp add: eq_divide_eq)
 qed fact
-
-lemma countable_space_integral_reduce:
-  assumes "positive M (measure M)" and "f \<in> borel_measurable M"
-  and "countable (f ` space M)"
-  and "\<not> finite (pos_part f ` space M)"
-  and "\<not> finite (neg_part f ` space M)"
-  and "((\<lambda>r. r * measure m (neg_part f -` {r} \<inter> space m)) o enumerate (neg_part f ` space M)) sums n"
-  and "((\<lambda>r. r * measure m (pos_part f -` {r} \<inter> space m)) o enumerate (pos_part f ` space M)) sums p"
-  shows "integral f = p - n"
-oops
-
-(*
-val countable_space_integral_reduce = store_thm
-  ("countable_space_integral_reduce",
-   "\<forall>m f p n. measure_space m \<and>
-	     positive m \<and>
-	     f \<in> borel_measurable (space m, sets m) \<and>
-	     countable (IMAGE f (space m)) \<and>
-	     ~(FINITE (IMAGE (pos_part f) (space m))) \<and>
-	     ~(FINITE (IMAGE (neg_part f) (space m))) \<and>
-	     (\<lambda>r. r *
-		  measure m (PREIMAGE (neg_part f) {r} \<inter> space m)) o
-		enumerate ((IMAGE (neg_part f) (space m))) sums n \<and>
-	     (\<lambda>r. r *
-		  measure m (PREIMAGE (pos_part f) {r} \<inter> space m)) o
-		enumerate ((IMAGE (pos_part f) (space m))) sums p ==>
-	     (integral m f = p - n)",
-   RW_TAC std_ss [integral_def]
-   ++ Suff `((@i. i \<in> nnfis m (pos_part f)) = p) \<and> ((@i. i \<in> nnfis m (neg_part f)) = n)`
-   >> RW_TAC std_ss []
-   ++ (CONJ_TAC ++ MATCH_MP_TAC SELECT_UNIQUE ++ RW_TAC std_ss [])
-   >> (Suff `p \<in> nnfis m (pos_part f)` >> METIS_TAC [nnfis_unique]
-       ++ MATCH_MP_TAC nnfis_mon_conv
-       ++ `BIJ (enumerate(IMAGE (pos_part f) (space m))) UNIV (IMAGE (pos_part f) (space m))`
-		by (`countable (IMAGE (pos_part f) (space m))`
-			by (MATCH_MP_TAC COUNTABLE_SUBSET
-			    ++ Q.EXISTS_TAC `0 INSERT (IMAGE f (space m))`
-			    ++ RW_TAC std_ss [SUBSET_DEF, IN_IMAGE, pos_part_def, COUNTABLE_INSERT, IN_INSERT]
-			    ++ METIS_TAC [])
-		     ++ METIS_TAC [COUNTABLE_ALT])
-       ++ FULL_SIMP_TAC std_ss [sums, BIJ_DEF, INJ_DEF, SURJ_DEF, IN_UNIV]
-       ++ Q.EXISTS_TAC `(\<lambda>n t. if t \<in> space m \<and> pos_part f t \<in> IMAGE (enumerate (IMAGE (pos_part f) (space m)))
-			(pred_set$count n) then pos_part f t else 0)`
-       ++ Q.EXISTS_TAC `(\<lambda>n.
-         sum (0,n)
-           ((\<lambda>r.
-               r *
-               measure m (PREIMAGE (pos_part f) {r} \<inter> space m)) o
-            enumerate (IMAGE (pos_part f) (space m))))`
-       ++ ASM_SIMP_TAC std_ss []
-       ++ CONJ_TAC
-       >> (RW_TAC std_ss [mono_convergent_def]
-	   >> (RW_TAC real_ss [IN_IMAGE, pred_setTheory.IN_COUNT, pos_part_def] ++ METIS_TAC [LESS_LESS_EQ_TRANS])
-	   ++ RW_TAC std_ss [SEQ]
-	   ++ `\<exists>N. enumerate (IMAGE (pos_part f) (space m)) N = (pos_part f) t`
-		by METIS_TAC [IN_IMAGE]
-	   ++ Q.EXISTS_TAC `SUC N`
-	   ++ RW_TAC real_ss [GREATER_EQ, real_ge, IN_IMAGE, REAL_SUB_LZERO]
-	   ++ FULL_SIMP_TAC std_ss [pred_setTheory.IN_COUNT]
-	   ++ METIS_TAC [DECIDE "!n:num. n < SUC n", LESS_LESS_EQ_TRANS, pos_part_def])
-       ++ STRIP_TAC ++ MATCH_MP_TAC psfis_nnfis ++ ASM_SIMP_TAC std_ss [GSYM REAL_SUM_IMAGE_COUNT]
-	   ++ `(\<lambda>t. (if t \<in> space m \<and> pos_part f t \<in> IMAGE (enumerate (IMAGE (pos_part f) (space m))) (pred_set$count n')
-      			then pos_part f t else  0)) =
-		(\<lambda>t. SIGMA (\<lambda>i. (\<lambda>i. enumerate (IMAGE (pos_part f) (space m)) i) i *
-			indicator_fn ((\<lambda>i. PREIMAGE (pos_part f) {enumerate (IMAGE (pos_part f) (space m)) i}
-					   \<inter> (space m)) i) t)
-		     (pred_set$count n'))`
-		by (RW_TAC std_ss [FUN_EQ_THM] ++ RW_TAC real_ss [IN_IMAGE]
-		    >> (`pred_set$count n' = x INSERT (pred_set$count n')`
-				by (ONCE_REWRITE_TAC [EXTENSION] ++ RW_TAC std_ss [IN_INSERT] ++ METIS_TAC [])
-			++ POP_ORW
-			++ RW_TAC std_ss [REAL_SUM_IMAGE_THM, pred_setTheory.FINITE_COUNT]
-			++ ONCE_REWRITE_TAC [(REWRITE_RULE [pred_setTheory.FINITE_COUNT] o
-				REWRITE_RULE [FINITE_DELETE] o Q.ISPEC `pred_set$count n' DELETE x`) REAL_SUM_IMAGE_IN_IF]
-			++ RW_TAC real_ss [IN_DELETE, indicator_fn_def, IN_INTER, IN_SING, IN_PREIMAGE]
-			++ `(\x'. (if x' \<in> pred_set$count n' \<and> ~(x' = x) then
-				enumerate (IMAGE (pos_part f) (space m)) x' *
-				(if enumerate (IMAGE (pos_part f) (space m)) x =
-				enumerate (IMAGE (pos_part f) (space m)) x'
-				then 1 else 0) else 0)) = (\<lambda>x. 0)`
-				by (RW_TAC std_ss [FUN_EQ_THM] ++ RW_TAC real_ss [] ++ METIS_TAC [])
-			++ POP_ORW
-			++ RW_TAC real_ss [REAL_SUM_IMAGE_0, pred_setTheory.FINITE_COUNT, FINITE_DELETE])
-		    ++ FULL_SIMP_TAC real_ss [IN_IMAGE, indicator_fn_def, IN_INTER, IN_PREIMAGE, IN_SING]
-		    >> RW_TAC real_ss [REAL_SUM_IMAGE_0, pred_setTheory.FINITE_COUNT, FINITE_DELETE]
-		    ++ ONCE_REWRITE_TAC [(REWRITE_RULE [pred_setTheory.FINITE_COUNT] o Q.ISPEC `pred_set$count n'`)
-			REAL_SUM_IMAGE_IN_IF]
-		    ++ `(\<lambda>x. (if x \<in> pred_set$count n' then
-			(\<lambda>i. enumerate (IMAGE (pos_part f) (space m)) i *
-           		(if (pos_part f t = enumerate (IMAGE (pos_part f) (space m)) i) \<and>
-             		 t \<in> space m then 1 else 0)) x else 0)) = (\<lambda>x. 0)`
-			by (RW_TAC std_ss [FUN_EQ_THM] ++ RW_TAC real_ss [] ++ METIS_TAC [])
-		    ++ POP_ORW
-		    ++ RW_TAC real_ss [REAL_SUM_IMAGE_0, pred_setTheory.FINITE_COUNT])
-	   ++ POP_ORW
-	   ++ `((\<lambda>r. r * measure m (PREIMAGE (pos_part f) {r} \<inter> space m)) o
-		enumerate (IMAGE (pos_part f) (space m))) =
-		(\<lambda>i. (\<lambda>i. enumerate (IMAGE (pos_part f) (space m)) i) i *
-			measure m ((\<lambda>i.
-                PREIMAGE (pos_part f)
-                  {enumerate (IMAGE (pos_part f) (space m)) i} \<inter>
-                space m) i))`
-		by (RW_TAC std_ss [FUN_EQ_THM, o_DEF] ++ RW_TAC real_ss [])
-	   ++ POP_ORW
-	   ++ MATCH_MP_TAC psfis_intro
-	   ++ ASM_SIMP_TAC std_ss [pred_setTheory.FINITE_COUNT]
-	   ++ REVERSE CONJ_TAC
-	   >> (FULL_SIMP_TAC real_ss [IN_IMAGE, pos_part_def]
-	       ++ METIS_TAC [REAL_LE_REFL])
-	   ++ `(pos_part f) \<in> borel_measurable (space m, sets m)`
-		by METIS_TAC [pos_part_neg_part_borel_measurable]
-	   ++ REPEAT STRIP_TAC
-	   ++ `PREIMAGE (pos_part f) {enumerate (IMAGE (pos_part f) (space m)) i} \<inter> space m =
-		{w | w \<in> space m \<and> ((pos_part f) w = (\<lambda>w. enumerate (IMAGE (pos_part f) (space m)) i) w)}`
-		by (ONCE_REWRITE_TAC [EXTENSION] ++ RW_TAC std_ss [GSPECIFICATION, IN_INTER, IN_PREIMAGE, IN_SING]
-		    ++ DECIDE_TAC)
-	   ++ POP_ORW
-	   ++ MATCH_MP_TAC borel_measurable_eq_borel_measurable
-	   ++ METIS_TAC [borel_measurable_const, measure_space_def])
-   ++ Suff `n \<in> nnfis m (neg_part f)` >> METIS_TAC [nnfis_unique]
-   ++ MATCH_MP_TAC nnfis_mon_conv
-   ++ `BIJ (enumerate(IMAGE (neg_part f) (space m))) UNIV (IMAGE (neg_part f) (space m))`
-		by (`countable (IMAGE (neg_part f) (space m))`
-			by (MATCH_MP_TAC COUNTABLE_SUBSET
-			    ++ Q.EXISTS_TAC `0 INSERT (IMAGE abs (IMAGE f (space m)))`
-			    ++ RW_TAC std_ss [SUBSET_DEF, IN_IMAGE, abs, neg_part_def, COUNTABLE_INSERT, IN_INSERT, COUNTABLE_IMAGE]
-			    ++ METIS_TAC [])
-		     ++ METIS_TAC [COUNTABLE_ALT])
-   ++ FULL_SIMP_TAC std_ss [sums, BIJ_DEF, INJ_DEF, SURJ_DEF, IN_UNIV]
-   ++ Q.EXISTS_TAC `(\<lambda>n t. if t \<in> space m \<and> neg_part f t \<in> IMAGE (enumerate (IMAGE (neg_part f) (space m)))
-			(pred_set$count n) then neg_part f t else 0)`
-   ++ Q.EXISTS_TAC `(\<lambda>n.
-         sum (0,n)
-           ((\<lambda>r.
-               r *
-               measure m (PREIMAGE (neg_part f) {r} \<inter> space m)) o
-            enumerate (IMAGE (neg_part f) (space m))))`
-   ++ ASM_SIMP_TAC std_ss []
-   ++ CONJ_TAC
-   >> (RW_TAC std_ss [mono_convergent_def]
-	   >> (RW_TAC real_ss [IN_IMAGE, pred_setTheory.IN_COUNT, neg_part_def] ++ METIS_TAC [LESS_LESS_EQ_TRANS, REAL_LE_NEGTOTAL])
-	   ++ RW_TAC std_ss [SEQ]
-	   ++ `\<exists>N. enumerate (IMAGE (neg_part f) (space m)) N = (neg_part f) t`
-		by METIS_TAC [IN_IMAGE]
-	   ++ Q.EXISTS_TAC `SUC N`
-	   ++ RW_TAC real_ss [GREATER_EQ, real_ge, IN_IMAGE, REAL_SUB_LZERO]
-	   ++ FULL_SIMP_TAC std_ss [pred_setTheory.IN_COUNT]
-	   ++ METIS_TAC [DECIDE "!n:num. n < SUC n", LESS_LESS_EQ_TRANS, neg_part_def])
-   ++ STRIP_TAC ++ MATCH_MP_TAC psfis_nnfis ++ ASM_SIMP_TAC std_ss [GSYM REAL_SUM_IMAGE_COUNT]
-	   ++ `(\<lambda>t. (if t \<in> space m \<and> neg_part f t \<in> IMAGE (enumerate (IMAGE (neg_part f) (space m))) (pred_set$count n')
-      			then neg_part f t else  0)) =
-		(\<lambda>t. SIGMA (\<lambda>i. (\<lambda>i. enumerate (IMAGE (neg_part f) (space m)) i) i *
-			indicator_fn ((\<lambda>i. PREIMAGE (neg_part f) {enumerate (IMAGE (neg_part f) (space m)) i}
-					   \<inter> (space m)) i) t)
-		     (pred_set$count n'))`
-		by (RW_TAC std_ss [FUN_EQ_THM] ++ RW_TAC real_ss [IN_IMAGE]
-		    >> (`pred_set$count n' = x INSERT (pred_set$count n')`
-				by (ONCE_REWRITE_TAC [EXTENSION] ++ RW_TAC std_ss [IN_INSERT] ++ METIS_TAC [])
-			++ POP_ORW
-			++ RW_TAC std_ss [REAL_SUM_IMAGE_THM, pred_setTheory.FINITE_COUNT]
-			++ ONCE_REWRITE_TAC [(REWRITE_RULE [pred_setTheory.FINITE_COUNT] o
-				REWRITE_RULE [FINITE_DELETE] o Q.ISPEC `pred_set$count n' DELETE x`) REAL_SUM_IMAGE_IN_IF]
-			++ RW_TAC real_ss [IN_DELETE, indicator_fn_def, IN_INTER, IN_SING, IN_PREIMAGE]
-			++ `(\x'. (if x' \<in> pred_set$count n' \<and> ~(x' = x) then
-				enumerate (IMAGE (neg_part f) (space m)) x' *
-				(if enumerate (IMAGE (neg_part f) (space m)) x =
-				enumerate (IMAGE (neg_part f) (space m)) x'
-				then 1 else 0) else 0)) = (\<lambda>x. 0)`
-				by (RW_TAC std_ss [FUN_EQ_THM] ++ RW_TAC real_ss [] ++ METIS_TAC [])
-			++ POP_ORW
-			++ RW_TAC real_ss [REAL_SUM_IMAGE_0, pred_setTheory.FINITE_COUNT, FINITE_DELETE])
-		    ++ FULL_SIMP_TAC real_ss [IN_IMAGE, indicator_fn_def, IN_INTER, IN_PREIMAGE, IN_SING]
-		    >> RW_TAC real_ss [REAL_SUM_IMAGE_0, pred_setTheory.FINITE_COUNT, FINITE_DELETE]
-		    ++ ONCE_REWRITE_TAC [(REWRITE_RULE [pred_setTheory.FINITE_COUNT] o Q.ISPEC `pred_set$count n'`)
-			REAL_SUM_IMAGE_IN_IF]
-		    ++ `(\<lambda>x. (if x \<in> pred_set$count n' then
-			(\<lambda>i. enumerate (IMAGE (neg_part f) (space m)) i *
-           		(if (neg_part f t = enumerate (IMAGE (neg_part f) (space m)) i) \<and>
-             		 t \<in> space m then 1 else 0)) x else 0)) = (\<lambda>x. 0)`
-			by (RW_TAC std_ss [FUN_EQ_THM] ++ RW_TAC real_ss [] ++ METIS_TAC [])
-		    ++ POP_ORW
-		    ++ RW_TAC real_ss [REAL_SUM_IMAGE_0, pred_setTheory.FINITE_COUNT])
-	   ++ POP_ORW
-	   ++ `((\<lambda>r. r * measure m (PREIMAGE (neg_part f) {r} \<inter> space m)) o
-		enumerate (IMAGE (neg_part f) (space m))) =
-		(\<lambda>i. (\<lambda>i. enumerate (IMAGE (neg_part f) (space m)) i) i *
-			measure m ((\<lambda>i.
-                PREIMAGE (neg_part f)
-                  {enumerate (IMAGE (neg_part f) (space m)) i} \<inter>
-                space m) i))`
-		by (RW_TAC std_ss [FUN_EQ_THM, o_DEF] ++ RW_TAC real_ss [])
-	   ++ POP_ORW
-	   ++ MATCH_MP_TAC psfis_intro
-	   ++ ASM_SIMP_TAC std_ss [pred_setTheory.FINITE_COUNT]
-	   ++ REVERSE CONJ_TAC
-	   >> (FULL_SIMP_TAC real_ss [IN_IMAGE, neg_part_def]
-	       ++ METIS_TAC [REAL_LE_REFL, REAL_LE_NEGTOTAL])
-	   ++ `(neg_part f) \<in> borel_measurable (space m, sets m)`
-		by METIS_TAC [pos_part_neg_part_borel_measurable]
-	   ++ REPEAT STRIP_TAC
-	   ++ `PREIMAGE (neg_part f) {enumerate (IMAGE (neg_part f) (space m)) i} \<inter> space m =
-		{w | w \<in> space m \<and> ((neg_part f) w = (\<lambda>w. enumerate (IMAGE (neg_part f) (space m)) i) w)}`
-		by (ONCE_REWRITE_TAC [EXTENSION] ++ RW_TAC std_ss [GSPECIFICATION, IN_INTER, IN_PREIMAGE, IN_SING]
-		    ++ DECIDE_TAC)
-	   ++ POP_ORW
-	   ++ MATCH_MP_TAC borel_measurable_eq_borel_measurable
-	   ++ METIS_TAC [borel_measurable_const, measure_space_def]);
-*)
 
 end
 
