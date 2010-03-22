@@ -467,7 +467,7 @@ fun define_class (bclass, raw_super) raw_params raw_specs thy =
 
     (* definition *)
 
-    val conjs = map (curry Logic.mk_of_class (Term.aT [])) super @ flat axiomss;
+    val conjs = Logic.mk_of_sort (Term.aT [], super) @ flat axiomss;
     val class_eq =
       Logic.mk_equals (Logic.mk_of_class (Term.aT [], class), Logic.mk_conjunction_balanced conjs);
 
@@ -521,7 +521,7 @@ fun axiomatize prep mk name add raw_args thy =
     val names = name args;
   in
     thy
-    |> PureThy.add_axioms (map (rpair []) (map Binding.name names ~~ specs))
+    |> fold_map Drule.add_axiom (map Binding.name names ~~ specs)
     |-> fold add
   end;
 
