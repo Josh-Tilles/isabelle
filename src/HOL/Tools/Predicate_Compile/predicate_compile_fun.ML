@@ -9,7 +9,6 @@ sig
   val define_predicates : (string * thm list) list -> theory -> (string * thm list) list * theory
   val rewrite_intro : theory -> thm -> thm list
   val pred_of_function : theory -> string -> string option
-  
   val add_function_predicate_translation : (term * term) -> theory -> theory
 end;
 
@@ -37,7 +36,7 @@ fun lookup thy net t =
     in
       SOME (Envir.subst_term subst p)
     end
-  | _ => error ("Multiple matches possible for lookup of " ^ Syntax.string_of_term_global thy t)
+  | _ => NONE
 
 fun pred_of_function thy name =
   case Item_Net.retrieve (Fun_Pred.get thy) (Const (name, Term.dummyT)) of
@@ -61,8 +60,8 @@ fun transform_ho_arg arg =
     (T as Type ("fun", _)) =>
       (case arg of
         Free (name, _) => Free (name, transform_ho_typ T)
-      | _ => error "I am surprised")
-| _ => arg
+      | _ => raise Fail "A non-variable term at a higher-order position")
+  | _ => arg
 
 fun pred_type T =
   let
@@ -119,23 +118,12 @@ fun keep_functions thy t =
     SOME (c, _) => Predicate_Compile_Data.keep_function thy c
   | _ => false
 
-fun mk_prems thy lookup_pred t (names, prems) =
+fun flatten thy lookup_pred t (names, prems) =
   let
-    fun mk_prems' (t as Const (name, T)) (names, prems) =
-      (if is_constr thy name orelse (is_none (lookup_pred t)) then
-        [(t, (names, prems))]
-      else
-       (*(if is_none (try lookup_pred t) then
-          [(Abs ("uu", fastype_of t, HOLogic.mk_eq (t, Bound 0)), (names, prems))]
-        else*) [(the (lookup_pred t), (names, prems))])
-    | mk_prems' (t as Free (f, T)) (names, prems) = 
-      (case lookup_pred t of
-        SOME t' => [(t', (names, prems))]
-      | NONE => [(t, (names, prems))])
-    | mk_prems' (t as Abs _) (names, prems) =
-      if Predicate_Compile_Aux.is_predT (fastype_of t) then
-        ([(Envir.eta_contract t, (names, prems))])
-      else
+    fun lift t (names, prems) =
+      case lookup_pred (Envir.eta_contract t) of
+        SOME pred => [(pred, (names, prems))]
+      | NONE =>
         let
           val (vars, body) = strip_abs t
           val _ = assert (fastype_of body = body_type (fastype_of body))
@@ -144,7 +132,7 @@ fun mk_prems thy lookup_pred t (names, prems) =
           val body' = subst_bounds (rev frees, body)
           val resname = Name.variant (absnames @ names) "res"
           val resvar = Free (resname, fastype_of body)
-          val t = mk_prems' body' ([], [])
+          val t = flatten' body' ([], [])
             |> map (fn (res, (inner_names, inner_prems)) =>
               let
                 fun mk_exists (x, T) t = HOLogic.mk_exists (x, T, t)
@@ -153,7 +141,7 @@ fun mk_prems thy lookup_pred t (names, prems) =
                   |> filter (fn (x, T) => member (op =) inner_names x)
                 val t = 
                   fold mk_exists vTs
-                  (foldr1 HOLogic.mk_conj (HOLogic.mk_eq (resvar, res) ::
+                  (foldr1 HOLogic.mk_conj (HOLogic.mk_eq (res, resvar) ::
                     map HOLogic.dest_Trueprop inner_prems))
               in
                 t
@@ -163,7 +151,20 @@ fun mk_prems thy lookup_pred t (names, prems) =
         in
           [(t, (names, prems))]
         end
-    | mk_prems' t (names, prems) =
+    and flatten_or_lift (t, T) (names, prems) =
+      if fastype_of t = T then
+        flatten' t (names, prems)
+      else
+        (* note pred_type might be to general! *)
+        if (pred_type (fastype_of t) = T) then
+          lift t (names, prems)
+        else
+          error ("unexpected input for flatten or lift" ^ Syntax.string_of_term_global thy t ^
+          ", " ^  Syntax.string_of_typ_global thy T)
+    and flatten' (t as Const (name, T)) (names, prems) = [(t, (names, prems))]
+      | flatten' (t as Free (f, T)) (names, prems) = [(t, (names, prems))]
+      | flatten' (t as Abs _) (names, prems) = [(t, (names, prems))]
+      | flatten' (t as _ $ _) (names, prems) =
       if Predicate_Compile_Aux.is_constrt thy t orelse keep_functions thy t then
         [(t, (names, prems))]
       else
@@ -172,28 +173,31 @@ fun mk_prems thy lookup_pred t (names, prems) =
             (let
               val (_, [B, x, y]) = strip_comb t
             in
-              (mk_prems' x (names, prems)
-              |> map (fn (res, (names, prems)) => (res, (names, (HOLogic.mk_Trueprop B) :: prems))))
-              @ (mk_prems' y (names, prems)
-              |> map (fn (res, (names, prems)) =>
-                (res, (names, (HOLogic.mk_Trueprop (HOLogic.mk_not B)) :: prems))))
+              flatten' B (names, prems)
+              |> maps (fn (B', (names, prems)) =>
+                (flatten' x (names, prems)
+                |> map (fn (res, (names, prems)) => (res, (names, (HOLogic.mk_Trueprop B') :: prems))))
+                @ (flatten' y (names, prems)
+                |> map (fn (res, (names, prems)) =>
+                  (* in general unsound! *)
+                  (res, (names, (HOLogic.mk_Trueprop (HOLogic.mk_not B')) :: prems)))))
             end)
         | Const (@{const_name "Let"}, _) => 
             (let
               val (_, [f, g]) = strip_comb t
             in
-              mk_prems' f (names, prems)
+              flatten' f (names, prems)
               |> maps (fn (res, (names, prems)) =>
-                mk_prems' (betapply (g, res)) (names, prems))
+                flatten' (betapply (g, res)) (names, prems))
             end)
         | Const (@{const_name "split"}, _) => 
             (let
-              val (_, [g, res]) = strip_comb t
+              val (_, g :: res :: args) = strip_comb t
               val [res1, res2] = Name.variant_list names ["res1", "res2"]
               val (T1, T2) = HOLogic.dest_prodT (fastype_of res)
               val (resv1, resv2) = (Free (res1, T1), Free (res2, T2))
             in
-              mk_prems' (betapplys (g, [resv1, resv2]))
+              flatten' (betapplys (g, (resv1 :: resv2 :: args)))
               (res1 :: res2 :: names,
               HOLogic.mk_Trueprop (HOLogic.mk_eq (res, HOLogic.mk_prod (resv1, resv2))) :: prems)
             end)
@@ -202,14 +206,12 @@ fun mk_prems thy lookup_pred t (names, prems) =
           let
             val (f, args) = strip_comb t
             val split_thm = prepare_split_thm (ProofContext.init thy) (the (find_split_thm' thy f))
-            (* TODO: contextify things - this line is to unvarify the split_thm *)
-            (*val ((_, [isplit_thm]), _) = Variable.import true [split_thm] (ProofContext.init thy)*)
             val (assms, concl) = Logic.strip_horn (Thm.prop_of split_thm)
             val (P, [split_t]) = strip_comb (HOLogic.dest_Trueprop concl) 
             val subst = Pattern.match thy (split_t, t) (Vartab.empty, Vartab.empty)
             val (_, split_args) = strip_comb split_t
             val match = split_args ~~ args
-            fun mk_prems_of_assm assm =
+            fun flatten_of_assm assm =
               let
                 val (vTs, assm') = strip_all (Envir.beta_norm (Envir.subst_term subst assm))
                 val var_names = Name.variant_list names (map fst vTs)
@@ -219,183 +221,119 @@ fun mk_prems thy lookup_pred t (names, prems) =
                 val (lhss : term list, rhss) =
                   split_list (map (HOLogic.dest_eq o HOLogic.dest_Trueprop) prems')
               in
-                folds_map mk_prems' lhss (var_names @ names, prems)
+                folds_map flatten' lhss (var_names @ names, prems)
                 |> map (fn (ress, (names, prems)) =>
                   let
                     val prems' = map (HOLogic.mk_Trueprop o HOLogic.mk_eq) (ress ~~ rhss)
                   in (names, prems' @ prems) end)
-                |> maps (mk_prems' inner_t)
+                |> maps (flatten' inner_t)
               end
           in
-            maps mk_prems_of_assm assms
+            maps flatten_of_assm assms
           end
         else
           let
             val (f, args) = strip_comb t
-            (* TODO: special procedure for higher-order functions: split arguments in
-              simple types and function types *)
             val args = map (Pattern.eta_long []) args
-            val resname = Name.variant names "res"
-            val resvar = Free (resname, body_type (fastype_of t))
             val _ = assert (fastype_of t = body_type (fastype_of t))
-            val names' = resname :: names
-            fun mk_prems'' (t as Const (c, _)) =
-              if is_constr thy c orelse (is_none (lookup_pred t)) then
-                let
-                  val _ = ()(*tracing ("not translating function " ^ Syntax.string_of_term_global thy t)*)
-                in
-                folds_map mk_prems' args (names', prems) |>
-                map
-                  (fn (argvs, (names'', prems')) =>
-                  let
-                    val prem = HOLogic.mk_Trueprop (HOLogic.mk_eq (resvar, list_comb (f, argvs)))
-                  in (names'', prem :: prems') end)
-                end
-              else
-                let
-                  (* lookup_pred is falsch für polymorphe Argumente und bool. *)
-                  val pred = the (lookup_pred t)
-                  val Ts = binder_types (fastype_of pred)
-                in
-                  folds_map mk_prems' args (names', prems)
-                  |> map (fn (argvs, (names'', prems')) =>
-                    let
-                      fun lift_arg T t =
-                        if (fastype_of t) = T then t
-                        else
-                          let
-                            val _ = assert (T =
-                              (binder_types (fastype_of t) @ [@{typ bool}] ---> @{typ bool}))
-                            fun mk_if T (b, t, e) =
-                              Const (@{const_name If}, @{typ bool} --> T --> T --> T) $ b $ t $ e
-                            val Ts = binder_types (fastype_of t)
-                            val t = 
-                            list_abs (map (pair "x") Ts @ [("b", @{typ bool})],
-                              mk_if @{typ bool} (list_comb (t, map Bound (length Ts downto 1)),
-                              HOLogic.mk_eq (@{term True}, Bound 0),
-                              HOLogic.mk_eq (@{term False}, Bound 0)))
-                          in
-                            t
-                          end
-                      (*val _ = tracing ("Ts: " ^ commas (map (Syntax.string_of_typ_global thy) Ts))
-                      val _ = map2 check_arity Ts (map fastype_of (argvs @ [resvar]))*)
-                      val argvs' = map2 lift_arg (fst (split_last Ts)) argvs
-                      val prem = HOLogic.mk_Trueprop (list_comb (pred, argvs' @ [resvar]))
-                    in (names'', prem :: prems') end)
-                end
-            | mk_prems'' (t as Free (_, _)) =
-              folds_map mk_prems' args (names', prems) |>
-                map
-                  (fn (argvs, (names'', prems')) =>
-                  let
-                    val prem = 
-                      case lookup_pred t of
-                        NONE => HOLogic.mk_Trueprop (HOLogic.mk_eq (resvar, list_comb (f, argvs)))
-                      | SOME p => HOLogic.mk_Trueprop (list_comb (p, argvs @ [resvar]))
-                  in (names'', prem :: prems') end)
-            | mk_prems'' t =
-              error ("Invalid term: " ^ Syntax.string_of_term_global thy t)
+            val f' = lookup_pred f
+            val Ts = case f' of
+              SOME pred => (fst (split_last (binder_types (fastype_of pred))))
+            | NONE => binder_types (fastype_of f)
           in
-            map (pair resvar) (mk_prems'' f)
+            folds_map flatten_or_lift (args ~~ Ts) (names, prems) |>
+            (case f' of
+              NONE =>
+                map (fn (argvs, (names', prems')) => (list_comb (f, argvs), (names', prems')))
+            | SOME pred =>
+                map (fn (argvs, (names', prems')) =>
+                  let
+                    fun lift_arg T t =
+                      if (fastype_of t) = T then t
+                      else
+                        let
+                          val _ = assert (T =
+                            (binder_types (fastype_of t) @ [@{typ bool}] ---> @{typ bool}))
+                          fun mk_if T (b, t, e) =
+                            Const (@{const_name If}, @{typ bool} --> T --> T --> T) $ b $ t $ e
+                          val Ts = binder_types (fastype_of t)
+                        in
+                          list_abs (map (pair "x") Ts @ [("b", @{typ bool})],
+                            mk_if @{typ bool} (list_comb (t, map Bound (length Ts downto 1)),
+                            HOLogic.mk_eq (@{term True}, Bound 0),
+                            HOLogic.mk_eq (@{term False}, Bound 0)))
+                        end
+                    val argvs' = map2 lift_arg Ts argvs
+                    val resname = Name.variant names' "res"
+                    val resvar = Free (resname, body_type (fastype_of t))
+                    val prem = HOLogic.mk_Trueprop (list_comb (pred, argvs' @ [resvar]))
+                  in (resvar, (resname :: names', prem :: prems')) end))
           end
   in
-    mk_prems' (Pattern.eta_long [] t) (names, prems)
+    map (apfst Envir.eta_contract) (flatten' (Pattern.eta_long [] t) (names, prems))
   end;
 
-(* assumption: mutual recursive predicates all have the same parameters. *)  
+(* assumption: mutual recursive predicates all have the same parameters. *)
 fun define_predicates specs thy =
   if forall (fn (const, _) => defined_const thy const) specs then
     ([], thy)
   else
-  let
-    val consts = map fst specs
-    val eqns = maps snd specs
-    (*val eqns = maps (Predicate_Compile_Preproc_Data.get_specification thy) consts*)
+    let
+      val consts = map fst specs
+      val eqns = maps snd specs
       (* create prednames *)
-    val ((funs, argss), rhss) = map_split dest_code_eqn eqns |>> split_list
-    val argss' = map (map transform_ho_arg) argss
-    (* TODO: higher order arguments also occur in tuples! *)
-    val ho_argss = distinct (op =) (maps (filter (is_funtype o fastype_of)) argss)
-    val params = distinct (op =) (maps (filter (is_funtype o fastype_of)) argss')
-    val pnames = map dest_Free params
-    val preds = map pred_of funs
-    val prednames = map (fst o dest_Free) preds
-    val funnames = map (fst o dest_Const) funs
-    val fun_pred_names = (funnames ~~ prednames)  
+      val ((funs, argss), rhss) = map_split dest_code_eqn eqns |>> split_list
+      val argss' = map (map transform_ho_arg) argss
+      fun is_lifted (t1, t2) = (fastype_of t2 = pred_type (fastype_of t1))
+     (* FIXME: higher order arguments also occur in tuples! *)
+      val lifted_args = distinct (op =) (filter is_lifted (flat argss ~~ flat argss'))
+      val preds = map pred_of funs
       (* mapping from term (Free or Const) to term *)
-    fun map_Free f = Free o f o dest_Free
-    val net = fold Item_Net.update
-      ((funs ~~ preds) @ (ho_argss ~~ params))
-        (Fun_Pred.get thy)
-    fun lookup_pred t = lookup thy net t
-    (* create intro rules *)
-  
-    fun mk_intros ((func, pred), (args, rhs)) =
-      if (body_type (fastype_of func) = @{typ bool}) then
-       (*TODO: preprocess predicate definition of rhs *)
-        [Logic.list_implies ([HOLogic.mk_Trueprop rhs], HOLogic.mk_Trueprop (list_comb (pred, args)))]
-      else
-        let
-          val names = Term.add_free_names rhs []
-        in mk_prems thy lookup_pred rhs (names, [])
-          |> map (fn (resultt, (names', prems)) =>
-            Logic.list_implies (prems, HOLogic.mk_Trueprop (list_comb (pred, args @ [resultt]))))
-        end
-    fun mk_rewr_thm (func, pred) = @{thm refl}
-  in
-    case (*try *)SOME (maps mk_intros ((funs ~~ preds) ~~ (argss' ~~ rhss))) of
-      NONE =>
-        let val _ = tracing "error occured!" in ([], thy) end
-    | SOME intr_ts =>
-        if is_some (try (map (cterm_of thy)) intr_ts) then
-          let
-            val (ind_result, thy') =
-              thy
-              |> Sign.map_naming Name_Space.conceal
-              |> Inductive.add_inductive_global
-                {quiet_mode = false, verbose = false, alt_name = Binding.empty, coind = false,
-                  no_elim = false, no_ind = false, skip_mono = false, fork_mono = false}
-                (map (fn (s, T) =>
-                  ((Binding.name s, T), NoSyn)) (distinct (op =) (map dest_Free preds)))
-                []
-                (map (fn x => (Attrib.empty_binding, x)) intr_ts)
-                []
-              ||> Sign.restore_naming thy
-            val prednames = map (fst o dest_Const) (#preds ind_result)
-            (* val rewr_thms = map mk_rewr_eq ((distinct (op =) funs) ~~ (#preds ind_result)) *)
-            (* add constants to my table *)
-            
-            val specs = map (fn predname => (predname, filter (Predicate_Compile_Aux.is_intro predname)
-              (#intrs ind_result))) prednames
-            (*
-            val thy'' = Pred_Compile_Preproc.map (fold Symtab.update_new (consts ~~ prednames)) thy'
-            *)
-            
-            val thy'' = Fun_Pred.map
-              (fold Item_Net.update (map (apfst Logic.varify_global)
-                (distinct (op =) funs ~~ (#preds ind_result)))) thy'
-            (*val _ = print_specs thy'' specs*)
-          in
-            (specs, thy'')
-          end
+      val net = fold Item_Net.update
+        ((funs ~~ preds) @ lifted_args)
+          (Fun_Pred.get thy)
+      fun lookup_pred t = lookup thy net t
+      (* create intro rules *)
+      fun mk_intros ((func, pred), (args, rhs)) =
+        if (body_type (fastype_of func) = @{typ bool}) then
+         (* TODO: preprocess predicate definition of rhs *)
+          [Logic.list_implies ([HOLogic.mk_Trueprop rhs], HOLogic.mk_Trueprop (list_comb (pred, args)))]
         else
           let
-            val _ = Output.tracing (
-            "Introduction rules of function_predicate are not welltyped: " ^
-              commas (map (Syntax.string_of_term_global thy) intr_ts))
-          in ([], thy) end
-  end
+            val names = Term.add_free_names rhs []
+          in flatten thy lookup_pred rhs (names, [])
+            |> map (fn (resultt, (names', prems)) =>
+              Logic.list_implies (prems, HOLogic.mk_Trueprop (list_comb (pred, args @ [resultt]))))
+          end
+      fun mk_rewr_thm (func, pred) = @{thm refl}
+      val intr_ts = maps mk_intros ((funs ~~ preds) ~~ (argss' ~~ rhss))
+      val (ind_result, thy') =
+        thy
+        |> Sign.map_naming Name_Space.conceal
+        |> Inductive.add_inductive_global
+          {quiet_mode = false, verbose = false, alt_name = Binding.empty, coind = false,
+            no_elim = false, no_ind = false, skip_mono = false, fork_mono = false}
+          (map (fn (s, T) =>
+            ((Binding.name s, T), NoSyn)) (distinct (op =) (map dest_Free preds)))
+          (map (dest_Free o snd) lifted_args)
+          (map (fn x => (Attrib.empty_binding, x)) intr_ts)
+          []
+        ||> Sign.restore_naming thy
+      val prednames = map (fst o dest_Const) (#preds ind_result)
+      (* add constants to my table *)
+      val specs = map (fn predname => (predname, filter (Predicate_Compile_Aux.is_intro predname)
+        (#intrs ind_result))) prednames
+      val thy'' = Fun_Pred.map
+        (fold Item_Net.update (map (apfst Logic.varify_global)
+          (distinct (op =) funs ~~ (#preds ind_result)))) thy'
+    in
+      (specs, thy'')
+    end
 
 fun rewrite_intro thy intro =
   let
     (*val _ = tracing ("Rewriting intro with registered mapping for: " ^
       commas (Symtab.keys (Pred_Compile_Preproc.get thy)))*)
-    (*fun lookup_pred (Const (name, T)) =
-      (case (Symtab.lookup (Pred_Compile_Preproc.get thy) name) of
-        SOME c => SOME (Const (c, pred_type T))
-      | NONE => NONE)
-    | lookup_pred _ = NONE
-    *)
     fun lookup_pred t = lookup thy (Fun_Pred.get thy) t
     val intro_t = Logic.unvarify_global (prop_of intro)
     val (prems, concl) = Logic.strip_horn intro_t
@@ -409,7 +347,7 @@ fun rewrite_intro thy intro =
           | NONE => (t, I)
         val (P, args) = (strip_comb lit)
       in
-        folds_map (mk_prems thy lookup_pred) args (names, [])
+        folds_map (flatten thy lookup_pred) args (names, [])
         |> map (fn (resargs, (names', prems')) =>
           let
             val prem' = HOLogic.mk_Trueprop (mk_lit (list_comb (P, resargs)))
