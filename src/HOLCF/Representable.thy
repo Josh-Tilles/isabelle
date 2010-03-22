@@ -35,7 +35,7 @@ lemmas emb_strict = rep.e_strict
 lemmas prj_strict = rep.p_strict
 
 
-subsection {* Making @{term rep} the default class *}
+subsection {* Making \emph{rep} the default class *}
 
 text {*
   From now on, free type variables are assumed to be in class
@@ -342,7 +342,7 @@ unfolding mem_Collect_eq by (rule adm_in_deflation)
 use "Tools/repdef.ML"
 
 
-subsection {* Instances of class @{text rep} *}
+subsection {* Instances of class \emph{rep} *}
 
 subsubsection {* Universal Domain *}
 
@@ -517,7 +517,8 @@ qed
 lemma cast_TypeRep_fun2:
   assumes f: "\<And>a b. finite_deflation a \<Longrightarrow> finite_deflation b \<Longrightarrow>
                 finite_deflation (f\<cdot>a\<cdot>b)"
-  shows "cast\<cdot>(TypeRep_fun2 f\<cdot>A\<cdot>B) = udom_emb oo f\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
+  shows "cast\<cdot>(TypeRep_fun2 f\<cdot>A\<cdot>B) =
+    udom_emb oo f\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
 proof -
   have 1: "\<And>a b. finite_deflation
            (udom_emb oo f\<cdot>(Rep_fin_defl a)\<cdot>(Rep_fin_defl b) oo udom_prj)"
