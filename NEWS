@@ -83,6 +83,9 @@ are added internally.  For example:
 * Code generator: details of internal data cache have no impact on
 the user space functionality any longer.
 
+* Methods unfold_locales and intro_locales ignore non-locale subgoals.  This
+is more appropriate for interpretations with 'where'.  INCOMPATIBILITY.
+
 * Discontinued unnamed infix syntax (legacy feature for many years) --
 need to specify constant name and syntax separately.  Internal ML
 datatype constructors have been renamed from InfixName to Infix etc.
