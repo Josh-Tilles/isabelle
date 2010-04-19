@@ -71,6 +71,10 @@ Tracing is then active for all invocations of the simplifier
 in subsequent goal refinement steps. Tracing may also still be
 enabled or disabled via the ProofGeneral settings menu.
 
+* Separate commands 'hide_class', 'hide_type', 'hide_const',
+'hide_fact' replace the former 'hide' KIND command.  Minor
+INCOMPATIBILITY.
+
 
 *** Pure ***
 
@@ -97,9 +101,9 @@ Minor INCOMPATIBILITY.
 within a local theory context, with explicit checking of the
 constructors involved (in contrast to the raw 'syntax' versions).
 
-* Command 'typedecl' now works within a local theory context --
-without introducing dependencies on parameters or assumptions, which
-is not possible in Isabelle/Pure.
+* Commands 'types' and 'typedecl' now work within a local theory
+context -- without introducing dependencies on parameters or
+assumptions, which is not possible in Isabelle/Pure.
 
 * Proof terms: Type substitutions on proof constants now use canonical
 order of type variables. INCOMPATIBILITY: Tools working with proof
@@ -297,6 +301,10 @@ Library/Nat_Int_Bij.thy and HOLCF/NatIso.thy.  INCOMPATIBILITY.
 
 * Antiquotation @{syntax_const NAME} ensures that NAME refers to a raw
 syntax constant (cf. 'syntax' command).
+
+* Antiquotation @{make_string} inlines a function to print arbitrary
+values similar to the ML toplevel.  The result is compiler dependent
+and may fall back on "?" in certain situations.
 
 * Renamed old-style Drule.standard to Drule.export_without_context, to
 emphasize that this is in no way a standard operation.
