@@ -44,7 +44,7 @@ val default_default_params =
    ("respect_no_atp", "true"),
    ("relevance_threshold", "50"),
    ("convergence", "320"),
-   ("theory_const", "smart"),
+   ("theory_relevant", "smart"),
    ("higher_order", "smart"),
    ("follow_defs", "false"),
    ("isar_proof", "false"),
@@ -60,7 +60,7 @@ val negated_alias_params =
    ("no_overlord", "overlord"),
    ("ignore_no_atp", "respect_no_atp"),
    ("partial_types", "full_types"),
-   ("no_theory_const", "theory_const"),
+   ("theory_irrelevant", "theory_relevant"),
    ("first_order", "higher_order"),
    ("dont_follow_defs", "follow_defs"),
    ("metis_proof", "isar_proof"),
@@ -150,7 +150,7 @@ fun extract_params thy default_params override_params =
     val relevance_threshold =
       0.01 * Real.fromInt (lookup_int "relevance_threshold")
     val convergence = 0.01 * Real.fromInt (lookup_int "convergence")
-    val theory_const = lookup_bool_option "theory_const"
+    val theory_relevant = lookup_bool_option "theory_relevant"
     val higher_order = lookup_bool_option "higher_order"
     val follow_defs = lookup_bool "follow_defs"
     val isar_proof = lookup_bool "isar_proof"
@@ -162,7 +162,7 @@ fun extract_params thy default_params override_params =
     {debug = debug, verbose = verbose, overlord = overlord, atps = atps,
      full_types = full_types, respect_no_atp = respect_no_atp,
      relevance_threshold = relevance_threshold, convergence = convergence,
-     theory_const = theory_const, higher_order = higher_order,
+     theory_relevant = theory_relevant, higher_order = higher_order,
      follow_defs = follow_defs, isar_proof = isar_proof, modulus = modulus,
      sorts = sorts, timeout = timeout, minimize_timeout = minimize_timeout}
   end
@@ -183,27 +183,27 @@ fun minimize override_params old_style_args i fact_refs state =
     fun get_time_limit_arg s =
       (case Int.fromString s of
         SOME t => Time.fromSeconds t
-      | NONE => error ("Invalid time limit: " ^ quote s))
+      | NONE => error ("Invalid time limit: " ^ quote s ^ "."))
     fun get_opt (name, a) (p, t) =
       (case name of
         "time" => (p, get_time_limit_arg a)
       | "atp" => (a, t)
-      | n => error ("Invalid argument: " ^ n))
+      | n => error ("Invalid argument: " ^ n ^ "."))
     val {atps, minimize_timeout, ...} = get_params thy override_params
     val (atp, timeout) = fold get_opt old_style_args (hd atps, minimize_timeout)
     val params =
       get_params thy
-          [("atps", [atp]),
-           ("minimize_timeout",
-            [string_of_int (Time.toMilliseconds timeout) ^ " ms"])]
+          (override_params @
+           [("atps", [atp]),
+            ("minimize_timeout",
+             [string_of_int (Time.toMilliseconds timeout) ^ " ms"])])
     val prover =
       (case get_prover thy atp of
         SOME prover => prover
-      | NONE => error ("Unknown ATP: " ^ quote atp))
+      | NONE => error ("Unknown ATP: " ^ quote atp ^ "."))
     val name_thms_pairs = theorems_from_refs ctxt fact_refs
   in
-    writeln (#2 (minimize_theorems params linear_minimize prover atp i state
-                                   name_thms_pairs))
+    priority (#2 (minimize_theorems params prover atp i state name_thms_pairs))
   end
 
 val runN = "run"
