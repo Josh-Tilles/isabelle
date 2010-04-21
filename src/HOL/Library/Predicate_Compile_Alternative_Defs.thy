@@ -6,6 +6,14 @@ section {* Common constants *}
 
 declare HOL.if_bool_eq_disj[code_pred_inline]
 
+declare bool_diff_def[code_pred_inline]
+declare inf_bool_eq_raw[code_pred_inline]
+declare less_bool_def_raw[code_pred_inline]
+declare le_bool_def_raw[code_pred_inline]
+
+lemma min_bool_eq [code_pred_inline]: "(min :: bool => bool => bool) == (op &)"
+by (rule eq_reflection) (auto simp add: expand_fun_eq min_def le_bool_def)
+
 setup {* Predicate_Compile_Data.ignore_consts [@{const_name Let}] *}
 
 section {* Pairs *}
@@ -34,6 +42,10 @@ declare eq_reflection[OF UNION_def, code_pred_inline]
 lemma Diff[code_pred_inline]:
   "(A - B) = (%x. A x \<and> \<not> B x)"
 by (auto simp add: mem_def)
+
+lemma subset_eq[code_pred_inline]:
+  "(P :: 'a => bool) < (Q :: 'a => bool) == ((\<exists>x. Q x \<and> (\<not> P x)) \<and> (\<forall> x. P x --> Q x))"
+by (rule eq_reflection) (fastsimp simp add: mem_def)
 
 lemma set_equality[code_pred_inline]:
   "(A = B) = ((\<forall>x. A x \<longrightarrow> B x) \<and> (\<forall>x. B x \<longrightarrow> A x))"
@@ -141,7 +153,7 @@ where
   "less_nat 0 (Suc y)"
 | "less_nat x y ==> less_nat (Suc x) (Suc y)"
 
-lemma [code_pred_inline]:
+lemma less_nat[code_pred_inline]:
   "x < y = less_nat x y"
 apply (rule iffI)
 apply (induct x arbitrary: y)
@@ -228,6 +240,16 @@ proof -
     done
 qed
 
+section {* Simplification rules for optimisation *}
+
+lemma [code_pred_simp]: "\<not> False == True"
+by auto
+
+lemma [code_pred_simp]: "\<not> True == False"
+by auto
+
+lemma less_nat_k_0 [code_pred_simp]: "less_nat k 0 == False"
+unfolding less_nat[symmetric] by auto
 
 
 end

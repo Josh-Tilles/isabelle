@@ -1251,10 +1251,6 @@ fun rev_option_ord ord (NONE, NONE) = EQUAL
   | rev_option_ord ord (SOME _, NONE) = LESS
   | rev_option_ord ord (SOME x, SOME y) = ord (x, y)
 
-fun term_of_prem (Prem t) = t
-  | term_of_prem (Negprem t) = t
-  | term_of_prem (Sidecond t) = t
-
 fun random_mode_in_deriv modes t deriv =
   case try dest_Const (fst (strip_comb t)) of
     SOME (s, _) =>
@@ -1282,8 +1278,28 @@ fun lex_ord ord1 ord2 (x, x') =
     EQUAL => ord2 (x, x')
   | ord => ord
 
-fun deriv_ord2' thy pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
+fun lexl_ord [] (x, x') = EQUAL
+  | lexl_ord (ord :: ords') (x, x') =
+    case ord (x, x') of
+      EQUAL => lexl_ord ords' (x, x')
+    | ord => ord
+
+fun deriv_ord' thy pol pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
   let
+    (* prefer functional modes if it is a function *)
+    fun fun_ord ((t1, deriv1, mvars1), (t2, deriv2, mvars2)) =
+      let
+        fun is_functional t mode =
+          case try (fst o dest_Const o fst o strip_comb) t of
+            NONE => false
+          | SOME c => is_some (alternative_compilation_of thy c mode)
+      in
+        case (is_functional t1 (head_mode_of deriv1), is_functional t2 (head_mode_of deriv2)) of
+          (true, true) => EQUAL
+        | (true, false) => LESS
+        | (false, true) => GREATER
+        | (false, false) => EQUAL
+      end
     (* prefer modes without requirement for generating random values *)
     fun mvars_ord ((t1, deriv1, mvars1), (t2, deriv2, mvars2)) =
       int_ord (length mvars1, length mvars2)
@@ -1301,18 +1317,15 @@ fun deriv_ord2' thy pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
     fun recursive_ord ((t1, deriv1, mvars1), (t2, deriv2, mvars2)) =
       int_ord (if is_rec_premise t1 then 0 else 1,
         if is_rec_premise t2 then 0 else 1)
-    val ord = lex_ord mvars_ord (lex_ord random_mode_ord (lex_ord output_mode_ord recursive_ord))
+    val ord = lexl_ord [mvars_ord, fun_ord, random_mode_ord, output_mode_ord, recursive_ord]
   in
     ord ((t1, deriv1, mvars1), (t2, deriv2, mvars2))
   end
 
-fun deriv_ord2 thy pred modes t = deriv_ord2' thy pred modes t t
+fun deriv_ord thy pol pred modes t = deriv_ord' thy pol pred modes t t
 
-fun deriv_ord ((deriv1, mvars1), (deriv2, mvars2)) =
-  int_ord (length mvars1, length mvars2)
-
-fun premise_ord thy pred modes ((prem1, a1), (prem2, a2)) =
-  rev_option_ord (deriv_ord2' thy pred modes (term_of_prem prem1) (term_of_prem prem2)) (a1, a2)
+fun premise_ord thy pol pred modes ((prem1, a1), (prem2, a2)) =
+  rev_option_ord (deriv_ord' thy pol pred modes (dest_indprem prem1) (dest_indprem prem2)) (a1, a2)
 
 fun print_mode_list modes =
   tracing ("modes: " ^ (commas (map (fn (s, ms) => s ^ ": " ^
@@ -1322,15 +1335,16 @@ fun select_mode_prem (mode_analysis_options : mode_analysis_options) (thy : theo
   pol (modes, (pos_modes, neg_modes)) vs ps =
   let
     fun choose_mode_of_prem (Prem t) = partial_hd
-        (sort (deriv_ord2 thy pred modes t) (all_derivations_of thy pos_modes vs t))
+        (sort (deriv_ord thy pol pred modes t) (all_derivations_of thy pos_modes vs t))
       | choose_mode_of_prem (Sidecond t) = SOME (Context Bool, missing_vars vs t)
       | choose_mode_of_prem (Negprem t) = partial_hd
-          (sort (deriv_ord2 thy pred modes t) (filter (fn (d, missing_vars) => is_all_input (head_mode_of d))
+          (sort (deriv_ord thy (not pol) pred modes t)
+          (filter (fn (d, missing_vars) => is_all_input (head_mode_of d))
              (all_derivations_of thy neg_modes vs t)))
       | choose_mode_of_prem p = raise Fail ("choose_mode_of_prem: " ^ string_of_prem thy p)
   in
     if #reorder_premises mode_analysis_options then
-      partial_hd (sort (premise_ord thy pred modes) (ps ~~ map choose_mode_of_prem ps))
+      partial_hd (sort (premise_ord thy pol pred modes) (ps ~~ map choose_mode_of_prem ps))
     else
       SOME (hd ps, choose_mode_of_prem (hd ps))
   end
@@ -1338,7 +1352,7 @@ fun select_mode_prem (mode_analysis_options : mode_analysis_options) (thy : theo
 fun check_mode_clause' (mode_analysis_options : mode_analysis_options) thy pred param_vs (modes :
   (string * ((bool * mode) * bool) list) list) ((pol, mode) : bool * mode) (ts, ps) =
   let
-    val vTs = distinct (op =) (fold Term.add_frees (map term_of_prem ps) (fold Term.add_frees ts []))
+    val vTs = distinct (op =) (fold Term.add_frees (map dest_indprem ps) (fold Term.add_frees ts []))
     val modes' = modes @ (param_vs ~~ map (fn x => [((true, x), false), ((false, x), false)]) (ho_arg_modes_of mode))
     fun retrieve_modes_of_pol pol = map (fn (s, ms) =>
       (s, map_filter (fn ((p, m), r) => if p = pol then SOME m else NONE | _ => NONE) ms))
@@ -1464,13 +1478,26 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
     val prednames = map fst preds
     (* extramodes contains all modes of all constants, should we only use the necessary ones
        - what is the impact on performance? *)
+    fun predname_of (Prem t) =
+        (case try dest_Const (fst (strip_comb t)) of SOME (c, _) => insert (op =) c | NONE => I)
+      | predname_of (Negprem t) =
+        (case try dest_Const (fst (strip_comb t)) of SOME (c, _) => insert (op =) c | NONE => I)
+      | predname_of _ = I
+    val relevant_prednames = fold (fn (_, clauses') =>
+      fold (fn (_, ps) => fold Term.add_const_names (map dest_indprem ps)) clauses') clauses []
     val extra_modes =
       if #infer_pos_and_neg_modes mode_analysis_options then
         let
           val pos_extra_modes =
-            all_modes_of compilation thy |> filter_out (fn (name, _) => member (op =) prednames name)
+            map_filter (fn name => Option.map (pair name) (try (modes_of compilation thy) name))
+            relevant_prednames
+            (* all_modes_of compilation thy *)
+            |> filter_out (fn (name, _) => member (op =) prednames name)
           val neg_extra_modes =
-            all_modes_of (negative_compilation_of compilation) thy
+          map_filter (fn name => Option.map (pair name)
+            (try (modes_of (negative_compilation_of compilation) thy) name))
+            relevant_prednames
+          (*all_modes_of (negative_compilation_of compilation) thy*)
             |> filter_out (fn (name, _) => member (op =) prednames name)
         in
           map (fn (s, ms) => (s, (add_polarity_and_random_bit s true ms)
@@ -1479,7 +1506,10 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
         end
       else
         map (fn (s, ms) => (s, (add_polarity_and_random_bit s true ms)))
-          (all_modes_of compilation thy |> filter_out (fn (name, _) => member (op =) prednames name))
+          (map_filter (fn name => Option.map (pair name) (try (modes_of compilation thy) name))
+            relevant_prednames
+          (*all_modes_of compilation thy*)
+          |> filter_out (fn (name, _) => member (op =) prednames name))
     val _ = print_extra_modes options extra_modes
     val start_modes =
       if #infer_pos_and_neg_modes mode_analysis_options then
@@ -1504,7 +1534,6 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
     val thy' = fold (fn (s, ms) => if member (op =) (map fst preds) s then
       set_needs_random s (map_filter (fn ((true, m), true) => SOME m | _ => NONE) ms) else I)
       modes thy
-
   in
     ((moded_clauses, errors), thy')
   end;
@@ -1608,7 +1637,7 @@ fun compile_match compilation_modifiers additional_arguments
     val name' = Name.variant (name :: names) "y";
     val T = HOLogic.mk_tupleT (map fastype_of out_ts);
     val U = fastype_of success_t;
-    val U' = dest_predT compfuns U;        
+    val U' = dest_predT compfuns U;
     val v = Free (name, T);
     val v' = Free (name', T);
   in
@@ -1668,13 +1697,12 @@ fun compile_expr compilation_modifiers ctxt (t, deriv) additional_arguments =
   end
 
 fun compile_clause compilation_modifiers ctxt all_vs param_vs additional_arguments
-  mode inp (ts, moded_ps) =
+  mode inp (in_ts, out_ts) moded_ps =
   let
     val compfuns = Comp_Mod.compfuns compilation_modifiers
-    val iss = ho_arg_modes_of mode
+    val iss = ho_arg_modes_of mode (* FIXME! *)
     val compile_match = compile_match compilation_modifiers
       additional_arguments param_vs iss ctxt
-    val (in_ts, out_ts) = split_mode mode ts;
     val (in_ts', (all_vs', eqs)) =
       fold_map (collect_non_invertible_subterms ctxt) in_ts (all_vs, []);
     fun compile_prems out_ts' vs names [] =
@@ -1742,7 +1770,171 @@ fun compile_clause compilation_modifiers ctxt all_vs param_vs additional_argumen
     mk_bind compfuns (mk_single compfuns inp, prem_t)
   end
 
-fun compile_pred compilation_modifiers thy all_vs param_vs s T (pol, mode) moded_cls =
+(* switch detection *)
+
+(** argument position of an inductive predicates and the executable functions **)
+
+type position = int * int list
+
+fun input_positions_pair Input = [[]]
+  | input_positions_pair Output = []
+  | input_positions_pair (Fun _) = []
+  | input_positions_pair (Pair (m1, m2)) =
+    map (cons 1) (input_positions_pair m1) @ map (cons 2) (input_positions_pair m2)
+
+fun input_positions_of_mode mode = flat (map_index
+   (fn (i, Input) => [(i, [])]
+   | (_, Output) => []
+   | (_, Fun _) => []
+   | (i, m as Pair (m1, m2)) => map (pair i) (input_positions_pair m))
+     (Predicate_Compile_Aux.strip_fun_mode mode))
+
+fun argument_position_pair mode [] = []
+  | argument_position_pair (Pair (Fun _, m2)) (2 :: is) = argument_position_pair m2 is
+  | argument_position_pair (Pair (m1, m2)) (i :: is) =
+    (if eq_mode (m1, Output) andalso i = 2 then
+      argument_position_pair m2 is
+    else if eq_mode (m2, Output) andalso i = 1 then
+      argument_position_pair m1 is
+    else (i :: argument_position_pair (if i = 1 then m1 else m2) is))
+
+fun argument_position_of mode (i, is) =
+  (i - (length (filter (fn Output => true | Fun _ => true | _ => false)
+    (List.take (strip_fun_mode mode, i)))),
+  argument_position_pair (nth (strip_fun_mode mode) i) is)
+
+fun nth_pair [] t = t
+  | nth_pair (1 :: is) (Const (@{const_name Pair}, _) $ t1 $ _) = nth_pair is t1
+  | nth_pair (2 :: is) (Const (@{const_name Pair}, _) $ _ $ t2) = nth_pair is t2
+  | nth_pair _ _ = raise Fail "unexpected input for nth_tuple"
+
+(** switch detection analysis **)
+
+fun find_switch_test thy (i, is) (ts, prems) =
+  let
+    val t = nth_pair is (nth ts i)
+    val T = fastype_of t
+  in
+    case T of
+      TFree _ => NONE
+    | Type (Tcon, _) =>
+      (case Datatype_Data.get_constrs thy Tcon of
+        NONE => NONE
+      | SOME cs =>
+        (case strip_comb t of
+          (Var _, []) => NONE
+        | (Free _, []) => NONE
+        | (Const (c, T), _) => if AList.defined (op =) cs c then SOME (c, T) else NONE))
+  end
+
+fun partition_clause thy pos moded_clauses =
+  let
+    fun insert_list eq (key, value) = AList.map_default eq (key, []) (cons value)
+    fun find_switch_test' moded_clause (cases, left) =
+      case find_switch_test thy pos moded_clause of
+        SOME (c, T) => (insert_list (op =) ((c, T), moded_clause) cases, left)
+      | NONE => (cases, moded_clause :: left)
+  in
+    fold find_switch_test' moded_clauses ([], [])
+  end
+
+datatype switch_tree =
+  Atom of moded_clause list | Node of (position * ((string * typ) * switch_tree) list) * switch_tree
+
+fun mk_switch_tree thy mode moded_clauses =
+  let
+    fun select_best_switch moded_clauses input_position best_switch =
+      let
+        val ord = option_ord (rev_order o int_ord o (pairself (length o snd o snd)))
+        val partition = partition_clause thy input_position moded_clauses
+        val switch = if (length (fst partition) > 1) then SOME (input_position, partition) else NONE
+      in
+        case ord (switch, best_switch) of LESS => best_switch
+          | EQUAL => best_switch | GREATER => switch
+      end
+    fun detect_switches moded_clauses =
+      case fold (select_best_switch moded_clauses) (input_positions_of_mode mode) NONE of
+        SOME (best_pos, (switched_on, left_clauses)) =>
+          Node ((best_pos, map (apsnd detect_switches) switched_on),
+            detect_switches left_clauses)
+      | NONE => Atom moded_clauses
+  in
+    detect_switches moded_clauses
+  end
+
+(** compilation of detected switches **)
+
+fun destruct_constructor_pattern (pat, obj) =
+  (case strip_comb pat of
+    (f as Free _, []) => cons (pat, obj)
+  | (Const (c, T), pat_args) =>
+    (case strip_comb obj of
+      (Const (c', T'), obj_args) =>
+        (if c = c' andalso T = T' then
+          fold destruct_constructor_pattern (pat_args ~~ obj_args)
+        else raise Fail "pattern and object mismatch")
+    | _ => raise Fail "unexpected object")
+  | _ => raise Fail "unexpected pattern")
+
+
+fun compile_switch compilation_modifiers ctxt all_vs param_vs additional_arguments mode
+  in_ts' outTs switch_tree =
+  let
+    val compfuns = Comp_Mod.compfuns compilation_modifiers
+    val thy = ProofContext.theory_of ctxt
+    fun compile_switch_tree _ _ (Atom []) = NONE
+      | compile_switch_tree all_vs ctxt_eqs (Atom moded_clauses) =
+        let
+          val in_ts' = map (Pattern.rewrite_term thy ctxt_eqs []) in_ts'
+          fun compile_clause' (ts, moded_ps) =
+            let
+              val (ts, out_ts) = split_mode mode ts
+              val subst = fold destruct_constructor_pattern (in_ts' ~~ ts) []
+              val (fsubst, pat') = List.partition (fn (_, Free _) => true | _ => false) subst
+              val moded_ps' = (map o apfst o map_indprem)
+                (Pattern.rewrite_term thy (map swap fsubst) []) moded_ps
+              val inp = HOLogic.mk_tuple (map fst pat')
+              val in_ts' = map (Pattern.rewrite_term thy (map swap fsubst) []) (map snd pat')
+              val out_ts' = map (Pattern.rewrite_term thy (map swap fsubst) []) out_ts
+            in
+              compile_clause compilation_modifiers ctxt all_vs param_vs additional_arguments
+                mode inp (in_ts', out_ts') moded_ps'
+            end
+        in SOME (foldr1 (mk_sup compfuns) (map compile_clause' moded_clauses)) end
+    | compile_switch_tree all_vs ctxt_eqs (Node ((position, switched_clauses), left_clauses)) =
+      let
+        val (i, is) = argument_position_of mode position
+        val inp_var = nth_pair is (nth in_ts' i)
+        val x = Name.variant all_vs "x"
+        val xt = Free (x, fastype_of inp_var)
+        fun compile_single_case ((c, T), switched) =
+          let
+            val Ts = binder_types T
+            val argnames = Name.variant_list (x :: all_vs)
+              (map (fn i => "c" ^ string_of_int i) (1 upto length Ts))
+            val args = map2 (curry Free) argnames Ts
+            val pattern = list_comb (Const (c, T), args)
+            val ctxt_eqs' = (inp_var, pattern) :: ctxt_eqs
+            val compilation = the_default (mk_bot compfuns (HOLogic.mk_tupleT outTs))
+              (compile_switch_tree (argnames @ x :: all_vs) ctxt_eqs' switched)
+        in
+          (pattern, compilation)
+        end
+        val switch = fst (Datatype.make_case ctxt Datatype_Case.Quiet [] inp_var
+          ((map compile_single_case switched_clauses) @
+            [(xt, mk_bot compfuns (HOLogic.mk_tupleT outTs))]))
+      in
+        case compile_switch_tree all_vs ctxt_eqs left_clauses of
+          NONE => SOME switch
+        | SOME left_comp => SOME (mk_sup compfuns (switch, left_comp))
+      end
+  in
+    compile_switch_tree all_vs [] switch_tree
+  end
+
+(* compilation of predicates *)
+
+fun compile_pred options compilation_modifiers thy all_vs param_vs s T (pol, mode) moded_cls =
   let
     val ctxt = ProofContext.init thy
     val compilation_modifiers = if pol then compilation_modifiers else
@@ -1757,7 +1949,6 @@ fun compile_pred compilation_modifiers thy all_vs param_vs s T (pol, mode) moded
       (binder_types T)
     val predT = mk_predT compfuns (HOLogic.mk_tupleT outTs)
     val funT = Comp_Mod.funT_of compilation_modifiers mode T
-    
     val (in_ts, _) = fold_map (fold_map_aterms_prodT (curry HOLogic.mk_prod)
       (fn T => fn (param_vs, names) =>
         if is_param_type T then
@@ -1769,14 +1960,24 @@ fun compile_pred compilation_modifiers thy all_vs param_vs s T (pol, mode) moded
         (param_vs, (all_vs @ param_vs))
     val in_ts' = map_filter (map_filter_prod
       (fn t as Free (x, _) => if member (op =) param_vs x then NONE else SOME t | t => SOME t)) in_ts
-    val cl_ts =
-      map (compile_clause compilation_modifiers
-        ctxt all_vs param_vs additional_arguments mode (HOLogic.mk_tuple in_ts')) moded_cls;
-    val compilation = Comp_Mod.wrap_compilation compilation_modifiers compfuns
-      s T mode additional_arguments
-      (if null cl_ts then
-        mk_bot compfuns (HOLogic.mk_tupleT outTs)
-      else foldr1 (mk_sup compfuns) cl_ts)
+    val compilation =
+      if detect_switches options then
+        the_default (mk_bot compfuns (HOLogic.mk_tupleT outTs))
+          (compile_switch compilation_modifiers ctxt all_vs param_vs additional_arguments
+            mode in_ts' outTs (mk_switch_tree thy mode moded_cls))
+      else
+        let
+          val cl_ts =
+            map (fn (ts, moded_prems) => 
+              compile_clause compilation_modifiers ctxt all_vs param_vs additional_arguments
+              mode (HOLogic.mk_tuple in_ts') (split_mode mode ts) moded_prems) moded_cls;
+        in
+          Comp_Mod.wrap_compilation compilation_modifiers compfuns s T mode additional_arguments
+            (if null cl_ts then
+              mk_bot compfuns (HOLogic.mk_tupleT outTs)
+            else
+              foldr1 (mk_sup compfuns) cl_ts)
+        end
     val fun_const =
       Const (function_name_of (Comp_Mod.compilation compilation_modifiers)
       (ProofContext.theory_of ctxt) s mode, funT)
@@ -1785,7 +1986,7 @@ fun compile_pred compilation_modifiers thy all_vs param_vs s T (pol, mode) moded
       (HOLogic.mk_eq (list_comb (fun_const, in_ts @ additional_arguments), compilation))
   end;
 
-(* special setup for simpset *)                  
+(** special setup for simpset **)
 val HOL_basic_ss' = HOL_basic_ss addsimps (@{thms HOL.simp_thms} @ [@{thm Pair_eq}])
   setSolver (mk_solver "all_tac_solver" (fn _ => fn _ => all_tac))
   setSolver (mk_solver "True_solver" (fn _ => rtac @{thm TrueI}))
@@ -2426,13 +2627,13 @@ fun map_preds_modes f preds_modes_table =
 fun join_preds_modes table1 table2 =
   map_preds_modes (fn pred => fn mode => fn value =>
     (value, the (AList.lookup (op =) (the (AList.lookup (op =) table2 pred)) mode))) table1
-    
+
 fun maps_modes preds_modes_table =
   map (fn (pred, modes) =>
     (pred, map (fn (mode, value) => value) modes)) preds_modes_table
-    
-fun compile_preds comp_modifiers thy all_vs param_vs preds moded_clauses =
-  map_preds_modes (fn pred => compile_pred comp_modifiers thy all_vs param_vs pred
+
+fun compile_preds options comp_modifiers thy all_vs param_vs preds moded_clauses =
+  map_preds_modes (fn pred => compile_pred options comp_modifiers thy all_vs param_vs pred
       (the (AList.lookup (op =) preds pred))) moded_clauses
 
 fun prove options thy clauses preds moded_clauses compiled_terms =
@@ -2445,7 +2646,6 @@ fun prove_by_skip options thy _ _ _ compiled_terms =
     compiled_terms
 
 (* preparation of introduction rules into special datastructures *)
-
 fun dest_prem thy params t =
   (case strip_comb t of
     (v as Free _, ts) => if member (op =) params v then Prem t else Sidecond t
@@ -2589,9 +2789,6 @@ fun add_code_equations thy preds result_thmss =
 datatype steps = Steps of
   {
   define_functions : options -> (string * typ) list -> string * (bool * mode) list -> theory -> theory,
-  (*infer_modes : options -> (string * typ) list -> (string * mode list) list
-    -> string list -> (string * (term list * indprem list) list) list
-    -> theory -> ((moded_clause list pred_mode_table * string list) * theory),*)
   prove : options -> theory -> (string * (term list * indprem list) list) list -> (string * typ) list
     -> moded_clause list pred_mode_table -> term pred_mode_table -> thm pred_mode_table,
   add_code_equations : theory -> (string * typ) list
@@ -2618,32 +2815,39 @@ fun add_equations_of steps mode_analysis_options options prednames thy =
       prepare_intrs options compilation thy prednames (maps (intros_of thy) prednames)
     val _ = print_step options "Infering modes..."
     val ((moded_clauses, errors), thy') =
-      (*Output.cond_timeit true "Infering modes"
-      (fn _ =>*) infer_modes mode_analysis_options
-        options compilation preds all_modes param_vs clauses thy
+      Output.cond_timeit true "Infering modes"
+      (fn _ => infer_modes mode_analysis_options
+        options compilation preds all_modes param_vs clauses thy)
     val modes = map (fn (p, mps) => (p, map fst mps)) moded_clauses
     val _ = check_expected_modes preds options modes
     (*val _ = check_proposed_modes preds options modes (fst extra_modes) errors*)
     val _ = print_modes options thy' modes
     val _ = print_step options "Defining executable functions..."
-    val thy'' = fold (#define_functions (dest_steps steps) options preds) modes thy'
-      |> Theory.checkpoint
+    val thy'' =
+      Output.cond_timeit (!Quickcheck.timing) "Defining executable functions..."
+      (fn _ => fold (#define_functions (dest_steps steps) options preds) modes thy'
+      |> Theory.checkpoint)
     val _ = print_step options "Compiling equations..."
     val compiled_terms =
-      compile_preds (#comp_modifiers (dest_steps steps)) thy'' all_vs param_vs preds moded_clauses
+      Output.cond_timeit (!Quickcheck.timing) "Compiling equations...." (fn _ =>
+        compile_preds options
+          (#comp_modifiers (dest_steps steps)) thy'' all_vs param_vs preds moded_clauses)
     val _ = print_compiled_terms options thy'' compiled_terms
     val _ = print_step options "Proving equations..."
     val result_thms =
-      #prove (dest_steps steps) options thy'' clauses preds moded_clauses compiled_terms
+      Output.cond_timeit (!Quickcheck.timing) "Proving equations...." (fn _ =>
+      #prove (dest_steps steps) options thy'' clauses preds moded_clauses compiled_terms)
     val result_thms' = #add_code_equations (dest_steps steps) thy'' preds
       (maps_modes result_thms)
     val qname = #qname (dest_steps steps)
     val attrib = fn thy => Attrib.attribute_i thy (Attrib.internal (K (Thm.declaration_attribute
       (fn thm => Context.mapping (Code.add_eqn thm) I))))
-    val thy''' = fold (fn (name, result_thms) => fn thy => snd (PureThy.add_thmss
+    val thy''' =
+      Output.cond_timeit (!Quickcheck.timing) "Setting code equations...." (fn _ =>
+      fold (fn (name, result_thms) => fn thy => snd (PureThy.add_thmss
       [((Binding.qualify true (Long_Name.base_name name) (Binding.name qname), result_thms),
         [attrib thy ])] thy))
-      result_thms' thy'' |> Theory.checkpoint
+      result_thms' thy'' |> Theory.checkpoint)
   in
     thy'''
   end

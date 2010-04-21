@@ -18,16 +18,8 @@ struct
 val present_graph = Unsynchronized.ref false
 
 val intro_hook = Unsynchronized.ref NONE : (theory -> thm -> unit) option Unsynchronized.ref
-  
 
 open Predicate_Compile_Aux;
-
-(* Some last processing *)
-
-fun remove_pointless_clauses intro =
-  if Logic.strip_imp_prems (prop_of intro) = [@{prop "False"}] then
-    []
-  else [intro]
 
 fun print_intross options thy msg intross =
   if show_intermediate_results options then
@@ -120,10 +112,15 @@ fun preprocess_strong_conn_constnames options gr ts thy =
       val intross8 = map_specs (map (eta_contract_ho_arguments thy2)) intross7
       val _ = case !intro_hook of NONE => () | SOME f => (map_specs (map (f thy2)) intross8; ())
       val _ = print_step options ("Looking for specialisations in " ^ commas (map fst intross8) ^ "...")
-      val (intross9, thy3) = Predicate_Compile_Specialisation.find_specialisations [] intross8 thy2
-      val _ = print_intross options thy3 "introduction rules before registering: " intross9
+      val (intross9, thy3) =
+        if specialise options then
+          Predicate_Compile_Specialisation.find_specialisations [] intross8 thy2
+        else (intross8, thy2)
+      val _ = print_intross options thy3 "introduction rules after specialisations: " intross9
+      val intross10 = map_specs (map_filter (peephole_optimisation thy3)) intross9
+      val _ = print_intross options thy3 "introduction rules before registering: " intross10
       val _ = print_step options "Registering introduction rules..."
-      val thy4 = fold Predicate_Compile_Core.register_intros intross9 thy3
+      val thy4 = fold Predicate_Compile_Core.register_intros intross10 thy3
     in
       thy4
     end;
@@ -160,10 +157,12 @@ fun extract_options (((expected_modes, proposed_modes), (compilation, raw_option
       show_caught_failures = false,
       skip_proof = chk "skip_proof",
       function_flattening = not (chk "no_function_flattening"),
+      specialise = chk "specialise",
       fail_safe_function_flattening = false,
       no_topmost_reordering = (chk "no_topmost_reordering"),
       no_higher_order_predicate = [],
       inductify = chk "inductify",
+      detect_switches = chk "detect_switches",
       compilation = compilation
     }
   end
