@@ -6,15 +6,12 @@
 header {* Multivariate calculus in Euclidean space. *}
 
 theory Derivative
-imports Brouwer_Fixpoint RealVector
+imports Brouwer_Fixpoint Vec1 RealVector
 begin
 
 
 (* Because I do not want to type this all the time *)
 lemmas linear_linear = linear_conv_bounded_linear[THEN sym]
-
-(** move this **)
-declare norm_vec1[simp]
 
 subsection {* Derivatives *}
 
@@ -94,16 +91,6 @@ lemma has_derivative_within_open:
 
 subsection {* Derivatives on real = Derivatives on @{typ "real^1"} *}
 
-lemma dist_vec1_0[simp]: "dist(vec1 (x::real)) 0 = norm x" unfolding vector_dist_norm by auto
-
-lemma bounded_linear_vec1_dest_vec1: fixes f::"real \<Rightarrow> real"
-  shows "linear (vec1 \<circ> f \<circ> dest_vec1) = bounded_linear f" (is "?l = ?r") proof-
-  { assume ?l guess K using linear_bounded[OF `?l`] ..
-    hence "\<exists>K. \<forall>x. \<bar>f x\<bar> \<le> \<bar>x\<bar> * K" apply(rule_tac x=K in exI)
-      unfolding vec1_dest_vec1_simps by (auto simp add:field_simps) }
-  thus ?thesis unfolding linear_def bounded_linear_def additive_def bounded_linear_axioms_def o_def
-    unfolding vec1_dest_vec1_simps by auto qed 
-
 lemma has_derivative_within_vec1_dest_vec1: fixes f::"real\<Rightarrow>real" shows
   "((vec1 \<circ> f \<circ> dest_vec1) has_derivative (vec1 \<circ> f' \<circ> dest_vec1)) (at (vec1 x) within vec1 ` s)
   = (f has_derivative f') (at x within s)"
@@ -156,14 +143,14 @@ lemma has_derivative_id: "((\<lambda>x. x) has_derivative (\<lambda>h. h)) net"
 lemma has_derivative_const: "((\<lambda>x. c) has_derivative (\<lambda>h. 0)) net"
   unfolding has_derivative_def apply(rule,rule bounded_linear_zero) by(simp add: Lim_const)
 
-lemma (in bounded_linear) cmul: shows "bounded_linear (\<lambda>x. (c::real) *\<^sub>R f x)" proof
-  guess K using pos_bounded ..
-  thus "\<exists>K. \<forall>x. norm ((c::real) *\<^sub>R f x) \<le> norm x * K" apply(rule_tac x="abs c * K" in exI) proof
-    fix x case goal1
-    hence "abs c * norm (f x) \<le> abs c * (norm x * K)" apply-apply(erule conjE,erule_tac x=x in allE)  
-      apply(rule mult_left_mono) by auto
-    thus ?case by(auto simp add:field_simps)
-  qed qed(auto simp add: scaleR.add_right add scaleR)
+lemma (in bounded_linear) cmul: shows "bounded_linear (\<lambda>x. (c::real) *\<^sub>R f x)"
+proof -
+  have "bounded_linear (\<lambda>x. c *\<^sub>R x)"
+    by (rule scaleR.bounded_linear_right)
+  moreover have "bounded_linear f" ..
+  ultimately show ?thesis
+    by (rule bounded_linear_compose)
+qed
 
 lemma has_derivative_cmul: assumes "(f has_derivative f') net" shows "((\<lambda>x. c *\<^sub>R f(x)) has_derivative (\<lambda>h. c *\<^sub>R f'(h))) net"
   unfolding has_derivative_def apply(rule,rule bounded_linear.cmul)
@@ -647,11 +634,6 @@ lemma differential_zero_maxmin: fixes f::"real^'a \<Rightarrow> real"
 
 subsection {* The traditional Rolle theorem in one dimension. *}
 
-lemma vec1_le[simp]:fixes a::real shows "vec1 a \<le> vec1 b \<longleftrightarrow> a \<le> b"
-  unfolding vector_le_def by auto
-lemma vec1_less[simp]:fixes a::real shows "vec1 a < vec1 b \<longleftrightarrow> a < b"
-  unfolding vector_less_def by auto 
-
 lemma rolle: fixes f::"real\<Rightarrow>real"
   assumes "a < b" "f a = f b" "continuous_on {a..b} f"
   "\<forall>x\<in>{a<..<b}. (f has_derivative f'(x)) (at x)"
@@ -762,6 +744,9 @@ lemma onorm_vec1: fixes f::"real \<Rightarrow> real"
   have "\<forall>x::real. norm x = 1 \<longleftrightarrow> x\<in>{-1, 1}" by auto hence 3:"{x. norm x = 1} = {-1, (1::real)}" by auto
   have 4:"{norm (f x) |x. norm x = 1} = (\<lambda>x. norm (f x)) ` {x. norm x=1}" by auto
   show ?thesis unfolding onorm_def 1 2 3 4 by(simp add:Sup_finite_Max) qed
+
+lemma convex_vec1:"convex (vec1 ` s) = convex (s::real set)"
+  unfolding convex_def Ball_def forall_vec1 unfolding vec1_dest_vec1_simps image_iff by auto
 
 lemma differentiable_bound_real: fixes f::"real \<Rightarrow> real"
   assumes "convex s" "\<forall>x\<in>s. (f has_derivative f' x) (at x within s)" "\<forall>x\<in>s. onorm(f' x) \<le> B" and x:"x\<in>s" and y:"y\<in>s"
