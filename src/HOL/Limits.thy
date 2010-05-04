@@ -241,22 +241,40 @@ lemma eventually_False:
 unfolding expand_net_eq by (auto elim: eventually_rev_mp)
 
 
-subsection {* Standard Nets *}
+subsection {* Map function for nets *}
+
+definition
+  netmap :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a net \<Rightarrow> 'b net"
+where [code del]:
+  "netmap f net = Abs_net (\<lambda>P. eventually (\<lambda>x. P (f x)) net)"
+
+lemma eventually_netmap:
+  "eventually P (netmap f net) = eventually (\<lambda>x. P (f x)) net"
+unfolding netmap_def
+apply (rule eventually_Abs_net)
+apply (rule is_filter.intro)
+apply (auto elim!: eventually_rev_mp)
+done
+
+lemma netmap_ident: "netmap (\<lambda>x. x) net = net"
+by (simp add: expand_net_eq eventually_netmap)
+
+lemma netmap_netmap: "netmap f (netmap g net) = netmap (\<lambda>x. f (g x)) net"
+by (simp add: expand_net_eq eventually_netmap)
+
+lemma netmap_mono: "net \<le> net' \<Longrightarrow> netmap f net \<le> netmap f net'"
+unfolding le_net_def eventually_netmap by simp
+
+lemma netmap_bot [simp]: "netmap f bot = bot"
+by (simp add: expand_net_eq eventually_netmap)
+
+
+subsection {* Sequentially *}
 
 definition
   sequentially :: "nat net"
 where [code del]:
   "sequentially = Abs_net (\<lambda>P. \<exists>k. \<forall>n\<ge>k. P n)"
-
-definition
-  within :: "'a net \<Rightarrow> 'a set \<Rightarrow> 'a net" (infixr "within" 70)
-where [code del]:
-  "net within S = Abs_net (\<lambda>P. eventually (\<lambda>x. x \<in> S \<longrightarrow> P x) net)"
-
-definition
-  at :: "'a::topological_space \<Rightarrow> 'a net"
-where [code del]:
-  "at a = Abs_net (\<lambda>P. \<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> P x))"
 
 lemma eventually_sequentially:
   "eventually P sequentially \<longleftrightarrow> (\<exists>N. \<forall>n\<ge>N. P n)"
@@ -269,6 +287,36 @@ proof (rule eventually_Abs_net, rule is_filter.intro)
   then show "\<exists>k. \<forall>n\<ge>k. P n \<and> Q n" ..
 qed auto
 
+lemma sequentially_bot [simp]: "sequentially \<noteq> bot"
+unfolding expand_net_eq eventually_sequentially by auto
+
+lemma eventually_False_sequentially [simp]:
+  "\<not> eventually (\<lambda>n. False) sequentially"
+by (simp add: eventually_False)
+
+lemma le_sequentially:
+  "net \<le> sequentially \<longleftrightarrow> (\<forall>N. eventually (\<lambda>n. N \<le> n) net)"
+unfolding le_net_def eventually_sequentially
+by (safe, fast, drule_tac x=N in spec, auto elim: eventually_rev_mp)
+
+
+subsection {* Standard Nets *}
+
+definition
+  within :: "'a net \<Rightarrow> 'a set \<Rightarrow> 'a net" (infixr "within" 70)
+where [code del]:
+  "net within S = Abs_net (\<lambda>P. eventually (\<lambda>x. x \<in> S \<longrightarrow> P x) net)"
+
+definition
+  nhds :: "'a::topological_space \<Rightarrow> 'a net"
+where [code del]:
+  "nhds a = Abs_net (\<lambda>P. \<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. P x))"
+
+definition
+  at :: "'a::topological_space \<Rightarrow> 'a net"
+where [code del]:
+  "at a = nhds a within - {a}"
+
 lemma eventually_within:
   "eventually P (net within S) = eventually (\<lambda>x. x \<in> S \<longrightarrow> P x) net"
 unfolding within_def
@@ -278,28 +326,27 @@ by (rule eventually_Abs_net, rule is_filter.intro)
 lemma within_UNIV: "net within UNIV = net"
   unfolding expand_net_eq eventually_within by simp
 
-lemma eventually_at_topological:
-  "eventually P (at a) \<longleftrightarrow> (\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> P x))"
-unfolding at_def
+lemma eventually_nhds:
+  "eventually P (nhds a) \<longleftrightarrow> (\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. P x))"
+unfolding nhds_def
 proof (rule eventually_Abs_net, rule is_filter.intro)
-  have "open UNIV \<and> a \<in> UNIV \<and> (\<forall>x\<in>UNIV. x \<noteq> a \<longrightarrow> True)" by simp
-  thus "\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> True)" by - rule
+  have "open UNIV \<and> a \<in> UNIV \<and> (\<forall>x\<in>UNIV. True)" by simp
+  thus "\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. True)" by - rule
 next
   fix P Q
-  assume "\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> P x)"
-     and "\<exists>T. open T \<and> a \<in> T \<and> (\<forall>x\<in>T. x \<noteq> a \<longrightarrow> Q x)"
+  assume "\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. P x)"
+     and "\<exists>T. open T \<and> a \<in> T \<and> (\<forall>x\<in>T. Q x)"
   then obtain S T where
-    "open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> P x)"
-    "open T \<and> a \<in> T \<and> (\<forall>x\<in>T. x \<noteq> a \<longrightarrow> Q x)" by auto
-  hence "open (S \<inter> T) \<and> a \<in> S \<inter> T \<and> (\<forall>x\<in>(S \<inter> T). x \<noteq> a \<longrightarrow> P x \<and> Q x)"
+    "open S \<and> a \<in> S \<and> (\<forall>x\<in>S. P x)"
+    "open T \<and> a \<in> T \<and> (\<forall>x\<in>T. Q x)" by auto
+  hence "open (S \<inter> T) \<and> a \<in> S \<inter> T \<and> (\<forall>x\<in>(S \<inter> T). P x \<and> Q x)"
     by (simp add: open_Int)
-  thus "\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> P x \<and> Q x)" by - rule
+  thus "\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. P x \<and> Q x)" by - rule
 qed auto
 
-lemma eventually_at:
-  fixes a :: "'a::metric_space"
-  shows "eventually P (at a) \<longleftrightarrow> (\<exists>d>0. \<forall>x. x \<noteq> a \<and> dist x a < d \<longrightarrow> P x)"
-unfolding eventually_at_topological open_dist
+lemma eventually_nhds_metric:
+  "eventually P (nhds a) \<longleftrightarrow> (\<exists>d>0. \<forall>x. dist x a < d \<longrightarrow> P x)"
+unfolding eventually_nhds open_dist
 apply safe
 apply fast
 apply (rule_tac x="{x. dist x a < d}" in exI, simp)
@@ -308,6 +355,15 @@ apply (rule_tac x="d - dist x a" in exI, clarsimp)
 apply (simp only: less_diff_eq)
 apply (erule le_less_trans [OF dist_triangle])
 done
+
+lemma eventually_at_topological:
+  "eventually P (at a) \<longleftrightarrow> (\<exists>S. open S \<and> a \<in> S \<and> (\<forall>x\<in>S. x \<noteq> a \<longrightarrow> P x))"
+unfolding at_def eventually_within eventually_nhds by simp
+
+lemma eventually_at:
+  fixes a :: "'a::metric_space"
+  shows "eventually P (at a) \<longleftrightarrow> (\<exists>d>0. \<forall>x. x \<noteq> a \<and> dist x a < d \<longrightarrow> P x)"
+unfolding at_def eventually_within eventually_nhds_metric by auto
 
 
 subsection {* Boundedness *}
@@ -507,6 +563,9 @@ structure Tendsto_Intros = Named_Thms
 
 setup Tendsto_Intros.setup
 
+lemma tendsto_mono: "net \<le> net' \<Longrightarrow> (f ---> l) net' \<Longrightarrow> (f ---> l) net"
+unfolding tendsto_def le_net_def by fast
+
 lemma topological_tendstoI:
   "(\<And>S. open S \<Longrightarrow> l \<in> S \<Longrightarrow> eventually (\<lambda>x. f x \<in> S) net)
     \<Longrightarrow> (f ---> l) net"
@@ -548,11 +607,21 @@ lemma tendsto_ident_at [tendsto_intros]: "((\<lambda>x. x) ---> a) (at a)"
 unfolding tendsto_def eventually_at_topological by auto
 
 lemma tendsto_ident_at_within [tendsto_intros]:
-  "a \<in> S \<Longrightarrow> ((\<lambda>x. x) ---> a) (at a within S)"
+  "((\<lambda>x. x) ---> a) (at a within S)"
 unfolding tendsto_def eventually_within eventually_at_topological by auto
 
 lemma tendsto_const [tendsto_intros]: "((\<lambda>x. k) ---> k) net"
 by (simp add: tendsto_def)
+
+lemma tendsto_const_iff:
+  fixes k l :: "'a::metric_space"
+  assumes "net \<noteq> bot" shows "((\<lambda>n. k) ---> l) net \<longleftrightarrow> k = l"
+apply (safe intro!: tendsto_const)
+apply (rule ccontr)
+apply (drule_tac e="dist k l" in tendstoD)
+apply (simp add: zero_less_dist_iff)
+apply (simp add: eventually_False assms)
+done
 
 lemma tendsto_dist [tendsto_intros]:
   assumes f: "(f ---> l) net" and g: "(g ---> m) net"
@@ -574,13 +643,24 @@ proof (rule tendstoI)
   qed
 qed
 
+lemma norm_conv_dist: "norm x = dist x 0"
+unfolding dist_norm by simp
+
 lemma tendsto_norm [tendsto_intros]:
   "(f ---> a) net \<Longrightarrow> ((\<lambda>x. norm (f x)) ---> norm a) net"
-apply (simp add: tendsto_iff dist_norm, safe)
-apply (drule_tac x="e" in spec, safe)
-apply (erule eventually_elim1)
-apply (erule order_le_less_trans [OF norm_triangle_ineq3])
-done
+unfolding norm_conv_dist by (intro tendsto_intros)
+
+lemma tendsto_norm_zero:
+  "(f ---> 0) net \<Longrightarrow> ((\<lambda>x. norm (f x)) ---> 0) net"
+by (drule tendsto_norm, simp)
+
+lemma tendsto_norm_zero_cancel:
+  "((\<lambda>x. norm (f x)) ---> 0) net \<Longrightarrow> (f ---> 0) net"
+unfolding tendsto_iff dist_norm by simp
+
+lemma tendsto_norm_zero_iff:
+  "((\<lambda>x. norm (f x)) ---> 0) net \<longleftrightarrow> (f ---> 0) net"
+unfolding tendsto_iff dist_norm by simp
 
 lemma add_diff_add:
   fixes a b c d :: "'a::ab_group_add"
