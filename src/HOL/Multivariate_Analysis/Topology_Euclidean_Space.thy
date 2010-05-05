@@ -416,30 +416,52 @@ lemma connected_empty[simp, intro]: "connected {}"
 
 subsection{* Hausdorff and other separation properties *}
 
-class t0_space =
+class t0_space = topological_space +
   assumes t0_space: "x \<noteq> y \<Longrightarrow> \<exists>U. open U \<and> \<not> (x \<in> U \<longleftrightarrow> y \<in> U)"
 
-class t1_space =
-  assumes t1_space: "x \<noteq> y \<Longrightarrow> \<exists>U V. open U \<and> open V \<and> x \<in> U \<and> y \<notin> U \<and> x \<notin> V \<and> y \<in> V"
-begin
+class t1_space = topological_space +
+  assumes t1_space: "x \<noteq> y \<Longrightarrow> \<exists>U. open U \<and> x \<in> U \<and> y \<notin> U"
 
-subclass t0_space
-proof
-qed (fast dest: t1_space)
+instance t1_space \<subseteq> t0_space
+proof qed (fast dest: t1_space)
 
-end
+lemma separation_t1:
+  fixes x y :: "'a::t1_space"
+  shows "x \<noteq> y \<longleftrightarrow> (\<exists>U. open U \<and> x \<in> U \<and> y \<notin> U)"
+  using t1_space[of x y] by blast
+
+lemma closed_sing:
+  fixes a :: "'a::t1_space"
+  shows "closed {a}"
+proof -
+  let ?T = "\<Union>{S. open S \<and> a \<notin> S}"
+  have "open ?T" by (simp add: open_Union)
+  also have "?T = - {a}"
+    by (simp add: expand_set_eq separation_t1, auto)
+  finally show "closed {a}" unfolding closed_def .
+qed
+
+lemma closed_insert [simp]:
+  fixes a :: "'a::t1_space"
+  assumes "closed S" shows "closed (insert a S)"
+proof -
+  from closed_sing assms
+  have "closed ({a} \<union> S)" by (rule closed_Un)
+  thus "closed (insert a S)" by simp
+qed
+
+lemma finite_imp_closed:
+  fixes S :: "'a::t1_space set"
+  shows "finite S \<Longrightarrow> closed S"
+by (induct set: finite, simp_all)
 
 text {* T2 spaces are also known as Hausdorff spaces. *}
 
-class t2_space =
+class t2_space = topological_space +
   assumes hausdorff: "x \<noteq> y \<Longrightarrow> \<exists>U V. open U \<and> open V \<and> x \<in> U \<and> y \<in> V \<and> U \<inter> V = {}"
-begin
 
-subclass t1_space
-proof
-qed (fast dest: hausdorff)
-
-end
+instance t2_space \<subseteq> t1_space
+proof qed (fast dest: hausdorff)
 
 instance metric_space \<subseteq> t2_space
 proof
@@ -460,11 +482,6 @@ lemma separation_t2:
   fixes x y :: "'a::t2_space"
   shows "x \<noteq> y \<longleftrightarrow> (\<exists>U V. open U \<and> open V \<and> x \<in> U \<and> y \<in> V \<and> U \<inter> V = {})"
   using hausdorff[of x y] by blast
-
-lemma separation_t1:
-  fixes x y :: "'a::t1_space"
-  shows "x \<noteq> y \<longleftrightarrow> (\<exists>U V. open U \<and> open V \<and> x \<in>U \<and> y\<notin> U \<and> x\<notin>V \<and> y\<in>V)"
-  using t1_space[of x y] by blast
 
 lemma separation_t0:
   fixes x y :: "'a::t0_space"
@@ -1200,7 +1217,7 @@ qed
 text{* Another limit point characterization. *}
 
 lemma islimpt_sequential:
-  fixes x :: "'a::metric_space" (* FIXME: generalize to topological_space *)
+  fixes x :: "'a::metric_space"
   shows "x islimpt S \<longleftrightarrow> (\<exists>f. (\<forall>n::nat. f n \<in> S -{x}) \<and> (f ---> x) sequentially)"
     (is "?lhs = ?rhs")
 proof
@@ -1537,51 +1554,50 @@ proof-
 qed
 
 lemma Lim_transform_eventually:
-  "eventually (\<lambda>x. f x = g x) net \<Longrightarrow> (f ---> l) net ==> (g ---> l) net"
+  "eventually (\<lambda>x. f x = g x) net \<Longrightarrow> (f ---> l) net \<Longrightarrow> (g ---> l) net"
   apply (rule topological_tendstoI)
   apply (drule (2) topological_tendstoD)
   apply (erule (1) eventually_elim2, simp)
   done
 
 lemma Lim_transform_within:
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
-  assumes "0 < d" "(\<forall>x'\<in>S. 0 < dist x' x \<and> dist x' x < d \<longrightarrow> f x' = g x')"
-          "(f ---> l) (at x within S)"
-  shows   "(g ---> l) (at x within S)"
-  using assms(1,3) unfolding Lim_within
-  apply -
-  apply (clarify, rename_tac e)
-  apply (drule_tac x=e in spec, clarsimp, rename_tac r)
-  apply (rule_tac x="min d r" in exI, clarsimp, rename_tac y)
-  apply (drule_tac x=y in bspec, assumption, clarsimp)
-  apply (simp add: assms(2))
-  done
+  assumes "0 < d" and "\<forall>x'\<in>S. 0 < dist x' x \<and> dist x' x < d \<longrightarrow> f x' = g x'"
+  and "(f ---> l) (at x within S)"
+  shows "(g ---> l) (at x within S)"
+proof (rule Lim_transform_eventually)
+  show "eventually (\<lambda>x. f x = g x) (at x within S)"
+    unfolding eventually_within
+    using assms(1,2) by auto
+  show "(f ---> l) (at x within S)" by fact
+qed
 
 lemma Lim_transform_at:
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
-  shows "0 < d \<Longrightarrow> (\<forall>x'. 0 < dist x' x \<and> dist x' x < d \<longrightarrow> f x' = g x') \<Longrightarrow>
-  (f ---> l) (at x) ==> (g ---> l) (at x)"
-  apply (subst within_UNIV[symmetric])
-  using Lim_transform_within[of d UNIV x f g l]
-  by (auto simp add: within_UNIV)
+  assumes "0 < d" and "\<forall>x'. 0 < dist x' x \<and> dist x' x < d \<longrightarrow> f x' = g x'"
+  and "(f ---> l) (at x)"
+  shows "(g ---> l) (at x)"
+proof (rule Lim_transform_eventually)
+  show "eventually (\<lambda>x. f x = g x) (at x)"
+    unfolding eventually_at
+    using assms(1,2) by auto
+  show "(f ---> l) (at x)" by fact
+qed
 
 text{* Common case assuming being away from some crucial point like 0. *}
 
 lemma Lim_transform_away_within:
-  fixes a b :: "'a::metric_space"
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
-  assumes "a\<noteq>b" "\<forall>x\<in> S. x \<noteq> a \<and> x \<noteq> b \<longrightarrow> f x = g x"
+  fixes a b :: "'a::t1_space"
+  assumes "a \<noteq> b" and "\<forall>x\<in>S. x \<noteq> a \<and> x \<noteq> b \<longrightarrow> f x = g x"
   and "(f ---> l) (at a within S)"
   shows "(g ---> l) (at a within S)"
-proof-
-  have "\<forall>x'\<in>S. 0 < dist x' a \<and> dist x' a < dist a b \<longrightarrow> f x' = g x'" using assms(2)
-    apply auto apply(erule_tac x=x' in ballE) by (auto simp add: dist_commute)
-  thus ?thesis using Lim_transform_within[of "dist a b" S a f g l] using assms(1,3) unfolding dist_nz by auto
+proof (rule Lim_transform_eventually)
+  show "(f ---> l) (at a within S)" by fact
+  show "eventually (\<lambda>x. f x = g x) (at a within S)"
+    unfolding Limits.eventually_within eventually_at_topological
+    by (rule exI [where x="- {b}"], simp add: open_Compl assms)
 qed
 
 lemma Lim_transform_away_at:
-  fixes a b :: "'a::metric_space"
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
+  fixes a b :: "'a::t1_space"
   assumes ab: "a\<noteq>b" and fg: "\<forall>x. x \<noteq> a \<and> x \<noteq> b \<longrightarrow> f x = g x"
   and fl: "(f ---> l) (at a)"
   shows "(g ---> l) (at a)"
@@ -1591,15 +1607,14 @@ lemma Lim_transform_away_at:
 text{* Alternatively, within an open set. *}
 
 lemma Lim_transform_within_open:
-  fixes a :: "'a::metric_space"
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
-  assumes "open S"  "a \<in> S"  "\<forall>x\<in>S. x \<noteq> a \<longrightarrow> f x = g x"  "(f ---> l) (at a)"
+  assumes "open S" and "a \<in> S" and "\<forall>x\<in>S. x \<noteq> a \<longrightarrow> f x = g x"
+  and "(f ---> l) (at a)"
   shows "(g ---> l) (at a)"
-proof-
-  from assms(1,2) obtain e::real where "e>0" and e:"ball a e \<subseteq> S" unfolding open_contains_ball by auto
-  hence "\<forall>x'. 0 < dist x' a \<and> dist x' a < e \<longrightarrow> f x' = g x'" using assms(3)
-    unfolding ball_def subset_eq apply auto apply(erule_tac x=x' in allE) apply(erule_tac x=x' in ballE) by(auto simp add: dist_commute)
-  thus ?thesis using Lim_transform_at[of e a f g l] `e>0` assms(4) by auto
+proof (rule Lim_transform_eventually)
+  show "eventually (\<lambda>x. f x = g x) (at a)"
+    unfolding eventually_at_topological
+    using assms(1,2,3) by auto
+  show "(f ---> l) (at a)" by fact
 qed
 
 text{* A congruence rule allowing us to transform limits assuming not at point. *}
@@ -1607,21 +1622,21 @@ text{* A congruence rule allowing us to transform limits assuming not at point. 
 (* FIXME: Only one congruence rule for tendsto can be used at a time! *)
 
 lemma Lim_cong_within(*[cong add]*):
-  fixes a :: "'a::metric_space"
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
-  shows "(\<And>x. x \<noteq> a \<Longrightarrow> f x = g x) ==> ((\<lambda>x. f x) ---> l) (at a within S) \<longleftrightarrow> ((g ---> l) (at a within S))"
-  by (simp add: Lim_within dist_nz[symmetric])
+  assumes "\<And>x. x \<noteq> a \<Longrightarrow> f x = g x"
+  shows "((\<lambda>x. f x) ---> l) (at a within S) \<longleftrightarrow> ((g ---> l) (at a within S))"
+  unfolding tendsto_def Limits.eventually_within eventually_at_topological
+  using assms by simp
 
-lemma Lim_cong_at[cong add]:
-  fixes a :: "'a::metric_space"
-  fixes l :: "'b::metric_space" (* TODO: generalize *)
-  shows "(\<And>x. x \<noteq> a ==> f x = g x) ==> (((\<lambda>x. f x) ---> l) (at a) \<longleftrightarrow> ((g ---> l) (at a)))"
-  by (simp add: Lim_at dist_nz[symmetric])
+lemma Lim_cong_at(*[cong add]*):
+  assumes "\<And>x. x \<noteq> a \<Longrightarrow> f x = g x"
+  shows "((\<lambda>x. f x) ---> l) (at a) \<longleftrightarrow> ((g ---> l) (at a))"
+  unfolding tendsto_def eventually_at_topological
+  using assms by simp
 
 text{* Useful lemmas on closure and set of possible sequential limits.*}
 
 lemma closure_sequential:
-  fixes l :: "'a::metric_space" (* TODO: generalize *)
+  fixes l :: "'a::metric_space"
   shows "l \<in> closure S \<longleftrightarrow> (\<exists>x. (\<forall>n. x n \<in> S) \<and> (x ---> l) sequentially)" (is "?lhs = ?rhs")
 proof
   assume "?lhs" moreover
@@ -2910,26 +2925,6 @@ proof-
     by auto
 qed
 
-lemma closed_sing [simp]:
-  fixes a :: "'a::metric_space"
-  shows "closed {a}"
-  apply (clarsimp simp add: closed_def open_dist)
-  apply (rule ccontr)
-  apply (drule_tac x="dist x a" in spec)
-  apply (simp add: dist_nz dist_commute)
-  done
-
-lemma finite_imp_closed:
-  fixes s :: "'a::metric_space set"
-  shows "finite s ==> closed s"
-proof (induct set: finite)
-  case empty show "closed {}" by simp
-next
-  case (insert x F)
-  hence "closed ({x} \<union> F)" by (simp only: closed_Un closed_sing)
-  thus "closed (insert x F)" by simp
-qed
-
 lemma finite_imp_compact:
   fixes s :: "'a::heine_borel set"
   shows "finite s ==> compact s"
@@ -2967,10 +2962,9 @@ lemma frontier_subset_compact:
   by blast
 
 lemma open_delete:
-  fixes s :: "'a::metric_space set"
-  shows "open s ==> open(s - {x})"
-  using open_Diff[of s "{x}"] closed_sing
-  by blast
+  fixes s :: "'a::t1_space set"
+  shows "open s \<Longrightarrow> open (s - {x})"
+  by (simp add: open_Diff)
 
 text{* Finite intersection property. I could make it an equivalence in fact. *}
 
@@ -3252,7 +3246,7 @@ proof
       by (rule Lim_trivial_limit)
   next
     case False
-    hence "netlimit (at x) = x"
+    hence 1: "netlimit (at x) = x"
       using netlimit_within [of x UNIV]
       by (simp add: within_UNIV)
     with * show ?thesis by simp
@@ -3411,38 +3405,28 @@ unfolding dist_norm Lim_null_norm [symmetric] ..
 text{* The usual transformation theorems. *}
 
 lemma continuous_transform_within:
-  fixes f g :: "'a::metric_space \<Rightarrow> 'b::metric_space" (* TODO: generalize *)
+  fixes f g :: "'a::metric_space \<Rightarrow> 'b::topological_space"
   assumes "0 < d" "x \<in> s" "\<forall>x' \<in> s. dist x' x < d --> f x' = g x'"
           "continuous (at x within s) f"
   shows "continuous (at x within s) g"
-proof-
-  { fix e::real assume "e>0"
-    then obtain d' where d':"d'>0" "\<forall>xa\<in>s. 0 < dist xa x \<and> dist xa x < d' \<longrightarrow> dist (f xa) (f x) < e" using assms(4) unfolding continuous_within Lim_within by auto
-    { fix x' assume "x'\<in>s" "0 < dist x' x" "dist x' x < (min d d')"
-      hence "dist (f x') (g x) < e" using assms(2,3) apply(erule_tac x=x in ballE) using d' by auto  }
-    hence "\<forall>xa\<in>s. 0 < dist xa x \<and> dist xa x < (min d d') \<longrightarrow> dist (f xa) (g x) < e" by blast
-    hence "\<exists>d>0. \<forall>xa\<in>s. 0 < dist xa x \<and> dist xa x < d \<longrightarrow> dist (f xa) (g x) < e" using `d>0` `d'>0` by(rule_tac x="min d d'" in exI)auto  }
-  hence "(f ---> g x) (at x within s)" unfolding Lim_within using assms(1) by auto
-  thus ?thesis unfolding continuous_within using Lim_transform_within[of d s x f g "g x"] using assms by blast
+unfolding continuous_within
+proof (rule Lim_transform_within)
+  show "0 < d" by fact
+  show "\<forall>x'\<in>s. 0 < dist x' x \<and> dist x' x < d \<longrightarrow> f x' = g x'"
+    using assms(3) by auto
+  have "f x = g x"
+    using assms(1,2,3) by auto
+  thus "(f ---> g x) (at x within s)"
+    using assms(4) unfolding continuous_within by simp
 qed
 
 lemma continuous_transform_at:
-  fixes f g :: "'a::metric_space \<Rightarrow> 'b::metric_space" (* TODO: generalize *)
+  fixes f g :: "'a::metric_space \<Rightarrow> 'b::topological_space"
   assumes "0 < d" "\<forall>x'. dist x' x < d --> f x' = g x'"
           "continuous (at x) f"
   shows "continuous (at x) g"
-proof-
-  { fix e::real assume "e>0"
-    then obtain d' where d':"d'>0" "\<forall>xa. 0 < dist xa x \<and> dist xa x < d' \<longrightarrow> dist (f xa) (f x) < e" using assms(3) unfolding continuous_at Lim_at by auto
-    { fix x' assume "0 < dist x' x" "dist x' x < (min d d')"
-      hence "dist (f x') (g x) < e" using assms(2) apply(erule_tac x=x in allE) using d' by auto
-    }
-    hence "\<forall>xa. 0 < dist xa x \<and> dist xa x < (min d d') \<longrightarrow> dist (f xa) (g x) < e" by blast
-    hence "\<exists>d>0. \<forall>xa. 0 < dist xa x \<and> dist xa x < d \<longrightarrow> dist (f xa) (g x) < e" using `d>0` `d'>0` by(rule_tac x="min d d'" in exI)auto
-  }
-  hence "(f ---> g x) (at x)" unfolding Lim_at using assms(1) by auto
-  thus ?thesis unfolding continuous_at using Lim_transform_at[of d x f g "g x"] using assms by blast
-qed
+  using continuous_transform_within [of d x UNIV f g] assms
+  by (simp add: within_UNIV)
 
 text{* Combination results for pointwise continuity. *}
 
@@ -3752,17 +3736,17 @@ proof- fix x T assume as:"open T" "x \<in> T" "T \<subseteq> f ` s"
 text{* Equality of continuous functions on closure and related results.          *}
 
 lemma continuous_closed_in_preimage_constant:
-  fixes f :: "_ \<Rightarrow> 'b::metric_space" (* class constraint due to closed_sing *)
+  fixes f :: "_ \<Rightarrow> 'b::t1_space"
   shows "continuous_on s f ==> closedin (subtopology euclidean s) {x \<in> s. f x = a}"
-  using continuous_closed_in_preimage[of s f "{a}"] closed_sing by auto
+  using continuous_closed_in_preimage[of s f "{a}"] by auto
 
 lemma continuous_closed_preimage_constant:
-  fixes f :: "_ \<Rightarrow> 'b::metric_space" (* class constraint due to closed_sing *)
+  fixes f :: "_ \<Rightarrow> 'b::t1_space"
   shows "continuous_on s f \<Longrightarrow> closed s ==> closed {x \<in> s. f x = a}"
-  using continuous_closed_preimage[of s f "{a}"] closed_sing by auto
+  using continuous_closed_preimage[of s f "{a}"] by auto
 
 lemma continuous_constant_on_closure:
-  fixes f :: "_ \<Rightarrow> 'b::metric_space" (* class constraint due to closed_sing *)
+  fixes f :: "_ \<Rightarrow> 'b::t1_space"
   assumes "continuous_on (closure s) f"
           "\<forall>x \<in> s. f x = a"
   shows "\<forall>x \<in> (closure s). f x = a"
@@ -3828,14 +3812,14 @@ using assms(1)[unfolded continuous_on_eq_continuous_at[OF assms(2)], THEN bspec[
 text{* Proving a function is constant by proving open-ness of level set.         *}
 
 lemma continuous_levelset_open_in_cases:
-  fixes f :: "_ \<Rightarrow> 'b::metric_space" (* class constraint due to closed_sing *)
+  fixes f :: "_ \<Rightarrow> 'b::t1_space"
   shows "connected s \<Longrightarrow> continuous_on s f \<Longrightarrow>
         openin (subtopology euclidean s) {x \<in> s. f x = a}
         ==> (\<forall>x \<in> s. f x \<noteq> a) \<or> (\<forall>x \<in> s. f x = a)"
 unfolding connected_clopen using continuous_closed_in_preimage_constant by auto
 
 lemma continuous_levelset_open_in:
-  fixes f :: "_ \<Rightarrow> 'b::metric_space" (* class constraint due to closed_sing *)
+  fixes f :: "_ \<Rightarrow> 'b::t1_space"
   shows "connected s \<Longrightarrow> continuous_on s f \<Longrightarrow>
         openin (subtopology euclidean s) {x \<in> s. f x = a} \<Longrightarrow>
         (\<exists>x \<in> s. f x = a)  ==> (\<forall>x \<in> s. f x = a)"
@@ -3843,7 +3827,7 @@ using continuous_levelset_open_in_cases[of s f ]
 by meson
 
 lemma continuous_levelset_open:
-  fixes f :: "_ \<Rightarrow> 'b::metric_space" (* class constraint due to closed_sing *)
+  fixes f :: "_ \<Rightarrow> 'b::t1_space"
   assumes "connected s"  "continuous_on s f"  "open {x \<in> s. f x = a}"  "\<exists>x \<in> s.  f x = a"
   shows "\<forall>x \<in> s. f x = a"
 using continuous_levelset_open_in[OF assms(1,2), of a, unfolded openin_open] using assms (3,4) by fast
@@ -4454,7 +4438,7 @@ next
   show ?thesis
   proof(cases "c=0")
     have *:"(\<lambda>x. 0) ` s = {0}" using `s\<noteq>{}` by auto
-    case True thus ?thesis apply auto unfolding * using closed_sing by auto
+    case True thus ?thesis apply auto unfolding * by auto
   next
     case False
     { fix x l assume as:"\<forall>n::nat. x n \<in> scaleR c ` s"  "(x ---> l) sequentially"
