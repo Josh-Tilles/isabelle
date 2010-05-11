@@ -69,18 +69,6 @@ lemma real_squared_diff_one_factored:
   shows "x * x - 1 = (x + 1) * (x - 1)"
 by (simp add: algebra_simps)
 
-(* TODO: no longer real-specific; rename and move elsewhere *)
-lemma real_mult_is_one [simp]:
-  fixes x :: "'a::ring_1_no_zero_divisors"
-  shows "x * x = 1 \<longleftrightarrow> x = 1 \<or> x = - 1"
-proof -
-  have "x * x = 1 \<longleftrightarrow> (x + 1) * (x - 1) = 0"
-    by (simp add: algebra_simps)
-  also have "\<dots> \<longleftrightarrow> x = 1 \<or> x = - 1"
-    by (auto simp add: add_eq_0_iff minus_equation_iff [of _ 1])
-  finally show ?thesis .
-qed
-
 (* FIXME: declare this [simp] for all types, or not at all *)
 lemma realpow_two_sum_zero_iff [simp]:
      "(x ^ 2 + y ^ 2 = (0::real)) = (x = 0 & y = 0)"
@@ -112,55 +100,5 @@ proof -
   thus "x \<le> y" using ygt0
     by (rule power_le_imp_le_base)
 qed
-
-subsection {*Floor*}
-
-lemma floor_power:
-  assumes "x = real (floor x)"
-  shows "floor (x ^ n) = floor x ^ n"
-proof -
-  have *: "x ^ n = real (floor x ^ n)"
-    using assms by (induct n arbitrary: x) simp_all
-  show ?thesis unfolding real_of_int_inject[symmetric]
-    unfolding * floor_real_of_int ..
-qed
-
-lemma natfloor_power:
-  assumes "x = real (natfloor x)"
-  shows "natfloor (x ^ n) = natfloor x ^ n"
-proof -
-  from assms have "0 \<le> floor x" by auto
-  note assms[unfolded natfloor_def real_nat_eq_real[OF `0 \<le> floor x`]]
-  from floor_power[OF this]
-  show ?thesis unfolding natfloor_def nat_power_eq[OF `0 \<le> floor x`, symmetric]
-    by simp
-qed
-
-subsection {*Various Other Theorems*}
-
-lemma real_le_add_half_cancel: "(x + y/2 \<le> (y::real)) = (x \<le> y /2)"
-by auto
-
-lemma real_mult_inverse_cancel:
-     "[|(0::real) < x; 0 < x1; x1 * y < x * u |] 
-      ==> inverse x * y < inverse x1 * u"
-apply (rule_tac c=x in mult_less_imp_less_left) 
-apply (auto simp add: mult_assoc [symmetric])
-apply (simp (no_asm) add: mult_ac)
-apply (rule_tac c=x1 in mult_less_imp_less_right) 
-apply (auto simp add: mult_ac)
-done
-
-lemma real_mult_inverse_cancel2:
-     "[|(0::real) < x;0 < x1; x1 * y < x * u |] ==> y * inverse x < u * inverse x1"
-apply (auto dest: real_mult_inverse_cancel simp add: mult_ac)
-done
-
-(* TODO: no longer real-specific; rename and move elsewhere *)
-lemma realpow_num_eq_if:
-  fixes m :: "'a::power"
-  shows "m ^ n = (if n=0 then 1 else m * m ^ (n - 1))"
-by (cases n, auto)
-
 
 end
