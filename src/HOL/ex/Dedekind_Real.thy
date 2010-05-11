@@ -1,16 +1,17 @@
-(*  Title:      HOL/PReal.thy
+(*  Title:      HOL/ex/Dedekind_Real.thy
     Author:     Jacques D. Fleuriot, University of Cambridge
+    Conversion to Isar and new proofs by Lawrence C Paulson, 2003/4
 
 The positive reals as Dedekind sections of positive
 rationals. Fundamentals of Abstract Analysis [Gleason- p. 121]
 provides some of the definitions.
 *)
 
-header {* Positive real numbers *}
-
-theory PReal
-imports Rat
+theory Dedekind_Real
+imports Rat Lubs
 begin
+
+section {* Positive real numbers *}
 
 text{*Could be generalized and moved to @{text Groups}*}
 lemma add_eq_exists: "\<exists>x. a+x = (b::rat)"
@@ -227,9 +228,6 @@ done
 
 text{*Lemmas for proving that addition of two positive reals gives
  a positive real*}
-
-lemma empty_psubset_nonempty: "a \<in> A ==> {} \<subset> A"
-by blast
 
 text{*Part 1 of Dedekind sections definition*}
 lemma add_set_not_empty:
@@ -1159,5 +1157,889 @@ apply (rename_tac U)
 apply (cut_tac x = U and y = Z in linorder_less_linear)
 apply (auto simp add: preal_less_def)
 done
+
+section {*Defining the Reals from the Positive Reals*}
+
+definition
+  realrel   ::  "((preal * preal) * (preal * preal)) set" where
+  [code del]: "realrel = {p. \<exists>x1 y1 x2 y2. p = ((x1,y1),(x2,y2)) & x1+y2 = x2+y1}"
+
+typedef (Real)  real = "UNIV//realrel"
+  by (auto simp add: quotient_def)
+
+definition
+  (** these don't use the overloaded "real" function: users don't see them **)
+  real_of_preal :: "preal => real" where
+  [code del]: "real_of_preal m = Abs_Real (realrel `` {(m + 1, 1)})"
+
+instantiation real :: "{zero, one, plus, minus, uminus, times, inverse, ord, abs, sgn}"
+begin
+
+definition
+  real_zero_def [code del]: "0 = Abs_Real(realrel``{(1, 1)})"
+
+definition
+  real_one_def [code del]: "1 = Abs_Real(realrel``{(1 + 1, 1)})"
+
+definition
+  real_add_def [code del]: "z + w =
+       contents (\<Union>(x,y) \<in> Rep_Real(z). \<Union>(u,v) \<in> Rep_Real(w).
+                 { Abs_Real(realrel``{(x+u, y+v)}) })"
+
+definition
+  real_minus_def [code del]: "- r =  contents (\<Union>(x,y) \<in> Rep_Real(r). { Abs_Real(realrel``{(y,x)}) })"
+
+definition
+  real_diff_def [code del]: "r - (s::real) = r + - s"
+
+definition
+  real_mult_def [code del]:
+    "z * w =
+       contents (\<Union>(x,y) \<in> Rep_Real(z). \<Union>(u,v) \<in> Rep_Real(w).
+                 { Abs_Real(realrel``{(x*u + y*v, x*v + y*u)}) })"
+
+definition
+  real_inverse_def [code del]: "inverse (R::real) = (THE S. (R = 0 & S = 0) | S * R = 1)"
+
+definition
+  real_divide_def [code del]: "R / (S::real) = R * inverse S"
+
+definition
+  real_le_def [code del]: "z \<le> (w::real) \<longleftrightarrow>
+    (\<exists>x y u v. x+v \<le> u+y & (x,y) \<in> Rep_Real z & (u,v) \<in> Rep_Real w)"
+
+definition
+  real_less_def [code del]: "x < (y\<Colon>real) \<longleftrightarrow> x \<le> y \<and> x \<noteq> y"
+
+definition
+  real_abs_def:  "abs (r::real) = (if r < 0 then - r else r)"
+
+definition
+  real_sgn_def: "sgn (x::real) = (if x=0 then 0 else if 0<x then 1 else - 1)"
+
+instance ..
+
+end
+
+subsection {* Equivalence relation over positive reals *}
+
+lemma preal_trans_lemma:
+  assumes "x + y1 = x1 + y"
+      and "x + y2 = x2 + y"
+  shows "x1 + y2 = x2 + (y1::preal)"
+proof -
+  have "(x1 + y2) + x = (x + y2) + x1" by (simp add: add_ac)
+  also have "... = (x2 + y) + x1"  by (simp add: prems)
+  also have "... = x2 + (x1 + y)"  by (simp add: add_ac)
+  also have "... = x2 + (x + y1)"  by (simp add: prems)
+  also have "... = (x2 + y1) + x"  by (simp add: add_ac)
+  finally have "(x1 + y2) + x = (x2 + y1) + x" .
+  thus ?thesis by (rule add_right_imp_eq)
+qed
+
+
+lemma realrel_iff [simp]: "(((x1,y1),(x2,y2)) \<in> realrel) = (x1 + y2 = x2 + y1)"
+by (simp add: realrel_def)
+
+lemma equiv_realrel: "equiv UNIV realrel"
+apply (auto simp add: equiv_def refl_on_def sym_def trans_def realrel_def)
+apply (blast dest: preal_trans_lemma) 
+done
+
+text{*Reduces equality of equivalence classes to the @{term realrel} relation:
+  @{term "(realrel `` {x} = realrel `` {y}) = ((x,y) \<in> realrel)"} *}
+lemmas equiv_realrel_iff = 
+       eq_equiv_class_iff [OF equiv_realrel UNIV_I UNIV_I]
+
+declare equiv_realrel_iff [simp]
+
+
+lemma realrel_in_real [simp]: "realrel``{(x,y)}: Real"
+by (simp add: Real_def realrel_def quotient_def, blast)
+
+declare Abs_Real_inject [simp]
+declare Abs_Real_inverse [simp]
+
+
+text{*Case analysis on the representation of a real number as an equivalence
+      class of pairs of positive reals.*}
+lemma eq_Abs_Real [case_names Abs_Real, cases type: real]: 
+     "(!!x y. z = Abs_Real(realrel``{(x,y)}) ==> P) ==> P"
+apply (rule Rep_Real [of z, unfolded Real_def, THEN quotientE])
+apply (drule arg_cong [where f=Abs_Real])
+apply (auto simp add: Rep_Real_inverse)
+done
+
+
+subsection {* Addition and Subtraction *}
+
+lemma real_add_congruent2_lemma:
+     "[|a + ba = aa + b; ab + bc = ac + bb|]
+      ==> a + ab + (ba + bc) = aa + ac + (b + (bb::preal))"
+apply (simp add: add_assoc)
+apply (rule add_left_commute [of ab, THEN ssubst])
+apply (simp add: add_assoc [symmetric])
+apply (simp add: add_ac)
+done
+
+lemma real_add:
+     "Abs_Real (realrel``{(x,y)}) + Abs_Real (realrel``{(u,v)}) =
+      Abs_Real (realrel``{(x+u, y+v)})"
+proof -
+  have "(\<lambda>z w. (\<lambda>(x,y). (\<lambda>(u,v). {Abs_Real (realrel `` {(x+u, y+v)})}) w) z)
+        respects2 realrel"
+    by (simp add: congruent2_def, blast intro: real_add_congruent2_lemma) 
+  thus ?thesis
+    by (simp add: real_add_def UN_UN_split_split_eq
+                  UN_equiv_class2 [OF equiv_realrel equiv_realrel])
+qed
+
+lemma real_minus: "- Abs_Real(realrel``{(x,y)}) = Abs_Real(realrel `` {(y,x)})"
+proof -
+  have "(\<lambda>(x,y). {Abs_Real (realrel``{(y,x)})}) respects realrel"
+    by (simp add: congruent_def add_commute) 
+  thus ?thesis
+    by (simp add: real_minus_def UN_equiv_class [OF equiv_realrel])
+qed
+
+instance real :: ab_group_add
+proof
+  fix x y z :: real
+  show "(x + y) + z = x + (y + z)"
+    by (cases x, cases y, cases z, simp add: real_add add_assoc)
+  show "x + y = y + x"
+    by (cases x, cases y, simp add: real_add add_commute)
+  show "0 + x = x"
+    by (cases x, simp add: real_add real_zero_def add_ac)
+  show "- x + x = 0"
+    by (cases x, simp add: real_minus real_add real_zero_def add_commute)
+  show "x - y = x + - y"
+    by (simp add: real_diff_def)
+qed
+
+
+subsection {* Multiplication *}
+
+lemma real_mult_congruent2_lemma:
+     "!!(x1::preal). [| x1 + y2 = x2 + y1 |] ==>
+          x * x1 + y * y1 + (x * y2 + y * x2) =
+          x * x2 + y * y2 + (x * y1 + y * x1)"
+apply (simp add: add_left_commute add_assoc [symmetric])
+apply (simp add: add_assoc right_distrib [symmetric])
+apply (simp add: add_commute)
+done
+
+lemma real_mult_congruent2:
+    "(%p1 p2.
+        (%(x1,y1). (%(x2,y2). 
+          { Abs_Real (realrel``{(x1*x2 + y1*y2, x1*y2+y1*x2)}) }) p2) p1)
+     respects2 realrel"
+apply (rule congruent2_commuteI [OF equiv_realrel], clarify)
+apply (simp add: mult_commute add_commute)
+apply (auto simp add: real_mult_congruent2_lemma)
+done
+
+lemma real_mult:
+      "Abs_Real((realrel``{(x1,y1)})) * Abs_Real((realrel``{(x2,y2)})) =
+       Abs_Real(realrel `` {(x1*x2+y1*y2,x1*y2+y1*x2)})"
+by (simp add: real_mult_def UN_UN_split_split_eq
+         UN_equiv_class2 [OF equiv_realrel equiv_realrel real_mult_congruent2])
+
+lemma real_mult_commute: "(z::real) * w = w * z"
+by (cases z, cases w, simp add: real_mult add_ac mult_ac)
+
+lemma real_mult_assoc: "((z1::real) * z2) * z3 = z1 * (z2 * z3)"
+apply (cases z1, cases z2, cases z3)
+apply (simp add: real_mult algebra_simps)
+done
+
+lemma real_mult_1: "(1::real) * z = z"
+apply (cases z)
+apply (simp add: real_mult real_one_def algebra_simps)
+done
+
+lemma real_add_mult_distrib: "((z1::real) + z2) * w = (z1 * w) + (z2 * w)"
+apply (cases z1, cases z2, cases w)
+apply (simp add: real_add real_mult algebra_simps)
+done
+
+text{*one and zero are distinct*}
+lemma real_zero_not_eq_one: "0 \<noteq> (1::real)"
+proof -
+  have "(1::preal) < 1 + 1"
+    by (simp add: preal_self_less_add_left)
+  thus ?thesis
+    by (simp add: real_zero_def real_one_def)
+qed
+
+instance real :: comm_ring_1
+proof
+  fix x y z :: real
+  show "(x * y) * z = x * (y * z)" by (rule real_mult_assoc)
+  show "x * y = y * x" by (rule real_mult_commute)
+  show "1 * x = x" by (rule real_mult_1)
+  show "(x + y) * z = x * z + y * z" by (rule real_add_mult_distrib)
+  show "0 \<noteq> (1::real)" by (rule real_zero_not_eq_one)
+qed
+
+subsection {* Inverse and Division *}
+
+lemma real_zero_iff: "Abs_Real (realrel `` {(x, x)}) = 0"
+by (simp add: real_zero_def add_commute)
+
+text{*Instead of using an existential quantifier and constructing the inverse
+within the proof, we could define the inverse explicitly.*}
+
+lemma real_mult_inverse_left_ex: "x \<noteq> 0 ==> \<exists>y. y*x = (1::real)"
+apply (simp add: real_zero_def real_one_def, cases x)
+apply (cut_tac x = xa and y = y in linorder_less_linear)
+apply (auto dest!: less_add_left_Ex simp add: real_zero_iff)
+apply (rule_tac
+        x = "Abs_Real (realrel``{(1, inverse (D) + 1)})"
+       in exI)
+apply (rule_tac [2]
+        x = "Abs_Real (realrel``{(inverse (D) + 1, 1)})" 
+       in exI)
+apply (auto simp add: real_mult preal_mult_inverse_right algebra_simps)
+done
+
+lemma real_mult_inverse_left: "x \<noteq> 0 ==> inverse(x)*x = (1::real)"
+apply (simp add: real_inverse_def)
+apply (drule real_mult_inverse_left_ex, safe)
+apply (rule theI, assumption, rename_tac z)
+apply (subgoal_tac "(z * x) * y = z * (x * y)")
+apply (simp add: mult_commute)
+apply (rule mult_assoc)
+done
+
+
+subsection{*The Real Numbers form a Field*}
+
+instance real :: field_inverse_zero
+proof
+  fix x y z :: real
+  show "x \<noteq> 0 ==> inverse x * x = 1" by (rule real_mult_inverse_left)
+  show "x / y = x * inverse y" by (simp add: real_divide_def)
+  show "inverse 0 = (0::real)" by (simp add: real_inverse_def)
+qed
+
+
+subsection{*The @{text "\<le>"} Ordering*}
+
+lemma real_le_refl: "w \<le> (w::real)"
+by (cases w, force simp add: real_le_def)
+
+text{*The arithmetic decision procedure is not set up for type preal.
+  This lemma is currently unused, but it could simplify the proofs of the
+  following two lemmas.*}
+lemma preal_eq_le_imp_le:
+  assumes eq: "a+b = c+d" and le: "c \<le> a"
+  shows "b \<le> (d::preal)"
+proof -
+  have "c+d \<le> a+d" by (simp add: prems)
+  hence "a+b \<le> a+d" by (simp add: prems)
+  thus "b \<le> d" by simp
+qed
+
+lemma real_le_lemma:
+  assumes l: "u1 + v2 \<le> u2 + v1"
+      and "x1 + v1 = u1 + y1"
+      and "x2 + v2 = u2 + y2"
+  shows "x1 + y2 \<le> x2 + (y1::preal)"
+proof -
+  have "(x1+v1) + (u2+y2) = (u1+y1) + (x2+v2)" by (simp add: prems)
+  hence "(x1+y2) + (u2+v1) = (x2+y1) + (u1+v2)" by (simp add: add_ac)
+  also have "... \<le> (x2+y1) + (u2+v1)" by (simp add: prems)
+  finally show ?thesis by simp
+qed
+
+lemma real_le: 
+     "(Abs_Real(realrel``{(x1,y1)}) \<le> Abs_Real(realrel``{(x2,y2)})) =  
+      (x1 + y2 \<le> x2 + y1)"
+apply (simp add: real_le_def)
+apply (auto intro: real_le_lemma)
+done
+
+lemma real_le_antisym: "[| z \<le> w; w \<le> z |] ==> z = (w::real)"
+by (cases z, cases w, simp add: real_le)
+
+lemma real_trans_lemma:
+  assumes "x + v \<le> u + y"
+      and "u + v' \<le> u' + v"
+      and "x2 + v2 = u2 + y2"
+  shows "x + v' \<le> u' + (y::preal)"
+proof -
+  have "(x+v') + (u+v) = (x+v) + (u+v')" by (simp add: add_ac)
+  also have "... \<le> (u+y) + (u+v')" by (simp add: prems)
+  also have "... \<le> (u+y) + (u'+v)" by (simp add: prems)
+  also have "... = (u'+y) + (u+v)"  by (simp add: add_ac)
+  finally show ?thesis by simp
+qed
+
+lemma real_le_trans: "[| i \<le> j; j \<le> k |] ==> i \<le> (k::real)"
+apply (cases i, cases j, cases k)
+apply (simp add: real_le)
+apply (blast intro: real_trans_lemma)
+done
+
+instance real :: order
+proof
+  fix u v :: real
+  show "u < v \<longleftrightarrow> u \<le> v \<and> \<not> v \<le> u" 
+    by (auto simp add: real_less_def intro: real_le_antisym)
+qed (assumption | rule real_le_refl real_le_trans real_le_antisym)+
+
+(* Axiom 'linorder_linear' of class 'linorder': *)
+lemma real_le_linear: "(z::real) \<le> w | w \<le> z"
+apply (cases z, cases w)
+apply (auto simp add: real_le real_zero_def add_ac)
+done
+
+instance real :: linorder
+  by (intro_classes, rule real_le_linear)
+
+
+lemma real_le_eq_diff: "(x \<le> y) = (x-y \<le> (0::real))"
+apply (cases x, cases y) 
+apply (auto simp add: real_le real_zero_def real_diff_def real_add real_minus
+                      add_ac)
+apply (simp_all add: add_assoc [symmetric])
+done
+
+lemma real_add_left_mono: 
+  assumes le: "x \<le> y" shows "z + x \<le> z + (y::real)"
+proof -
+  have "z + x - (z + y) = (z + -z) + (x - y)" 
+    by (simp add: algebra_simps) 
+  with le show ?thesis 
+    by (simp add: real_le_eq_diff[of x] real_le_eq_diff[of "z+x"] diff_minus)
+qed
+
+lemma real_sum_gt_zero_less: "(0 < S + (-W::real)) ==> (W < S)"
+by (simp add: linorder_not_le [symmetric] real_le_eq_diff [of S] diff_minus)
+
+lemma real_less_sum_gt_zero: "(W < S) ==> (0 < S + (-W::real))"
+by (simp add: linorder_not_le [symmetric] real_le_eq_diff [of S] diff_minus)
+
+lemma real_mult_order: "[| 0 < x; 0 < y |] ==> (0::real) < x * y"
+apply (cases x, cases y)
+apply (simp add: linorder_not_le [where 'a = real, symmetric] 
+                 linorder_not_le [where 'a = preal] 
+                  real_zero_def real_le real_mult)
+  --{*Reduce to the (simpler) @{text "\<le>"} relation *}
+apply (auto dest!: less_add_left_Ex
+     simp add: algebra_simps preal_self_less_add_left)
+done
+
+lemma real_mult_less_mono2: "[| (0::real) < z; x < y |] ==> z * x < z * y"
+apply (rule real_sum_gt_zero_less)
+apply (drule real_less_sum_gt_zero [of x y])
+apply (drule real_mult_order, assumption)
+apply (simp add: right_distrib)
+done
+
+instantiation real :: distrib_lattice
+begin
+
+definition
+  "(inf \<Colon> real \<Rightarrow> real \<Rightarrow> real) = min"
+
+definition
+  "(sup \<Colon> real \<Rightarrow> real \<Rightarrow> real) = max"
+
+instance
+  by default (auto simp add: inf_real_def sup_real_def min_max.sup_inf_distrib1)
+
+end
+
+
+subsection{*The Reals Form an Ordered Field*}
+
+instance real :: linordered_field_inverse_zero
+proof
+  fix x y z :: real
+  show "x \<le> y ==> z + x \<le> z + y" by (rule real_add_left_mono)
+  show "x < y ==> 0 < z ==> z * x < z * y" by (rule real_mult_less_mono2)
+  show "\<bar>x\<bar> = (if x < 0 then -x else x)" by (simp only: real_abs_def)
+  show "sgn x = (if x=0 then 0 else if 0<x then 1 else - 1)"
+    by (simp only: real_sgn_def)
+qed
+
+text{*The function @{term real_of_preal} requires many proofs, but it seems
+to be essential for proving completeness of the reals from that of the
+positive reals.*}
+
+lemma real_of_preal_add:
+     "real_of_preal ((x::preal) + y) = real_of_preal x + real_of_preal y"
+by (simp add: real_of_preal_def real_add algebra_simps)
+
+lemma real_of_preal_mult:
+     "real_of_preal ((x::preal) * y) = real_of_preal x* real_of_preal y"
+by (simp add: real_of_preal_def real_mult algebra_simps)
+
+
+text{*Gleason prop 9-4.4 p 127*}
+lemma real_of_preal_trichotomy:
+      "\<exists>m. (x::real) = real_of_preal m | x = 0 | x = -(real_of_preal m)"
+apply (simp add: real_of_preal_def real_zero_def, cases x)
+apply (auto simp add: real_minus add_ac)
+apply (cut_tac x = x and y = y in linorder_less_linear)
+apply (auto dest!: less_add_left_Ex simp add: add_assoc [symmetric])
+done
+
+lemma real_of_preal_leD:
+      "real_of_preal m1 \<le> real_of_preal m2 ==> m1 \<le> m2"
+by (simp add: real_of_preal_def real_le)
+
+lemma real_of_preal_lessI: "m1 < m2 ==> real_of_preal m1 < real_of_preal m2"
+by (auto simp add: real_of_preal_leD linorder_not_le [symmetric])
+
+lemma real_of_preal_lessD:
+      "real_of_preal m1 < real_of_preal m2 ==> m1 < m2"
+by (simp add: real_of_preal_def real_le linorder_not_le [symmetric])
+
+lemma real_of_preal_less_iff [simp]:
+     "(real_of_preal m1 < real_of_preal m2) = (m1 < m2)"
+by (blast intro: real_of_preal_lessI real_of_preal_lessD)
+
+lemma real_of_preal_le_iff:
+     "(real_of_preal m1 \<le> real_of_preal m2) = (m1 \<le> m2)"
+by (simp add: linorder_not_less [symmetric])
+
+lemma real_of_preal_zero_less: "0 < real_of_preal m"
+apply (insert preal_self_less_add_left [of 1 m])
+apply (auto simp add: real_zero_def real_of_preal_def
+                      real_less_def real_le_def add_ac)
+apply (rule_tac x="m + 1" in exI, rule_tac x="1" in exI)
+apply (simp add: add_ac)
+done
+
+lemma real_of_preal_minus_less_zero: "- real_of_preal m < 0"
+by (simp add: real_of_preal_zero_less)
+
+lemma real_of_preal_not_minus_gt_zero: "~ 0 < - real_of_preal m"
+proof -
+  from real_of_preal_minus_less_zero
+  show ?thesis by (blast dest: order_less_trans)
+qed
+
+
+subsection{*Theorems About the Ordering*}
+
+lemma real_gt_zero_preal_Ex: "(0 < x) = (\<exists>y. x = real_of_preal y)"
+apply (auto simp add: real_of_preal_zero_less)
+apply (cut_tac x = x in real_of_preal_trichotomy)
+apply (blast elim!: real_of_preal_not_minus_gt_zero [THEN notE])
+done
+
+lemma real_gt_preal_preal_Ex:
+     "real_of_preal z < x ==> \<exists>y. x = real_of_preal y"
+by (blast dest!: real_of_preal_zero_less [THEN order_less_trans]
+             intro: real_gt_zero_preal_Ex [THEN iffD1])
+
+lemma real_ge_preal_preal_Ex:
+     "real_of_preal z \<le> x ==> \<exists>y. x = real_of_preal y"
+by (blast dest: order_le_imp_less_or_eq real_gt_preal_preal_Ex)
+
+lemma real_less_all_preal: "y \<le> 0 ==> \<forall>x. y < real_of_preal x"
+by (auto elim: order_le_imp_less_or_eq [THEN disjE] 
+            intro: real_of_preal_zero_less [THEN [2] order_less_trans] 
+            simp add: real_of_preal_zero_less)
+
+lemma real_less_all_real2: "~ 0 < y ==> \<forall>x. y < real_of_preal x"
+by (blast intro!: real_less_all_preal linorder_not_less [THEN iffD1])
+
+
+subsection{*Numerals and Arithmetic*}
+
+instantiation real :: number_ring
+begin
+
+definition
+  real_number_of_def [code del]: "(number_of w :: real) = of_int w"
+
+instance
+  by intro_classes (simp add: real_number_of_def)
+
+end
+
+subsection {* Completeness of Positive Reals *}
+
+text {*
+  Supremum property for the set of positive reals
+
+  Let @{text "P"} be a non-empty set of positive reals, with an upper
+  bound @{text "y"}.  Then @{text "P"} has a least upper bound
+  (written @{text "S"}).
+
+  FIXME: Can the premise be weakened to @{text "\<forall>x \<in> P. x\<le> y"}?
+*}
+
+lemma posreal_complete:
+  assumes positive_P: "\<forall>x \<in> P. (0::real) < x"
+    and not_empty_P: "\<exists>x. x \<in> P"
+    and upper_bound_Ex: "\<exists>y. \<forall>x \<in> P. x<y"
+  shows "\<exists>S. \<forall>y. (\<exists>x \<in> P. y < x) = (y < S)"
+proof (rule exI, rule allI)
+  fix y
+  let ?pP = "{w. real_of_preal w \<in> P}"
+
+  show "(\<exists>x\<in>P. y < x) = (y < real_of_preal (psup ?pP))"
+  proof (cases "0 < y")
+    assume neg_y: "\<not> 0 < y"
+    show ?thesis
+    proof
+      assume "\<exists>x\<in>P. y < x"
+      have "\<forall>x. y < real_of_preal x"
+        using neg_y by (rule real_less_all_real2)
+      thus "y < real_of_preal (psup ?pP)" ..
+    next
+      assume "y < real_of_preal (psup ?pP)"
+      obtain "x" where x_in_P: "x \<in> P" using not_empty_P ..
+      hence "0 < x" using positive_P by simp
+      hence "y < x" using neg_y by simp
+      thus "\<exists>x \<in> P. y < x" using x_in_P ..
+    qed
+  next
+    assume pos_y: "0 < y"
+
+    then obtain py where y_is_py: "y = real_of_preal py"
+      by (auto simp add: real_gt_zero_preal_Ex)
+
+    obtain a where "a \<in> P" using not_empty_P ..
+    with positive_P have a_pos: "0 < a" ..
+    then obtain pa where "a = real_of_preal pa"
+      by (auto simp add: real_gt_zero_preal_Ex)
+    hence "pa \<in> ?pP" using `a \<in> P` by auto
+    hence pP_not_empty: "?pP \<noteq> {}" by auto
+
+    obtain sup where sup: "\<forall>x \<in> P. x < sup"
+      using upper_bound_Ex ..
+    from this and `a \<in> P` have "a < sup" ..
+    hence "0 < sup" using a_pos by arith
+    then obtain possup where "sup = real_of_preal possup"
+      by (auto simp add: real_gt_zero_preal_Ex)
+    hence "\<forall>X \<in> ?pP. X \<le> possup"
+      using sup by (auto simp add: real_of_preal_lessI)
+    with pP_not_empty have psup: "\<And>Z. (\<exists>X \<in> ?pP. Z < X) = (Z < psup ?pP)"
+      by (rule preal_complete)
+
+    show ?thesis
+    proof
+      assume "\<exists>x \<in> P. y < x"
+      then obtain x where x_in_P: "x \<in> P" and y_less_x: "y < x" ..
+      hence "0 < x" using pos_y by arith
+      then obtain px where x_is_px: "x = real_of_preal px"
+        by (auto simp add: real_gt_zero_preal_Ex)
+
+      have py_less_X: "\<exists>X \<in> ?pP. py < X"
+      proof
+        show "py < px" using y_is_py and x_is_px and y_less_x
+          by (simp add: real_of_preal_lessI)
+        show "px \<in> ?pP" using x_in_P and x_is_px by simp
+      qed
+
+      have "(\<exists>X \<in> ?pP. py < X) ==> (py < psup ?pP)"
+        using psup by simp
+      hence "py < psup ?pP" using py_less_X by simp
+      thus "y < real_of_preal (psup {w. real_of_preal w \<in> P})"
+        using y_is_py and pos_y by (simp add: real_of_preal_lessI)
+    next
+      assume y_less_psup: "y < real_of_preal (psup ?pP)"
+
+      hence "py < psup ?pP" using y_is_py
+        by (simp add: real_of_preal_lessI)
+      then obtain "X" where py_less_X: "py < X" and X_in_pP: "X \<in> ?pP"
+        using psup by auto
+      then obtain x where x_is_X: "x = real_of_preal X"
+        by (simp add: real_gt_zero_preal_Ex)
+      hence "y < x" using py_less_X and y_is_py
+        by (simp add: real_of_preal_lessI)
+
+      moreover have "x \<in> P" using x_is_X and X_in_pP by simp
+
+      ultimately show "\<exists> x \<in> P. y < x" ..
+    qed
+  qed
+qed
+
+text {*
+  \medskip Completeness properties using @{text "isUb"}, @{text "isLub"} etc.
+*}
+
+lemma posreals_complete:
+  assumes positive_S: "\<forall>x \<in> S. 0 < x"
+    and not_empty_S: "\<exists>x. x \<in> S"
+    and upper_bound_Ex: "\<exists>u. isUb (UNIV::real set) S u"
+  shows "\<exists>t. isLub (UNIV::real set) S t"
+proof
+  let ?pS = "{w. real_of_preal w \<in> S}"
+
+  obtain u where "isUb UNIV S u" using upper_bound_Ex ..
+  hence sup: "\<forall>x \<in> S. x \<le> u" by (simp add: isUb_def setle_def)
+
+  obtain x where x_in_S: "x \<in> S" using not_empty_S ..
+  hence x_gt_zero: "0 < x" using positive_S by simp
+  have  "x \<le> u" using sup and x_in_S ..
+  hence "0 < u" using x_gt_zero by arith
+
+  then obtain pu where u_is_pu: "u = real_of_preal pu"
+    by (auto simp add: real_gt_zero_preal_Ex)
+
+  have pS_less_pu: "\<forall>pa \<in> ?pS. pa \<le> pu"
+  proof
+    fix pa
+    assume "pa \<in> ?pS"
+    then obtain a where "a \<in> S" and "a = real_of_preal pa"
+      by simp
+    moreover hence "a \<le> u" using sup by simp
+    ultimately show "pa \<le> pu"
+      using sup and u_is_pu by (simp add: real_of_preal_le_iff)
+  qed
+
+  have "\<forall>y \<in> S. y \<le> real_of_preal (psup ?pS)"
+  proof
+    fix y
+    assume y_in_S: "y \<in> S"
+    hence "0 < y" using positive_S by simp
+    then obtain py where y_is_py: "y = real_of_preal py"
+      by (auto simp add: real_gt_zero_preal_Ex)
+    hence py_in_pS: "py \<in> ?pS" using y_in_S by simp
+    with pS_less_pu have "py \<le> psup ?pS"
+      by (rule preal_psup_le)
+    thus "y \<le> real_of_preal (psup ?pS)"
+      using y_is_py by (simp add: real_of_preal_le_iff)
+  qed
+
+  moreover {
+    fix x
+    assume x_ub_S: "\<forall>y\<in>S. y \<le> x"
+    have "real_of_preal (psup ?pS) \<le> x"
+    proof -
+      obtain "s" where s_in_S: "s \<in> S" using not_empty_S ..
+      hence s_pos: "0 < s" using positive_S by simp
+
+      hence "\<exists> ps. s = real_of_preal ps" by (simp add: real_gt_zero_preal_Ex)
+      then obtain "ps" where s_is_ps: "s = real_of_preal ps" ..
+      hence ps_in_pS: "ps \<in> {w. real_of_preal w \<in> S}" using s_in_S by simp
+
+      from x_ub_S have "s \<le> x" using s_in_S ..
+      hence "0 < x" using s_pos by simp
+      hence "\<exists> px. x = real_of_preal px" by (simp add: real_gt_zero_preal_Ex)
+      then obtain "px" where x_is_px: "x = real_of_preal px" ..
+
+      have "\<forall>pe \<in> ?pS. pe \<le> px"
+      proof
+        fix pe
+        assume "pe \<in> ?pS"
+        hence "real_of_preal pe \<in> S" by simp
+        hence "real_of_preal pe \<le> x" using x_ub_S by simp
+        thus "pe \<le> px" using x_is_px by (simp add: real_of_preal_le_iff)
+      qed
+
+      moreover have "?pS \<noteq> {}" using ps_in_pS by auto
+      ultimately have "(psup ?pS) \<le> px" by (simp add: psup_le_ub)
+      thus "real_of_preal (psup ?pS) \<le> x" using x_is_px by (simp add: real_of_preal_le_iff)
+    qed
+  }
+  ultimately show "isLub UNIV S (real_of_preal (psup ?pS))"
+    by (simp add: isLub_def leastP_def isUb_def setle_def setge_def)
+qed
+
+text {*
+  \medskip reals Completeness (again!)
+*}
+
+lemma reals_complete:
+  assumes notempty_S: "\<exists>X. X \<in> S"
+    and exists_Ub: "\<exists>Y. isUb (UNIV::real set) S Y"
+  shows "\<exists>t. isLub (UNIV :: real set) S t"
+proof -
+  obtain X where X_in_S: "X \<in> S" using notempty_S ..
+  obtain Y where Y_isUb: "isUb (UNIV::real set) S Y"
+    using exists_Ub ..
+  let ?SHIFT = "{z. \<exists>x \<in>S. z = x + (-X) + 1} \<inter> {x. 0 < x}"
+
+  {
+    fix x
+    assume "isUb (UNIV::real set) S x"
+    hence S_le_x: "\<forall> y \<in> S. y <= x"
+      by (simp add: isUb_def setle_def)
+    {
+      fix s
+      assume "s \<in> {z. \<exists>x\<in>S. z = x + - X + 1}"
+      hence "\<exists> x \<in> S. s = x + -X + 1" ..
+      then obtain x1 where "x1 \<in> S" and "s = x1 + (-X) + 1" ..
+      moreover hence "x1 \<le> x" using S_le_x by simp
+      ultimately have "s \<le> x + - X + 1" by arith
+    }
+    then have "isUb (UNIV::real set) ?SHIFT (x + (-X) + 1)"
+      by (auto simp add: isUb_def setle_def)
+  } note S_Ub_is_SHIFT_Ub = this
+
+  hence "isUb UNIV ?SHIFT (Y + (-X) + 1)" using Y_isUb by simp
+  hence "\<exists>Z. isUb UNIV ?SHIFT Z" ..
+  moreover have "\<forall>y \<in> ?SHIFT. 0 < y" by auto
+  moreover have shifted_not_empty: "\<exists>u. u \<in> ?SHIFT"
+    using X_in_S and Y_isUb by auto
+  ultimately obtain t where t_is_Lub: "isLub UNIV ?SHIFT t"
+    using posreals_complete [of ?SHIFT] by blast
+
+  show ?thesis
+  proof
+    show "isLub UNIV S (t + X + (-1))"
+    proof (rule isLubI2)
+      {
+        fix x
+        assume "isUb (UNIV::real set) S x"
+        hence "isUb (UNIV::real set) (?SHIFT) (x + (-X) + 1)"
+          using S_Ub_is_SHIFT_Ub by simp
+        hence "t \<le> (x + (-X) + 1)"
+          using t_is_Lub by (simp add: isLub_le_isUb)
+        hence "t + X + -1 \<le> x" by arith
+      }
+      then show "(t + X + -1) <=* Collect (isUb UNIV S)"
+        by (simp add: setgeI)
+    next
+      show "isUb UNIV S (t + X + -1)"
+      proof -
+        {
+          fix y
+          assume y_in_S: "y \<in> S"
+          have "y \<le> t + X + -1"
+          proof -
+            obtain "u" where u_in_shift: "u \<in> ?SHIFT" using shifted_not_empty ..
+            hence "\<exists> x \<in> S. u = x + - X + 1" by simp
+            then obtain "x" where x_and_u: "u = x + - X + 1" ..
+            have u_le_t: "u \<le> t" using u_in_shift and t_is_Lub by (simp add: isLubD2)
+
+            show ?thesis
+            proof cases
+              assume "y \<le> x"
+              moreover have "x = u + X + - 1" using x_and_u by arith
+              moreover have "u + X + - 1  \<le> t + X + -1" using u_le_t by arith
+              ultimately show "y  \<le> t + X + -1" by arith
+            next
+              assume "~(y \<le> x)"
+              hence x_less_y: "x < y" by arith
+
+              have "x + (-X) + 1 \<in> ?SHIFT" using x_and_u and u_in_shift by simp
+              hence "0 < x + (-X) + 1" by simp
+              hence "0 < y + (-X) + 1" using x_less_y by arith
+              hence "y + (-X) + 1 \<in> ?SHIFT" using y_in_S by simp
+              hence "y + (-X) + 1 \<le> t" using t_is_Lub  by (simp add: isLubD2)
+              thus ?thesis by simp
+            qed
+          qed
+        }
+        then show ?thesis by (simp add: isUb_def setle_def)
+      qed
+    qed
+  qed
+qed
+
+text{*A version of the same theorem without all those predicates!*}
+lemma reals_complete2:
+  fixes S :: "(real set)"
+  assumes "\<exists>y. y\<in>S" and "\<exists>(x::real). \<forall>y\<in>S. y \<le> x"
+  shows "\<exists>x. (\<forall>y\<in>S. y \<le> x) & 
+               (\<forall>z. ((\<forall>y\<in>S. y \<le> z) --> x \<le> z))"
+proof -
+  have "\<exists>x. isLub UNIV S x" 
+    by (rule reals_complete)
+       (auto simp add: isLub_def isUb_def leastP_def setle_def setge_def prems)
+  thus ?thesis
+    by (metis UNIV_I isLub_isUb isLub_le_isUb isUbD isUb_def setleI)
+qed
+
+
+subsection {* The Archimedean Property of the Reals *}
+
+theorem reals_Archimedean:
+  fixes x :: real
+  assumes x_pos: "0 < x"
+  shows "\<exists>n. inverse (of_nat (Suc n)) < x"
+proof (rule ccontr)
+  assume contr: "\<not> ?thesis"
+  have "\<forall>n. x * of_nat (Suc n) <= 1"
+  proof
+    fix n
+    from contr have "x \<le> inverse (of_nat (Suc n))"
+      by (simp add: linorder_not_less)
+    hence "x \<le> (1 / (of_nat (Suc n)))"
+      by (simp add: inverse_eq_divide)
+    moreover have "(0::real) \<le> of_nat (Suc n)"
+      by (rule of_nat_0_le_iff)
+    ultimately have "x * of_nat (Suc n) \<le> (1 / of_nat (Suc n)) * of_nat (Suc n)"
+      by (rule mult_right_mono)
+    thus "x * of_nat (Suc n) \<le> 1" by (simp del: of_nat_Suc)
+  qed
+  hence "{z. \<exists>n. z = x * (of_nat (Suc n))} *<= 1"
+    by (simp add: setle_def del: of_nat_Suc, safe, rule spec)
+  hence "isUb (UNIV::real set) {z. \<exists>n. z = x * (of_nat (Suc n))} 1"
+    by (simp add: isUbI)
+  hence "\<exists>Y. isUb (UNIV::real set) {z. \<exists>n. z = x* (of_nat (Suc n))} Y" ..
+  moreover have "\<exists>X. X \<in> {z. \<exists>n. z = x* (of_nat (Suc n))}" by auto
+  ultimately have "\<exists>t. isLub UNIV {z. \<exists>n. z = x * of_nat (Suc n)} t"
+    by (simp add: reals_complete)
+  then obtain "t" where
+    t_is_Lub: "isLub UNIV {z. \<exists>n. z = x * of_nat (Suc n)} t" ..
+
+  have "\<forall>n::nat. x * of_nat n \<le> t + - x"
+  proof
+    fix n
+    from t_is_Lub have "x * of_nat (Suc n) \<le> t"
+      by (simp add: isLubD2)
+    hence  "x * (of_nat n) + x \<le> t"
+      by (simp add: right_distrib)
+    thus  "x * (of_nat n) \<le> t + - x" by arith
+  qed
+
+  hence "\<forall>m. x * of_nat (Suc m) \<le> t + - x" by (simp del: of_nat_Suc)
+  hence "{z. \<exists>n. z = x * (of_nat (Suc n))}  *<= (t + - x)"
+    by (auto simp add: setle_def)
+  hence "isUb (UNIV::real set) {z. \<exists>n. z = x * (of_nat (Suc n))} (t + (-x))"
+    by (simp add: isUbI)
+  hence "t \<le> t + - x"
+    using t_is_Lub by (simp add: isLub_le_isUb)
+  thus False using x_pos by arith
+qed
+
+text {*
+  There must be other proofs, e.g. @{text "Suc"} of the largest
+  integer in the cut representing @{text "x"}.
+*}
+
+lemma reals_Archimedean2: "\<exists>n. (x::real) < of_nat (n::nat)"
+proof cases
+  assume "x \<le> 0"
+  hence "x < of_nat (1::nat)" by simp
+  thus ?thesis ..
+next
+  assume "\<not> x \<le> 0"
+  hence x_greater_zero: "0 < x" by simp
+  hence "0 < inverse x" by simp
+  then obtain n where "inverse (of_nat (Suc n)) < inverse x"
+    using reals_Archimedean by blast
+  hence "inverse (of_nat (Suc n)) * x < inverse x * x"
+    using x_greater_zero by (rule mult_strict_right_mono)
+  hence "inverse (of_nat (Suc n)) * x < 1"
+    using x_greater_zero by simp
+  hence "of_nat (Suc n) * (inverse (of_nat (Suc n)) * x) < of_nat (Suc n) * 1"
+    by (rule mult_strict_left_mono) (simp del: of_nat_Suc)
+  hence "x < of_nat (Suc n)"
+    by (simp add: algebra_simps del: of_nat_Suc)
+  thus "\<exists>(n::nat). x < of_nat n" ..
+qed
+
+instance real :: archimedean_field
+proof
+  fix r :: real
+  obtain n :: nat where "r < of_nat n"
+    using reals_Archimedean2 ..
+  then have "r \<le> of_int (int n)"
+    by simp
+  then show "\<exists>z. r \<le> of_int z" ..
+qed
 
 end
