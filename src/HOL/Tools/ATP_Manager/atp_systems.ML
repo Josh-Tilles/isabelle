@@ -112,8 +112,8 @@ fun shape_of_clauses _ [] = []
 
 fun generic_prover overlord get_facts prepare write_file home_var executable
         args proof_delims known_failures name
-        ({debug, full_types, explicit_apply, isar_proof, shrink_factor, ...}
-         : params) minimize_command
+        ({debug, full_types, explicit_apply, isar_proof, isar_shrink_factor,
+         ...} : params) minimize_command
         ({subgoal, goal, relevance_override, axiom_clauses, filtered_clauses}
          : problem) =
   let
@@ -218,7 +218,8 @@ fun generic_prover overlord get_facts prepare write_file home_var executable
       case outcome of
         NONE =>
         proof_text isar_proof
-            (pool, debug, full_types, shrink_factor, ctxt, conjecture_shape)
+            (pool, debug, full_types, isar_shrink_factor, ctxt,
+             conjecture_shape)
             (minimize_command, proof, internal_thm_names, th, subgoal)
       | SOME failure => (string_for_failure failure ^ "\n", [])
   in
@@ -237,11 +238,12 @@ fun generic_tptp_prover
         (name, {home_var, executable, arguments, proof_delims, known_failures,
                 max_axiom_clauses, prefers_theory_relevant})
         (params as {debug, overlord, respect_no_atp, relevance_threshold,
-                    convergence, theory_relevant, follow_defs, isar_proof, ...})
+                    relevance_convergence, theory_relevant, defs_relevant,
+                    isar_proof, ...})
         minimize_command timeout =
   generic_prover overlord
-      (get_relevant_facts respect_no_atp relevance_threshold convergence
-                          follow_defs max_axiom_clauses
+      (get_relevant_facts respect_no_atp relevance_threshold
+                          relevance_convergence defs_relevant max_axiom_clauses
                           (the_default prefers_theory_relevant theory_relevant))
       (prepare_clauses false)
       (write_tptp_file (debug andalso overlord)) home_var
@@ -309,12 +311,12 @@ val e = tptp_prover "e" e_config
 fun generic_dfg_prover
         (name, {home_var, executable, arguments, proof_delims, known_failures,
                 max_axiom_clauses, prefers_theory_relevant})
-        (params as {overlord, respect_no_atp, relevance_threshold, convergence,
-                    theory_relevant, follow_defs, ...})
+        (params as {overlord, respect_no_atp, relevance_threshold,
+                    relevance_convergence, theory_relevant, defs_relevant, ...})
         minimize_command timeout =
   generic_prover overlord
-      (get_relevant_facts respect_no_atp relevance_threshold convergence
-                          follow_defs max_axiom_clauses
+      (get_relevant_facts respect_no_atp relevance_threshold
+                          relevance_convergence defs_relevant max_axiom_clauses
                           (the_default prefers_theory_relevant theory_relevant))
       (prepare_clauses true) write_dfg_file home_var executable
       (arguments timeout) proof_delims known_failures name params

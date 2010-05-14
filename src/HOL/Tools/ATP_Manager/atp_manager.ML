@@ -20,11 +20,11 @@ sig
      explicit_apply: bool,
      respect_no_atp: bool,
      relevance_threshold: real,
-     convergence: real,
+     relevance_convergence: real,
      theory_relevant: bool option,
-     follow_defs: bool,
+     defs_relevant: bool,
      isar_proof: bool,
-     shrink_factor: int,
+     isar_shrink_factor: int,
      timeout: Time.time,
      minimize_timeout: Time.time}
   type problem =
@@ -79,11 +79,11 @@ type params =
    explicit_apply: bool,
    respect_no_atp: bool,
    relevance_threshold: real,
-   convergence: real,
+   relevance_convergence: real,
    theory_relevant: bool option,
-   follow_defs: bool,
+   defs_relevant: bool,
    isar_proof: bool,
-   shrink_factor: int,
+   isar_shrink_factor: int,
    timeout: Time.time,
    minimize_timeout: Time.time}
 
