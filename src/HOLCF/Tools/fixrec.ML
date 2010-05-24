@@ -78,9 +78,16 @@ fun mk_mplus (t, u) =
   in Const(@{const_name Fixrec.mplus}, mT ->> mT ->> mT) ` t ` u end;
 
 fun mk_run t =
-  let val mT = Term.fastype_of t
-      val T = dest_matchT mT
-  in Const(@{const_name Fixrec.run}, mT ->> T) ` t end;
+  let
+    val mT = Term.fastype_of t
+    val T = dest_matchT mT
+    val run = Const(@{const_name Fixrec.run}, mT ->> T)
+  in
+    case t of
+      Const(@{const_name Rep_CFun}, _) $
+        Const(@{const_name Fixrec.return}, _) $ u => u
+    | _ => run ` t
+  end;
 
 
 (*************************************************************************)
@@ -127,16 +134,15 @@ fun add_fixdefs
     val cont_thm =
       let
         val prop = mk_trp (mk_cont functional);
-        fun err () = error (
+        fun err _ = error (
           "Continuity proof failed; please check that cont2cont rules\n" ^
-          "are configured for all non-HOLCF constants.\n" ^
+          "or simp rules are configured for all non-HOLCF constants.\n" ^
           "The error occurred for the goal statement:\n" ^
           Syntax.string_of_term lthy prop);
-        fun check th = case Thm.nprems_of th of 0 => all_tac th | n => err ();
         val rules = Cont2ContData.get lthy;
         val fast_tac = SOLVED' (REPEAT_ALL_NEW (match_tac rules));
-        val slow_tac = simp_tac (simpset_of lthy);
-        val tac = (fast_tac 1 ORELSE slow_tac 1) THEN check;
+        val slow_tac = SOLVED' (simp_tac (simpset_of lthy));
+        val tac = fast_tac 1 ORELSE slow_tac 1 ORELSE err;
       in
         Goal.prove lthy [] [] prop (K tac)
       end;
