@@ -59,7 +59,7 @@ numbers of arguments.  This is achieved by the introduction of the
 following constant.
 *}
 
-definition "apply" where "apply f x = f x"
+definition fun_app where "fun_app f x = f x"
 
 text {*
 Some solvers support a theory of arrays which can be used to encode
@@ -85,6 +85,29 @@ following term-level equation symbol.
 *}
 
 definition term_eq :: "bool \<Rightarrow> bool \<Rightarrow> bool" where "term_eq x y = (x = y)"
+
+
+
+subsection {* Integer division and modulo for Z3 *}
+
+definition z3div :: "int \<Rightarrow> int \<Rightarrow> int" where
+  "z3div k l = (if 0 \<le> l then k div l else -(k div (-l)))"
+
+definition z3mod :: "int \<Rightarrow> int \<Rightarrow> int" where
+  "z3mod k l = (if 0 \<le> l then k mod l else k mod (-l))"
+
+lemma div_by_z3div: "k div l = (
+     if k = 0 \<or> l = 0 then 0
+     else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3div k l
+     else z3div (-k) (-l))"
+  by (auto simp add: z3div_def)
+
+lemma mod_by_z3mod: "k mod l = (
+     if l = 0 then k
+     else if k = 0 then 0
+     else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3mod k l
+     else - z3mod (-k) (-l))"
+  by (auto simp add: z3mod_def)
 
 
 
@@ -291,7 +314,7 @@ lemma [z3_rule]:
 
 
 hide_type (open) pattern
-hide_const Pattern "apply" term_eq
-hide_const (open) trigger pat nopat
+hide_const Pattern term_eq
+hide_const (open) trigger pat nopat fun_app z3div z3mod
 
 end
