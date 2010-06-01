@@ -450,7 +450,7 @@ fun synchronize_inst_syntax ctxt =
 
 (* target *)
 
-val sanatize_name = (*FIXME*)
+val sanitize_name = (*FIXME*)
   let
     fun is_valid s = Symbol.is_ascii_letter s orelse Symbol.is_ascii_digit s
       orelse s = "'" orelse s = "_";
@@ -467,7 +467,7 @@ val sanatize_name = (*FIXME*)
 
 fun type_name "*" = "prod"
   | type_name "+" = "sum"
-  | type_name s = sanatize_name (Long_Name.base_name s);
+  | type_name s = sanitize_name (Long_Name.base_name s);
 
 fun resort_terms pp algebra consts constraints ts =
   let
