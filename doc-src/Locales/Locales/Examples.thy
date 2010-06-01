@@ -107,7 +107,7 @@ text (in partial_order) {* The parameter of this locale is~@{text le},
   in the theory.  Technically, this is simply the theorem composed
   of context and conclusion.  For the transitivity theorem, this is
   @{thm [source] partial_order.trans}:
-  @{thm [display, indent=2] partial_order_def}
+  @{thm [display, indent=2] partial_order.trans}
 *}
 
 subsection {* Targets: Extending Locales *}
@@ -654,7 +654,7 @@ text {*
   definitions and other constructs that are not part of the
   specifications of the locales.
 
-  The first from of interpretation we will consider in this tutorial
+  The first form of interpretation we will consider in this tutorial
   is provided by the \isakeyword{sublocale} command.  It enables to
   modify the import hierarchy to reflect the \emph{logical} relation
   between locales.

@@ -58,7 +58,8 @@ text {*
 
 domain 'a d7 = d7a "'a d7 \<oplus> int lift" | d7b "'a \<otimes> 'a d7" | d7c (lazy "'a d7 \<rightarrow> 'a")
   -- "Indirect recursion detected, skipping proofs of (co)induction rules"
-(* d7.induct is absent *)
+
+text {* Note that @{text d7.induct} is absent. *}
 
 text {*
   Indirect recursion is also allowed using previously-defined datatypes.
@@ -98,7 +99,7 @@ by (rule flattree.induct) -- "no admissibility requirement"
 text {* Trivial datatypes will produce a warning message. *}
 
 domain triv = Triv triv triv
-  -- "domain Domain_ex.triv is empty!"
+  -- "domain @{text Domain_ex.triv} is empty!"
 
 lemma "(x::triv) = \<bottom>" by (induct x, simp_all)
 
@@ -152,11 +153,6 @@ text {* Rules about discriminators *}
 term is_Leaf
 term is_Node
 thm tree.dis_rews
-
-text {* Rules about pattern match combinators *}
-term Leaf_pat
-term Node_pat
-thm tree.pat_rews
 
 text {* Rules about monadic pattern match combinators *}
 term match_Leaf

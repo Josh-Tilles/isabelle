@@ -10,7 +10,6 @@ sig
   type minimize_command = string list -> string
   type name_pool = Sledgehammer_FOL_Clause.name_pool
 
-  val chained_hint: string
   val invert_const: string -> string
   val invert_type_const: string -> string
   val num_type_args: theory -> string -> int
@@ -254,7 +253,7 @@ fun type_from_node _ (u as IntLeaf _) = raise NODE [u]
             SOME b => TVar (("'" ^ b, 0), HOLogic.typeS)
           | NONE =>
             (* Variable from the ATP, say "X1" *)
-            TypeInfer.param 0 (a, HOLogic.typeS)
+            Type_Infer.param 0 (a, HOLogic.typeS)
     end
 
 (*Invert the table of translations between Isabelle and ATPs*)
@@ -453,7 +452,7 @@ fun clause_of_nodes ctxt full_types tfrees us =
     val (vt, t) = lits_of_nodes thy full_types tfrees (Vartab.empty, []) us
   in repair_tvar_sorts vt t end
 fun check_formula ctxt =
-  TypeInfer.constrain @{typ bool}
+  Type_Infer.constrain @{typ bool}
   #> Syntax.check_term (ProofContext.set_mode ProofContext.mode_schematic ctxt)
 
 
@@ -582,9 +581,6 @@ fun extract_clause_numbers_in_atp_proof atp_proof =
       | extract_num _ = NONE
   in atp_proof |> split_lines |> map_filter (extract_num o tokens_of) end
   
-(* Used to label theorems chained into the goal. *)
-val chained_hint = "sledgehammer_chained"
-
 fun apply_command _ 1 = "by "
   | apply_command 1 _ = "apply "
   | apply_command i _ = "prefer " ^ string_of_int i ^ " apply "
@@ -602,16 +598,24 @@ fun minimize_line _ [] = ""
       "To minimize the number of lemmas, try this command: " ^
       Markup.markup Markup.sendback command ^ ".\n"
 
+val unprefix_chained = perhaps (try (unprefix chained_prefix))
+
 fun metis_proof_text (minimize_command, atp_proof, thm_names, goal, i) =
   let
-    val lemmas =
+    val raw_lemmas =
       atp_proof |> extract_clause_numbers_in_atp_proof
                 |> filter (is_axiom_clause_number thm_names)
                 |> map (fn i => Vector.sub (thm_names, i - 1))
-                |> filter_out (fn s => s = "??.unknown" orelse s = chained_hint)
-                |> sort_distinct string_ord
+    val (chained_lemmas, other_lemmas) =
+      raw_lemmas |> List.partition (String.isPrefix chained_prefix)
+                 |>> map (unprefix chained_prefix)
+                 |> pairself (sort_distinct string_ord)
+    val lemmas = other_lemmas @ chained_lemmas
     val n = Logic.count_prems (prop_of goal)
-  in (metis_line i n lemmas ^ minimize_line minimize_command lemmas, lemmas) end
+  in
+    (metis_line i n other_lemmas ^ minimize_line minimize_command lemmas,
+     lemmas)
+  end
 
 (** Isar proof construction and manipulation **)
 
@@ -911,7 +915,7 @@ val relabel_proof =
 fun string_for_proof ctxt i n =
   let
     fun fix_print_mode f =
-      PrintMode.setmp (filter (curry (op =) Symbol.xsymbolsN)
+      Print_Mode.setmp (filter (curry (op =) Symbol.xsymbolsN)
                       (print_mode_value ())) f
     fun do_indent ind = replicate_string (ind * indent_size) " "
     fun do_free (s, T) =
@@ -929,7 +933,7 @@ fun string_for_proof ctxt i n =
     fun do_facts (ls, ss) =
       let
         val ls = ls |> sort_distinct (prod_ord string_ord int_ord)
-        val ss = ss |> sort_distinct string_ord
+        val ss = ss |> map unprefix_chained |> sort_distinct string_ord
       in metis_command 1 1 (map string_for_label ls @ ss) end
     and do_step ind (Fix xs) =
         do_indent ind ^ "fix " ^ space_implode " and " (map do_free xs) ^ "\n"

@@ -33,7 +33,7 @@ sig
   val output: Pretty.T list -> string
 end;
 
-structure ThyOutput: THY_OUTPUT =
+structure Thy_Output: THY_OUTPUT =
 struct
 
 (** global options **)
@@ -153,7 +153,7 @@ fun eval_antiquote lex state (txt, pos) =
       | expand (Antiquote.Antiq (ss, (pos, _))) =
           let val (opts, src) = Token.read_antiq lex antiq (ss, pos) in
             options opts (fn () => command src state) ();  (*preview errors!*)
-            PrintMode.with_modes (! modes @ Latex.modes)
+            Print_Mode.with_modes (! modes @ Latex.modes)
               (Output.no_warnings_CRITICAL (options opts (fn () => command src state))) ()
           end
       | expand (Antiquote.Open _) = ""
@@ -429,7 +429,7 @@ val _ = add_options
   ("display", setmp_CRITICAL display o boolean),
   ("break", setmp_CRITICAL break o boolean),
   ("quotes", setmp_CRITICAL quotes o boolean),
-  ("mode", fn s => fn f => PrintMode.with_modes [s] f),
+  ("mode", fn s => fn f => Print_Mode.with_modes [s] f),
   ("margin", setmp_CRITICAL Pretty.margin_default o integer),
   ("indent", setmp_CRITICAL indent o integer),
   ("source", setmp_CRITICAL source o boolean),
@@ -455,7 +455,7 @@ fun pretty_thm_style ctxt (style, th) =
 
 fun pretty_term_typ ctxt (style, t) =
   let val t' = style t
-  in pretty_term ctxt (TypeInfer.constrain (Term.fastype_of t') t') end;
+  in pretty_term ctxt (Type_Infer.constrain (Term.fastype_of t') t') end;
 
 fun pretty_term_typeof ctxt (style, t) =
   Syntax.pretty_typ ctxt (Term.fastype_of (style t));
@@ -587,7 +587,7 @@ local
 
 fun ml_text name ml = antiquotation name (Scan.lift Args.name_source_position)
   (fn {context, ...} => fn (txt, pos) =>
-   (ML_Context.eval_in (SOME context) false pos (ml txt);
+   (ML_Context.eval_in (SOME context) false pos (ml pos txt);
     Symbol_Pos.content (Symbol_Pos.explode (txt, pos))
     |> (if ! quotes then quote else I)
     |> (if ! display then enclose "\\begin{verbatim}\n" "\n\\end{verbatim}"
@@ -596,13 +596,21 @@ fun ml_text name ml = antiquotation name (Scan.lift Args.name_source_position)
       #> map (space_implode "\\verb,|," o map (enclose "\\verb|" "|") o space_explode "|")
       #> space_implode "\\isasep\\isanewline%\n")));
 
+fun ml_enclose bg en pos txt =
+  ML_Lex.read Position.none bg @ ML_Lex.read pos txt @ ML_Lex.read Position.none en;
+
 in
 
-val _ = ml_text "ML" (fn txt => "fn _ => (" ^ txt ^ ");");
-val _ = ml_text "ML_type" (fn txt => "val _ = NONE : (" ^ txt ^ ") option;");
-val _ = ml_text "ML_struct" (fn txt => "functor XXX() = struct structure XX = " ^ txt ^ " end;");
-val _ = ml_text "ML_functor" (fn txt => "ML_Env.check_functor " ^ ML_Syntax.print_string txt);
-val _ = ml_text "ML_text" (K "");
+val _ = ml_text "ML" (ml_enclose "fn _ => (" ");");
+val _ = ml_text "ML_type" (ml_enclose "val _ = NONE : (" ") option;");
+val _ = ml_text "ML_struct" (ml_enclose "functor XXX() = struct structure XX = " " end;");
+
+val _ = ml_text "ML_functor"   (* FIXME formal treatment of functor name (!?) *)
+  (fn pos => fn txt =>
+    ML_Lex.read Position.none ("ML_Env.check_functor " ^
+      ML_Syntax.print_string (Symbol_Pos.content (Symbol_Pos.explode (txt, pos)))));
+
+val _ = ml_text "ML_text" (K (K []));
 
 end;
 

@@ -18,27 +18,29 @@ sig
     -> ((string option * bool) * (compilation * int list)) -> int -> string -> Toplevel.state -> unit
   val register_predicate : (string * thm list * thm) -> theory -> theory
   val register_intros : string * thm list -> theory -> theory
-  val is_registered : theory -> string -> bool
-  val function_name_of : compilation -> theory -> string -> mode -> string
+  val is_registered : Proof.context -> string -> bool
+  val function_name_of : compilation -> Proof.context -> string -> mode -> string
   val predfun_intro_of: Proof.context -> string -> mode -> thm
   val predfun_elim_of: Proof.context -> string -> mode -> thm
-  val all_preds_of : theory -> string list
-  val modes_of: compilation -> theory -> string -> mode list
-  val all_modes_of : compilation -> theory -> (string * mode list) list
-  val all_random_modes_of : theory -> (string * mode list) list
-  val intros_of : theory -> string -> thm list
+  val all_preds_of : Proof.context -> string list
+  val modes_of: compilation -> Proof.context -> string -> mode list
+  val all_modes_of : compilation -> Proof.context -> (string * mode list) list
+  val all_random_modes_of : Proof.context -> (string * mode list) list
+  val intros_of : Proof.context -> string -> thm list
   val add_intro : thm -> theory -> theory
   val set_elim : thm -> theory -> theory
   val register_alternative_function : string -> mode -> string -> theory -> theory
-  val alternative_compilation_of : theory -> string -> mode ->
+  val alternative_compilation_of_global : theory -> string -> mode ->
+    (compilation_funs -> typ -> term) option
+  val alternative_compilation_of : Proof.context -> string -> mode ->
     (compilation_funs -> typ -> term) option
   val functional_compilation : string -> mode -> compilation_funs -> typ -> term
   val force_modes_and_functions : string -> (mode * (string * bool)) list -> theory -> theory
   val force_modes_and_compilations : string ->
     (mode * ((compilation_funs -> typ -> term) * bool)) list -> theory -> theory
   val preprocess_intro : theory -> thm -> thm
-  val print_stored_rules : theory -> unit
-  val print_all_modes : compilation -> theory -> unit
+  val print_stored_rules : Proof.context -> unit
+  val print_all_modes : compilation -> Proof.context -> unit
   val mk_casesrule : Proof.context -> term -> thm list -> term
   val eval_ref : (unit -> term Predicate.pred) option Unsynchronized.ref
   val random_eval_ref : (unit -> int * int -> term Predicate.pred * (int * int))
@@ -228,77 +230,81 @@ structure PredData = Theory_Data
 
 (* queries *)
 
-fun lookup_pred_data thy name =
-  Option.map rep_pred_data (try (Graph.get_node (PredData.get thy)) name)
+fun lookup_pred_data ctxt name =
+  Option.map rep_pred_data (try (Graph.get_node (PredData.get (ProofContext.theory_of ctxt))) name)
 
-fun the_pred_data thy name = case lookup_pred_data thy name
+fun the_pred_data ctxt name = case lookup_pred_data ctxt name
  of NONE => error ("No such predicate " ^ quote name)  
   | SOME data => data;
 
 val is_registered = is_some oo lookup_pred_data
 
-val all_preds_of = Graph.keys o PredData.get
+val all_preds_of = Graph.keys o PredData.get o ProofContext.theory_of
 
-fun intros_of thy = map (Thm.transfer thy) o #intros o the_pred_data thy
+val intros_of = #intros oo the_pred_data
 
-fun the_elim_of thy name = case #elim (the_pred_data thy name)
+fun the_elim_of ctxt name = case #elim (the_pred_data ctxt name)
  of NONE => error ("No elimination rule for predicate " ^ quote name)
-  | SOME thm => Thm.transfer thy thm
+  | SOME thm => thm
   
-val has_elim = is_some o #elim oo the_pred_data;
+val has_elim = is_some o #elim oo the_pred_data
 
-fun function_names_of compilation thy name =
-  case AList.lookup (op =) (#function_names (the_pred_data thy name)) compilation of
+fun function_names_of compilation ctxt name =
+  case AList.lookup (op =) (#function_names (the_pred_data ctxt name)) compilation of
     NONE => error ("No " ^ string_of_compilation compilation
       ^ "functions defined for predicate " ^ quote name)
   | SOME fun_names => fun_names
 
-fun function_name_of compilation thy name mode =
+fun function_name_of compilation ctxt name mode =
   case AList.lookup eq_mode
-    (function_names_of compilation thy name) mode of
+    (function_names_of compilation ctxt name) mode of
     NONE => error ("No " ^ string_of_compilation compilation
       ^ " function defined for mode " ^ string_of_mode mode ^ " of predicate " ^ quote name)
   | SOME function_name => function_name
 
-fun modes_of compilation thy name = map fst (function_names_of compilation thy name)
+fun modes_of compilation ctxt name = map fst (function_names_of compilation ctxt name)
 
-fun all_modes_of compilation thy =
-  map_filter (fn name => Option.map (pair name) (try (modes_of compilation thy) name))
-    (all_preds_of thy)
+fun all_modes_of compilation ctxt =
+  map_filter (fn name => Option.map (pair name) (try (modes_of compilation ctxt) name))
+    (all_preds_of ctxt)
 
 val all_random_modes_of = all_modes_of Random
 
-fun defined_functions compilation thy name =
-  AList.defined (op =) (#function_names (the_pred_data thy name)) compilation
+fun defined_functions compilation ctxt name = case lookup_pred_data ctxt name of
+    NONE => false
+  | SOME data => AList.defined (op =) (#function_names data) compilation
 
-fun lookup_predfun_data thy name mode =
+fun needs_random ctxt s m =
+  member (op =) (#needs_random (the_pred_data ctxt s)) m
+
+fun lookup_predfun_data ctxt name mode =
   Option.map rep_predfun_data
-    (AList.lookup (op =) (#predfun_data (the_pred_data thy name)) mode)
+    (AList.lookup (op =) (#predfun_data (the_pred_data ctxt name)) mode)
 
-fun the_predfun_data thy name mode =
-  case lookup_predfun_data thy name mode of
+fun the_predfun_data ctxt name mode =
+  case lookup_predfun_data ctxt name mode of
     NONE => error ("No function defined for mode " ^ string_of_mode mode ^
       " of predicate " ^ name)
   | SOME data => data;
 
-val predfun_definition_of = #definition ooo the_predfun_data o ProofContext.theory_of
+val predfun_definition_of = #definition ooo the_predfun_data
 
-val predfun_intro_of = #intro ooo the_predfun_data o ProofContext.theory_of
+val predfun_intro_of = #intro ooo the_predfun_data
 
-val predfun_elim_of = #elim ooo the_predfun_data o ProofContext.theory_of
+val predfun_elim_of = #elim ooo the_predfun_data
 
-val predfun_neg_intro_of = #neg_intro ooo the_predfun_data o ProofContext.theory_of
+val predfun_neg_intro_of = #neg_intro ooo the_predfun_data
 
 (* diagnostic display functions *)
 
-fun print_modes options thy modes =
+fun print_modes options modes =
   if show_modes options then
     tracing ("Inferred modes:\n" ^
       cat_lines (map (fn (s, ms) => s ^ ": " ^ commas (map
         (fn (p, m) => string_of_mode m ^ (if p then "pos" else "neg")) ms)) modes))
   else ()
 
-fun print_pred_mode_table string_of_entry thy pred_mode_table =
+fun print_pred_mode_table string_of_entry pred_mode_table =
   let
     fun print_mode pred ((pol, mode), entry) =  "mode : " ^ string_of_mode mode
       ^ string_of_entry pred mode entry
@@ -307,35 +313,35 @@ fun print_pred_mode_table string_of_entry thy pred_mode_table =
     val _ = tracing (cat_lines (map print_pred pred_mode_table))
   in () end;
 
-fun string_of_prem thy (Prem t) =
-    (Syntax.string_of_term_global thy t) ^ "(premise)"
-  | string_of_prem thy (Negprem t) =
-    (Syntax.string_of_term_global thy (HOLogic.mk_not t)) ^ "(negative premise)"
-  | string_of_prem thy (Sidecond t) =
-    (Syntax.string_of_term_global thy t) ^ "(sidecondition)"
-  | string_of_prem thy _ = raise Fail "string_of_prem: unexpected input"
+fun string_of_prem ctxt (Prem t) =
+    (Syntax.string_of_term ctxt t) ^ "(premise)"
+  | string_of_prem ctxt (Negprem t) =
+    (Syntax.string_of_term ctxt (HOLogic.mk_not t)) ^ "(negative premise)"
+  | string_of_prem ctxt (Sidecond t) =
+    (Syntax.string_of_term ctxt t) ^ "(sidecondition)"
+  | string_of_prem ctxt _ = raise Fail "string_of_prem: unexpected input"
 
-fun string_of_clause thy pred (ts, prems) =
+fun string_of_clause ctxt pred (ts, prems) =
   (space_implode " --> "
-  (map (string_of_prem thy) prems)) ^ " --> " ^ pred ^ " "
-   ^ (space_implode " " (map (Syntax.string_of_term_global thy) ts))
+  (map (string_of_prem ctxt) prems)) ^ " --> " ^ pred ^ " "
+   ^ (space_implode " " (map (Syntax.string_of_term ctxt) ts))
 
-fun print_compiled_terms options thy =
+fun print_compiled_terms options ctxt =
   if show_compilation options then
-    print_pred_mode_table (fn _ => fn _ => Syntax.string_of_term_global thy) thy
+    print_pred_mode_table (fn _ => fn _ => Syntax.string_of_term ctxt)
   else K ()
 
-fun print_stored_rules thy =
+fun print_stored_rules ctxt =
   let
-    val preds = (Graph.keys o PredData.get) thy
+    val preds = Graph.keys (PredData.get (ProofContext.theory_of ctxt))
     fun print pred () = let
       val _ = writeln ("predicate: " ^ pred)
       val _ = writeln ("introrules: ")
-      val _ = fold (fn thm => fn u => writeln (Display.string_of_thm_global thy thm))
-        (rev (intros_of thy pred)) ()
+      val _ = fold (fn thm => fn u => writeln (Display.string_of_thm ctxt thm))
+        (rev (intros_of ctxt pred)) ()
     in
-      if (has_elim thy pred) then
-        writeln ("elimrule: " ^ Display.string_of_thm_global thy (the_elim_of thy pred))
+      if (has_elim ctxt pred) then
+        writeln ("elimrule: " ^ Display.string_of_thm ctxt (the_elim_of ctxt pred))
       else
         writeln ("no elimrule defined")
     end
@@ -343,7 +349,7 @@ fun print_stored_rules thy =
     fold print preds ()
   end;
 
-fun print_all_modes compilation thy =
+fun print_all_modes compilation ctxt =
   let
     val _ = writeln ("Inferred modes:")
     fun print (pred, modes) u =
@@ -352,7 +358,7 @@ fun print_all_modes compilation thy =
         val _ = writeln ("modes: " ^ (commas (map string_of_mode modes)))
       in u end
   in
-    fold print (all_modes_of compilation thy) ()
+    fold print (all_modes_of compilation ctxt) ()
   end
 
 (* validity checks *)
@@ -575,12 +581,12 @@ fun preprocess_intro thy rule =
       (Trueprop_conv (Conv.try_conv (Conv.rewr_conv (Thm.symmetric @{thm Predicate.eq_is_eq})))))
     (Thm.transfer thy rule)
 
-fun preprocess_elim thy elimrule =
+fun preprocess_elim ctxt elimrule =
   let
     fun replace_eqs (Const ("Trueprop", _) $ (Const ("op =", T) $ lhs $ rhs)) =
        HOLogic.mk_Trueprop (Const (@{const_name Predicate.eq}, T) $ lhs $ rhs)
      | replace_eqs t = t
-    val ctxt = ProofContext.init_global thy
+    val thy = ProofContext.theory_of ctxt
     val ((_, [elimrule]), ctxt') = Variable.import false [elimrule] ctxt
     val prems = Thm.prems_of elimrule
     val nargs = length (snd (strip_comb (HOLogic.dest_Trueprop (hd prems))))
@@ -607,21 +613,21 @@ fun expand_tuples_elim th = th
 
 val no_compilation = ([], ([], []))
 
-fun fetch_pred_data thy name =
-  case try (Inductive.the_inductive (ProofContext.init_global thy)) name of
+fun fetch_pred_data ctxt name =
+  case try (Inductive.the_inductive ctxt) name of
     SOME (info as (_, result)) => 
       let
         fun is_intro_of intro =
           let
             val (const, _) = strip_comb (HOLogic.dest_Trueprop (concl_of intro))
-          in (fst (dest_Const const) = name) end;      
+          in (fst (dest_Const const) = name) end;
+        val thy = ProofContext.theory_of ctxt
         val intros =
           (map (expand_tuples thy #> preprocess_intro thy) (filter is_intro_of (#intrs result)))
         val index = find_index (fn s => s = name) (#names (fst info))
         val pre_elim = nth (#elims result) index
         val pred = nth (#preds result) index
         val nparams = length (Inductive.params_of (#raw_induct result))
-        val ctxt = ProofContext.init_global thy
         val elim_t = mk_casesrule ctxt pred intros
         val elim =
           prove_casesrule ctxt (pred, (pre_elim, nparams)) elim_t
@@ -635,16 +641,16 @@ fun add_predfun_data name mode data =
     val add = (apsnd o apsnd o apfst) (cons (mode, mk_predfun_data data))
   in PredData.map (Graph.map_node name (map_pred_data add)) end
 
-fun is_inductive_predicate thy name =
-  is_some (try (Inductive.the_inductive (ProofContext.init_global thy)) name)
+fun is_inductive_predicate ctxt name =
+  is_some (try (Inductive.the_inductive ctxt) name)
 
-fun depending_preds_of thy (key, value) =
+fun depending_preds_of ctxt (key, value) =
   let
     val intros = (#intros o rep_pred_data) value
   in
     fold Term.add_const_names (map Thm.prop_of intros) []
       |> filter (fn c => (not (c = key)) andalso
-        (is_inductive_predicate thy c orelse is_registered thy c))
+        (is_inductive_predicate ctxt c orelse is_registered ctxt c))
   end;
 
 fun add_intro thm thy =
@@ -667,7 +673,7 @@ fun set_elim thm =
 fun register_predicate (constname, pre_intros, pre_elim) thy =
   let
     val intros = map (preprocess_intro thy) pre_intros
-    val elim = preprocess_elim thy pre_elim
+    val elim = preprocess_elim (ProofContext.init_global thy) pre_elim
   in
     if not (member (op =) (Graph.keys (PredData.get thy)) constname) then
       PredData.map
@@ -725,8 +731,12 @@ structure Alt_Compilations_Data = Theory_Data
       (mode * (compilation_funs -> typ -> term)) list -> bool));
 );
 
-fun alternative_compilation_of thy pred_name mode =
+fun alternative_compilation_of_global thy pred_name mode =
   AList.lookup eq_mode (Symtab.lookup_list (Alt_Compilations_Data.get thy) pred_name) mode
+
+fun alternative_compilation_of ctxt pred_name mode =
+  AList.lookup eq_mode
+    (Symtab.lookup_list (Alt_Compilations_Data.get (ProofContext.theory_of ctxt)) pred_name) mode
 
 fun force_modes_and_compilations pred_name compilations =
   let
@@ -1157,10 +1167,10 @@ fun collect_non_invertible_subterms ctxt (f as Free _) (names, eqs) = (f, (names
     in (v, (s::names, HOLogic.mk_eq (v, t)::eqs)) end;
 *)
 
-fun is_possible_output thy vs t =
+fun is_possible_output ctxt vs t =
   forall
     (fn t => is_eqT (fastype_of t) andalso forall (member (op =) vs) (term_vs t))
-      (non_invertible_subterms (ProofContext.init_global thy) t)
+      (non_invertible_subterms ctxt t)
   andalso
     (forall (is_eqT o snd)
       (inter (fn ((f', _), f) => f = f') vs (Term.add_frees t [])))
@@ -1176,7 +1186,7 @@ fun vars_of_destructable_term ctxt (Free (x, _)) = [x]
       []
   end
 
-fun is_constructable thy vs t = forall (member (op =) vs) (term_vs t)
+fun is_constructable vs t = forall (member (op =) vs) (term_vs t)
 
 fun missing_vars vs t = subtract (op =) vs (term_vs t)
 
@@ -1196,11 +1206,11 @@ fun lookup_mode modes (Const (s, T)) =
       SOME ms => SOME (map (fn m => (Context m , [])) ms)
     | NONE => NONE)
 
-fun derivations_of (thy : theory) modes vs (Const ("Pair", _) $ t1 $ t2) (Pair (m1, m2)) =
+fun derivations_of (ctxt : Proof.context) modes vs (Const ("Pair", _) $ t1 $ t2) (Pair (m1, m2)) =
     map_product
       (fn (m1, mvars1) => fn (m2, mvars2) => (Mode_Pair (m1, m2), union (op =) mvars1 mvars2))
-        (derivations_of thy modes vs t1 m1) (derivations_of thy modes vs t2 m2)
-  | derivations_of thy modes vs t (m as Fun _) =
+        (derivations_of ctxt modes vs t1 m1) (derivations_of ctxt modes vs t2 m2)
+  | derivations_of ctxt modes vs t (m as Fun _) =
     (*let
       val (p, args) = strip_comb t
     in
@@ -1216,37 +1226,37 @@ fun derivations_of (thy : theory) modes vs (Const ("Pair", _) $ t1 $ t2) (Pair (
         end) ms
       | NONE => (if is_all_input mode then [(Context mode, [])] else []))
     end*)
-    (case try (all_derivations_of thy modes vs) t  of
+    (case try (all_derivations_of ctxt modes vs) t  of
       SOME derivs =>
         filter (fn (d, mvars) => eq_mode (mode_of d, m) andalso null (output_terms (t, d))) derivs
     | NONE => (if is_all_input m then [(Context m, [])] else []))
-  | derivations_of thy modes vs t m =
+  | derivations_of ctxt modes vs t m =
     if eq_mode (m, Input) then
       [(Term Input, missing_vars vs t)]
     else if eq_mode (m, Output) then
-      (if is_possible_output thy vs t then [(Term Output, [])] else [])
+      (if is_possible_output ctxt vs t then [(Term Output, [])] else [])
     else []
-and all_derivations_of thy modes vs (Const ("Pair", _) $ t1 $ t2) =
+and all_derivations_of ctxt modes vs (Const ("Pair", _) $ t1 $ t2) =
   let
-    val derivs1 = all_derivations_of thy modes vs t1
-    val derivs2 = all_derivations_of thy modes vs t2
+    val derivs1 = all_derivations_of ctxt modes vs t1
+    val derivs2 = all_derivations_of ctxt modes vs t2
   in
     map_product
       (fn (m1, mvars1) => fn (m2, mvars2) => (Mode_Pair (m1, m2), union (op =) mvars1 mvars2))
         derivs1 derivs2
   end
-  | all_derivations_of thy modes vs (t1 $ t2) =
+  | all_derivations_of ctxt modes vs (t1 $ t2) =
   let
-    val derivs1 = all_derivations_of thy modes vs t1
+    val derivs1 = all_derivations_of ctxt modes vs t1
   in
     maps (fn (d1, mvars1) =>
       case mode_of d1 of
         Fun (m', _) => map (fn (d2, mvars2) =>
-          (Mode_App (d1, d2), union (op =) mvars1 mvars2)) (derivations_of thy modes vs t2 m')
+          (Mode_App (d1, d2), union (op =) mvars1 mvars2)) (derivations_of ctxt modes vs t2 m')
         | _ => raise Fail "Something went wrong") derivs1
   end
-  | all_derivations_of thy modes vs (Const (s, T)) = the (lookup_mode modes (Const (s, T)))
-  | all_derivations_of thy modes vs (Free (x, T)) = the (lookup_mode modes (Free (x, T)))
+  | all_derivations_of _ modes vs (Const (s, T)) = the (lookup_mode modes (Const (s, T)))
+  | all_derivations_of _ modes vs (Free (x, T)) = the (lookup_mode modes (Free (x, T)))
   | all_derivations_of _ modes vs _ = raise Fail "all_derivations_of"
 
 fun rev_option_ord ord (NONE, NONE) = EQUAL
@@ -1287,7 +1297,7 @@ fun lexl_ord [] (x, x') = EQUAL
       EQUAL => lexl_ord ords' (x, x')
     | ord => ord
 
-fun deriv_ord' thy pol pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
+fun deriv_ord' ctxt pol pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
   let
     (* prefer functional modes if it is a function *)
     fun fun_ord ((t1, deriv1, mvars1), (t2, deriv2, mvars2)) =
@@ -1295,7 +1305,7 @@ fun deriv_ord' thy pol pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
         fun is_functional t mode =
           case try (fst o dest_Const o fst o strip_comb) t of
             NONE => false
-          | SOME c => is_some (alternative_compilation_of thy c mode)
+          | SOME c => is_some (alternative_compilation_of ctxt c mode)
       in
         case (is_functional t1 (head_mode_of deriv1), is_functional t2 (head_mode_of deriv2)) of
           (true, true) => EQUAL
@@ -1325,7 +1335,7 @@ fun deriv_ord' thy pol pred modes t1 t2 ((deriv1, mvars1), (deriv2, mvars2)) =
     ord ((t1, deriv1, mvars1), (t2, deriv2, mvars2))
   end
 
-fun deriv_ord thy pol pred modes t = deriv_ord' thy pol pred modes t t
+fun deriv_ord ctxt pol pred modes t = deriv_ord' ctxt pol pred modes t t
 
 fun premise_ord thy pol pred modes ((prem1, a1), (prem2, a2)) =
   rev_option_ord (deriv_ord' thy pol pred modes (dest_indprem prem1) (dest_indprem prem2)) (a1, a2)
@@ -1334,25 +1344,25 @@ fun print_mode_list modes =
   tracing ("modes: " ^ (commas (map (fn (s, ms) => s ^ ": " ^
     commas (map (fn (m, r) => string_of_mode m ^ (if r then " random " else " not ")) ms)) modes)))
 
-fun select_mode_prem (mode_analysis_options : mode_analysis_options) (thy : theory) pred
+fun select_mode_prem (mode_analysis_options : mode_analysis_options) (ctxt : Proof.context) pred
   pol (modes, (pos_modes, neg_modes)) vs ps =
   let
     fun choose_mode_of_prem (Prem t) = partial_hd
-        (sort (deriv_ord thy pol pred modes t) (all_derivations_of thy pos_modes vs t))
+        (sort (deriv_ord ctxt pol pred modes t) (all_derivations_of ctxt pos_modes vs t))
       | choose_mode_of_prem (Sidecond t) = SOME (Context Bool, missing_vars vs t)
       | choose_mode_of_prem (Negprem t) = partial_hd
-          (sort (deriv_ord thy (not pol) pred modes t)
+          (sort (deriv_ord ctxt (not pol) pred modes t)
           (filter (fn (d, missing_vars) => is_all_input (head_mode_of d))
-             (all_derivations_of thy neg_modes vs t)))
-      | choose_mode_of_prem p = raise Fail ("choose_mode_of_prem: " ^ string_of_prem thy p)
+             (all_derivations_of ctxt neg_modes vs t)))
+      | choose_mode_of_prem p = raise Fail ("choose_mode_of_prem: " ^ string_of_prem ctxt p)
   in
     if #reorder_premises mode_analysis_options then
-      partial_hd (sort (premise_ord thy pol pred modes) (ps ~~ map choose_mode_of_prem ps))
+      partial_hd (sort (premise_ord ctxt pol pred modes) (ps ~~ map choose_mode_of_prem ps))
     else
       SOME (hd ps, choose_mode_of_prem (hd ps))
   end
 
-fun check_mode_clause' (mode_analysis_options : mode_analysis_options) thy pred param_vs (modes :
+fun check_mode_clause' (mode_analysis_options : mode_analysis_options) ctxt pred param_vs (modes :
   (string * ((bool * mode) * bool) list) list) ((pol, mode) : bool * mode) (ts, ps) =
   let
     val vTs = distinct (op =) (fold Term.add_frees (map dest_indprem ps) (fold Term.add_frees ts []))
@@ -1367,7 +1377,7 @@ fun check_mode_clause' (mode_analysis_options : mode_analysis_options) thy pred 
           val modes = map (fn (s, ms) => (s, map (fn ((p, m), r) => m) ms)) modes'
         in (modes, modes) end
     val (in_ts, out_ts) = split_mode mode ts
-    val in_vs = maps (vars_of_destructable_term (ProofContext.init_global thy)) in_ts
+    val in_vs = maps (vars_of_destructable_term ctxt) in_ts
     val out_vs = terms_vs out_ts
     fun known_vs_after p vs = (case p of
         Prem t => union (op =) vs (term_vs t)
@@ -1377,7 +1387,7 @@ fun check_mode_clause' (mode_analysis_options : mode_analysis_options) thy pred 
     fun check_mode_prems acc_ps rnd vs [] = SOME (acc_ps, vs, rnd)
       | check_mode_prems acc_ps rnd vs ps =
         (case
-          (select_mode_prem mode_analysis_options thy pred pol (modes', (pos_modes', neg_modes')) vs ps) of
+          (select_mode_prem mode_analysis_options ctxt pred pol (modes', (pos_modes', neg_modes')) vs ps) of
           SOME (p, SOME (deriv, [])) => check_mode_prems ((p, deriv) :: acc_ps) rnd
             (known_vs_after p vs) (filter_out (equal p) ps)
         | SOME (p, SOME (deriv, missing_vars)) =>
@@ -1393,7 +1403,7 @@ fun check_mode_clause' (mode_analysis_options : mode_analysis_options) thy pred 
     case check_mode_prems [] false in_vs ps of
       NONE => NONE
     | SOME (acc_ps, vs, rnd) =>
-      if forall (is_constructable thy vs) (in_ts @ out_ts) then
+      if forall (is_constructable vs) (in_ts @ out_ts) then
         SOME (ts, rev acc_ps, rnd)
       else
         if #use_random mode_analysis_options andalso pol then
@@ -1473,11 +1483,12 @@ fun print_extra_modes options modes =
 
 fun infer_modes mode_analysis_options options compilation preds all_modes param_vs clauses thy =
   let
+    val ctxt = ProofContext.init_global thy  
     val collect_errors = false
     fun appair f (x1, x2) (y1, y2) = (f x1 y1, f x2 y2)
-    fun needs_random s (false, m) = ((false, m), false)
-      | needs_random s (true, m) = ((true, m), member (op =) (#needs_random (the_pred_data thy s)) m)
-    fun add_polarity_and_random_bit s b ms = map (fn m => needs_random s (b, m)) ms
+    fun add_needs_random s (false, m) = ((false, m), false)
+      | add_needs_random s (true, m) = ((true, m), needs_random ctxt s m)
+    fun add_polarity_and_random_bit s b ms = map (fn m => add_needs_random s (b, m)) ms
     val prednames = map fst preds
     (* extramodes contains all modes of all constants, should we only use the necessary ones
        - what is the impact on performance? *)
@@ -1492,15 +1503,13 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
       if #infer_pos_and_neg_modes mode_analysis_options then
         let
           val pos_extra_modes =
-            map_filter (fn name => Option.map (pair name) (try (modes_of compilation thy) name))
+            map_filter (fn name => Option.map (pair name) (try (modes_of compilation ctxt) name))
             relevant_prednames
-            (* all_modes_of compilation thy *)
             |> filter_out (fn (name, _) => member (op =) prednames name)
           val neg_extra_modes =
           map_filter (fn name => Option.map (pair name)
-            (try (modes_of (negative_compilation_of compilation) thy) name))
+            (try (modes_of (negative_compilation_of compilation) ctxt) name))
             relevant_prednames
-          (*all_modes_of (negative_compilation_of compilation) thy*)
             |> filter_out (fn (name, _) => member (op =) prednames name)
         in
           map (fn (s, ms) => (s, (add_polarity_and_random_bit s true ms)
@@ -1509,9 +1518,8 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
         end
       else
         map (fn (s, ms) => (s, (add_polarity_and_random_bit s true ms)))
-          (map_filter (fn name => Option.map (pair name) (try (modes_of compilation thy) name))
+          (map_filter (fn name => Option.map (pair name) (try (modes_of compilation ctxt) name))
             relevant_prednames
-          (*all_modes_of compilation thy*)
           |> filter_out (fn (name, _) => member (op =) prednames name))
     val _ = print_extra_modes options extra_modes
     val start_modes =
@@ -1521,7 +1529,7 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
       else
         map (fn (s, ms) => (s, map (fn m => ((true, m), false)) ms)) all_modes
     fun iteration modes = map
-      (check_modes_pred' mode_analysis_options options thy param_vs clauses
+      (check_modes_pred' mode_analysis_options options ctxt param_vs clauses
         (modes @ extra_modes)) modes
     val ((modes : (string * ((bool * mode) * bool) list) list), errors) =
       Output.cond_timeit false "Fixpount computation of mode analysis" (fn () =>
@@ -1532,7 +1540,7 @@ fun infer_modes mode_analysis_options options compilation preds all_modes param_
           in (modes', errors @ flat new_errors) end) (start_modes, [])
         else
           (fixp (fn modes => map fst (iteration modes)) start_modes, []))
-    val moded_clauses = map (get_modes_pred' mode_analysis_options thy param_vs clauses
+    val moded_clauses = map (get_modes_pred' mode_analysis_options ctxt param_vs clauses
       (modes @ extra_modes)) modes
     val thy' = fold (fn (s, ms) => if member (op =) (map fst preds) s then
       set_needs_random s (map_filter (fn ((true, m), true) => SOME m | _ => NONE) ms) else I)
@@ -1671,11 +1679,11 @@ fun compile_expr compilation_modifiers ctxt (t, deriv) additional_arguments =
         (t, Term Input) => SOME t
       | (t, Term Output) => NONE
       | (Const (name, T), Context mode) =>
-        (case alternative_compilation_of (ProofContext.theory_of ctxt) name mode of
+        (case alternative_compilation_of ctxt name mode of
           SOME alt_comp => SOME (alt_comp compfuns T)
         | NONE =>
           SOME (Const (function_name_of (Comp_Mod.compilation compilation_modifiers)
-            (ProofContext.theory_of ctxt) name mode,
+            ctxt name mode,
             Comp_Mod.funT_of compilation_modifiers mode T)))
       | (Free (s, T), Context m) =>
         SOME (Free (s, Comp_Mod.funT_of compilation_modifiers m T))
@@ -1813,7 +1821,7 @@ fun nth_pair [] t = t
 
 (** switch detection analysis **)
 
-fun find_switch_test thy (i, is) (ts, prems) =
+fun find_switch_test ctxt (i, is) (ts, prems) =
   let
     val t = nth_pair is (nth ts i)
     val T = fastype_of t
@@ -1821,7 +1829,7 @@ fun find_switch_test thy (i, is) (ts, prems) =
     case T of
       TFree _ => NONE
     | Type (Tcon, _) =>
-      (case Datatype_Data.get_constrs thy Tcon of
+      (case Datatype_Data.get_constrs (ProofContext.theory_of ctxt) Tcon of
         NONE => NONE
       | SOME cs =>
         (case strip_comb t of
@@ -1830,11 +1838,11 @@ fun find_switch_test thy (i, is) (ts, prems) =
         | (Const (c, T), _) => if AList.defined (op =) cs c then SOME (c, T) else NONE))
   end
 
-fun partition_clause thy pos moded_clauses =
+fun partition_clause ctxt pos moded_clauses =
   let
     fun insert_list eq (key, value) = AList.map_default eq (key, []) (cons value)
     fun find_switch_test' moded_clause (cases, left) =
-      case find_switch_test thy pos moded_clause of
+      case find_switch_test ctxt pos moded_clause of
         SOME (c, T) => (insert_list (op =) ((c, T), moded_clause) cases, left)
       | NONE => (cases, moded_clause :: left)
   in
@@ -1844,12 +1852,12 @@ fun partition_clause thy pos moded_clauses =
 datatype switch_tree =
   Atom of moded_clause list | Node of (position * ((string * typ) * switch_tree) list) * switch_tree
 
-fun mk_switch_tree thy mode moded_clauses =
+fun mk_switch_tree ctxt mode moded_clauses =
   let
     fun select_best_switch moded_clauses input_position best_switch =
       let
         val ord = option_ord (rev_order o int_ord o (pairself (length o snd o snd)))
-        val partition = partition_clause thy input_position moded_clauses
+        val partition = partition_clause ctxt input_position moded_clauses
         val switch = if (length (fst partition) > 1) then SOME (input_position, partition) else NONE
       in
         case ord (switch, best_switch) of LESS => best_switch
@@ -1937,9 +1945,8 @@ fun compile_switch compilation_modifiers ctxt all_vs param_vs additional_argumen
 
 (* compilation of predicates *)
 
-fun compile_pred options compilation_modifiers thy all_vs param_vs s T (pol, mode) moded_cls =
+fun compile_pred options compilation_modifiers ctxt all_vs param_vs s T (pol, mode) moded_cls =
   let
-    val ctxt = ProofContext.init_global thy
     val compilation_modifiers = if pol then compilation_modifiers else
       negative_comp_modifiers_of compilation_modifiers
     val additional_arguments = Comp_Mod.additional_arguments compilation_modifiers
@@ -1967,7 +1974,7 @@ fun compile_pred options compilation_modifiers thy all_vs param_vs s T (pol, mod
       if detect_switches options then
         the_default (mk_bot compfuns (HOLogic.mk_tupleT outTs))
           (compile_switch compilation_modifiers ctxt all_vs param_vs additional_arguments
-            mode in_ts' outTs (mk_switch_tree thy mode moded_cls))
+            mode in_ts' outTs (mk_switch_tree ctxt mode moded_cls))
       else
         let
           val cl_ts =
@@ -1983,7 +1990,7 @@ fun compile_pred options compilation_modifiers thy all_vs param_vs s T (pol, mod
         end
     val fun_const =
       Const (function_name_of (Comp_Mod.compilation compilation_modifiers)
-      (ProofContext.theory_of ctxt) s mode, funT)
+      ctxt s mode, funT)
   in
     HOLogic.mk_Trueprop
       (HOLogic.mk_eq (list_comb (fun_const, in_ts @ additional_arguments), compilation))
@@ -2008,7 +2015,7 @@ fun split_lambda (x as Free _) t = lambda x t
   | split_lambda (Const ("Product_Type.Unity", _)) t = Abs ("x", HOLogic.unitT, t)
   | split_lambda t _ = raise (TERM ("split_lambda", [t]))
 
-fun strip_split_abs (Const ("split", _) $ t) = strip_split_abs t
+fun strip_split_abs (Const (@{const_name split}, _) $ t) = strip_split_abs t
   | strip_split_abs (Abs (_, _, t)) = strip_split_abs t
   | strip_split_abs t = t
 
@@ -2044,7 +2051,7 @@ fun mk_args is_eval (m as Pair (m1, m2), T as Type ("*", [T1, T2])) names =
       (Free (x, T), x :: names)
     end
 
-fun create_intro_elim_rule mode defthm mode_id funT pred thy =
+fun create_intro_elim_rule ctxt mode defthm mode_id funT pred =
   let
     val funtrm = Const (mode_id, funT)
     val Ts = binder_types (fastype_of pred)
@@ -2072,11 +2079,11 @@ fun create_intro_elim_rule mode defthm mode_id funT pred thy =
     val simprules = [defthm, @{thm eval_pred},
       @{thm "split_beta"}, @{thm "fst_conv"}, @{thm "snd_conv"}, @{thm pair_collapse}]
     val unfolddef_tac = Simplifier.asm_full_simp_tac (HOL_basic_ss addsimps simprules) 1
-    val introthm = Goal.prove (ProofContext.init_global thy)
+    val introthm = Goal.prove ctxt
       (argnames @ hoarg_names' @ ["y"]) [] introtrm (fn _ => unfolddef_tac)
     val P = HOLogic.mk_Trueprop (Free ("P", HOLogic.boolT));
     val elimtrm = Logic.list_implies ([funpropE, Logic.mk_implies (predpropE, P)], P)
-    val elimthm = Goal.prove (ProofContext.init_global thy)
+    val elimthm = Goal.prove ctxt
       (argnames @ ["y", "P"]) [] elimtrm (fn _ => unfolddef_tac)
     val opt_neg_introthm =
       if is_all_input mode then
@@ -2090,7 +2097,7 @@ fun create_intro_elim_rule mode defthm mode_id funT pred thy =
             Simplifier.asm_full_simp_tac (HOL_basic_ss addsimps
               (@{thm if_False} :: @{thm Predicate.not_pred_eq} :: simprules)) 1
             THEN rtac @{thm Predicate.singleI} 1
-        in SOME (Goal.prove (ProofContext.init_global thy) (argnames @ hoarg_names') []
+        in SOME (Goal.prove ctxt (argnames @ hoarg_names') []
             neg_introtrm (fn _ => tac))
         end
       else NONE
@@ -2131,8 +2138,9 @@ fun create_definitions options preds (name, modes) thy =
         val ([definition], thy') = thy |>
           Sign.add_consts_i [(Binding.name mode_cbasename, funT, NoSyn)] |>
           PureThy.add_defs false [((Binding.name (mode_cbasename ^ "_def"), def), [])]
+        val ctxt' = ProofContext.init_global thy'
         val rules as ((intro, elim), _) =
-          create_intro_elim_rule mode definition mode_cname funT (Const (name, T)) thy'
+          create_intro_elim_rule ctxt' mode definition mode_cname funT (Const (name, T))
         in thy'
           |> set_function_name Pred name mode mode_cname
           |> add_predfun_data name mode (definition, rules)
@@ -2301,10 +2309,9 @@ fun prove_match options ctxt out_ts =
 
 fun prove_sidecond ctxt t =
   let
-    val thy = ProofContext.theory_of ctxt
     fun preds_of t nameTs = case strip_comb t of 
       (f as Const (name, T), args) =>
-        if is_registered thy name then (name, T) :: nameTs
+        if is_registered ctxt name then (name, T) :: nameTs
           else fold preds_of args nameTs
       | _ => nameTs
     val preds = preds_of t []
@@ -2402,10 +2409,9 @@ fun select_sup 1 1 = []
 
 fun prove_one_direction options ctxt clauses preds pred mode moded_clauses =
   let
-    val thy = ProofContext.theory_of ctxt
     val T = the (AList.lookup (op =) preds pred)
     val nargs = length (binder_types T)
-    val pred_case_rule = the_elim_of thy pred
+    val pred_case_rule = the_elim_of ctxt pred
   in
     REPEAT_DETERM (CHANGED (rewtac @{thm "split_paired_all"}))
     THEN print_tac options "before applying elim rule"
@@ -2495,7 +2501,7 @@ fun prove_expr2 options ctxt (t, deriv) =
 fun prove_sidecond2 options ctxt t = let
   fun preds_of t nameTs = case strip_comb t of 
     (f as Const (name, T), args) =>
-      if is_registered (ProofContext.theory_of ctxt) name then (name, T) :: nameTs
+      if is_registered ctxt name then (name, T) :: nameTs
         else fold preds_of args nameTs
     | _ => nameTs
   val preds = preds_of t []
@@ -2512,7 +2518,7 @@ fun prove_sidecond2 options ctxt t = let
   
 fun prove_clause2 options ctxt pred mode (ts, ps) i =
   let
-    val pred_intro_rule = nth (intros_of (ProofContext.theory_of ctxt) pred) (i - 1)
+    val pred_intro_rule = nth (intros_of ctxt pred) (i - 1)
     val (in_ts, clause_out_ts) = split_mode mode ts;
     fun prove_prems2 out_ts [] =
       print_tac options "before prove_match2 - last call:"
@@ -2635,8 +2641,8 @@ fun maps_modes preds_modes_table =
   map (fn (pred, modes) =>
     (pred, map (fn (mode, value) => value) modes)) preds_modes_table
 
-fun compile_preds options comp_modifiers thy all_vs param_vs preds moded_clauses =
-  map_preds_modes (fn pred => compile_pred options comp_modifiers thy all_vs param_vs pred
+fun compile_preds options comp_modifiers ctxt all_vs param_vs preds moded_clauses =
+  map_preds_modes (fn pred => compile_pred options comp_modifiers ctxt all_vs param_vs pred
       (the (AList.lookup (op =) preds pred))) moded_clauses
 
 fun prove options thy clauses preds moded_clauses compiled_terms =
@@ -2649,25 +2655,25 @@ fun prove_by_skip options thy _ _ _ compiled_terms =
     compiled_terms
 
 (* preparation of introduction rules into special datastructures *)
-fun dest_prem thy params t =
+fun dest_prem ctxt params t =
   (case strip_comb t of
     (v as Free _, ts) => if member (op =) params v then Prem t else Sidecond t
-  | (c as Const (@{const_name Not}, _), [t]) => (case dest_prem thy params t of
+  | (c as Const (@{const_name Not}, _), [t]) => (case dest_prem ctxt params t of
       Prem t => Negprem t
     | Negprem _ => error ("Double negation not allowed in premise: " ^
-        Syntax.string_of_term_global thy (c $ t)) 
+        Syntax.string_of_term ctxt (c $ t)) 
     | Sidecond t => Sidecond (c $ t))
   | (c as Const (s, _), ts) =>
-    if is_registered thy s then Prem t else Sidecond t
+    if is_registered ctxt s then Prem t else Sidecond t
   | _ => Sidecond t)
 
 fun prepare_intrs options compilation thy prednames intros =
   let
+    val ctxt = ProofContext.init_global thy
     val intrs = map prop_of intros
     val preds = map (fn c => Const (c, Sign.the_const_type thy c)) prednames
     val (preds, intrs) = unify_consts thy preds intrs
-    val ([preds, intrs], _) = fold_burrow (Variable.import_terms false) [preds, intrs]
-      (ProofContext.init_global thy)
+    val ([preds, intrs], _) = fold_burrow (Variable.import_terms false) [preds, intrs] ctxt
     val preds = map dest_Const preds
     val all_vs = terms_vs intrs
     val all_modes = 
@@ -2698,7 +2704,7 @@ fun prepare_intrs options compilation thy prednames intros =
     fun add_clause intr clauses =
       let
         val (Const (name, T), ts) = strip_comb (HOLogic.dest_Trueprop (Logic.strip_imp_concl intr))
-        val prems = map (dest_prem thy params o HOLogic.dest_Trueprop) (Logic.strip_imp_prems intr)
+        val prems = map (dest_prem ctxt params o HOLogic.dest_Trueprop) (Logic.strip_imp_prems intr)
       in
         AList.update op = (name, these (AList.lookup op = clauses name) @
           [(ts, prems)]) clauses
@@ -2755,20 +2761,19 @@ fun check_intros_elim_match thy prednames =
 
 (* create code equation *)
 
-fun add_code_equations thy preds result_thmss =
+fun add_code_equations ctxt preds result_thmss =
   let
-    val ctxt = ProofContext.init_global thy
     fun add_code_equation (predname, T) (pred, result_thms) =
       let
         val full_mode = fold_rev (curry Fun) (map (K Input) (binder_types T)) Bool
       in
-        if member (op =) (modes_of Pred thy predname) full_mode then
+        if member (op =) (modes_of Pred ctxt predname) full_mode then
           let
             val Ts = binder_types T
             val arg_names = Name.variant_list []
               (map (fn i => "x" ^ string_of_int i) (1 upto length Ts))
             val args = map2 (curry Free) arg_names Ts
-            val predfun = Const (function_name_of Pred thy predname full_mode,
+            val predfun = Const (function_name_of Pred ctxt predname full_mode,
               Ts ---> PredicateCompFuns.mk_predT @{typ unit})
             val rhs = @{term Predicate.holds} $ (list_comb (predfun, args))
             val eq_term = HOLogic.mk_Trueprop
@@ -2794,7 +2799,7 @@ datatype steps = Steps of
   define_functions : options -> (string * typ) list -> string * (bool * mode) list -> theory -> theory,
   prove : options -> theory -> (string * (term list * indprem list) list) list -> (string * typ) list
     -> moded_clause list pred_mode_table -> term pred_mode_table -> thm pred_mode_table,
-  add_code_equations : theory -> (string * typ) list
+  add_code_equations : Proof.context -> (string * typ) list
     -> (string * thm list) list -> (string * thm list) list,
   comp_modifiers : Comp_Mod.comp_modifiers,
   use_random : bool,
@@ -2805,6 +2810,7 @@ fun add_equations_of steps mode_analysis_options options prednames thy =
   let
     fun dest_steps (Steps s) = s
     val compilation = Comp_Mod.compilation (#comp_modifiers (dest_steps steps))
+    val ctxt = ProofContext.init_global thy
     val _ = print_step options
       ("Starting predicate compiler (compilation: " ^ string_of_compilation compilation
         ^ ") for predicates " ^ commas prednames ^ "...")
@@ -2812,35 +2818,36 @@ fun add_equations_of steps mode_analysis_options options prednames thy =
       (*val _ = map (check_format_of_intro_rule thy) (maps (intros_of thy) prednames)*)
     val _ =
       if show_intermediate_results options then
-        tracing (commas (map (Display.string_of_thm_global thy) (maps (intros_of thy) prednames)))
+        tracing (commas (map (Display.string_of_thm ctxt) (maps (intros_of ctxt) prednames)))
       else ()
     val (preds, all_vs, param_vs, all_modes, clauses) =
-      prepare_intrs options compilation thy prednames (maps (intros_of thy) prednames)
+      prepare_intrs options compilation thy prednames (maps (intros_of ctxt) prednames)
     val _ = print_step options "Infering modes..."
     val ((moded_clauses, errors), thy') =
-      Output.cond_timeit true "Infering modes"
+      Output.cond_timeit (!Quickcheck.timing) "Infering modes"
       (fn _ => infer_modes mode_analysis_options
         options compilation preds all_modes param_vs clauses thy)
     val modes = map (fn (p, mps) => (p, map fst mps)) moded_clauses
     val _ = check_expected_modes preds options modes
     (*val _ = check_proposed_modes preds options modes (fst extra_modes) errors*)
-    val _ = print_modes options thy' modes
+    val _ = print_modes options modes
     val _ = print_step options "Defining executable functions..."
     val thy'' =
       Output.cond_timeit (!Quickcheck.timing) "Defining executable functions..."
       (fn _ => fold (#define_functions (dest_steps steps) options preds) modes thy'
       |> Theory.checkpoint)
+    val ctxt'' = ProofContext.init_global thy''
     val _ = print_step options "Compiling equations..."
     val compiled_terms =
       Output.cond_timeit (!Quickcheck.timing) "Compiling equations...." (fn _ =>
         compile_preds options
-          (#comp_modifiers (dest_steps steps)) thy'' all_vs param_vs preds moded_clauses)
-    val _ = print_compiled_terms options thy'' compiled_terms
+          (#comp_modifiers (dest_steps steps)) ctxt'' all_vs param_vs preds moded_clauses)
+    val _ = print_compiled_terms options ctxt'' compiled_terms
     val _ = print_step options "Proving equations..."
     val result_thms =
       Output.cond_timeit (!Quickcheck.timing) "Proving equations...." (fn _ =>
       #prove (dest_steps steps) options thy'' clauses preds moded_clauses compiled_terms)
-    val result_thms' = #add_code_equations (dest_steps steps) thy'' preds
+    val result_thms' = #add_code_equations (dest_steps steps) ctxt'' preds
       (maps_modes result_thms)
     val qname = #qname (dest_steps steps)
     val attrib = fn thy => Attrib.attribute_i thy (Attrib.internal (K (Thm.declaration_attribute
@@ -2873,8 +2880,9 @@ fun gen_add_equations steps options names thy =
   let
     fun dest_steps (Steps s) = s
     val defined = defined_functions (Comp_Mod.compilation (#comp_modifiers (dest_steps steps)))
+    val ctxt = ProofContext.init_global thy
     val thy' = thy
-      |> PredData.map (fold (extend (fetch_pred_data thy) (depending_preds_of thy)) names)
+      |> PredData.map (fold (extend (fetch_pred_data ctxt) (depending_preds_of ctxt)) names)
       |> Theory.checkpoint;
     fun strong_conn_of gr keys =
       Graph.strong_conn (Graph.subgraph (member (op =) (Graph.all_succs gr keys)) gr)
@@ -2882,7 +2890,7 @@ fun gen_add_equations steps options names thy =
     
     val thy'' = fold_rev
       (fn preds => fn thy =>
-        if not (forall (defined thy) preds) then
+        if not (forall (defined (ProofContext.init_global thy)) preds) then
           let
             val mode_analysis_options = {use_random = #use_random (dest_steps steps),
               reorder_premises =
@@ -3025,15 +3033,17 @@ fun generic_code_pred prep_const options raw_const lthy =
   let
     val thy = ProofContext.theory_of lthy
     val const = prep_const thy raw_const
+    val ctxt = ProofContext.init_global thy
     val lthy' = Local_Theory.theory (PredData.map
-        (extend (fetch_pred_data thy) (depending_preds_of thy) const)) lthy
+        (extend (fetch_pred_data ctxt) (depending_preds_of ctxt) const)) lthy
     val thy' = ProofContext.theory_of lthy'
-    val preds = Graph.all_succs (PredData.get thy') [const] |> filter_out (has_elim thy')
+    val ctxt' = ProofContext.init_global thy'
+    val preds = Graph.all_succs (PredData.get thy') [const] |> filter_out (has_elim ctxt')
     fun mk_cases const =
       let
         val T = Sign.the_const_type thy const
         val pred = Const (const, T)
-        val intros = intros_of thy' const
+        val intros = intros_of ctxt' const
       in mk_casesrule lthy' pred intros end  
     val cases_rules = map mk_cases preds
     val cases =
@@ -3083,11 +3093,11 @@ val new_random_dseq_stats_eval_ref =
       (unit -> int -> int -> int * int -> int -> (term * int) Lazy_Sequence.lazy_sequence) option)
 
 (*FIXME turn this into an LCF-guarded preprocessor for comprehensions*)
-fun analyze_compr thy compfuns param_user_modes (compilation, arguments) t_compr =
+fun analyze_compr ctxt compfuns param_user_modes (compilation, arguments) t_compr =
   let
     val all_modes_of = all_modes_of compilation
     val split = case t_compr of (Const (@{const_name Collect}, _) $ t) => t
-      | _ => error ("Not a set comprehension: " ^ Syntax.string_of_term_global thy t_compr);
+      | _ => error ("Not a set comprehension: " ^ Syntax.string_of_term ctxt t_compr);
     val (body, Ts, fp) = HOLogic.strip_psplits split;
     val output_names = Name.variant_list (Term.add_free_names body [])
       (map (fn i => "x" ^ string_of_int i) (1 upto length Ts))
@@ -3098,9 +3108,9 @@ fun analyze_compr thy compfuns param_user_modes (compilation, arguments) t_compr
     val (pred as Const (name, T), all_args) =
       case strip_comb body of
         (Const (name, T), all_args) => (Const (name, T), all_args)
-      | (head, _) => error ("Not a constant: " ^ Syntax.string_of_term_global thy head)
+      | (head, _) => error ("Not a constant: " ^ Syntax.string_of_term ctxt head)
   in
-    if defined_functions compilation thy name then
+    if defined_functions compilation ctxt name then
       let
         fun extract_mode (Const ("Pair", _) $ t1 $ t2) = Pair (extract_mode t1, extract_mode t2)
           | extract_mode (Free (x, _)) = if member (op =) output_names x then Output else Input
@@ -3123,9 +3133,13 @@ fun analyze_compr thy compfuns param_user_modes (compilation, arguments) t_compr
                   instance_of (m1, Input) andalso instance_of (m2, Input)
               | instance_of (Pair (m1, m2), Output) =
                   instance_of (m1, Output) andalso instance_of (m2, Output)
+              | instance_of (Input, Pair (m1, m2)) =
+                  instance_of (Input, m1) andalso instance_of (Input, m2)
+              | instance_of (Output, Pair (m1, m2)) =
+                  instance_of (Output, m1) andalso instance_of (Output, m2)
               | instance_of _ = false
           in forall instance_of (strip_fun_mode m1 ~~ strip_fun_mode m2) end
-        val derivs = all_derivations_of thy (all_modes_of thy) [] body
+        val derivs = all_derivations_of ctxt (all_modes_of ctxt) [] body
           |> filter (fn (d, missing_vars) =>
             let
               val (p_mode :: modes) = collect_context_modes d
@@ -3137,10 +3151,10 @@ fun analyze_compr thy compfuns param_user_modes (compilation, arguments) t_compr
           |> map fst
         val deriv = case derivs of
             [] => error ("No mode possible for comprehension "
-                    ^ Syntax.string_of_term_global thy t_compr)
+                    ^ Syntax.string_of_term ctxt t_compr)
           | [d] => d
           | d :: _ :: _ => (warning ("Multiple modes possible for comprehension "
-                    ^ Syntax.string_of_term_global thy t_compr); d);
+                    ^ Syntax.string_of_term ctxt t_compr); d);
         val (_, outargs) = split_mode (head_mode_of deriv) all_args
         val additional_arguments =
           case compilation of
@@ -3164,7 +3178,7 @@ fun analyze_compr thy compfuns param_user_modes (compilation, arguments) t_compr
           | DSeq => dseq_comp_modifiers
           | Pos_Random_DSeq => pos_random_dseq_comp_modifiers
           | New_Pos_Random_DSeq => new_pos_random_dseq_comp_modifiers
-        val t_pred = compile_expr comp_modifiers (ProofContext.init_global thy)
+        val t_pred = compile_expr comp_modifiers ctxt
           (body, deriv) additional_arguments;
         val T_pred = dest_predT compfuns (fastype_of t_pred)
         val arrange = split_lambda (HOLogic.mk_tuple outargs) output_tuple
@@ -3175,7 +3189,7 @@ fun analyze_compr thy compfuns param_user_modes (compilation, arguments) t_compr
       error "Evaluation with values is not possible because compilation with code_pred was not invoked"
   end
 
-fun eval thy stats param_user_modes (options as (compilation, arguments)) k t_compr =
+fun eval ctxt stats param_user_modes (options as (compilation, arguments)) k t_compr =
   let
     fun count xs x =
       let
@@ -3190,7 +3204,7 @@ fun eval thy stats param_user_modes (options as (compilation, arguments)) k t_co
       | Pos_Random_DSeq => Random_Sequence_CompFuns.compfuns
       | New_Pos_Random_DSeq => New_Pos_Random_Sequence_CompFuns.compfuns
       | _ => PredicateCompFuns.compfuns
-    val t = analyze_compr thy compfuns param_user_modes options t_compr;
+    val t = analyze_compr ctxt compfuns param_user_modes options t_compr;
     val T = dest_predT compfuns (fastype_of t);
     val t' =
       if stats andalso compilation = New_Pos_Random_DSeq then
@@ -3199,6 +3213,7 @@ fun eval thy stats param_user_modes (options as (compilation, arguments)) k t_co
             @{term Code_Numeral.of_nat} $ (HOLogic.size_const T $ Bound 0)))) t
       else
         mk_map compfuns T HOLogic.termT (HOLogic.term_of_const T) t
+    val thy = ProofContext.theory_of ctxt
     val (ts, statistics) =
       case compilation of
        (* Random =>
@@ -3250,8 +3265,7 @@ fun eval thy stats param_user_modes (options as (compilation, arguments)) k t_co
 
 fun values ctxt param_user_modes ((raw_expected, stats), comp_options) k t_compr =
   let
-    val thy = ProofContext.theory_of ctxt
-    val ((T, ts), statistics) = eval thy stats param_user_modes comp_options k t_compr
+    val ((T, ts), statistics) = eval ctxt stats param_user_modes comp_options k t_compr
     val setT = HOLogic.mk_setT T
     val elems = HOLogic.mk_set T ts
     val cont = Free ("...", setT)
@@ -3292,7 +3306,7 @@ fun values_cmd print_modes param_user_modes options k raw_t state =
              Pretty.str "total:", Pretty.brk 1, Pretty.str (string_of_int total), Pretty.fbrk]
              @ maps pretty_entry xs
           end
-    val p = PrintMode.with_modes print_modes (fn () =>
+    val p = Print_Mode.with_modes print_modes (fn () =>
       Pretty.block ([Pretty.quote (Syntax.pretty_term ctxt' t'), Pretty.fbrk,
         Pretty.str "::", Pretty.brk 1, Pretty.quote (Syntax.pretty_typ ctxt' ty')]
         @ pretty_stat)) ();

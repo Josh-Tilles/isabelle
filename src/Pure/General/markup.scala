@@ -123,6 +123,7 @@ object Markup
   /* ML syntax */
 
   val ML_KEYWORD = "ML_keyword"
+  val ML_DELIMITER = "ML_delimiter"
   val ML_IDENT = "ML_ident"
   val ML_TVAR = "ML_tvar"
   val ML_NUMERAL = "ML_numeral"
@@ -144,6 +145,7 @@ object Markup
   val COMMAND_DECL = "command_decl"
 
   val KEYWORD = "keyword"
+  val OPERATOR = "operator"
   val COMMAND = "command"
   val IDENT = "ident"
   val STRING = "string"
@@ -172,6 +174,8 @@ object Markup
 
   val UNPROCESSED = "unprocessed"
   val RUNNING = "running"
+  val FORKED = "forked"
+  val JOINED = "joined"
   val FAILED = "failed"
   val FINISHED = "finished"
   val DISPOSED = "disposed"
@@ -193,7 +197,6 @@ object Markup
   val INIT = "init"
   val STATUS = "status"
   val WRITELN = "writeln"
-  val PRIORITY = "priority"
   val TRACING = "tracing"
   val WARNING = "warning"
   val ERROR = "error"

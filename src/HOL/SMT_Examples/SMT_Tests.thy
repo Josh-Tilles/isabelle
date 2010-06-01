@@ -190,6 +190,16 @@ lemma
   "distinct [a, b, c] \<and> (\<forall>x y. f x = f y \<longrightarrow> y = x) \<longrightarrow> f a \<noteq> f b"
   sorry  (* FIXME: injective function *)
 
+lemma
+  assumes "\<forall>x. SMT.trigger [[SMT.pat (f x)]] (f x = x)"
+  shows "f 1 = 1"
+  using assms by smt
+
+lemma
+  assumes "\<forall>x y. SMT.trigger [[SMT.pat (f x), SMT.pat (g y)]] (f x = g y)"
+  shows "f 1 = g 2"
+  using assms by smt
+
 
 
 section {* Meta logical connectives *}
@@ -271,7 +281,7 @@ lemma
   "(3::nat) div 3 = 1"
   "(x::nat) div 3 \<le> x"
   "(x div 3 = x) = (x = 0)"
-  sorry (* FIXME: div/mod *)
+  by smt+
 
 lemma
   "(0::nat) mod 0 = 0"
@@ -285,12 +295,12 @@ lemma
   "(3::nat) mod 3 = 0"
   "x mod 3 < 3"
   "(x mod 3 = x) = (x < 3)"
-  sorry (* FIXME: div/mod *)
+  by smt+
 
 lemma
   "(x::nat) = x div 1 * 1 + x mod 1"
   "x = x div 3 * 3 + x mod 3"
-  sorry (* FIXME: div/mod *)
+  by smt+
 
 lemma
   "min (x::nat) y \<le> x"
@@ -378,8 +388,6 @@ lemma
   "3 * x = x * 3"
   by smt+
 
-(* FIXME: consider different cases of signs
-
 lemma
   "(0::int) div 0 = 0"
   "(x::int) div 0 = 0"
@@ -387,10 +395,24 @@ lemma
   "(1::int) div 1 = 1"
   "(3::int) div 1 = 3"
   "(x::int) div 1 = x"
+  "(0::int) div -1 = 0"
+  "(1::int) div -1 = -1"
+  "(3::int) div -1 = -3"
+  "(x::int) div -1 = -x"
   "(0::int) div 3 = 0"
+  "(0::int) div -3 = 0"
   "(1::int) div 3 = 0"
   "(3::int) div 3 = 1"
-  "(0::int) div -3 = 0"
+  "(5::int) div 3 = 1"
+  "(1::int) div -3 = -1"
+  "(3::int) div -3 = -1"
+  "(5::int) div -3 = -2"
+  "(-1::int) div 3 = -1"
+  "(-3::int) div 3 = -1"
+  "(-5::int) div 3 = -2"
+  "(-1::int) div -3 = 0"
+  "(-3::int) div -3 = 1"
+  "(-5::int) div -3 = 1"
   by smt+
 
 lemma
@@ -399,19 +421,33 @@ lemma
   "(0::int) mod 1 = 0"
   "(1::int) mod 1 = 0"
   "(3::int) mod 1 = 0"
-  "x mod 1 = 0"
+  "(x::int) mod 1 = 0"
+  "(0::int) mod -1 = 0"
+  "(1::int) mod -1 = 0"
+  "(3::int) mod -1 = 0"
+  "(x::int) mod -1 = 0"
   "(0::int) mod 3 = 0"
+  "(0::int) mod -3 = 0"
   "(1::int) mod 3 = 1"
   "(3::int) mod 3 = 0"
+  "(5::int) mod 3 = 2"
+  "(1::int) mod -3 = -2"
+  "(3::int) mod -3 = 0"
+  "(5::int) mod -3 = -1"
+  "(-1::int) mod 3 = 2"
+  "(-3::int) mod 3 = 0"
+  "(-5::int) mod 3 = 1"
+  "(-1::int) mod -3 = -1"
+  "(-3::int) mod -3 = 0"
+  "(-5::int) mod -3 = -2"
   "x mod 3 < 3"
-  "(x mod 3 = x) = (x < 3)"
+  "(x mod 3 = x) \<longrightarrow> (x < 3)"
   by smt+
 
 lemma
   "(x::int) = x div 1 * 1 + x mod 1"
   "x = x div 3 * 3 + x mod 3"
   by smt+
-*)
 
 lemma
   "abs (x::int) \<ge> 0"
@@ -581,5 +617,51 @@ lemma
   "(fst (x, y) = snd (x, y)) = (x = y)"
   "(fst p = snd p) = (p = (snd p, fst p))"
   by smt+
+
+
+
+section {* Function updates *}
+
+lemma
+  "(f (i := v)) i = v"
+  "i1 \<noteq> i2 \<longrightarrow> (f (i1 := v)) i2 = f i2"
+  "i1 \<noteq> i2 \<longrightarrow> (f (i1 := v1, i2 := v2)) i1 = v1"
+  "i1 \<noteq> i2 \<longrightarrow> (f (i1 := v1, i2 := v2)) i2 = v2"
+  "i1 = i2 \<longrightarrow> (f (i1 := v1, i2 := v2)) i1 = v2"
+  "i1 = i2 \<longrightarrow> (f (i1 := v1, i2 := v2)) i1 = v2"
+  "distinct [i1, i2, i3] \<longrightarrow> (f (i1 := v1, i2 := v2)) i3 = f i3"
+  by smt+
+
+
+
+section {* Sets *}
+
+lemma smt_sets:
+  "\<not>({} x)"
+  "UNIV x"
+  "(A \<union> B) x = (A x \<or> B x)"
+  "(A \<inter> B) x = (A x \<and> B x)"
+  by auto
+
+lemma
+  "x \<in> P = P x"
+  "x \<in> {x. P x} = P x"
+  "x \<notin> {}"
+  "x \<in> UNIV"
+  "x \<in> P \<union> Q = (P x \<or> Q x)"
+  "x \<in> P \<union> {} = P x"
+  "x \<in> P \<union> UNIV"
+  "(x \<in> P \<union> Q) = (x \<in> Q \<union> P)"
+  "(x \<in> P \<union> P) = (x \<in> P)"
+  "(x \<in> P \<union> (Q \<union> R)) = (x \<in> (P \<union> Q) \<union> R)"
+  "(x \<in> P \<inter> Q) = (P x \<and> Q x)"
+  "x \<notin> P \<inter> {}"
+  "(x \<in> P \<inter> UNIV) = (x \<in> P)"
+  "(x \<in> P \<inter> Q) = (x \<in> Q \<inter> P)"
+  "(x \<in> P \<inter> P) = (x \<in> P)"
+  "(x \<in> P \<inter> (Q \<inter> R)) = (x \<in> (P \<inter> Q) \<inter> R)"
+  "{x. P x} = {y. P y}"
+  unfolding mem_def Collect_def
+  by (smt smt_sets)+
 
 end

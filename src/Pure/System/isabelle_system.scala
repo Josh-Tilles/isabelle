@@ -18,9 +18,19 @@ import scala.util.matching.Regex
 import scala.collection.mutable
 
 
-class Isabelle_System extends Standard_System
+class Isabelle_System(this_isabelle_home: String) extends Standard_System
 {
+  def this() = this(null)
+
+
   /** Isabelle environment **/
+
+  /*
+    isabelle_home precedence:
+      (1) this_isabelle_home as explicit argument
+      (2) ISABELLE_HOME process environment variable (e.g. inherited from running isabelle tool)
+      (3) isabelle.home system property (e.g. via JVM application boot process)
+  */
 
   private val environment: Map[String, String] =
   {
@@ -30,13 +40,15 @@ class Isabelle_System extends Standard_System
       ("THIS_JAVA" -> this_java())
 
     val isabelle_home =
-      env0.get("ISABELLE_HOME") match {
-        case None | Some("") =>
-          val path = java.lang.System.getProperty("isabelle.home")
-          if (path == null || path == "") error("Unknown Isabelle home directory")
-          else path
-        case Some(path) => path
-      }
+      if (this_isabelle_home != null) this_isabelle_home
+      else
+        env0.get("ISABELLE_HOME") match {
+          case None | Some("") =>
+            val path = java.lang.System.getProperty("isabelle.home")
+            if (path == null || path == "") error("Unknown Isabelle home directory")
+            else path
+          case Some(path) => path
+        }
 
     Standard_System.with_tmp_file("settings") { dump =>
         val shell_prefix =
@@ -81,7 +93,7 @@ class Isabelle_System extends Standard_System
     if (value != "") value else error("Undefined environment variable: " + name)
   }
 
-  override def toString = getenv("ISABELLE_HOME")
+  override def toString = getenv_strict("ISABELLE_HOME")
 
 
 
@@ -150,6 +162,20 @@ class Isabelle_System extends Standard_System
   def platform_file(path: String) = new File(platform_path(path))
 
 
+  /* try_read */
+
+  def try_read(paths: Seq[String]): String =
+  {
+    val buf = new StringBuilder
+    for {
+      path <- paths
+      file = platform_file(path) if file.isFile
+      c <- (Source.fromFile(file) ++ Iterator.single('\n'))
+    } buf.append(c)
+    buf.toString
+  }
+
+
   /* source files */
 
   private def try_file(file: File) = if (file.isFile) Some(file) else None
@@ -189,12 +215,12 @@ class Isabelle_System extends Standard_System
               catch { case _: IOException => None }
             if (pid.isDefined) {
               var running = true
-              var count = 10
+              var count = 10   // FIXME property!?
               while (running && count > 0) {
                 if (execute(true, "kill", "-INT", "-" + pid.get).waitFor != 0)
                   running = false
                 else {
-                  Thread.sleep(100)
+                  Thread.sleep(100)   // FIXME property!?
                   if (!strict) count -= 1
                 }
               }
@@ -282,7 +308,7 @@ class Isabelle_System extends Standard_System
   /* components */
 
   def components(): List[String] =
-    getenv("ISABELLE_COMPONENTS").split(":").toList
+    getenv_strict("ISABELLE_COMPONENTS").split(":").toList
 
 
   /* find logics */
@@ -303,20 +329,13 @@ class Isabelle_System extends Standard_System
 
   /* symbols */
 
-  private def read_symbols(path: String): List[String] =
-  {
-    val file = platform_file(path)
-    if (file.isFile) Source.fromFile(file).getLines("\n").toList
-    else Nil
-  }
   val symbols = new Symbol.Interpretation(
-    read_symbols("$ISABELLE_HOME/etc/symbols") :::
-    read_symbols("$ISABELLE_HOME_USER/etc/symbols"))
+    try_read(getenv_strict("ISABELLE_SYMBOLS").split(":").toList).split("\n").toList)
 
 
   /* fonts */
 
-  val font_family = "IsabelleText"
+  val font_family = getenv_strict("ISABELLE_FONT_FAMILY")
 
   def get_font(size: Int = 1, bold: Boolean = false): Font =
     new Font(font_family, if (bold) Font.BOLD else Font.PLAIN, size)
@@ -339,6 +358,7 @@ class Isabelle_System extends Standard_System
       val ge = GraphicsEnvironment.getLocalGraphicsEnvironment()
       ge.registerFont(font)
       // workaround strange problem with Apple's Java 1.6 font manager
+      // FIXME does not quite work!?
       if (bold_font.getFamily == font_family) ge.registerFont(bold_font)
       if (!check_font()) error("Failed to install IsabelleText fonts")
     }

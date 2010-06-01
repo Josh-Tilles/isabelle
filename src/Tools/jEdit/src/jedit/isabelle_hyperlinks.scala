@@ -38,15 +38,15 @@ class External_Hyperlink(start: Int, end: Int, line: Int, ref_file: String, ref_
 
 class Isabelle_Hyperlinks extends HyperlinkSource
 {
-	def getHyperlink(buffer: Buffer, original_offset: Int): Hyperlink =
-	{
+  def getHyperlink(buffer: Buffer, original_offset: Int): Hyperlink =
+  {
     Document_Model(buffer) match {
       case Some(model) =>
         val document = model.recent_document()
         val offset = model.from_current(document, original_offset)
         document.command_at(offset) match {
           case Some((command, command_start)) =>
-            document.current_state(command).get.ref_at(offset - command_start) match {
+            document.current_state(command).ref_at(offset - command_start) match {
               case Some(ref) =>
                 val begin = model.to_current(document, command_start + ref.start)
                 val line = buffer.getLineOfOffset(begin)

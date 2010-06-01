@@ -100,7 +100,7 @@ translations
 subsection {* Continuous function space is pointed *}
 
 lemma UU_CFun: "\<bottom> \<in> CFun"
-by (simp add: CFun_def inst_fun_pcpo cont_const)
+by (simp add: CFun_def inst_fun_pcpo)
 
 instance cfun :: (finite_po, finite_po) finite_po
 by (rule typedef_finite_po [OF type_definition_CFun])
@@ -139,8 +139,36 @@ text {* Beta-equality for continuous functions *}
 lemma Abs_CFun_inverse2: "cont f \<Longrightarrow> Rep_CFun (Abs_CFun f) = f"
 by (simp add: Abs_CFun_inverse CFun_def)
 
-lemma beta_cfun [simp]: "cont f \<Longrightarrow> (\<Lambda> x. f x)\<cdot>u = f u"
+lemma beta_cfun: "cont f \<Longrightarrow> (\<Lambda> x. f x)\<cdot>u = f u"
 by (simp add: Abs_CFun_inverse2)
+
+text {* Beta-reduction simproc *}
+
+text {*
+  Given the term @{term "(\<Lambda> x. f x)\<cdot>y"}, the procedure tries to
+  construct the theorem @{term "(\<Lambda> x. f x)\<cdot>y == f y"}.  If this
+  theorem cannot be completely solved by the cont2cont rules, then
+  the procedure returns the ordinary conditional @{text beta_cfun}
+  rule.
+
+  The simproc does not solve any more goals that would be solved by
+  using @{text beta_cfun} as a simp rule.  The advantage of the
+  simproc is that it can avoid deeply-nested calls to the simplifier
+  that would otherwise be caused by large continuity side conditions.
+*}
+
+simproc_setup beta_cfun_proc ("Abs_CFun f\<cdot>x") = {*
+  fn phi => fn ss => fn ct =>
+    let
+      val dest = Thm.dest_comb;
+      val (f, x) = (apfst (snd o dest o snd o dest) o dest) ct;
+      val [T, U] = Thm.dest_ctyp (ctyp_of_term f);
+      val tr = instantiate' [SOME T, SOME U] [SOME f, SOME x]
+          (mk_meta_eq @{thm beta_cfun});
+      val rules = Cont2ContData.get (Simplifier.the_context ss);
+      val tac = SOLVED' (REPEAT_ALL_NEW (match_tac rules));
+    in SOME (perhaps (SINGLE (tac 1)) tr) end
+*}
 
 text {* Eta-equality for continuous functions *}
 
@@ -301,7 +329,7 @@ subsection {* Continuity simplification procedure *}
 
 text {* cont2cont lemma for @{term Rep_CFun} *}
 
-lemma cont2cont_Rep_CFun [cont2cont]:
+lemma cont2cont_Rep_CFun [simp, cont2cont]:
   assumes f: "cont (\<lambda>x. f x)"
   assumes t: "cont (\<lambda>x. t x)"
   shows "cont (\<lambda>x. (f x)\<cdot>(t x))"
@@ -341,7 +369,7 @@ text {*
   has only a single subgoal.
 *}
 
-lemma cont2cont_LAM' [cont2cont]:
+lemma cont2cont_LAM' [simp, cont2cont]:
   fixes f :: "'a::cpo \<Rightarrow> 'b::cpo \<Rightarrow> 'c::cpo"
   assumes f: "cont (\<lambda>p. f (fst p) (snd p))"
   shows "cont (\<lambda>x. \<Lambda> y. f x y)"
@@ -353,7 +381,7 @@ next
     using f by (rule cont_fst_snd_D1)
 qed
 
-lemma cont2cont_LAM_discrete [cont2cont]:
+lemma cont2cont_LAM_discrete [simp, cont2cont]:
   "(\<And>y::'a::discrete_cpo. cont (\<lambda>x. f x y)) \<Longrightarrow> cont (\<lambda>x. \<Lambda> y. f x y)"
 by (simp add: cont2cont_LAM)
 
@@ -556,7 +584,7 @@ lemma cont2cont_Let:
   shows "cont (\<lambda>x. let y = f x in g x y)"
 unfolding Let_def using f g2 g1 by (rule cont_apply)
 
-lemma cont2cont_Let' [cont2cont]:
+lemma cont2cont_Let' [simp, cont2cont]:
   assumes f: "cont (\<lambda>x. f x)"
   assumes g: "cont (\<lambda>p. g (fst p) (snd p))"
   shows "cont (\<lambda>x. let y = f x in g x y)"

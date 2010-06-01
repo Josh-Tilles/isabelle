@@ -31,24 +31,22 @@ subsection {* Triggers for quantifier instantiation *}
 text {*
 Some SMT solvers support triggers for quantifier instantiation.
 Each trigger consists of one ore more patterns.  A pattern may either
-be a list of positive subterms (the first being tagged by "pat" and
-the consecutive subterms tagged by "andpat"), or a list of negative
-subterms (the first being tagged by "nopat" and the consecutive
-subterms tagged by "andpat").
+be a list of positive subterms (each being tagged by "pat"), or a
+list of negative subterms (each being tagged by "nopat").
+
+When an SMT solver finds a term matching a positive pattern (a
+pattern with positive subterms only), it instantiates the
+corresponding quantifier accordingly.  Negative patterns inhibit
+quantifier instantiations.  Each pattern should mention all preceding
+bound variables.
 *}
 
 datatype pattern = Pattern
 
-definition pat :: "'a \<Rightarrow> pattern"
-where "pat _ = Pattern"
+definition pat :: "'a \<Rightarrow> pattern" where "pat _ = Pattern"
+definition nopat :: "'a \<Rightarrow> pattern" where "nopat _ = Pattern"
 
-definition nopat :: "'a \<Rightarrow> pattern"
-where "nopat _ = Pattern"
-
-definition andpat :: "pattern \<Rightarrow> 'a \<Rightarrow> pattern" (infixl "andpat" 60)
-where "_ andpat _ = Pattern"
-
-definition trigger :: "pattern list \<Rightarrow> bool \<Rightarrow> bool"
+definition trigger :: "pattern list list \<Rightarrow> bool \<Rightarrow> bool"
 where "trigger _ P = P"
 
 
@@ -61,7 +59,7 @@ numbers of arguments.  This is achieved by the introduction of the
 following constant.
 *}
 
-definition "apply" where "apply f x = f x"
+definition fun_app where "fun_app f x = f x"
 
 text {*
 Some solvers support a theory of arrays which can be used to encode
@@ -70,7 +68,7 @@ properties of such (extensional) arrays.
 *}
 
 lemmas array_rules = ext fun_upd_apply fun_upd_same fun_upd_other
-  fun_upd_upd
+  fun_upd_upd fun_app_def
 
 
 
@@ -86,8 +84,30 @@ turned into terms by equating such atoms with @{term True} using the
 following term-level equation symbol.
 *}
 
-definition term_eq :: "bool \<Rightarrow> bool \<Rightarrow> bool" (infix "term'_eq" 50)
-  where "(x term_eq y) = (x = y)"
+definition term_eq :: "bool \<Rightarrow> bool \<Rightarrow> bool" where "term_eq x y = (x = y)"
+
+
+
+subsection {* Integer division and modulo for Z3 *}
+
+definition z3div :: "int \<Rightarrow> int \<Rightarrow> int" where
+  "z3div k l = (if 0 \<le> l then k div l else -(k div (-l)))"
+
+definition z3mod :: "int \<Rightarrow> int \<Rightarrow> int" where
+  "z3mod k l = (if 0 \<le> l then k mod l else k mod (-l))"
+
+lemma div_by_z3div: "k div l = (
+     if k = 0 \<or> l = 0 then 0
+     else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3div k l
+     else z3div (-k) (-l))"
+  by (auto simp add: z3div_def)
+
+lemma mod_by_z3mod: "k mod l = (
+     if l = 0 then k
+     else if k = 0 then 0
+     else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3mod k l
+     else - z3mod (-k) (-l))"
+  by (auto simp add: z3mod_def)
 
 
 
@@ -290,5 +310,11 @@ lemma [z3_rule]:
   "1 * x = x"
   "x + y = y + x"
   by auto
+
+
+
+hide_type (open) pattern
+hide_const Pattern term_eq
+hide_const (open) trigger pat nopat fun_app z3div z3mod
 
 end

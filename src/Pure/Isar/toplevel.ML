@@ -238,7 +238,7 @@ fun thread interrupts body =
         |> Runtime.debugging
         |> Runtime.toplevel_error
           (fn exn => priority ("## INTERNAL ERROR ##\n" ^ ML_Compiler.exn_message exn))),
-      SimpleThread.attributes interrupts);
+      Simple_Thread.attributes interrupts);
 
 
 (* node transactions -- maintaining stable checkpoints *)
@@ -638,11 +638,12 @@ fun command_result tr st =
 fun run_command thy_name tr st =
   (case
       (case init_of tr of
-        SOME name => Exn.capture (fn () => ThyLoad.check_name thy_name name) ()
+        SOME name => Exn.capture (fn () => Thy_Load.check_name thy_name name) ()
       | NONE => Exn.Result ()) of
     Exn.Result () =>
       (case transition true tr st of
         SOME (st', NONE) => (status tr Markup.finished; SOME st')
+      | SOME (_, SOME (exn as Exn.Interrupt, _)) => reraise exn
       | SOME (_, SOME exn_info) => (error_msg tr exn_info; status tr Markup.failed; NONE)
       | NONE => (error_msg tr (TERMINATE, at_command tr); status tr Markup.failed; NONE))
   | Exn.Exn exn => (error_msg tr (exn, at_command tr); status tr Markup.failed; NONE));

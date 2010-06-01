@@ -85,7 +85,7 @@ sig
   val proof_markup: Symbol_Pos.text * Position.T -> Toplevel.transition -> Toplevel.transition
 end;
 
-structure IsarCmd: ISAR_CMD =
+structure Isar_Cmd: ISAR_CMD =
 struct
 
 
@@ -94,11 +94,13 @@ struct
 (* generic setup *)
 
 fun global_setup (txt, pos) =
-  ML_Context.expression pos "val setup: theory -> theory" "Context.map_theory setup" txt
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos "val setup: theory -> theory" "Context.map_theory setup"
   |> Context.theory_map;
 
 fun local_setup (txt, pos) =
-  ML_Context.expression pos "val setup: local_theory -> local_theory" "Context.map_proof setup" txt
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos "val setup: local_theory -> local_theory" "Context.map_proof setup"
   |> Context.proof_map;
 
 
@@ -115,35 +117,40 @@ fun advancedN false = ""
 in
 
 fun parse_ast_translation (a, (txt, pos)) =
-  txt |> ML_Context.expression pos
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     ("val parse_ast_translation: (string * (" ^ advancedT a ^
       "Syntax.ast list -> Syntax.ast)) list")
     ("Context.map_theory (Sign.add_" ^ advancedN a ^ "trfuns (parse_ast_translation, [], [], []))")
   |> Context.theory_map;
 
 fun parse_translation (a, (txt, pos)) =
-  txt |> ML_Context.expression pos
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     ("val parse_translation: (string * (" ^ advancedT a ^
       "term list -> term)) list")
     ("Context.map_theory (Sign.add_" ^ advancedN a ^ "trfuns ([], parse_translation, [], []))")
   |> Context.theory_map;
 
 fun print_translation (a, (txt, pos)) =
-  txt |> ML_Context.expression pos
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     ("val print_translation: (string * (" ^ advancedT a ^
       "term list -> term)) list")
     ("Context.map_theory (Sign.add_" ^ advancedN a ^ "trfuns ([], [], print_translation, []))")
   |> Context.theory_map;
 
 fun print_ast_translation (a, (txt, pos)) =
-  txt |> ML_Context.expression pos
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     ("val print_ast_translation: (string * (" ^ advancedT a ^
       "Syntax.ast list -> Syntax.ast)) list")
     ("Context.map_theory (Sign.add_" ^ advancedN a ^ "trfuns ([], [], [], print_ast_translation))")
   |> Context.theory_map;
 
 fun typed_print_translation (a, (txt, pos)) =
-  txt |> ML_Context.expression pos
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     ("val typed_print_translation: (string * (" ^ advancedT a ^
       "bool -> typ -> term list -> term)) list")
     ("Context.map_theory (Sign.add_" ^ advancedN a ^ "trfunsT typed_print_translation)")
@@ -156,15 +163,16 @@ end;
 
 fun oracle (name, pos) (body_txt, body_pos) =
   let
-    val body = Symbol_Pos.content (Symbol_Pos.explode (body_txt, body_pos));
-    val txt =
-      "local\n\
-      \  val binding = " ^ ML_Syntax.make_binding (name, pos) ^ ";\n\
-      \  val body = " ^ body ^ ";\n\
-      \in\n\
-      \  val " ^ name ^ " = snd (Context.>>> (Context.map_theory_result (Thm.add_oracle (binding, body))));\n\
-      \end;\n";
-  in Context.theory_map (ML_Context.exec (fn () => ML_Context.eval false body_pos txt)) end;
+    val body = ML_Lex.read body_pos body_txt;
+    val ants =
+      ML_Lex.read Position.none
+       ("local\n\
+        \  val binding = " ^ ML_Syntax.make_binding (name, pos) ^ ";\n\
+        \  val body = ") @ body @ ML_Lex.read Position.none (";\n\
+        \in\n\
+        \  val " ^ name ^ " = snd (Context.>>> (Context.map_theory_result (Thm.add_oracle (binding, body))));\n\
+        \end;\n");
+  in Context.theory_map (ML_Context.exec (fn () => ML_Context.eval false body_pos ants)) end;
 
 
 (* old-style axioms *)
@@ -180,7 +188,8 @@ fun add_defs ((unchecked, overloaded), args) thy =
 (* declarations *)
 
 fun declaration pervasive (txt, pos) =
-  txt |> ML_Context.expression pos
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     "val declaration: Morphism.declaration"
     ("Context.map_proof (Local_Theory.declaration " ^ Bool.toString pervasive ^ " declaration)")
   |> Context.proof_map;
@@ -188,12 +197,13 @@ fun declaration pervasive (txt, pos) =
 
 (* simprocs *)
 
-fun simproc_setup name lhss (proc, pos) identifier =
-  ML_Context.expression pos
+fun simproc_setup name lhss (txt, pos) identifier =
+  ML_Lex.read pos txt
+  |> ML_Context.expression pos
     "val proc: Morphism.morphism -> Simplifier.simpset -> cterm -> thm option"
-  ("Context.map_proof (Simplifier.def_simproc {name = " ^ ML_Syntax.print_string name ^ ", \
-    \lhss = " ^ ML_Syntax.print_strings lhss ^ ", proc = proc, \
-    \identifier = Library.maps ML_Context.thms " ^ ML_Syntax.print_strings identifier ^ "})") proc
+    ("Context.map_proof (Simplifier.def_simproc {name = " ^ ML_Syntax.print_string name ^ ", \
+      \lhss = " ^ ML_Syntax.print_strings lhss ^ ", proc = proc, \
+      \identifier = Library.maps ML_Context.thms " ^ ML_Syntax.print_strings identifier ^ "})")
   |> Context.proof_map;
 
 
@@ -262,10 +272,10 @@ val skip_proof = local_skip_proof o global_skip_proof;
 (* init and exit *)
 
 fun init_theory (name, imports, uses) =
-  Toplevel.init_theory name (ThyInfo.begin_theory name imports (map (apfst Path.explode) uses))
+  Toplevel.init_theory name (Thy_Info.begin_theory name imports (map (apfst Path.explode) uses))
     (fn thy =>
-      if ThyInfo.check_known_thy (Context.theory_name thy)
-      then ThyInfo.end_theory thy else ());
+      if Thy_Info.check_known_thy (Context.theory_name thy)
+      then Thy_Info.end_theory thy else ());
 
 val exit = Toplevel.keep (fn state =>
  (Context.set_thread_data (try Toplevel.generic_theory_of state);
@@ -281,7 +291,7 @@ fun set_limit _ NONE = ()
 
 fun pr (modes, (lim1, lim2)) = Toplevel.keep (fn state =>
   (set_limit goals_limit lim1; set_limit ProofContext.prems_limit lim2; Toplevel.quiet := false;
-    PrintMode.with_modes modes (Toplevel.print_state true) state));
+    Print_Mode.with_modes modes (Toplevel.print_state true) state));
 
 val disable_pr = Toplevel.imperative (fn () => Toplevel.quiet := true);
 val enable_pr = Toplevel.imperative (fn () => Toplevel.quiet := false);
@@ -290,7 +300,7 @@ val enable_pr = Toplevel.imperative (fn () => Toplevel.quiet := false);
 (* diagnostic ML evaluation *)
 
 fun ml_diag verbose (txt, pos) = Toplevel.keep (fn state =>
-  (ML_Context.eval_in
+  (ML_Context.eval_text_in
     (Option.map Context.proof_of (try Toplevel.generic_theory_of state)) verbose pos txt));
 
 
@@ -374,18 +384,18 @@ val print_trans_rules = Toplevel.unknown_context o
 val print_methods = Toplevel.unknown_theory o
   Toplevel.keep (Method.print_methods o Toplevel.theory_of);
 
-val print_antiquotations = Toplevel.imperative ThyOutput.print_antiquotations;
+val print_antiquotations = Toplevel.imperative Thy_Output.print_antiquotations;
 
 val thy_deps = Toplevel.unknown_theory o Toplevel.keep (fn state =>
   let
     val thy = Toplevel.theory_of state;
-    val all_thys = sort ThyInfo.thy_ord (thy :: Theory.ancestors_of thy);
+    val all_thys = sort Thy_Info.thy_ord (thy :: Theory.ancestors_of thy);
     val gr = all_thys |> map (fn node =>
       let
         val name = Context.theory_name node;
         val parents = map Context.theory_name (Theory.parents_of node);
         val dir = Present.session_name node;
-        val unfold = not (ThyInfo.known_thy name andalso ThyInfo.is_finished name);
+        val unfold = not (Thy_Info.known_thy name andalso Thy_Info.is_finished name);
       in {name = name, ID = name, parents = parents, dir = dir, unfold = unfold, path = ""} end);
   in Present.display_graph gr end);
 
@@ -417,8 +427,8 @@ fun unused_thms opt_range = Toplevel.keep (fn state =>
     Thm_Deps.unused_thms
       (case opt_range of
         NONE => (Theory.parents_of thy, [thy])
-      | SOME (xs, NONE) => (map ThyInfo.get_theory xs, [thy])
-      | SOME (xs, SOME ys) => (map ThyInfo.get_theory xs, map ThyInfo.get_theory ys))
+      | SOME (xs, NONE) => (map Thy_Info.get_theory xs, [thy])
+      | SOME (xs, SOME ys) => (map Thy_Info.get_theory xs, map Thy_Info.get_theory ys))
     |> map pretty_thm |> Pretty.chunks |> Pretty.writeln
   end);
 
@@ -488,7 +498,7 @@ fun string_of_type state s =
   in Pretty.string_of (Pretty.quote (Syntax.pretty_typ ctxt T)) end;
 
 fun print_item string_of (modes, arg) = Toplevel.keep (fn state =>
-  PrintMode.with_modes modes (fn () =>
+  Print_Mode.with_modes modes (fn () =>
     writeln (string_of (Toplevel.enter_proof_body state) arg)) ());
 
 in
@@ -507,7 +517,7 @@ end;
 
 fun check_text (txt, pos) state =
  (Position.report Markup.doc_source pos;
-  ignore (ThyOutput.eval_antiquote (#1 (Keyword.get_lexicons ())) state (txt, pos)));
+  ignore (Thy_Output.eval_antiquote (#1 (Keyword.get_lexicons ())) state (txt, pos)));
 
 fun header_markup txt = Toplevel.keep (fn state =>
   if Toplevel.is_toplevel state then check_text txt state

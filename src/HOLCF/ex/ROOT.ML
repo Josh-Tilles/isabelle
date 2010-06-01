@@ -3,8 +3,7 @@
 Misc HOLCF examples.
 *)
 
-use_thys ["Dnat", "Stream", "Dagstuhl", "Focus_ex", "Fix2", "Hoare",
-  "Loop", "Fixrec_ex", "Powerdomain_ex", "Domain_ex", "Domain_Proofs",
+use_thys ["Dnat", "Dagstuhl", "Focus_ex", "Fix2", "Hoare",
+  "Loop", "Powerdomain_ex", "Domain_Proofs",
   "Letrec",
-  "Strict_Fun",
-  "New_Domain"];
+  "Pattern_Match"];

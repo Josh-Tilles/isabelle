@@ -96,13 +96,13 @@ fun close_forms ctxt i xs As =
       (case duplicates (op =) commons of [] => ()
       | dups => error ("Duplicate local variables " ^ commas_quote dups));
     val frees = rev ((fold o fold_aterms) add_free As (rev commons));
-    val types = map (TypeInfer.param i o rpair []) (Name.invents Name.context Name.aT (length frees));
+    val types = map (Type_Infer.param i o rpair []) (Name.invents Name.context Name.aT (length frees));
     val uniform_typing = the o AList.lookup (op =) (frees ~~ types);
 
     fun abs_body lev y (Abs (x, T, b)) = Abs (x, T, abs_body (lev + 1) y b)
       | abs_body lev y (t $ u) = abs_body lev y t $ abs_body lev y u
       | abs_body lev y (t as Free (x, T)) =
-          if x = y then TypeInfer.constrain (uniform_typing x) (TypeInfer.constrain T (Bound lev))
+          if x = y then Type_Infer.constrain (uniform_typing x) (Type_Infer.constrain T (Bound lev))
           else t
       | abs_body _ _ a = a;
     fun close (y, U) B =
@@ -361,7 +361,7 @@ fun prep_statement prep_att prep_stmt elems concl ctxt =
             #2 #> pair ths);
       in ((prems, stmt, SOME facts), goal_ctxt) end);
 
-structure TheoremHook = Generic_Data
+structure Theorem_Hook = Generic_Data
 (
   type T = ((bool -> Proof.state -> Proof.state) * stamp) list;
   val empty = [];
@@ -407,7 +407,7 @@ fun gen_theorem schematic prep_att prep_stmt
     |> (case facts of NONE => I | SOME ths => Proof.refine_insert ths)
     |> tap (fn state => not schematic andalso Proof.schematic_goal state andalso
         error "Illegal schematic goal statement")
-    |> Library.apply (map (fn (f, _) => f int) (rev (TheoremHook.get (Context.Proof goal_ctxt))))
+    |> Library.apply (map (fn (f, _) => f int) (rev (Theorem_Hook.get (Context.Proof goal_ctxt))))
   end;
 
 in
@@ -418,7 +418,7 @@ val theorem_cmd = gen_theorem false Attrib.intern_src Expression.read_statement;
 val schematic_theorem = gen_theorem true (K I) Expression.cert_statement;
 val schematic_theorem_cmd = gen_theorem true Attrib.intern_src Expression.read_statement;
 
-fun add_theorem_hook f = TheoremHook.map (cons (f, stamp ()));
+fun add_theorem_hook f = Theorem_Hook.map (cons (f, stamp ()));
 
 end;
 

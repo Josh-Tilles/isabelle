@@ -1,10 +1,10 @@
-(*  Title:      FOL/ex/LocaleTest.thy
+(*  Title:      FOL/ex/Locale_Test/Locale_Test1.thy
     Author:     Clemens Ballarin, TU Muenchen
 
 Test environment for the locale implementation.
 *)
 
-theory LocaleTest
+theory Locale_Test1
 imports FOL
 begin
 
@@ -148,7 +148,7 @@ thm d1_def d2_def  (* should print as "d1(?x) <-> ..." and "d2(?x) <-> ..." *)
 ML {*
   fun check_syntax ctxt thm expected =
     let
-      val obtained = PrintMode.setmp [] (Display.string_of_thm ctxt) thm;
+      val obtained = Print_Mode.setmp [] (Display.string_of_thm ctxt) thm;
     in
       if obtained <> expected
       then error ("Theorem syntax '" ^ obtained ^ "' obtained, but '" ^ expected ^ "' expected.")
@@ -533,7 +533,7 @@ axioms
   grefl: "gle(x, x)" gless_def: "gless(x, y) <-> gle(x, y) & x ~= y"
   grefl': "gle'(x, x)" gless'_def: "gless'(x, y) <-> gle'(x, y) & x ~= y"
 
-text {* Mixin not applied to locales further up the hierachy. *}
+text {* Setup *}
 
 locale mixin = reflexive
 begin
@@ -547,16 +547,6 @@ proof -
   show "reflexive.less(gle, x, y) <-> gless(x, y)"
     by (simp add: reflexive.less_def[OF reflexive] gless_def)
 qed
-
-thm le.less_def  (* mixin not applied *)
-lemma "reflexive.less(gle, x, y) <-> gle(x, y) & x ~= y" by (rule le.less_def)
-thm le.less_thm  (* mixin applied *)
-lemma "gless(x, y) <-> gle(x, y) & x ~= y" by (rule le.less_thm)
-
-lemma "reflexive.less(gle, x, y) <-> gle(x, y) & x ~= y"
-  by (rule le.less_def)
-lemma "gless(x, y) <-> gle(x, y) & x ~= y"
-  by (rule le.less_thm)
 
 text {* Mixin propagated along the locale hierarchy *}
 
@@ -698,6 +688,11 @@ lemmas (in mixin7_inherited) less_thm7b = less_def
 thm le7.less_thm7b  (* after, mixin applied *)
 lemma "gless(x, y) <-> gle(x, y) & x ~= y"
   by (rule le7.less_thm7b)
+
+
+text {* This locale will be interpreted in later theories. *}
+
+locale mixin_thy_merge = le: reflexive le + le': reflexive le' for le le'
 
 
 subsection {* Interpretation in proofs *}

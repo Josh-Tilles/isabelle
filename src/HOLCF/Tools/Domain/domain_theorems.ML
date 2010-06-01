@@ -145,7 +145,6 @@ val when_rews = #cases result;
 val when_strict = hd when_rews;
 val dis_rews = #dis_rews result;
 val mat_rews = #match_rews result;
-val pat_rews = #pat_rews result;
 
 (* ----- theorems concerning the isomorphism -------------------------------- *)
 
@@ -198,7 +197,6 @@ val case_ns =
 
 fun qualified name = Binding.qualified true name dbind;
 val simp = Simplifier.simp_add;
-val fixrec_simp = Fixrec.fixrec_simp_add;
 
 in
   thy
@@ -209,19 +207,18 @@ in
       [Rule_Cases.case_names case_ns, Induct.cases_type dname]),
      ((qualified "when_rews" , when_rews   ), [simp]),
      ((qualified "compacts"  , compacts    ), [simp]),
-     ((qualified "con_rews"  , con_rews    ), [simp, fixrec_simp]),
+     ((qualified "con_rews"  , con_rews    ), [simp]),
      ((qualified "sel_rews"  , sel_rews    ), [simp]),
      ((qualified "dis_rews"  , dis_rews    ), [simp]),
-     ((qualified "pat_rews"  , pat_rews    ), [simp]),
      ((qualified "dist_les"  , dist_les    ), [simp]),
      ((qualified "dist_eqs"  , dist_eqs    ), [simp]),
      ((qualified "inverts"   , inverts     ), [simp]),
      ((qualified "injects"   , injects     ), [simp]),
      ((qualified "take_rews" , take_rews   ), [simp]),
-     ((qualified "match_rews", mat_rews    ), [simp, fixrec_simp])]
+     ((qualified "match_rews", mat_rews    ), [simp])]
   |> snd
   |> pair (iso_rews @ when_rews @ con_rews @ sel_rews @ dis_rews @
-      pat_rews @ dist_les @ dist_eqs)
+      dist_les @ dist_eqs)
 end; (* let *)
 
 (******************************************************************************)
@@ -466,7 +463,7 @@ local
 
   fun legacy_infer_term thy t =
       singleton (Syntax.check_terms (ProofContext.init_global thy)) (intern_term thy t);
-  fun legacy_infer_prop thy t = legacy_infer_term thy (TypeInfer.constrain propT t);
+  fun legacy_infer_prop thy t = legacy_infer_term thy (Type_Infer.constrain propT t);
   fun infer_props thy = map (apsnd (legacy_infer_prop thy));
   fun add_defs_i x = PureThy.add_defs false (map Thm.no_attributes x);
   fun add_defs_infer defs thy = add_defs_i (infer_props thy defs) thy;

@@ -29,16 +29,26 @@ definition keys :: "('a, 'b) mapping \<Rightarrow> 'a set" where
   "keys m = dom (lookup m)"
 
 definition ordered_keys :: "('a\<Colon>linorder, 'b) mapping \<Rightarrow> 'a list" where
-  "ordered_keys m = sorted_list_of_set (keys m)"
+  "ordered_keys m = (if finite (keys m) then sorted_list_of_set (keys m) else [])"
 
 definition is_empty :: "('a, 'b) mapping \<Rightarrow> bool" where
-  "is_empty m \<longleftrightarrow> dom (lookup m) = {}"
+  "is_empty m \<longleftrightarrow> keys m = {}"
 
 definition size :: "('a, 'b) mapping \<Rightarrow> nat" where
-  "size m = (if finite (dom (lookup m)) then card (dom (lookup m)) else 0)"
+  "size m = (if finite (keys m) then card (keys m) else 0)"
 
 definition replace :: "'a \<Rightarrow> 'b \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('a, 'b) mapping" where
-  "replace k v m = (if lookup m k = None then m else update k v m)"
+  "replace k v m = (if k \<in> keys m then update k v m else m)"
+
+definition default :: "'a \<Rightarrow> 'b \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('a, 'b) mapping" where
+  "default k v m = (if k \<in> keys m then m else update k v m)"
+
+definition map_entry :: "'a \<Rightarrow> ('b \<Rightarrow> 'b) \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('a, 'b) mapping" where
+  "map_entry k f m = (case lookup m k of None \<Rightarrow> m
+    | Some v \<Rightarrow> update k (f v) m)" 
+
+definition map_default :: "'a \<Rightarrow> 'b \<Rightarrow> ('b \<Rightarrow> 'b) \<Rightarrow> ('a, 'b) mapping \<Rightarrow> ('a, 'b) mapping" where
+  "map_default k v f m = map_entry k f (default k v m)" 
 
 definition tabulate :: "'a list \<Rightarrow> ('a \<Rightarrow> 'b) \<Rightarrow> ('a, 'b) mapping" where
   "tabulate ks f = Mapping (map_of (map (\<lambda>k. (k, f k)) ks))"
@@ -58,6 +68,10 @@ lemma mapping_eqI:
   shows "m = n"
   using assms by simp
 
+lemma keys_is_none_lookup [code_inline]:
+  "k \<in> keys m \<longleftrightarrow> \<not> (Option.is_none (lookup m k))"
+  by (auto simp add: keys_def is_none_def)
+
 lemma lookup_empty [simp]:
   "lookup empty = Map.empty"
   by (simp add: empty_def)
@@ -69,6 +83,10 @@ lemma lookup_update [simp]:
 lemma lookup_delete [simp]:
   "lookup (delete k m) = (lookup m) (k := None)"
   by (cases m) simp
+
+lemma lookup_map_entry [simp]:
+  "lookup (map_entry k f m) = (lookup m) (k := Option.map f (lookup m k))"
+  by (cases "lookup m k") (simp_all add: map_entry_def expand_fun_eq)
 
 lemma lookup_tabulate [simp]:
   "lookup (tabulate ks f) = (Some o f) |` set ks"
@@ -97,34 +115,157 @@ lemma delete_empty [simp]:
   by (rule mapping_eqI) simp
 
 lemma replace_update:
-  "k \<notin> dom (lookup m) \<Longrightarrow> replace k v m = m"
-  "k \<in> dom (lookup m) \<Longrightarrow> replace k v m = update k v m"
-  by (rule mapping_eqI, auto simp add: replace_def fun_upd_twist)+
+  "k \<notin> keys m \<Longrightarrow> replace k v m = m"
+  "k \<in> keys m \<Longrightarrow> replace k v m = update k v m"
+  by (rule mapping_eqI) (auto simp add: replace_def fun_upd_twist)+
 
 lemma size_empty [simp]:
   "size empty = 0"
-  by (simp add: size_def)
+  by (simp add: size_def keys_def)
 
 lemma size_update:
-  "finite (dom (lookup m)) \<Longrightarrow> size (update k v m) =
-    (if k \<in> dom (lookup m) then size m else Suc (size m))"
-  by (auto simp add: size_def insert_dom)
+  "finite (keys m) \<Longrightarrow> size (update k v m) =
+    (if k \<in> keys m then size m else Suc (size m))"
+  by (auto simp add: size_def insert_dom keys_def)
 
 lemma size_delete:
-  "size (delete k m) = (if k \<in> dom (lookup m) then size m - 1 else size m)"
-  by (simp add: size_def)
+  "size (delete k m) = (if k \<in> keys m then size m - 1 else size m)"
+  by (simp add: size_def keys_def)
 
-lemma size_tabulate:
+lemma size_tabulate [simp]:
   "size (tabulate ks f) = length (remdups ks)"
-  by (simp add: size_def distinct_card [of "remdups ks", symmetric] comp_def)
+  by (simp add: size_def distinct_card [of "remdups ks", symmetric] comp_def keys_def)
 
 lemma bulkload_tabulate:
   "bulkload xs = tabulate [0..<length xs] (nth xs)"
   by (rule mapping_eqI) (simp add: expand_fun_eq)
 
-lemma is_empty_empty:
+lemma is_empty_empty: (*FIXME*)
   "is_empty m \<longleftrightarrow> m = Mapping Map.empty"
-  by (cases m) (simp add: is_empty_def)
+  by (cases m) (simp add: is_empty_def keys_def)
+
+lemma is_empty_empty' [simp]:
+  "is_empty empty"
+  by (simp add: is_empty_empty empty_def) 
+
+lemma is_empty_update [simp]:
+  "\<not> is_empty (update k v m)"
+  by (cases m) (simp add: is_empty_empty)
+
+lemma is_empty_delete:
+  "is_empty (delete k m) \<longleftrightarrow> is_empty m \<or> keys m = {k}"
+  by (cases m) (auto simp add: is_empty_empty keys_def dom_eq_empty_conv [symmetric] simp del: dom_eq_empty_conv)
+
+lemma is_empty_replace [simp]:
+  "is_empty (replace k v m) \<longleftrightarrow> is_empty m"
+  by (auto simp add: replace_def) (simp add: is_empty_def)
+
+lemma is_empty_default [simp]:
+  "\<not> is_empty (default k v m)"
+  by (auto simp add: default_def) (simp add: is_empty_def)
+
+lemma is_empty_map_entry [simp]:
+  "is_empty (map_entry k f m) \<longleftrightarrow> is_empty m"
+  by (cases "lookup m k")
+    (auto simp add: map_entry_def, simp add: is_empty_empty)
+
+lemma is_empty_map_default [simp]:
+  "\<not> is_empty (map_default k v f m)"
+  by (simp add: map_default_def)
+
+lemma keys_empty [simp]:
+  "keys empty = {}"
+  by (simp add: keys_def)
+
+lemma keys_update [simp]:
+  "keys (update k v m) = insert k (keys m)"
+  by (simp add: keys_def)
+
+lemma keys_delete [simp]:
+  "keys (delete k m) = keys m - {k}"
+  by (simp add: keys_def)
+
+lemma keys_replace [simp]:
+  "keys (replace k v m) = keys m"
+  by (auto simp add: keys_def replace_def)
+
+lemma keys_default [simp]:
+  "keys (default k v m) = insert k (keys m)"
+  by (auto simp add: keys_def default_def)
+
+lemma keys_map_entry [simp]:
+  "keys (map_entry k f m) = keys m"
+  by (auto simp add: keys_def)
+
+lemma keys_map_default [simp]:
+  "keys (map_default k v f m) = insert k (keys m)"
+  by (simp add: map_default_def)
+
+lemma keys_tabulate [simp]:
+  "keys (tabulate ks f) = set ks"
+  by (simp add: tabulate_def keys_def map_of_map_restrict o_def)
+
+lemma keys_bulkload [simp]:
+  "keys (bulkload xs) = {0..<length xs}"
+  by (simp add: keys_tabulate bulkload_tabulate)
+
+lemma distinct_ordered_keys [simp]:
+  "distinct (ordered_keys m)"
+  by (simp add: ordered_keys_def)
+
+lemma ordered_keys_infinite [simp]:
+  "\<not> finite (keys m) \<Longrightarrow> ordered_keys m = []"
+  by (simp add: ordered_keys_def)
+
+lemma ordered_keys_empty [simp]:
+  "ordered_keys empty = []"
+  by (simp add: ordered_keys_def)
+
+lemma ordered_keys_update [simp]:
+  "k \<in> keys m \<Longrightarrow> ordered_keys (update k v m) = ordered_keys m"
+  "finite (keys m) \<Longrightarrow> k \<notin> keys m \<Longrightarrow> ordered_keys (update k v m) = insort k (ordered_keys m)"
+  by (simp_all add: ordered_keys_def) (auto simp only: sorted_list_of_set_insert [symmetric] insert_absorb)
+
+lemma ordered_keys_delete [simp]:
+  "ordered_keys (delete k m) = remove1 k (ordered_keys m)"
+proof (cases "finite (keys m)")
+  case False then show ?thesis by simp
+next
+  case True note fin = True
+  show ?thesis
+  proof (cases "k \<in> keys m")
+    case False with fin have "k \<notin> set (sorted_list_of_set (keys m))" by simp
+    with False show ?thesis by (simp add: ordered_keys_def remove1_idem)
+  next
+    case True with fin show ?thesis by (simp add: ordered_keys_def sorted_list_of_set_remove)
+  qed
+qed
+
+lemma ordered_keys_replace [simp]:
+  "ordered_keys (replace k v m) = ordered_keys m"
+  by (simp add: replace_def)
+
+lemma ordered_keys_default [simp]:
+  "k \<in> keys m \<Longrightarrow> ordered_keys (default k v m) = ordered_keys m"
+  "finite (keys m) \<Longrightarrow> k \<notin> keys m \<Longrightarrow> ordered_keys (default k v m) = insort k (ordered_keys m)"
+  by (simp_all add: default_def)
+
+lemma ordered_keys_map_entry [simp]:
+  "ordered_keys (map_entry k f m) = ordered_keys m"
+  by (simp add: ordered_keys_def)
+
+lemma ordered_keys_map_default [simp]:
+  "k \<in> keys m \<Longrightarrow> ordered_keys (map_default k v f m) = ordered_keys m"
+  "finite (keys m) \<Longrightarrow> k \<notin> keys m \<Longrightarrow> ordered_keys (map_default k v f m) = insort k (ordered_keys m)"
+  by (simp_all add: map_default_def)
+
+lemma ordered_keys_tabulate [simp]:
+  "ordered_keys (tabulate ks f) = sort (remdups ks)"
+  by (simp add: ordered_keys_def sorted_list_of_set_sort_remdups)
+
+lemma ordered_keys_bulkload [simp]:
+  "ordered_keys (bulkload ks) = [0..<length ks]"
+  by (simp add: ordered_keys_def)
 
 
 subsection {* Some technical code lemmas *}

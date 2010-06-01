@@ -170,13 +170,45 @@ fun specification_of thy = #spec o the_locale thy;
 fun dependencies_of thy name = the_locale thy name |>
   #dependencies |> map fst;
 
+(* Print instance and qualifiers *)
+
+fun pretty_reg thy (name, morph) =
+  let
+    val name' = extern thy name;
+    val ctxt = ProofContext.init_global thy;
+    fun prt_qual (qual, mand) = Pretty.str (qual ^ (if mand then "!" else "?"));
+    fun prt_quals qs = Pretty.separate "." (map prt_qual qs) |> Pretty.block;
+    val prt_term = Pretty.quote o Syntax.pretty_term ctxt;
+    fun prt_term' t = if !show_types
+      then Pretty.block [prt_term t, Pretty.brk 1, Pretty.str "::",
+        Pretty.brk 1, (Pretty.quote o Syntax.pretty_typ ctxt) (type_of t)]
+      else prt_term t;
+    fun prt_inst ts =
+      Pretty.block (Pretty.breaks (Pretty.str name' :: map prt_term' ts));
+
+    val qs = Binding.name "x" |> Morphism.binding morph |> Binding.prefix_of;
+    val ts = instance_of thy name morph;
+  in
+    case qs of
+       [] => prt_inst ts
+     | qs => Pretty.block [prt_quals qs, Pretty.brk 1, Pretty.str ":",
+         Pretty.brk 1, prt_inst ts]
+  end;
+
 
 (*** Activate context elements of locale ***)
 
 (** Identifiers: activated locales in theory or proof context **)
 
-fun ident_eq thy ((n: string, ts), (m, ss)) = (m = n) andalso Pattern.matchess thy (ss, ts);
-(* FIXME: this is ident_le, smaller term is more general *)
+(* subsumption *)
+fun ident_le thy ((n: string, ts), (m, ss)) = (m = n) andalso Pattern.matchess thy (ss, ts);
+  (* smaller term is more general *)
+
+(* total order *)
+fun ident_ord ((n: string, ts), (m, ss)) =
+  case fast_string_ord (m, n) of
+      EQUAL => list_ord Term_Ord.fast_term_ord (ts, ss)
+    | ord => ord;
 
 local
 
@@ -190,7 +222,7 @@ structure Identifiers = Generic_Data
   val merge = ToDo;
 );
 
-fun finish thy (ToDo (i1, i2)) = merge (ident_eq thy) (finish thy i1, finish thy i2)
+fun finish thy (ToDo (i1, i2)) = merge (ident_le thy) (finish thy i1, finish thy i2)
   | finish _ (Ready ids) = ids;
 
 val _ = Context.>> (Context.map_theory (Theory.at_begin (fn thy =>
@@ -220,7 +252,7 @@ fun add thy depth export (name, morph) (deps, marked) =
       val dependencies = dependencies_of thy name;
       val instance = instance_of thy name (morph $> export);
     in
-      if member (ident_eq thy) marked (name, instance)
+      if member (ident_le thy) marked (name, instance)
       then (deps, marked)
       else
         let
@@ -244,9 +276,9 @@ fun roundup thy activate_dep export (name, morph) (marked, input) =
     val (dependencies, marked') = add thy 0 export (name, morph) ([], []);
     (* Filter out fragments from marked; these won't be activated. *)
     val dependencies' = filter_out (fn (name, morph) =>
-      member (ident_eq thy) marked (name, instance_of thy name (morph $> export))) dependencies;
+      member (ident_le thy) marked (name, instance_of thy name (morph $> export))) dependencies;
   in
-    (merge (ident_eq thy) (marked, marked'), input |> fold_rev activate_dep dependencies')
+    (merge (ident_le thy) (marked, marked'), input |> fold_rev activate_dep dependencies')
   end;
 
 end;
@@ -328,47 +360,63 @@ fun print_locale thy show_facts raw_name =
 
 (*** Registrations: interpretations in theories ***)
 
+structure Idtab = Table(type key = string * term list val ord = ident_ord);
+
 structure Registrations = Theory_Data
 (
-  type T = ((string * (morphism * morphism)) * serial) list *
-    (* registrations, in reverse order of declaration;
+  type T = ((morphism * morphism) * serial) Idtab.table *
+    (* registrations, indexed by locale name and instance;
        serial points to mixin list *)
-    (serial * ((morphism * bool) * serial) list) list;
-    (* alist of mixin lists, per list mixins in reverse order of declaration;
+    (((morphism * bool) * serial) list) Inttab.table;
+    (* table of mixin lists, per list mixins in reverse order of declaration;
        lists indexed by registration serial,
        entries for empty lists may be omitted *)
-  val empty = ([], []);
+  val empty = (Idtab.empty, Inttab.empty);
   val extend = I;
-  fun merge ((r1, m1), (r2, m2)) : T =
-    (Library.merge (eq_snd op =) (r1, r2),
-      AList.join (op =) (K (Library.merge (eq_snd op =))) (m1, m2));
+  fun merge ((reg1, mix1), (reg2, mix2)) : T =
+    (Idtab.join (fn id => fn (r1 as (_, s1), r2 as (_, s2)) =>
+        if s1 = s2 then raise Idtab.SAME else raise Idtab.DUP id) (reg1, reg2),
+      Inttab.join (K (Library.merge (eq_snd op =))) (mix1, mix2))
+    handle Idtab.DUP id =>
+      (* distinct interpretations with same base: merge their mixins *)
+      let
+        val (_, s1) = Idtab.lookup reg1 id |> the;
+        val (morph2, s2) = Idtab.lookup reg2 id |> the;
+        val reg2' = Idtab.update (id, (morph2, s1)) reg2;
+        val mix2' = case Inttab.lookup mix2 s2 of
+              NONE => mix2 |
+              SOME mxs => Inttab.delete s2 mix2 |> Inttab.update_new (s1, mxs);
+        val _ = warning "Removed duplicate interpretation after retrieving its mixins.";
+        (* FIXME print interpretations,
+           which is not straightforward without theory context *)
+      in merge ((reg1, mix1), (reg2', mix2')) end;
     (* FIXME consolidate with dependencies, consider one data slot only *)
 );
 
 
 (* Primitive operations *)
 
-fun add_reg export (dep, morph) =
-  Registrations.map (apfst (cons ((dep, (morph, export)), serial ())));
+fun add_reg thy export (name, morph) =
+  Registrations.map (apfst (Idtab.insert (K false)
+    ((name, instance_of thy name (morph $> export)), ((morph, export), serial ()))));
 
 fun add_mixin serial' mixin =
   (* registration to be amended identified by its serial id *)
-  Registrations.map (apsnd (AList.map_default (op =) (serial', []) (cons (mixin, serial ()))));
+  Registrations.map (apsnd (Inttab.map_default (serial', []) (cons (mixin, serial ()))));
 
 fun get_mixins thy (name, morph) =
   let
     val (regs, mixins) = Registrations.get thy;
   in
-    case find_first (fn ((name', (morph', export')), _) => ident_eq thy
-      ((name', instance_of thy name' (morph' $> export')), (name, instance_of thy name morph))) (rev regs) of
+    case Idtab.lookup regs (name, instance_of thy name morph) of
       NONE => []
-    | SOME (_, serial) => the_default [] (AList.lookup (op =) mixins serial)
+    | SOME (_, serial) => the_default [] (Inttab.lookup mixins serial)
   end;
 
 fun collect_mixins thy (name, morph) =
   roundup thy (fn dep => fn mixins =>
     merge (eq_snd op =) (mixins, get_mixins thy dep)) Morphism.identity (name, morph) ([], [])
-  |> snd |> filter (snd o fst);  (* only inheritable mixins *)
+  |> snd |> filter (snd o fst);  (* only inheritable mixins *) (* FIXME *)
   (* FIXME refactor usage *)
 
 fun compose_mixins mixins =
@@ -379,14 +427,17 @@ fun reg_morph mixins ((name, (base, export)), serial) =
   in (name, base $> mix $> export) end;
 
 fun these_registrations thy name = Registrations.get thy
+  |>> Idtab.dest
   |>> filter (curry (op =) name o fst o fst)
   (* with inherited mixins *)
-  |-> (fn regs => fn _ => map (fn ((name, (base, export)) ,_) =>
+  |-> (fn regs => fn _ => map (fn ((name, _), ((base, export) ,_)) =>
     (name, base $> (collect_mixins thy (name, base $> export) |> compose_mixins) $> export)) regs);
 
-fun all_registrations thy = Registrations.get thy
-  |-> (fn regs => fn mixins => map (reg_morph mixins) regs);
-  (* without inherited mixins *)
+fun all_registrations thy = Registrations.get thy (* FIXME clone *)
+  |>> Idtab.dest
+  (* with inherited mixins *)
+  |-> (fn regs => fn _ => map (fn ((name, _), ((base, export) ,_)) =>
+    (name, base $> (collect_mixins thy (name, base $> export) |> compose_mixins) $> export)) regs);
 
 fun activate_notes' activ_elem transfer thy export (name, morph) input =
   let
@@ -409,29 +460,6 @@ fun activate_facts' export dep context =
 
 (* Diagnostic *)
 
-fun pretty_reg thy (name, morph) =
-  let
-    val name' = extern thy name;
-    val ctxt = ProofContext.init_global thy;
-    fun prt_qual (qual, mand) = Pretty.str (qual ^ (if mand then "!" else "?"));
-    fun prt_quals qs = Pretty.separate "." (map prt_qual qs) |> Pretty.block;
-    val prt_term = Pretty.quote o Syntax.pretty_term ctxt;
-    fun prt_term' t = if !show_types
-      then Pretty.block [prt_term t, Pretty.brk 1, Pretty.str "::",
-        Pretty.brk 1, (Pretty.quote o Syntax.pretty_typ ctxt) (type_of t)]
-      else prt_term t;
-    fun prt_inst ts =
-      Pretty.block (Pretty.breaks (Pretty.str name' :: map prt_term' ts));
-
-    val qs = Binding.name "x" |> Morphism.binding morph |> Binding.prefix_of;
-    val ts = instance_of thy name morph;
-  in
-    case qs of
-       [] => prt_inst ts
-     | qs => Pretty.block [prt_quals qs, Pretty.brk 1, Pretty.str ":",
-         Pretty.brk 1, prt_inst ts]
-  end;
-
 fun print_registrations thy raw_name =
   (case these_registrations thy (intern thy raw_name) of
       [] => Pretty.str ("no interpretations")
@@ -445,10 +473,8 @@ fun amend_registration (name, morph) mixin export thy =
   let
     val regs = Registrations.get thy |> fst;
     val base = instance_of thy name (morph $> export);
-    fun match ((name', (morph', export')), _) =
-      name = name' andalso eq_list (op aconv) (base, instance_of thy name' (morph' $> export'));
   in
-    case find_first match (rev regs) of
+    case Idtab.lookup regs (name, base) of
         NONE => error ("No interpretation of locale " ^
           quote (extern thy name) ^ " and\nparameter instantiation " ^
           space_implode " " (map (quote o Syntax.string_of_term_global thy) base) ^
@@ -461,36 +487,37 @@ fun amend_registration (name, morph) mixin export thy =
 
 fun add_registration (name, base_morph) mixin export thy =
   let
-    val base = instance_of thy name base_morph;
+    val mix = case mixin of NONE => Morphism.identity
+          | SOME (mix, _) => mix;
+    val morph = base_morph $> mix;
+    val inst = instance_of thy name morph;
   in
-    if member (ident_eq thy) (get_idents (Context.Theory thy)) (name, base)
+    if member (ident_le thy) (get_idents (Context.Theory thy)) (name, inst)
     then thy
     else
       (get_idents (Context.Theory thy), thy)
       (* add new registrations with inherited mixins *)
-      |> roundup thy (add_reg export) export (name, base_morph)
+      |> roundup thy (add_reg thy export) export (name, morph)
       |> snd
       (* add mixin *)
       |> (case mixin of NONE => I
-           | SOME mixin => amend_registration (name, base_morph) mixin export)
+           | SOME mixin => amend_registration (name, morph) mixin export)
       (* activate import hierarchy as far as not already active *)
-      |> Context.theory_map (activate_facts' export (name, base_morph))
+      |> Context.theory_map (activate_facts' export (name, morph))
   end;
 
 
 (*** Dependencies ***)
 
-fun add_reg_activate_facts export (dep, morph) thy =
-  (get_idents (Context.Theory thy), thy)
-  |> roundup thy (add_reg export) export (dep, morph)
-  |> snd
-  |> Context.theory_map (activate_facts' export (dep, morph));
-
-fun add_dependency loc (dep, morph) export thy =
-  thy
-  |> (change_locale loc o apsnd) (cons ((dep, (morph, export)), serial ()))
-  |> (fn thy => fold_rev (add_reg_activate_facts export)
-      (all_registrations thy) thy);
+fun add_dependency loc (name, morph) export thy =
+  let
+    val thy' = (change_locale loc o apsnd) (cons ((name, (morph, export)), serial ())) thy;
+    val (_, regs) = fold_rev (roundup thy' cons export)
+      (all_registrations thy') (get_idents (Context.Theory thy'), []);
+  in
+    thy'
+    |> fold_rev (fn dep => add_registration dep NONE export) regs
+  end;
 
 
 (*** Storing results ***)

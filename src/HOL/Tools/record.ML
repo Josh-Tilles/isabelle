@@ -1038,7 +1038,7 @@ fun future_forward_prf_standard thy prf prop () =
   let val thm =
     if ! quick_and_dirty then Skip_Proof.make_thm thy prop
     else if Goal.future_enabled () then
-      Goal.future_result (ProofContext.init_global thy) (Future.fork_pri ~1 prf) prop
+      Goal.future_result (ProofContext.init_global thy) (Goal.fork prf) prop
     else prf ()
   in Drule.export_without_context thm end;
 
@@ -2215,7 +2215,7 @@ fun record_definition (alphas, binding) parent (parents: parent_info list) raw_f
       prove_standard [] cases_prop
         (fn _ =>
           try_param_tac rN cases_scheme 1 THEN
-          simp_all_tac HOL_basic_ss [unit_all_eq1]);
+          simp_all_tac HOL_basic_ss [@{thm unit_all_eq1}]);
     val cases = timeit_msg "record cases proof:" cases_prf;
 
     fun surjective_prf () =

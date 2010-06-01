@@ -11,8 +11,20 @@ import java.awt.Component
 import javax.swing.JOptionPane
 
 
+import scala.swing.ComboBox
+import scala.swing.event.SelectionChanged
+
+
 object Library
 {
+  /* partial functions */
+
+  def undefined[A, B] = new PartialFunction[A, B] {
+    def apply(x: A): B = throw new NoSuchElementException("undefined")
+    def isDefinedAt(x: A) = false
+  }
+
+
   /* separate */
 
   def separate[A](s: A, list: List[A]): List[A] =
@@ -86,6 +98,31 @@ object Library
   def dialog = simple_dialog(JOptionPane.PLAIN_MESSAGE, null) _
   def warning_dialog = simple_dialog(JOptionPane.WARNING_MESSAGE, "Warning") _
   def error_dialog = simple_dialog(JOptionPane.ERROR_MESSAGE, "Error") _
+
+
+  /* zoom box */
+
+  class Zoom_Box(apply_factor: Int => Unit) extends ComboBox[String](
+    List("50%", "70%", "85%", "100%", "125%", "150%", "175%", "200%", "300%", "400%"))
+  {
+    val Factor = "([0-9]+)%?"r
+    def parse(text: String): Int =
+      text match {
+        case Factor(s) =>
+          val i = Integer.parseInt(s)
+          if (10 <= i && i <= 1000) i else 100
+        case _ => 100
+      }
+    def print(i: Int): String = i.toString + "%"
+
+    makeEditable()(c => new ComboBox.BuiltInEditor(c)(text => print(parse(text)), x => x))
+    reactions += {
+      case SelectionChanged(_) => apply_factor(parse(selection.item))
+    }
+    listenTo(selection)
+    selection.index = 3
+    prototypeDisplayValue = Some("00000%")
+  }
 
 
   /* timing */

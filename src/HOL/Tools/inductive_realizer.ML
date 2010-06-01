@@ -386,7 +386,7 @@ fun add_ind_realizer rsets intrs induct raw_induct elims vs thy =
           end) (rlzs ~~ rnames);
         val concl = HOLogic.mk_Trueprop (foldr1 HOLogic.mk_conj (map
           (fn (_, _ $ P, _ $ Q) => HOLogic.mk_imp (P, Q)) rlzs'));
-        val rews = map mk_meta_eq (fst_conv :: snd_conv :: rec_thms);
+        val rews = map mk_meta_eq (@{thm fst_conv} :: @{thm snd_conv} :: rec_thms);
         val thm = Goal.prove_global thy []
           (map attach_typeS prems) (attach_typeS concl)
           (fn {prems, ...} => EVERY

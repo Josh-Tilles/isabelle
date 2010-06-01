@@ -9,10 +9,11 @@ imports
   Main
   Domain
   Powerdomains
-  Sum_Cpo
 begin
 
 default_sort pcpo
+
+ML {* path_add "~~/src/HOLCF/Library" *}
 
 text {* Legacy theorem names *}
 

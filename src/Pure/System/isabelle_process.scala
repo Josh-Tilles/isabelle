@@ -32,7 +32,6 @@ object Isabelle_Process
     val INIT = Value("INIT")
     val STATUS = Value("STATUS")
     val WRITELN = Value("WRITELN")
-    val PRIORITY = Value("PRIORITY")
     val TRACING = Value("TRACING")
     val WARNING = Value("WARNING")
     val ERROR = Value("ERROR")
@@ -42,11 +41,10 @@ object Isabelle_Process
       ('A' : Int) -> Kind.INIT,
       ('B' : Int) -> Kind.STATUS,
       ('C' : Int) -> Kind.WRITELN,
-      ('D' : Int) -> Kind.PRIORITY,
-      ('E' : Int) -> Kind.TRACING,
-      ('F' : Int) -> Kind.WARNING,
-      ('G' : Int) -> Kind.ERROR,
-      ('H' : Int) -> Kind.DEBUG,
+      ('D' : Int) -> Kind.TRACING,
+      ('E' : Int) -> Kind.WARNING,
+      ('F' : Int) -> Kind.ERROR,
+      ('G' : Int) -> Kind.DEBUG,
       ('0' : Int) -> Kind.SYSTEM,
       ('1' : Int) -> Kind.STDIN,
       ('2' : Int) -> Kind.STDOUT,
@@ -57,7 +55,6 @@ object Isabelle_Process
       Kind.INIT -> Markup.INIT,
       Kind.STATUS -> Markup.STATUS,
       Kind.WRITELN -> Markup.WRITELN,
-      Kind.PRIORITY -> Markup.PRIORITY,
       Kind.TRACING -> Markup.TRACING,
       Kind.WARNING -> Markup.WARNING,
       Kind.ERROR -> Markup.ERROR,
@@ -84,7 +81,7 @@ object Isabelle_Process
 
   class Result(val kind: Kind.Value, val props: List[(String, String)], val body: List[XML.Tree])
   {
-    def message = XML.Elem(Markup.MESSAGE, (Markup.CLASS, Kind.markup(kind)) :: props, body)
+    def message = XML.Elem(Kind.markup(kind), props, body)
 
     override def toString: String =
     {
@@ -164,7 +161,7 @@ class Isabelle_Process(system: Isabelle_System, receiver: Actor, args: String*)
     if (proc == 0) error("Cannot kill Isabelle: no process")
     else {
       try_close()
-      Thread.sleep(500)
+      Thread.sleep(500)  // FIXME property!?
       put_result(Kind.SIGNAL, "KILL")
       proc.destroy
       proc = null
@@ -394,7 +391,7 @@ class Isabelle_Process(system: Isabelle_System, receiver: Actor, args: String*)
     new Thread("isabelle: exit") {
       override def run() = {
         val rc = proc.waitFor()
-        Thread.sleep(300)
+        Thread.sleep(300)  // FIXME property!?
         put_result(Kind.SYSTEM, "Exit thread terminated")
         put_result(Kind.EXIT, rc.toString)
         rm_fifo()

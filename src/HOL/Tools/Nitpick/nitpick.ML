@@ -181,7 +181,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
     val ctxt = Proof.context_of state
 (* FIXME: reintroduce code before new release:
 
-    val nitpick_thy = ThyInfo.get_theory "Nitpick"
+    val nitpick_thy = Thy_Info.get_theory "Nitpick"
     val _ = Theory.subthy (nitpick_thy, thy) orelse
             error "You must import the theory \"Nitpick\" to use Nitpick"
 *)
@@ -483,7 +483,7 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
         val def_fs = map (kodkod_formula_from_nut ofs kk) def_us
         val formula = fold (fold s_and) [def_fs, nondef_fs] KK.True
         val comment = (if unsound then "unsound" else "sound") ^ "\n" ^
-                      PrintMode.setmp [] multiline_string_for_scope scope
+                      Print_Mode.setmp [] multiline_string_for_scope scope
         val kodkod_sat_solver =
           Kodkod_SAT.sat_solver_spec actual_sat_solver |> snd
         val bit_width = if bits = 0 then 16 else bits + 1
@@ -945,21 +945,32 @@ fun pick_them_nits_in_term deadline state (params : params) auto i n step
 
 fun pick_nits_in_term state (params as {debug, timeout, expect, ...}) auto i n
                       step subst orig_assm_ts orig_t =
-  if getenv "KODKODI" = "" then
-    (if auto then ()
-     else warning (Pretty.string_of (plazy install_kodkodi_message));
-     ("unknown", state))
-  else
-    let
-      val deadline = Option.map (curry Time.+ (Time.now ())) timeout
-      val outcome as (outcome_code, _) =
-        time_limit (if debug then NONE else timeout)
-            (pick_them_nits_in_term deadline state params auto i n step subst
-                                    orig_assm_ts) orig_t
-    in
-      if expect = "" orelse outcome_code = expect then outcome
-      else error ("Unexpected outcome: " ^ quote outcome_code ^ ".")
-    end
+  let
+    val warning_m = if auto then K () else warning
+    val unknown_outcome = ("unknown", state)
+  in
+    if getenv "KODKODI" = "" then
+      (warning_m (Pretty.string_of (plazy install_kodkodi_message));
+       unknown_outcome)
+    else
+      let
+        val deadline = Option.map (curry Time.+ (Time.now ())) timeout
+        val outcome as (outcome_code, _) =
+          time_limit (if debug then NONE else timeout)
+              (pick_them_nits_in_term deadline state params auto i n step subst
+                                      orig_assm_ts) orig_t
+          handle TOO_LARGE (_, details) =>
+                 (warning ("Limit reached: " ^ details ^ "."); unknown_outcome)
+               | TOO_SMALL (_, details) =>
+                 (warning ("Limit reached: " ^ details ^ "."); unknown_outcome)
+               | Kodkod.SYNTAX (_, details) =>
+                 (warning ("Ill-formed Kodkodi output: " ^ details ^ ".");
+                  unknown_outcome)
+      in
+        if expect = "" orelse outcome_code = expect then outcome
+        else error ("Unexpected outcome: " ^ quote outcome_code ^ ".")
+      end
+  end
 
 fun is_fixed_equation fixes
                       (Const (@{const_name "=="}, _) $ Free (s, _) $ Const _) =

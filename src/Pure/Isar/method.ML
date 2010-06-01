@@ -271,23 +271,24 @@ fun gen_intros_tac goals intros facts =
 val intros_tac = gen_intros_tac ALLGOALS;
 val try_intros_tac = gen_intros_tac TRYALL;
 
+
 (* ML tactics *)
 
-structure TacticData = Proof_Data
+structure ML_Tactic = Proof_Data
 (
   type T = thm list -> tactic;
   fun init _ = undefined;
 );
 
-val set_tactic = TacticData.put;
+val set_tactic = ML_Tactic.put;
 
 fun ml_tactic (txt, pos) ctxt =
   let
     val ctxt' = ctxt |> Context.proof_map
       (ML_Context.expression pos
         "fun tactic (facts: thm list) : tactic"
-        "Context.map_proof (Method.set_tactic tactic)" txt);
-  in Context.setmp_thread_data (SOME (Context.Proof ctxt)) (TacticData.get ctxt') end;
+        "Context.map_proof (Method.set_tactic tactic)" (ML_Lex.read pos txt));
+  in Context.setmp_thread_data (SOME (Context.Proof ctxt)) (ML_Tactic.get ctxt') end;
 
 fun tactic txt ctxt = METHOD (ml_tactic txt ctxt);
 fun raw_tactic txt ctxt = RAW_METHOD (ml_tactic txt ctxt);
@@ -376,7 +377,9 @@ fun method_setup name (txt, pos) cmt =
   Context.theory_map (ML_Context.expression pos
     "val (name, scan, comment): binding * (Proof.context -> Proof.method) context_parser * string"
     "Context.map_theory (Method.setup name scan comment)"
-    ("(" ^ ML_Syntax.make_binding name ^ ", " ^ txt ^ ", " ^ ML_Syntax.print_string cmt ^ ")"));
+    (ML_Lex.read Position.none ("(" ^ ML_Syntax.make_binding name ^ ", ") @
+      ML_Lex.read pos txt @
+      ML_Lex.read Position.none (", " ^ ML_Syntax.print_string cmt ^ ")")));
 
 
 
@@ -463,9 +466,9 @@ val _ = Context.>> (Context.map_theory
   setup (Binding.name "rotate_tac") (Args.goal_spec -- Scan.lift (Scan.optional Parse.int 1) >>
     (fn (quant, i) => K (SIMPLE_METHOD'' quant (Tactic.rotate_tac i))))
       "rotate assumptions of goal" #>
-  setup (Binding.name "tactic") (Scan.lift (Parse.position Args.name) >> tactic)
+  setup (Binding.name "tactic") (Scan.lift Args.name_source_position >> tactic)
     "ML tactic as proof method" #>
-  setup (Binding.name "raw_tactic") (Scan.lift (Parse.position Args.name) >> raw_tactic)
+  setup (Binding.name "raw_tactic") (Scan.lift Args.name_source_position >> raw_tactic)
     "ML tactic as raw proof method"));
 
 

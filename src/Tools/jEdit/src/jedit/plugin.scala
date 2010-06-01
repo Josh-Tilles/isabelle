@@ -21,6 +21,7 @@ import org.gjt.sp.jedit.{jEdit, EBMessage, EBPlugin, Buffer, EditPane, ServiceMa
 import org.gjt.sp.jedit.buffer.JEditBuffer
 import org.gjt.sp.jedit.textarea.JEditTextArea
 import org.gjt.sp.jedit.msg.{EditPaneUpdate, PropertiesChanged}
+import org.gjt.sp.jedit.gui.DockableWindowManager
 
 
 object Isabelle
@@ -70,8 +71,22 @@ object Isabelle
       jEdit.setIntegerProperty(OPTION_PREFIX + name, value)
   }
 
-  def font_size(): Int =
-    (jEdit.getIntegerProperty("view.fontsize", 16) * Int_Property("relative-font-size", 100)) / 100
+
+  /* font */
+
+  def font_family(): String = jEdit.getProperty("view.font")
+
+  def font_size(): Float =
+    (jEdit.getIntegerProperty("view.fontsize", 16) *
+      Int_Property("relative-font-size", 100)).toFloat / 100
+
+
+  /* tooltip markup */
+
+  def tooltip(text: String): String =
+    "<html><pre style=\"font-family: " + font_family() + "; font-size: " +
+        Int_Property("tooltip-font-size", 10).toString + "px; \">" +  // FIXME proper scaling (!?)
+      HTML.encode(text) + "</pre></html>"
 
 
   /* settings */
@@ -97,18 +112,41 @@ object Isabelle
 
   /* main jEdit components */  // FIXME ownership!?
 
-  def jedit_buffers(): Iterator[Buffer] = Iterator.fromArray(jEdit.getBuffers())
+  def jedit_buffers(): Iterator[Buffer] = jEdit.getBuffers().iterator
 
-  def jedit_views(): Iterator[View] = Iterator.fromArray(jEdit.getViews())
+  def jedit_views(): Iterator[View] = jEdit.getViews().iterator
 
   def jedit_text_areas(view: View): Iterator[JEditTextArea] =
-    Iterator.fromArray(view.getEditPanes).map(_.getTextArea)
+    view.getEditPanes().iterator.map(_.getTextArea)
 
   def jedit_text_areas(): Iterator[JEditTextArea] =
     jedit_views().flatMap(jedit_text_areas(_))
 
   def jedit_text_areas(buffer: JEditBuffer): Iterator[JEditTextArea] =
     jedit_text_areas().filter(_.getBuffer == buffer)
+
+
+  /* dockable windows */
+
+  private def wm(view: View): DockableWindowManager = view.getDockableWindowManager
+
+  def docked_output(view: View): Option[Output_Dockable] =
+    wm(view).getDockableWindow("isabelle-output") match {
+      case dockable: Output_Dockable => Some(dockable)
+      case _ => None
+    }
+
+  def docked_raw_output(view: View): Option[Raw_Output_Dockable] =
+    wm(view).getDockableWindow("isabelle-raw-output") match {
+      case dockable: Raw_Output_Dockable => Some(dockable)
+      case _ => None
+    }
+
+  def docked_protocol(view: View): Option[Protocol_Dockable] =
+    wm(view).getDockableWindow("isabelle-protocol") match {
+      case dockable: Protocol_Dockable => Some(dockable)
+      case _ => None
+    }
 
 
   /* manage prover */

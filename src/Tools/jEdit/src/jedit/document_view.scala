@@ -23,14 +23,18 @@ import org.gjt.sp.jedit.textarea.{JEditTextArea, TextArea, TextAreaExtension, Te
 
 object Document_View
 {
-  def choose_color(command: Command, doc: Document): Color =
+  def choose_color(document: Document, command: Command): Color =
   {
-    doc.current_state(command).map(_.status) match {
-      case Some(Command.Status.UNPROCESSED) => new Color(255, 228, 225)
-      case Some(Command.Status.FINISHED) => new Color(234, 248, 255)
-      case Some(Command.Status.FAILED) => new Color(255, 193, 193)
-      case _ => Color.red
-    }
+    val state = document.current_state(command)
+    if (state.forks > 0) new Color(255, 228, 225)
+    else if (state.forks < 0) Color.red
+    else
+      state.status match {
+        case Command.Status.UNPROCESSED => new Color(255, 228, 225)
+        case Command.Status.FINISHED => new Color(234, 248, 255)
+        case Command.Status.FAILED => new Color(255, 193, 193)
+        case Command.Status.UNDEFINED => Color.red
+      }
   }
 
 
@@ -69,47 +73,26 @@ object Document_View
 }
 
 
-class Document_View(model: Document_Model, text_area: TextArea)
+class Document_View(val model: Document_Model, text_area: TextArea)
 {
   private val session = model.session
 
 
-  /* visible document -- owned by Swing thread */
+  /* commands_changed_actor */
 
-  @volatile private var document = model.recent_document()
-
-
-  /* buffer of changed commands -- owned by Swing thread */
-
-  @volatile private var changed_commands: Set[Command] = Set()
-
-  private val changed_delay = Swing_Thread.delay_first(100) {
-    if (!changed_commands.isEmpty) {
-      document = model.recent_document()
-      for (cmd <- changed_commands if document.commands.contains(cmd)) { // FIXME cover doc states as well!!?
-        update_syntax(cmd)
-        invalidate_line(cmd)
-        overview.repaint()
-      }
-      changed_commands = Set()
-    }
-  }
-
-
-  /* command change actor */
-
-  private case object Exit
-
-  private val command_change_actor = actor {
+  private val commands_changed_actor = actor {
     loop {
       react {
-        case command: Command =>  // FIXME rough filtering according to document family!?
+        case Command_Set(changed) =>
           Swing_Thread.now {
-            changed_commands += command
-            changed_delay()
+            val document = model.recent_document()
+            // FIXME cover doc states as well!!?
+            for (command <- changed if document.commands.contains(command)) {
+              update_syntax(document, command)
+              invalidate_line(document, command)
+              overview.repaint()
+            }
           }
-
-        case Exit => reply(()); exit()
 
         case bad => System.err.println("command_change_actor: ignoring bad message " + bad)
       }
@@ -124,18 +107,19 @@ class Document_View(model: Document_Model, text_area: TextArea)
     override def paintValidLine(gfx: Graphics2D,
       screen_line: Int, physical_line: Int, start: Int, end: Int, y: Int)
     {
+      val document = model.recent_document()
       def from_current(pos: Int) = model.from_current(document, pos)
       def to_current(pos: Int) = model.to_current(document, pos)
       val metrics = text_area.getPainter.getFontMetrics
       val saved_color = gfx.getColor
       try {
         for ((command, command_start) <-
-          document.command_range(from_current(start), from_current(end)))
+          document.command_range(from_current(start), from_current(end)) if !command.is_ignored)
         {
           val begin = start max to_current(command_start)
           val finish = (end - 1) min to_current(command_start + command.length)
           encolor(gfx, y, metrics.getHeight, begin, finish,
-            Document_View.choose_color(command, document), true)
+            Document_View.choose_color(document, command), true)
         }
       }
       finally { gfx.setColor(saved_color) }
@@ -143,34 +127,37 @@ class Document_View(model: Document_Model, text_area: TextArea)
 
     override def getToolTipText(x: Int, y: Int): String =
     {
+      val document = model.recent_document()
       val offset = model.from_current(document, text_area.xyToOffset(x, y))
       document.command_at(offset) match {
         case Some((command, command_start)) =>
-          document.current_state(command).get.type_at(offset - command_start).getOrElse(null)
+          document.current_state(command).type_at(offset - command_start) match {
+            case Some(text) => Isabelle.tooltip(text)
+            case None => null
+          }
         case None => null
       }
     }
   }
 
 
-  /* caret_listener */
+  /* caret handling */
 
-  private var _selected_command: Command = null
-  private def selected_command = _selected_command
-  private def selected_command_=(cmd: Command)
-  {
-    _selected_command = cmd
-    session.results.event(cmd)
-  }
+  def selected_command: Option[Command] =
+    model.recent_document().command_at(text_area.getCaretPosition) match {
+      case Some((command, _)) => Some(command)
+      case None => None
+    }
 
   private val caret_listener = new CaretListener
   {
+    private var last_selected_command: Option[Command] = None
     override def caretUpdate(e: CaretEvent)
     {
-      document.command_at(e.getDot) match {
-        case Some((command, command_start)) if (selected_command != command) =>
-          selected_command = command
-        case _ =>
+      val selected = selected_command
+      if (selected != last_selected_command) {
+        last_selected_command = selected
+        if (selected.isDefined) session.indicate_command_change(selected.get)
       }
     }
   }
@@ -179,8 +166,9 @@ class Document_View(model: Document_Model, text_area: TextArea)
   /* (re)painting */
 
   private val update_delay = Swing_Thread.delay_first(500) { model.buffer.propertiesChanged() }
+  // FIXME update_delay property
 
-  private def update_syntax(cmd: Command)
+  private def update_syntax(document: Document, cmd: Command)
   {
     val (line1, line2) = model.lines_of_command(document, cmd)
     if (line2 >= text_area.getFirstLine &&
@@ -188,13 +176,10 @@ class Document_View(model: Document_Model, text_area: TextArea)
         update_delay()
   }
 
-  private def invalidate_line(cmd: Command) =
+  private def invalidate_line(document: Document, cmd: Command) =
   {
     val (start, stop) = model.lines_of_command(document, cmd)
     text_area.invalidateLineRange(start, stop)
-
-    if (selected_command == cmd)
-      session.results.event(cmd)
   }
 
   private def invalidate_all() =
@@ -262,15 +247,20 @@ class Document_View(model: Document_Model, text_area: TextArea)
     {
       super.paintComponent(gfx)
       val buffer = model.buffer
-
-      for ((command, start) <- document.command_range(0)) {
-        val line1 = buffer.getLineOfOffset(model.to_current(document, start))
-        val line2 = buffer.getLineOfOffset(model.to_current(document, start + command.length)) + 1
-        val y = line_to_y(line1)
-        val height = HEIGHT * (line2 - line1)
-        gfx.setColor(Document_View.choose_color(command, document))
-        gfx.fillRect(0, y, getWidth - 1, height)
+      val document = model.recent_document()
+      def to_current(pos: Int) = model.to_current(document, pos)
+      val saved_color = gfx.getColor
+      try {
+        for ((command, start) <- document.command_range(0) if !command.is_ignored) {
+          val line1 = buffer.getLineOfOffset(to_current(start))
+          val line2 = buffer.getLineOfOffset(to_current(start + command.length)) + 1
+          val y = line_to_y(line1)
+          val height = HEIGHT * (line2 - line1)
+          gfx.setColor(Document_View.choose_color(document, command))
+          gfx.fillRect(0, y, getWidth - 1, height)
+        }
       }
+      finally { gfx.setColor(saved_color) }
     }
 
     private def line_to_y(line: Int): Int =
@@ -289,13 +279,12 @@ class Document_View(model: Document_Model, text_area: TextArea)
       addExtension(TextAreaPainter.LINE_BACKGROUND_LAYER + 1, text_area_extension)
     text_area.addCaretListener(caret_listener)
     text_area.addLeftOfScrollBar(overview)
-    session.command_change += command_change_actor
+    session.commands_changed += commands_changed_actor
   }
 
   private def deactivate()
   {
-    session.command_change -= command_change_actor
-    command_change_actor !? Exit
+    session.commands_changed -= commands_changed_actor
     text_area.removeLeftOfScrollBar(overview)
     text_area.removeCaretListener(caret_listener)
     text_area.getPainter.removeExtension(text_area_extension)

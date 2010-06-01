@@ -67,17 +67,17 @@ fun setup_channels out =
     val path = File.platform_path (Path.explode out);
     val out_stream = TextIO.openOut path;  (*fifo blocks until reader is ready*)
     val _ = OS.FileSys.remove path;  (*prevent alien access, indicate writer is ready*)
-    val _ = SimpleThread.fork false (auto_flush out_stream);
-    val _ = SimpleThread.fork false (auto_flush TextIO.stdOut);
-    val _ = SimpleThread.fork false (auto_flush TextIO.stdErr);
+    val _ = Simple_Thread.fork false (auto_flush out_stream);
+    val _ = Simple_Thread.fork false (auto_flush TextIO.stdOut);
+    val _ = Simple_Thread.fork false (auto_flush TextIO.stdErr);
   in
     Output.status_fn   := standard_message out_stream "B";
     Output.writeln_fn  := standard_message out_stream "C";
-    Output.priority_fn := standard_message out_stream "D";
-    Output.tracing_fn  := standard_message out_stream "E";
-    Output.warning_fn  := standard_message out_stream "F";
-    Output.error_fn    := standard_message out_stream "G";
-    Output.debug_fn    := standard_message out_stream "H";
+    Output.tracing_fn  := standard_message out_stream "D";
+    Output.warning_fn  := standard_message out_stream "E";
+    Output.error_fn    := standard_message out_stream "F";
+    Output.debug_fn    := standard_message out_stream "G";
+    Output.priority_fn := ! Output.writeln_fn;
     Output.prompt_fn   := ignore;
     out_stream
   end;

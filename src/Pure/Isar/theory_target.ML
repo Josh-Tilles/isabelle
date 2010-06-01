@@ -50,7 +50,9 @@ val peek = (fn Target args => args) o Data.get;
 fun pretty_thy ctxt target is_class =
   let
     val thy = ProofContext.theory_of ctxt;
-    val target_name = (if is_class then "class " else "locale ") ^ Locale.extern thy target;
+    val target_name =
+      [Pretty.command (if is_class then "class" else "locale"),
+        Pretty.str (" " ^ Locale.extern thy target)];
     val fixes =
       map (fn (x, T) => (Binding.name x, SOME T, NoSyn)) (#1 (ProofContext.inferred_fixes ctxt));
     val assumes =
@@ -60,13 +62,13 @@ fun pretty_thy ctxt target is_class =
       (if null assumes then [] else [Element.Assumes assumes]);
   in
     if target = "" then []
-    else if null elems then [Pretty.str target_name]
-    else [Pretty.big_list (target_name ^ " =")
-      (map (Pretty.chunks o Element.pretty_ctxt ctxt) elems)]
+    else if null elems then [Pretty.block target_name]
+    else [Pretty.block (Pretty.fbreaks (Pretty.block (target_name @ [Pretty.str " ="]) ::
+      map (Pretty.chunks o Element.pretty_ctxt ctxt) elems))]
   end;
 
 fun pretty (Target {target, is_class, instantiation, overloading, ...}) ctxt =
-  Pretty.block [Pretty.str "theory", Pretty.brk 1,
+  Pretty.block [Pretty.command "theory", Pretty.brk 1,
       Pretty.str (Context.theory_name (ProofContext.theory_of ctxt))] ::
     (if not (null overloading) then [Overloading.pretty ctxt]
      else if not (null (#1 instantiation)) then [Class_Target.pretty_instantiation ctxt]
@@ -200,8 +202,8 @@ fun locale_const (Target {target, is_class, ...}) (prmode as (mode, _)) ((b, mx)
   in
     not (is_class andalso (same_shape orelse class_global)) ?
       (Context.mapping_result
-        (Sign.add_abbrev PrintMode.internal arg)
-        (ProofContext.add_abbrev PrintMode.internal arg)
+        (Sign.add_abbrev Print_Mode.internal arg)
+        (ProofContext.add_abbrev Print_Mode.internal arg)
       #-> (fn (lhs' as Const (d, _), _) =>
           same_shape ?
             (Context.mapping (Sign.revert_abbrev mode d) (ProofContext.revert_abbrev mode d) #>
@@ -225,7 +227,7 @@ fun abbrev (ta as Target {target, is_locale, is_class, ...}) prmode ((b, mx), t)
   in
     lthy |>
      (if is_locale then
-        Local_Theory.theory_result (Sign.add_abbrev PrintMode.internal (b, global_rhs))
+        Local_Theory.theory_result (Sign.add_abbrev Print_Mode.internal (b, global_rhs))
         #-> (fn (lhs, _) =>
           let val lhs' = Term.list_comb (Logic.unvarify_global lhs, xs) in
             syntax_declaration ta false (locale_const ta prmode ((b, mx2), lhs')) #>
@@ -235,7 +237,7 @@ fun abbrev (ta as Target {target, is_locale, is_class, ...}) prmode ((b, mx), t)
         Local_Theory.theory
           (Sign.add_abbrev (#1 prmode) (b, global_rhs) #-> (fn (lhs, _) =>
            Sign.notation true prmode [(lhs, mx3)])))
-    |> ProofContext.add_abbrev PrintMode.internal (b, t) |> snd
+    |> ProofContext.add_abbrev Print_Mode.internal (b, t) |> snd
     |> Local_Defs.fixed_abbrev ((b, NoSyn), t)
   end;
 

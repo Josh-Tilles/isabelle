@@ -126,7 +126,7 @@ local
   val lock = Mutex.mutex ();
 in
 
-fun SYNCHRONIZED name = SimpleThread.synchronized name lock;
+fun SYNCHRONIZED name = Simple_Thread.synchronized name lock;
 
 fun wait cond = (*requires SYNCHRONIZED*)
   Multithreading.sync_wait NONE NONE cond lock;
@@ -170,12 +170,14 @@ fun count_workers state = (*requires SYNCHRONIZED*)
 fun future_job group (e: unit -> 'a) =
   let
     val result = Single_Assignment.var "future" : 'a result;
+    val pos = Position.thread_data ();
     fun job ok =
       let
         val res =
           if ok then
             Exn.capture (fn () =>
-              Multithreading.with_attributes Multithreading.private_interrupts (fn _ => e ())) ()
+              Multithreading.with_attributes Multithreading.private_interrupts
+                (fn _ => Position.setmp_thread_data pos e ())) ()
           else Exn.Exn Exn.Interrupt;
       in assign_result group result res end;
   in (result, job) end;
@@ -236,7 +238,7 @@ fun worker_loop name =
   | SOME work => (execute work; worker_loop name));
 
 fun worker_start name = (*requires SYNCHRONIZED*)
-  Unsynchronized.change workers (cons (SimpleThread.fork false (fn () => worker_loop name),
+  Unsynchronized.change workers (cons (Simple_Thread.fork false (fn () => worker_loop name),
     Unsynchronized.ref Working));
 
 
@@ -369,7 +371,7 @@ fun scheduler_active () = (*requires SYNCHRONIZED*)
 fun scheduler_check () = (*requires SYNCHRONIZED*)
  (do_shutdown := false;
   if scheduler_active () then ()
-  else scheduler := SOME (SimpleThread.fork false scheduler_loop));
+  else scheduler := SOME (Simple_Thread.fork false scheduler_loop));
 
 
 
@@ -407,8 +409,10 @@ local
 fun get_result x =
   (case peek x of
     NONE => Exn.Exn (SYS_ERROR "unfinished future")
-  | SOME (Exn.Exn Exn.Interrupt) =>
-      Exn.Exn (Exn.EXCEPTIONS (Exn.flatten_list (Task_Queue.group_status (group_of x))))
+  | SOME (exn as Exn.Exn Exn.Interrupt) =>
+      (case Exn.flatten_list (Task_Queue.group_status (group_of x)) of
+        [] => exn
+      | exns => Exn.Exn (Exn.EXCEPTIONS exns))
   | SOME res => res);
 
 fun join_next deps = (*requires SYNCHRONIZED*)
