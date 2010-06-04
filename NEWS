@@ -86,10 +86,13 @@ disabled via the ProofGeneral settings menu.
 'hide_fact' replace the former 'hide' KIND command.  Minor
 INCOMPATIBILITY.
 
+* Improved parallelism of proof term normalization: usedir -p2 -q0 is
+more efficient than combinations with -q1 or -q2.
+
 
 *** Pure ***
 
-* Predicates of locales introduces by classes carry a mandatory
+* Predicates of locales introduced by classes carry a mandatory
 "class" prefix.  INCOMPATIBILITY.
 
 * Command 'code_reflect' allows to incorporate generated ML code into
@@ -137,8 +140,15 @@ assumptions, which is not possible in Isabelle/Pure.
 within a local theory context.  Minor INCOMPATIBILITY.
 
 * Proof terms: Type substitutions on proof constants now use canonical
-order of type variables. Potential INCOMPATIBILITY for tools working
-with proof terms.
+order of type variables.  INCOMPATIBILITY for tools working with proof
+terms.
+
+* New operation Thm.unconstrainT eliminates all sort constraints from
+a theorem and proof, introducing explicit OFCLASS-premises. On the
+proof term level, this operation is automatically applied at PThm
+boundaries, such that closed proofs are always free of sort
+constraints. The old (axiomatic) unconstrain operation has been
+discontinued.  INCOMPATIBILITY for tools working with proof terms.
 
 
 *** HOL ***
@@ -547,6 +557,11 @@ syntax constant (cf. 'syntax' command).
 * Antiquotation @{make_string} inlines a function to print arbitrary
 values similar to the ML toplevel.  The result is compiler dependent
 and may fall back on "?" in certain situations.
+
+* Diagnostic commands 'ML_val' and 'ML_command' may refer to
+antiquotations @{Isar.state} and @{Isar.goal}.  This replaces impure
+Isar.state() and Isar.goal(), which belong to the old TTY loop and do
+not work with the asynchronous Isar document model.
 
 * Sorts.certify_sort and derived "cert" operations for types and terms
 no longer minimize sorts.  Thus certification at the boundary of the

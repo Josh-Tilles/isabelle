@@ -6,6 +6,10 @@ distribution.
 Contributions to Isabelle2009-2
 --------------------------------------
 
+* 2009/2010: Stefan Berghofer, Alexander Krauss, and Andreas Schropp, TUM,
+  Makarius Wenzel, TUM / LRI
+  Elimination of type classes from proof terms.
+
 * April 2010: Florian Haftmann, TUM
   Reorganization of abstract algebra type classes.
 
@@ -16,6 +20,9 @@ Contributions to Isabelle2009-2
 
 * March 2010: Sascha Boehme, TUM
   Efficient SHA1 library for Poly/ML.
+
+* February 2010: Cezary Kaliszyk and Christian Urban, TUM
+  Quotient type package for Isabelle/HOL.
 
 
 Contributions to Isabelle2009-1
