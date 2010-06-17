@@ -115,7 +115,7 @@ fun print_haskell_stmt labelled_name syntax_class syntax_tyco syntax_const
           end
       | print_case tyvars some_thm vars fxy ((_, []), _) =
           (brackify fxy o Pretty.breaks o map str) ["error", "\"empty case\""];
-    fun print_stmt (name, Code_Thingol.Fun (_, ((vs, ty), raw_eqs))) =
+    fun print_stmt (name, Code_Thingol.Fun (_, (((vs, ty), raw_eqs), _))) =
           let
             val tyvars = intro_vars (map fst vs) reserved;
             fun print_err n =
@@ -275,7 +275,8 @@ fun haskell_program_of_program labelled_name module_name module_prefix reserved 
             val (base', nsp_typ') = mk_name_stmt (first_upper base) nsp_typ
           in (base', (nsp_fun, nsp_typ')) end;
         val add_name = case stmt
-         of Code_Thingol.Fun _ => add_fun false
+         of Code_Thingol.Fun (_, (_, SOME _)) => pair base
+          | Code_Thingol.Fun _ => add_fun false
           | Code_Thingol.Datatype _ => add_typ
           | Code_Thingol.Datatypecons _ => add_fun true
           | Code_Thingol.Class _ => add_typ
@@ -283,7 +284,9 @@ fun haskell_program_of_program labelled_name module_name module_prefix reserved 
           | Code_Thingol.Classparam _ => add_fun false
           | Code_Thingol.Classinst _ => pair base;
         fun add_stmt' base' = case stmt
-         of Code_Thingol.Datatypecons _ =>
+         of Code_Thingol.Fun (_, (_, SOME _)) =>
+              I
+          | Code_Thingol.Datatypecons _ =>
               cons (name, (Long_Name.append module_name' base', NONE))
           | Code_Thingol.Classrel _ => I
           | Code_Thingol.Classparam _ =>

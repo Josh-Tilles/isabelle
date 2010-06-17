@@ -129,7 +129,7 @@ fun print_scala_stmt labelled_name syntax_tyco syntax_const reserved args_num is
             (map2 (fn param => fn ty => print_typed tyvars
                 ((str o lookup_var vars) param) ty)
               params tys)) implicits) ty, str " ="]
-    fun print_stmt (name, Code_Thingol.Fun (_, ((vs, ty), raw_eqs))) = (case filter (snd o snd) raw_eqs
+    fun print_stmt (name, Code_Thingol.Fun (_, (((vs, ty), raw_eqs), _))) = (case filter (snd o snd) raw_eqs
          of [] =>
               let
                 val (tys, ty') = Code_Thingol.unfold_fun ty;
@@ -334,8 +334,9 @@ fun scala_program_of_program labelled_name module_name reserved raw_module_alias
         |> add_name
         |-> (fn base' => rpair (add_stmt base' stmts))
       end;
-    val (_, sca_program) = fold prepare_stmt (AList.make (fn name => Graph.get_node program name)
-      (Graph.strong_conn program |> flat)) (((reserved, reserved), reserved), []);
+    val stmts = AList.make (Graph.get_node program) (Graph.strong_conn program |> flat)
+      |> filter_out (Code_Thingol.is_case o snd);
+    val (_, sca_program) = fold prepare_stmt stmts (((reserved, reserved), reserved), []);
     fun deresolver name = (fst o the o AList.lookup (op =) sca_program) name
       handle Option => error ("Unknown statement name: " ^ labelled_name name);
   in (deresolver, (the_module_name, sca_program)) end;
@@ -351,8 +352,8 @@ fun serialize_scala raw_module_name labelled_name
       module_name reserved raw_module_alias program;
     val reserved = make_vars reserved;
     fun args_num c = case Graph.get_node program c
-     of Code_Thingol.Fun (_, ((_, ty), [])) => (length o fst o Code_Thingol.unfold_fun) ty
-      | Code_Thingol.Fun (_, (_, ((ts, _), _) :: _)) => length ts
+     of Code_Thingol.Fun (_, (((_, ty), []), _)) => (length o fst o Code_Thingol.unfold_fun) ty
+      | Code_Thingol.Fun (_, ((_, ((ts, _), _) :: _), _)) => length ts
       | Code_Thingol.Datatypecons (_, tyco) =>
           let val Code_Thingol.Datatype (_, (_, constrs)) = Graph.get_node program tyco
           in (length o the o AList.lookup (op =) constrs) c end
