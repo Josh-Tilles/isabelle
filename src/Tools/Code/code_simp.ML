@@ -10,6 +10,7 @@ sig
   val map_ss: (simpset -> simpset) -> theory -> theory
   val current_conv: theory -> conv
   val current_tac: theory -> int -> tactic
+  val current_value: theory -> term -> term
   val make_conv: theory -> simpset option -> string list -> conv
   val make_tac: theory -> simpset option -> string list -> int -> tactic
   val setup: theory -> theory
@@ -50,8 +51,8 @@ val map_ss = Simpset.map;
 
 fun add_stmt (Code_Thingol.Fun (_, ((_, eqs), some_cong))) ss =
       ss addsimps (map_filter (fst o snd)) eqs addcongs (the_list some_cong)
-  | add_stmt (Code_Thingol.Classinst (_, (_, classparam_insts))) ss =
-      ss addsimps (map (fst o snd) classparam_insts)
+  | add_stmt (Code_Thingol.Classinst (_, (_, (classparam_instances, _)))) ss =
+      ss addsimps (map (fst o snd) classparam_instances)
   | add_stmt _ ss = ss;
 
 val add_program = Graph.fold (add_stmt o fst o snd)
@@ -68,9 +69,12 @@ fun current_conv thy = no_frees_conv (Code_Thingol.eval_conv thy
 
 fun current_tac thy = CONVERSION (current_conv thy);
 
+fun current_value thy = snd o Logic.dest_equals o Thm.prop_of o current_conv thy o Thm.cterm_of thy
+
 val setup = Method.setup (Binding.name "code_simp")
   (Scan.succeed (SIMPLE_METHOD' o current_tac o ProofContext.theory_of))
   "simplification with code equations"
+  #> Value.add_evaluator ("simp", current_value o ProofContext.theory_of);
 
 
 (* evaluation with freezed code context *)
