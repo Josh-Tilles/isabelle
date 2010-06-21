@@ -59,16 +59,20 @@ sig
   val add_default_eqn: thm -> theory -> theory
   val add_default_eqn_attribute: attribute
   val add_default_eqn_attrib: Attrib.src
+  val add_nbe_default_eqn: thm -> theory -> theory
+  val add_nbe_default_eqn_attribute: attribute
+  val add_nbe_default_eqn_attrib: Attrib.src
   val del_eqn: thm -> theory -> theory
   val del_eqns: string -> theory -> theory
   val add_case: thm -> theory -> theory
   val add_undefined: string -> theory -> theory
-  val get_type: theory -> string -> ((string * sort) list * (string * typ list) list)
+  val get_type: theory -> string -> ((string * sort) list * ((string * string list) * typ list) list)
   val get_type_of_constr_or_abstr: theory -> string -> (string * bool) option
   val is_constr: theory -> string -> bool
   val is_abstr: theory -> string -> bool
   val get_cert: theory -> ((thm * bool) list -> (thm * bool) list) -> string -> cert
   val get_case_scheme: theory -> string -> (int * (int * string list)) option
+  val get_case_cong: theory -> string -> thm option
   val undefineds: theory -> string list
   val print_codesetup: theory -> unit
 
@@ -142,12 +146,12 @@ fun constructors_of (Constructors cos) = (cos, false)
 
 (* functions *)
 
-datatype fun_spec = Default of (thm * bool) list
+datatype fun_spec = Default of (thm * bool) list * (thm * bool) list lazy
   | Eqns of (thm * bool) list
   | Proj of term * string
   | Abstr of thm * string;
 
-val empty_fun_spec = Default [];
+val empty_fun_spec = Default ([], Lazy.value []);
 
 fun is_default (Default _) = true
   | is_default _ = false;
@@ -165,7 +169,7 @@ datatype spec = Spec of {
     (*with explicit history*),
   types: ((serial * ((string * sort) list * typ_spec)) list) Symtab.table
     (*with explicit history*),
-  cases: (int * (int * string list)) Symtab.table * unit Symtab.table
+  cases: ((int * (int * string list)) * thm) Symtab.table * unit Symtab.table
 };
 
 fun make_spec (history_concluded, ((signatures, functions), (types, cases))) =
@@ -425,7 +429,13 @@ fun get_abstype_spec thy tyco = case get_type_entry thy tyco
  of SOME (vs, Abstractor spec) => (vs, spec)
   | _ => error ("Not an abstract type: " ^ tyco);
  
-fun get_type thy = fst o get_type_spec thy;
+fun get_type thy tyco =
+  let
+    val ((vs, cos), _) = get_type_spec thy tyco;
+    fun args_of c tys = map (fst o dest_TFree)
+      (Sign.const_typargs thy (c, tys ---> Type (tyco, map TFree vs)));
+    fun add_typargs (c, tys) = ((c, args_of c tys), tys);
+  in (vs, map add_typargs cos) end;
 
 fun get_type_of_constr_or_abstr thy c =
   case (snd o strip_type o const_typ thy) c
@@ -869,10 +879,10 @@ end;
 fun retrieve_raw thy c =
   Symtab.lookup ((the_functions o the_exec) thy) c
   |> Option.map (snd o fst)
-  |> the_default (Default [])
+  |> the_default empty_fun_spec
 
 fun get_cert thy f c = case retrieve_raw thy c
- of Default eqns => eqns
+ of Default (_, eqns_lazy) => Lazy.force eqns_lazy
       |> (map o apfst) (Thm.transfer thy)
       |> f
       |> (map o apfst) (AxClass.unoverload thy)
@@ -932,7 +942,8 @@ fun case_cert thm = case_certificate thm
   handle Bind => error "bad case certificate"
        | TERM _ => error "bad case certificate";
 
-fun get_case_scheme thy = Symtab.lookup ((fst o the_cases o the_exec) thy);
+fun get_case_scheme thy = Option.map fst o Symtab.lookup ((fst o the_cases o the_exec) thy);
+fun get_case_cong thy = Option.map snd o Symtab.lookup ((fst o the_cases o the_exec) thy);
 
 val undefineds = Symtab.keys o snd o the_cases o the_exec;
 
@@ -947,7 +958,7 @@ fun print_codesetup thy =
       (Pretty.block o Pretty.fbreaks) (
         Pretty.str (string_of_const thy const) :: map (Display.pretty_thm ctxt) thms
       );
-    fun pretty_function (const, Default eqns) = pretty_equations const (map fst eqns)
+    fun pretty_function (const, Default (_, eqns_lazy)) = pretty_equations const (map fst (Lazy.force eqns_lazy))
       | pretty_function (const, Eqns eqns) = pretty_equations const (map fst eqns)
       | pretty_function (const, Proj (proj, _)) = Pretty.block
           [Pretty.str (string_of_const thy const), Pretty.fbrk, Syntax.pretty_term ctxt proj]
@@ -967,8 +978,8 @@ fun print_codesetup thy =
                       :: Pretty.str "of"
                       :: map (Pretty.quote o Syntax.pretty_typ_global thy) tys)) cos)
       );
-    fun pretty_case (const, (_, (_, []))) = Pretty.str (string_of_const thy const)
-      | pretty_case (const, (_, (_, cos))) = (Pretty.block o Pretty.breaks) [
+    fun pretty_case (const, ((_, (_, [])), _)) = Pretty.str (string_of_const thy const)
+      | pretty_case (const, ((_, (_, cos)), _)) = (Pretty.block o Pretty.breaks) [
           Pretty.str (string_of_const thy const), Pretty.str "with",
           (Pretty.block o Pretty.commas o map (Pretty.str o string_of_const thy)) cos];
     val functions = the_functions exec
@@ -1040,21 +1051,26 @@ fun gen_add_eqn default (raw_thm, proper) thy =
   let
     val thm = Thm.close_derivation raw_thm;
     val c = const_eqn thy thm;
-    fun add_eqn' true (Default eqns) = Default (eqns @ [(thm, proper)])
-      | add_eqn' _ (Eqns eqns) =
-          let
-            val args_of = snd o strip_comb o map_types Type.strip_sorts
-              o fst o Logic.dest_equals o Thm.plain_prop_of;
-            val args = args_of thm;
-            val incr_idx = Logic.incr_indexes ([], Thm.maxidx_of thm + 1);
-            fun matches_args args' = length args <= length args' andalso
-              Pattern.matchess thy (args, (map incr_idx o take (length args)) args');
-            fun drop (thm', proper') = if (proper orelse not proper')
-              andalso matches_args (args_of thm') then 
-                (warning ("Code generator: dropping redundant code equation\n" ^
-                    Display.string_of_thm_global thy thm'); true)
-              else false;
-          in Eqns ((thm, proper) :: filter_out drop eqns) end
+    fun update_subsume thy (thm, proper) eqns = 
+      let
+        val args_of = snd o strip_comb o map_types Type.strip_sorts
+          o fst o Logic.dest_equals o Thm.plain_prop_of;
+        val args = args_of thm;
+        val incr_idx = Logic.incr_indexes ([], Thm.maxidx_of thm + 1);
+        fun matches_args args' = length args <= length args' andalso
+          Pattern.matchess thy (args, (map incr_idx o take (length args)) args');
+        fun drop (thm', proper') = if (proper orelse not proper')
+          andalso matches_args (args_of thm') then 
+            (warning ("Code generator: dropping subsumed code equation\n" ^
+                Display.string_of_thm_global thy thm'); true)
+          else false;
+      in (thm, proper) :: filter_out drop eqns end;
+    fun natural_order thy_ref eqns =
+      (eqns, Lazy.lazy (fn () => fold (update_subsume (Theory.deref thy_ref)) eqns []))
+    fun add_eqn' true (Default (eqns, _)) =
+          Default (natural_order (Theory.check_thy thy) ((thm, proper) :: eqns))
+          (*this restores the natural order and drops syntactic redundancies*)
+      | add_eqn' _ (Eqns eqns) = Eqns (update_subsume thy (thm, proper) eqns)
       | add_eqn' false _ = Eqns [(thm, proper)];
   in change_fun_spec false c (add_eqn' default) thy end;
 
@@ -1066,17 +1082,24 @@ fun add_warning_eqn thm thy =
    of SOME eqn => gen_add_eqn false eqn thy
     | NONE => thy;
 
+fun add_nbe_eqn thm thy =
+  gen_add_eqn false (mk_eqn thy (thm, false)) thy;
+
 fun add_default_eqn thm thy =
   case mk_eqn_liberal thy thm
    of SOME eqn => gen_add_eqn true eqn thy
     | NONE => thy;
 
-fun add_nbe_eqn thm thy =
-  gen_add_eqn false (mk_eqn thy (thm, false)) thy;
-
 val add_default_eqn_attribute = Thm.declaration_attribute
   (fn thm => Context.mapping (add_default_eqn thm) I);
 val add_default_eqn_attrib = Attrib.internal (K add_default_eqn_attribute);
+
+fun add_nbe_default_eqn thm thy =
+  gen_add_eqn true (mk_eqn thy (thm, false)) thy;
+
+val add_nbe_default_eqn_attribute = Thm.declaration_attribute
+  (fn thm => Context.mapping (add_nbe_default_eqn thm) I);
+val add_nbe_default_eqn_attrib = Attrib.internal (K add_nbe_default_eqn_attribute);
 
 fun add_abs_eqn raw_thm thy =
   let
@@ -1098,14 +1121,34 @@ fun del_eqns c = change_fun_spec true c (K empty_fun_spec);
 
 (* cases *)
 
+fun case_cong thy case_const (num_args, (pos, constrs)) =
+  let
+    val ([x, y], ctxt) = Name.variants ["A", "A'"] Name.context;
+    val (zs, _) = Name.variants (replicate (num_args - 1) "") ctxt;
+    val (ws, vs) = chop pos zs;
+    val T = Logic.unvarifyT_global (Sign.the_const_type thy case_const);
+    val Ts = (fst o strip_type) T;
+    val T_cong = nth Ts pos;
+    fun mk_prem z = Free (z, T_cong);
+    fun mk_concl z = list_comb (Const (case_const, T), map2 (curry Free) (ws @ z :: vs) Ts);
+    val (prem, concl) = pairself Logic.mk_equals (pairself mk_prem (x, y), pairself mk_concl (x, y));
+    fun tac { prems, ... } = Simplifier.rewrite_goals_tac prems
+      THEN ALLGOALS (ProofContext.fact_tac [Drule.reflexive_thm]);
+  in Skip_Proof.prove_global thy (x :: y :: zs) [prem] concl tac end;
+
 fun add_case thm thy =
   let
-    val (c, (k, case_pats)) = case_cert thm;
+    val (case_const, (k, case_pats)) = case_cert thm;
     val _ = case filter_out (is_constr thy) case_pats
      of [] => ()
       | cs => error ("Non-constructor(s) in case certificate: " ^ commas (map quote cs));
-    val entry = (1 + Int.max (1, length case_pats), (k, case_pats))
-  in (map_exec_purge o map_cases o apfst) (Symtab.update (c, entry)) thy end;
+    val entry = (1 + Int.max (1, length case_pats), (k, case_pats));
+  in
+    thy
+    |> Theory.checkpoint
+    |> `(fn thy => case_cong thy case_const entry)
+    |-> (fn cong => (map_exec_purge o map_cases o apfst) (Symtab.update (case_const, (entry, cong))))
+  end;
 
 fun add_undefined c thy =
   (map_exec_purge o map_cases o apsnd) (Symtab.update (c, ())) thy;
@@ -1128,7 +1171,7 @@ fun register_type (tyco, vs_spec) thy =
             then insert (op =) c else I)
             ((the_functions o the_exec) thy) (old_proj :: old_constrs);
     fun drop_outdated_cases cases = fold Symtab.delete_safe
-      (Symtab.fold (fn (c, (_, (_, cos))) =>
+      (Symtab.fold (fn (c, ((_, (_, cos)), _)) =>
         if exists (member (op =) old_constrs) cos
           then insert (op =) c else I) cases []) cases;
   in
@@ -1145,7 +1188,7 @@ structure Datatype_Interpretation =
   Interpretation(type T = string * serial val eq = eq_snd (op =) : T * T -> bool);
 
 fun datatype_interpretation f = Datatype_Interpretation.interpretation
-  (fn (tyco, _) => fn thy => f (tyco, get_type thy tyco) thy);
+  (fn (tyco, _) => fn thy => f (tyco, fst (get_type_spec thy tyco)) thy);
 
 fun add_datatype proto_constrs thy =
   let

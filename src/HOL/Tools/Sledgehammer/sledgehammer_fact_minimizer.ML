@@ -38,6 +38,7 @@ fun linear_minimize test s =
 (* wrapper for calling external prover *)
 
 fun string_for_failure Unprovable = "Unprovable."
+  | string_for_failure IncompleteUnprovable = "Failed."
   | string_for_failure TimedOut = "Timed out."
   | string_for_failure OutOfResources = "Failed."
   | string_for_failure OldSpass = "Error."
@@ -110,9 +111,8 @@ fun minimize_theorems (params as {debug, atps, full_types, minimize_timeout,
         in
           (SOME min_thms,
            proof_text isar_proof
-               (pool, debug, full_types, isar_shrink_factor, ctxt,
-                conjecture_shape)
-               (K "", proof, internal_thm_names, goal, i) |> fst)
+               (pool, debug, isar_shrink_factor, ctxt, conjecture_shape)
+               (full_types, K "", proof, internal_thm_names, goal, i) |> fst)
         end
     | {outcome = SOME TimedOut, ...} =>
         (NONE, "Timeout: You can increase the time limit using the \"timeout\" \
@@ -125,7 +125,8 @@ fun minimize_theorems (params as {debug, atps, full_types, minimize_timeout,
                \option (e.g., \"timeout = " ^
                string_of_int (10 + msecs div 1000) ^ " s\").")
     | {message, ...} => (NONE, "ATP error: " ^ message))
-    handle Sledgehammer_HOL_Clause.TRIVIAL => (SOME [], metis_line i n [])
+    handle Sledgehammer_HOL_Clause.TRIVIAL =>
+           (SOME [], metis_line full_types i n [])
          | ERROR msg => (NONE, "Error: " ^ msg)
   end
 

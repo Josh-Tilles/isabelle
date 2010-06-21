@@ -5,7 +5,7 @@
 header {* The datatype of finite lists *}
 
 theory List
-imports Plain Presburger Sledgehammer Recdef
+imports Plain Quotient Presburger Code_Numeral Sledgehammer Recdef
 uses ("Tools/list_code.ML")
 begin
 
@@ -3190,8 +3190,16 @@ by (fast dest!: not0_implies_Suc intro!: set_replicate_Suc)
 lemma set_replicate_conv_if: "set (replicate n x) = (if n = 0 then {} else {x})"
 by auto
 
-lemma in_set_replicateD: "x : set (replicate n y) ==> x = y"
-by (simp add: set_replicate_conv_if split: split_if_asm)
+lemma in_set_replicate[simp]: "(x : set (replicate n y)) = (x = y & n \<noteq> 0)"
+by (simp add: set_replicate_conv_if)
+
+lemma Ball_set_replicate[simp]:
+  "(ALL x : set(replicate n a). P x) = (P a | n=0)"
+by(simp add: set_replicate_conv_if)
+
+lemma Bex_set_replicate[simp]:
+  "(EX x : set(replicate n a). P x) = (P a & n\<noteq>0)"
+by(simp add: set_replicate_conv_if)
 
 lemma replicate_append_same:
   "replicate i x @ [x] = x # replicate i x"
@@ -4188,8 +4196,8 @@ text{*These orderings preserve well-foundedness: shorter lists
         
 primrec -- {*The lexicographic ordering for lists of the specified length*}
   lexn :: "('a \<times> 'a) set \<Rightarrow> nat \<Rightarrow> ('a list \<times> 'a list) set" where
-    "lexn r 0 = {}"
-  | "lexn r (Suc n) = (prod_fun (%(x, xs). x#xs) (%(x, xs). x#xs) ` (r <*lex*> lexn r n)) Int
+    [code del]: "lexn r 0 = {}"
+  | [code del]: "lexn r (Suc n) = (prod_fun (%(x, xs). x#xs) (%(x, xs). x#xs) ` (r <*lex*> lexn r n)) Int
       {(xs, ys). length xs = Suc n \<and> length ys = Suc n}"
 
 definition
@@ -4706,7 +4714,11 @@ by (simp add: list_all_iff)
 
 lemma list_all_length:
   "list_all P xs \<longleftrightarrow> (\<forall>n < length xs. P (xs ! n))"
-  unfolding list_all_iff by (auto intro: all_nth_imp_all_set)
+unfolding list_all_iff by (auto intro: all_nth_imp_all_set)
+
+lemma list_all_cong[fundef_cong]:
+  "xs = ys \<Longrightarrow> (\<And>x. x \<in> set ys \<Longrightarrow> f x = g x) \<Longrightarrow> list_all f xs = list_all g ys"
+by (simp add: list_all_iff)
 
 lemma list_ex_iff [code_post]:
   "list_ex P xs \<longleftrightarrow> (\<exists>x \<in> set xs. P x)"
@@ -4717,7 +4729,11 @@ lemmas list_bex_code [code_unfold] =
 
 lemma list_ex_length:
   "list_ex P xs \<longleftrightarrow> (\<exists>n < length xs. P (xs ! n))"
-  unfolding list_ex_iff set_conv_nth by auto
+unfolding list_ex_iff set_conv_nth by auto
+
+lemma list_ex_cong[fundef_cong]:
+  "xs = ys \<Longrightarrow> (\<And>x. x \<in> set ys \<Longrightarrow> f x = g x) \<Longrightarrow> list_ex f xs = list_ex g ys"
+by (simp add: list_ex_iff)
 
 lemma filtermap_conv:
    "filtermap f xs = map (\<lambda>x. the (f x)) (filter (\<lambda>x. f x \<noteq> None) xs)"
@@ -4928,5 +4944,41 @@ by(simp add: all_from_to_int_iff_ball list_all_iff)
 lemma list_ex_iff_not_all_from_to_not_int[code_unfold]:
   "list_ex P [i..j] = (~ all_from_to_int (%x. ~P x) i j)"
 by(simp add: all_from_to_int_iff_ball list_ex_iff)
+
+
+subsubsection {* Use convenient predefined operations *}
+
+code_const "op @"
+  (SML infixr 7 "@")
+  (OCaml infixr 6 "@")
+  (Haskell infixr 5 "++")
+  (Scala infixl 7 "++")
+
+code_const map
+  (Haskell "map")
+
+code_const filter
+  (Haskell "filter")
+
+code_const concat
+  (Haskell "concat")
+
+code_const rev
+  (Haskell "reverse")
+
+code_const zip
+  (Haskell "zip")
+
+code_const takeWhile
+  (Haskell "takeWhile")
+
+code_const dropWhile
+  (Haskell "dropWhile")
+
+code_const hd
+  (Haskell "head")
+
+code_const last
+  (Haskell "last")
 
 end

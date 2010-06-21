@@ -29,14 +29,16 @@ sig
   val type_of_combterm : combterm -> fol_type
   val strip_combterm_comb : combterm -> combterm * combterm list
   val literals_of_term : theory -> term -> literal list * typ list
+  val conceal_skolem_somes :
+    int -> (string * term) list -> term -> (string * term) list * term
   exception TRIVIAL
   val make_conjecture_clauses : bool -> theory -> thm list -> hol_clause list
   val make_axiom_clauses : bool -> theory ->
        (thm * (axiom_name * hol_clause_id)) list -> (axiom_name * hol_clause) list
   val type_wrapper_name : string
-  val get_helper_clauses : bool -> theory -> bool ->
-       hol_clause list * (thm * (axiom_name * hol_clause_id)) list * string list ->
-       hol_clause list
+  val get_helper_clauses :
+    bool -> theory -> bool -> bool -> hol_clause list
+      -> (thm * (axiom_name * hol_clause_id)) list -> hol_clause list
   val write_tptp_file : bool -> bool -> bool -> Path.T ->
     hol_clause list * hol_clause list * hol_clause list * hol_clause list *
     classrel_clause list * arity_clause list -> name_pool option * int
@@ -52,13 +54,13 @@ open Sledgehammer_Util
 open Sledgehammer_FOL_Clause
 open Sledgehammer_Fact_Preprocessor
 
-fun min_arity_of const_min_arity c = the_default 0 (Symtab.lookup const_min_arity c);
+fun min_arity_of const_min_arity c =
+  the_default 0 (Symtab.lookup const_min_arity c)
 
 (*True if the constant ever appears outside of the top-level position in literals.
   If false, the constant always receives all of its arguments and is used as a predicate.*)
 fun needs_hBOOL explicit_apply const_needs_hBOOL c =
-  explicit_apply orelse
-    the_default false (Symtab.lookup const_needs_hBOOL c);
+  explicit_apply orelse the_default false (Symtab.lookup const_needs_hBOOL c)
 
 
 (******************************************************)
@@ -115,28 +117,31 @@ fun simp_type_of dfg (Type (a, Ts)) =
     TyVar (make_schematic_type_var x, string_of_indexname x);
 
 
-fun const_type_of dfg thy (c,t) =
-      let val (tp,ts) = type_of dfg t
-      in  (tp, ts, map (simp_type_of dfg) (Sign.const_typargs thy (c,t))) end;
-
 (* convert a Term.term (with combinators) into a combterm, also accummulate sort info *)
-fun combterm_of dfg thy (Const(c,t)) =
-      let val (tp,ts,tvar_list) = const_type_of dfg thy (c,t)
-          val c' = CombConst (`(make_fixed_const dfg) c, tp, tvar_list)
+fun combterm_of dfg thy (Const (c, T)) =
+      let
+        val (tp, ts) = type_of dfg T
+        val tvar_list =
+          (if String.isPrefix skolem_theory_name c then
+             [] |> Term.add_tvarsT T |> map TVar
+           else
+             (c, T) |> Sign.const_typargs thy)
+          |> map (simp_type_of dfg)
+        val c' = CombConst (`(make_fixed_const dfg) c, tp, tvar_list)
       in  (c',ts)  end
-  | combterm_of dfg _ (Free(v,t)) =
-      let val (tp,ts) = type_of dfg t
+  | combterm_of dfg _ (Free(v, T)) =
+      let val (tp,ts) = type_of dfg T
           val v' = CombConst (`make_fixed_var v, tp, [])
       in  (v',ts)  end
-  | combterm_of dfg _ (Var(v,t)) =
-      let val (tp,ts) = type_of dfg t
+  | combterm_of dfg _ (Var(v, T)) =
+      let val (tp,ts) = type_of dfg T
           val v' = CombVar ((make_schematic_var v, string_of_indexname v), tp)
       in  (v',ts)  end
   | combterm_of dfg thy (P $ Q) =
       let val (P',tsP) = combterm_of dfg thy P
           val (Q',tsQ) = combterm_of dfg thy Q
       in  (CombApp(P',Q'), union (op =) tsP tsQ)  end
-  | combterm_of _ _ (t as Abs _) = raise CLAUSE ("HOL CLAUSE", t);
+  | combterm_of _ _ (t as Abs _) = raise CLAUSE ("HOL clause", t);
 
 fun predicate_of dfg thy ((@{const Not} $ P), polarity) = predicate_of dfg thy (P, not polarity)
   | predicate_of dfg thy (t,polarity) = (combterm_of dfg thy (Envir.eta_contract t), polarity);
@@ -153,36 +158,78 @@ fun literals_of_term1 dfg thy args (@{const Trueprop} $ P) = literals_of_term1 d
 fun literals_of_term_dfg dfg thy P = literals_of_term1 dfg thy ([],[]) P;
 val literals_of_term = literals_of_term_dfg false;
 
+fun skolem_name i j num_T_args =
+  skolem_prefix ^ (space_implode "_" (map Int.toString [i, j, num_T_args])) ^
+  skolem_infix ^ "g"
+
+fun conceal_skolem_somes i skolem_somes t =
+  if exists_Const (curry (op =) @{const_name skolem_id} o fst) t then
+    let
+      fun aux skolem_somes
+              (t as (Const (@{const_name skolem_id}, Type (_, [_, T])) $ _)) =
+          let
+            val (skolem_somes, s) =
+              if i = ~1 then
+                (skolem_somes, @{const_name undefined})
+              else case AList.find (op aconv) skolem_somes t of
+                s :: _ => (skolem_somes, s)
+              | [] =>
+                let
+                  val s = skolem_theory_name ^ "." ^
+                          skolem_name i (length skolem_somes)
+                                        (length (Term.add_tvarsT T []))
+                in ((s, t) :: skolem_somes, s) end
+          in (skolem_somes, Const (s, T)) end
+        | aux skolem_somes (t1 $ t2) =
+          let
+            val (skolem_somes, t1) = aux skolem_somes t1
+            val (skolem_somes, t2) = aux skolem_somes t2
+          in (skolem_somes, t1 $ t2) end
+        | aux skolem_somes (Abs (s, T, t')) =
+          let val (skolem_somes, t') = aux skolem_somes t' in
+            (skolem_somes, Abs (s, T, t'))
+          end
+        | aux skolem_somes t = (skolem_somes, t)
+    in aux skolem_somes t end
+  else
+    (skolem_somes, t)
+
 (* Trivial problem, which resolution cannot handle (empty clause) *)
 exception TRIVIAL;
 
 (* making axiom and conjecture clauses *)
-fun make_clause dfg thy (clause_id, axiom_name, kind, th) =
-    let val (lits,ctypes_sorts) = literals_of_term_dfg dfg thy (prop_of th)
-    in
-        if forall isFalse lits then
-            raise TRIVIAL
-        else
-            HOLClause {clause_id = clause_id, axiom_name = axiom_name, th = th,
-                       kind = kind, literals = lits, ctypes_sorts = ctypes_sorts}
-    end;
-
-
-fun add_axiom_clause dfg thy (th, (name, id)) =
-  let val cls = make_clause dfg thy (id, name, Axiom, th) in
-    not (isTaut cls) ? cons (name, cls)
+fun make_clause dfg thy (clause_id, axiom_name, kind, th) skolem_somes =
+  let
+    val (skolem_somes, t) =
+      th |> prop_of |> conceal_skolem_somes clause_id skolem_somes
+    val (lits, ctypes_sorts) = literals_of_term_dfg dfg thy t
+  in
+    if forall isFalse lits then
+      raise TRIVIAL
+    else
+      (skolem_somes,
+       HOLClause {clause_id = clause_id, axiom_name = axiom_name, th = th,
+                  kind = kind, literals = lits, ctypes_sorts = ctypes_sorts})
   end
 
+fun add_axiom_clause dfg thy (th, (name, id)) (skolem_somes, clss) =
+  let
+    val (skolem_somes, cls) =
+      make_clause dfg thy (id, name, Axiom, th) skolem_somes
+  in (skolem_somes, clss |> not (isTaut cls) ? cons (name, cls)) end
+
 fun make_axiom_clauses dfg thy clauses =
-  fold (add_axiom_clause dfg thy) clauses []
+  ([], []) |> fold (add_axiom_clause dfg thy) clauses |> snd
 
-fun make_conjecture_clauses_aux _ _ _ [] = []
-  | make_conjecture_clauses_aux dfg thy n (th::ths) =
-      make_clause dfg thy (n,"conjecture", Conjecture, th) ::
-      make_conjecture_clauses_aux dfg thy (n+1) ths;
-
-fun make_conjecture_clauses dfg thy = make_conjecture_clauses_aux dfg thy 0;
-
+fun make_conjecture_clauses dfg thy =
+  let
+    fun aux _ _ [] = []
+      | aux n skolem_somes (th :: ths) =
+        let
+          val (skolem_somes, cls) =
+            make_clause dfg thy (n, "conjecture", Conjecture, th) skolem_somes
+        in cls :: aux (n + 1) skolem_somes ths end
+  in aux 0 [] end
 
 (**********************************************************************)
 (* convert clause into ATP specific formats:                          *)
@@ -376,10 +423,13 @@ fun add_clause_decls params (HOLClause {literals, ...}) decls =
     fold (add_literal_decls params) literals decls
     handle Symtab.DUP a => error ("function " ^ a ^ " has multiple arities")
 
-fun decls_of_clauses params clauses arity_clauses =
-  let val functab =
-        init_functab |> fold Symtab.update [(type_wrapper_name, 2), ("hAPP", 2),
-                                            ("tc_bool", 0)]
+fun decls_of_clauses (params as (full_types, explicit_apply, _, _)) clauses
+                     arity_clauses =
+  let
+    val functab =
+      init_functab
+      |> fold Symtab.update [(type_wrapper_name, 2), ("hAPP", 2),
+                             ("tc_bool", 0)]
       val predtab = Symtab.empty |> Symtab.update ("hBOOL", 1)
       val (functab, predtab) =
         (functab, predtab) |> fold (add_clause_decls params) clauses
@@ -402,10 +452,6 @@ fun preds_of_clauses clauses clsrel_clauses arity_clauses =
 (* write clauses to files                                             *)
 (**********************************************************************)
 
-val init_counters =
-  Symtab.make [("c_COMBI", 0), ("c_COMBK", 0), ("c_COMBB", 0), ("c_COMBC", 0),
-               ("c_COMBS", 0)];
-
 fun count_combterm (CombConst ((c, _), _, _)) =
     Symtab.map_entry c (Integer.add 1)
   | count_combterm (CombVar _) = I
@@ -415,33 +461,37 @@ fun count_literal (Literal (_, t)) = count_combterm t
 
 fun count_clause (HOLClause {literals, ...}) = fold count_literal literals
 
-fun count_user_clause user_lemmas (HOLClause {axiom_name, literals, ...}) =
-  member (op =) user_lemmas axiom_name ? fold count_literal literals
+val raw_cnf_rules_pairs = map (fn (name, thm) => (thm, (name, 0)))
+fun cnf_helper_thms thy raw =
+  map (`Thm.get_name_hint)
+  #> (if raw then raw_cnf_rules_pairs else cnf_rules_pairs thy)
 
-fun cnf_helper_thms thy = cnf_rules_pairs thy o map (`Thm.get_name_hint)
+val optional_helpers =
+  [(["c_COMBI", "c_COMBK"], (false, @{thms COMBI_def COMBK_def})),
+   (["c_COMBB", "c_COMBC"], (false, @{thms COMBB_def COMBC_def})),
+   (["c_COMBS"], (false, @{thms COMBS_def}))]
+val optional_typed_helpers =
+  [(["c_True", "c_False"], (true, @{thms True_or_False})),
+   (["c_If"], (true, @{thms if_True if_False True_or_False}))]
+val mandatory_helpers = @{thms fequal_imp_equal equal_imp_fequal}
 
-fun get_helper_clauses dfg thy isFO (conjectures, axcls, user_lemmas) =
-  if isFO then
-    []
-  else
-    let
-        val axclauses = map #2 (make_axiom_clauses dfg thy axcls)
-        val ct = init_counters |> fold count_clause conjectures
-                               |> fold (count_user_clause user_lemmas) axclauses
-        fun needed c = the (Symtab.lookup ct c) > 0
-        val IK = if needed "c_COMBI" orelse needed "c_COMBK"
-                 then cnf_helper_thms thy [@{thm COMBI_def}, @{thm COMBK_def}]
-                 else []
-        val BC = if needed "c_COMBB" orelse needed "c_COMBC"
-                 then cnf_helper_thms thy [@{thm COMBB_def}, @{thm COMBC_def}]
-                 else []
-        val S = if needed "c_COMBS" then cnf_helper_thms thy [@{thm COMBS_def}]
-                else []
-        val other = cnf_helper_thms thy [@{thm fequal_imp_equal},
-                                         @{thm equal_imp_fequal}]
-    in
-        map #2 (make_axiom_clauses dfg thy (other @ IK @ BC @ S))
-    end;
+val init_counters =
+  Symtab.make (maps (maps (map (rpair 0) o fst))
+                    [optional_helpers, optional_typed_helpers])
+
+fun get_helper_clauses dfg thy is_FO full_types conjectures axcls =
+  let
+    val axclauses = map snd (make_axiom_clauses dfg thy axcls)
+    val ct = fold (fold count_clause) [conjectures, axclauses] init_counters
+    fun is_needed c = the (Symtab.lookup ct c) > 0
+    val cnfs =
+      (optional_helpers
+       |> full_types ? append optional_typed_helpers
+       |> maps (fn (ss, (raw, ths)) =>
+                   if exists is_needed ss then cnf_helper_thms thy raw ths
+                   else []))
+      @ (if is_FO then [] else cnf_helper_thms thy false mandatory_helpers)
+  in map snd (make_axiom_clauses dfg thy cnfs) end
 
 (*Find the minimal arity of each function mentioned in the term. Also, note which uses
   are not at top level, to see if hBOOL is needed.*)
@@ -553,7 +603,8 @@ fun write_dfg_file full_types explicit_apply file clauses =
     val tfree_preds = map dfg_tfree_predicate tfree_lits
     val (helper_clauses_strs, pool) =
       pool_map (apfst fst oo dfg_clause params) helper_clauses pool
-    val (funcs, cl_preds) = decls_of_clauses params (helper_clauses @ conjectures @ axclauses) arity_clauses
+    val (funcs, cl_preds) =
+      decls_of_clauses params (helper_clauses @ conjectures @ axclauses) arity_clauses
     val ty_preds = preds_of_clauses axclauses classrel_clauses arity_clauses
     val preds = tfree_preds @ cl_preds @ ty_preds
     val conjecture_offset =

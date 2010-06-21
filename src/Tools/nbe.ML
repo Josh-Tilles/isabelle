@@ -396,17 +396,17 @@ fun compile_eqnss ctxt gr raw_deps [] = []
 
 (* preparing function equations *)
 
-fun eqns_of_stmt (_, Code_Thingol.Fun (_, (_, []))) =
+fun eqns_of_stmt (_, Code_Thingol.Fun (_, ((_, []), _))) =
       []
-  | eqns_of_stmt (const, Code_Thingol.Fun (_, ((vs, _), eqns))) =
+  | eqns_of_stmt (const, Code_Thingol.Fun (_, (((vs, _), eqns), _))) =
       [(const, (vs, map fst eqns))]
   | eqns_of_stmt (_, Code_Thingol.Datatypecons _) =
       []
   | eqns_of_stmt (_, Code_Thingol.Datatype _) =
       []
-  | eqns_of_stmt (class, Code_Thingol.Class (_, (v, (superclasses, classops)))) =
+  | eqns_of_stmt (class, Code_Thingol.Class (_, (v, (super_classes, classparams)))) =
       let
-        val names = map snd superclasses @ map fst classops;
+        val names = map snd super_classes @ map fst classparams;
         val params = Name.invent_list [] "d" (length names);
         fun mk (k, name) =
           (name, ([(v, [])],
@@ -417,10 +417,10 @@ fun eqns_of_stmt (_, Code_Thingol.Fun (_, (_, []))) =
       []
   | eqns_of_stmt (_, Code_Thingol.Classparam _) =
       []
-  | eqns_of_stmt (inst, Code_Thingol.Classinst ((class, (_, arities)), (superinsts, instops))) =
-      [(inst, (arities, [([], IConst (class, (([], []), [])) `$$
-        map (fn (_, (_, (inst, dicts))) => IConst (inst, (([], dicts), []))) superinsts
-        @ map (IConst o snd o fst) instops)]))];
+  | eqns_of_stmt (inst, Code_Thingol.Classinst ((class, (_, arity_args)), (super_instances, (classparam_instances, _)))) =
+      [(inst, (arity_args, [([], IConst (class, (([], []), [])) `$$
+        map (fn (_, (_, (inst, dss))) => IConst (inst, (([], dss), []))) super_instances
+        @ map (IConst o snd o fst) classparam_instances)]))];
 
 fun compile_stmts ctxt stmts_deps =
   let
@@ -581,19 +581,6 @@ val (_, raw_norm_oracle) = Context.>>> (Context.map_theory_result
 fun norm_oracle thy program vsp_ty_t deps ct =
   raw_norm_oracle (thy, program, vsp_ty_t, deps, ct);
 
-fun no_frees_conv conv ct =
-  let
-    val frees = Thm.add_cterm_frees ct [];
-    fun apply_beta free thm = Thm.combination thm (Thm.reflexive free)
-      |> Conv.fconv_rule (Conv.arg_conv (Conv.try_conv (Thm.beta_conversion false)))
-      |> Conv.fconv_rule (Conv.arg1_conv (Thm.beta_conversion false));
-  in
-    ct
-    |> fold_rev Thm.cabs frees
-    |> conv
-    |> fold apply_beta frees
-  end;
-
 fun no_frees_rew rew t =
   let
     val frees = map Free (Term.add_frees t []);
@@ -604,7 +591,7 @@ fun no_frees_rew rew t =
     |> (fn t' => Term.betapplys (t', frees))
   end;
 
-val norm_conv = no_frees_conv (fn ct =>
+val norm_conv = Code_Simp.no_frees_conv (fn ct =>
   let
     val thy = Thm.theory_of_cterm ct;
   in lift_triv_classes_conv thy (Code_Thingol.eval_conv thy (K (norm_oracle thy))) ct end);

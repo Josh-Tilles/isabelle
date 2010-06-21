@@ -66,20 +66,23 @@ sig
 
   datatype stmt =
       NoStmt
-    | Fun of string * (typscheme * ((iterm list * iterm) * (thm option * bool)) list)
-    | Datatype of string * ((vname * sort) list * (string * itype list) list)
+    | Fun of string * ((typscheme * ((iterm list * iterm) * (thm option * bool)) list) * thm option)
+    | Datatype of string * ((vname * sort) list *
+        ((string * vname list (*type argument wrt. canonical order*)) * itype list) list)
     | Datatypecons of string * string
     | Class of class * (vname * ((class * string) list * (string * itype) list))
     | Classrel of class * class
     | Classparam of string * class
-    | Classinst of (class * (string * (vname * sort) list))
-          * ((class * (string * (string * dict list list))) list
-        * ((string * const) * (thm * bool)) list)
+    | Classinst of (class * (string * (vname * sort) list) (*class and arity*))
+          * ((class * (string * (string * dict list list))) list (*super instances*)
+        * (((string * const) * (thm * bool)) list (*class parameter instances*)
+          * ((string * const) * (thm * bool)) list (*super class parameter instances*)))
   type program = stmt Graph.T
   val empty_funs: program -> string list
   val map_terms_bottom_up: (iterm -> iterm) -> iterm -> iterm
   val map_terms_stmt: (iterm -> iterm) -> stmt -> stmt
   val is_cons: program -> string -> bool
+  val is_case: stmt -> bool
   val contr_classparam_typs: program -> string -> itype option list
   val labelled_name: theory -> program -> string -> string
   val group_stmts: theory -> program
@@ -276,8 +279,8 @@ local
 in
 
 fun namify_class thy = namify thy Long_Name.base_name thyname_of_class;
-fun namify_classrel thy = namify thy (fn (class1, class2) => 
-    Long_Name.base_name class2 ^ "_" ^ Long_Name.base_name class1)
+fun namify_classrel thy = namify thy (fn (sub_class, super_class) => 
+    Long_Name.base_name super_class ^ "_" ^ Long_Name.base_name sub_class)
   (fn thy => thyname_of_class thy o fst);
   (*order fits nicely with composed projections*)
 fun namify_tyco thy "fun" = "Pure.fun"
@@ -386,11 +389,12 @@ fun ensure_declared_const thy const naming =
    of SOME const' => (const', naming)
     | NONE => declare_const thy const naming;
 
-val fun_tyco = "Pure.fun.tyco" (*depends on suffix_tyco and namify_tyco!*);
+val fun_tyco = Long_Name.append (namify_tyco Pure.thy "fun") suffix_tyco
+  (*depends on add_suffix*);
 
 val unfold_fun = unfoldr
   (fn tyco `%% [ty1, ty2] => if tyco = fun_tyco then SOME (ty1, ty2) else NONE
-    | _ => NONE); (*depends on suffix_tyco and namify_tyco!*)
+    | _ => NONE);
 
 end; (* local *)
 
@@ -400,20 +404,22 @@ end; (* local *)
 type typscheme = (vname * sort) list * itype;
 datatype stmt =
     NoStmt
-  | Fun of string * (typscheme * ((iterm list * iterm) * (thm option * bool)) list)
-  | Datatype of string * ((vname * sort) list * (string * itype list) list)
+  | Fun of string * ((typscheme * ((iterm list * iterm) * (thm option * bool)) list) * thm option)
+  | Datatype of string * ((vname * sort) list * ((string * vname list) * itype list) list)
   | Datatypecons of string * string
   | Class of class * (vname * ((class * string) list * (string * itype) list))
   | Classrel of class * class
   | Classparam of string * class
   | Classinst of (class * (string * (vname * sort) list))
         * ((class * (string * (string * dict list list))) list
-      * ((string * const) * (thm * bool)) list);
+      * (((string * const) * (thm * bool)) list
+        * ((string * const) * (thm * bool)) list))
+      (*see also signature*);
 
 type program = stmt Graph.T;
 
 fun empty_funs program =
-  Graph.fold (fn (name, (Fun (c, (_, [])), _)) => cons c
+  Graph.fold (fn (name, (Fun (c, ((_, []), _)), _)) => cons c
                | _ => I) program [];
 
 fun map_terms_bottom_up f (t as IConst _) = f t
@@ -426,21 +432,26 @@ fun map_terms_bottom_up f (t as IConst _) = f t
       (ICase (((map_terms_bottom_up f t, ty), (map o pairself)
         (map_terms_bottom_up f) ps), map_terms_bottom_up f t0));
 
+fun map_classparam_instances_as_term f =
+  (map o apfst o apsnd) (fn const => case f (IConst const) of IConst const' => const')
+
 fun map_terms_stmt f NoStmt = NoStmt
-  | map_terms_stmt f (Fun (c, (tysm, eqs))) = Fun (c, (tysm, (map o apfst)
-      (fn (ts, t) => (map f ts, f t)) eqs))
+  | map_terms_stmt f (Fun (c, ((tysm, eqs), case_cong))) = Fun (c, ((tysm, (map o apfst)
+      (fn (ts, t) => (map f ts, f t)) eqs), case_cong))
   | map_terms_stmt f (stmt as Datatype _) = stmt
   | map_terms_stmt f (stmt as Datatypecons _) = stmt
   | map_terms_stmt f (stmt as Class _) = stmt
   | map_terms_stmt f (stmt as Classrel _) = stmt
   | map_terms_stmt f (stmt as Classparam _) = stmt
-  | map_terms_stmt f (Classinst (arity, (superinsts, classparams))) =
-      Classinst (arity, (superinsts, (map o apfst o apsnd) (fn const =>
-        case f (IConst const) of IConst const' => const') classparams));
+  | map_terms_stmt f (Classinst (arity, (super_instances, classparam_instances))) =
+      Classinst (arity, (super_instances, (pairself o map_classparam_instances_as_term) f classparam_instances));
 
 fun is_cons program name = case Graph.get_node program name
  of Datatypecons _ => true
   | _ => false;
+
+fun is_case (Fun (_, (_, SOME _))) = true
+  | is_case _ = false;
 
 fun contr_classparam_typs program name = case Graph.get_node program name
  of Classparam (_, class) => let
@@ -470,6 +481,10 @@ fun labelled_name thy program name = case Graph.get_node program name
         val Datatype (tyco, _) = Graph.get_node program tyco
       in quote (Sign.extern_type thy tyco ^ " :: " ^ Sign.extern_class thy class) end
 
+fun linear_stmts program =
+  rev (Graph.strong_conn program)
+  |> map (AList.make (Graph.get_node program));
+
 fun group_stmts thy program =
   let
     fun is_fun (_, Fun _) = true | is_fun _ = false;
@@ -489,8 +504,7 @@ fun group_stmts thy program =
       else error ("Illegal mutual dependencies: " ^
         (commas o map (labelled_name thy program o fst)) stmts)
   in
-    rev (Graph.strong_conn program)
-    |> map (AList.make (Graph.get_node program))
+    linear_stmts program
     |> map group
   end;
 
@@ -549,8 +563,9 @@ fun ensure_tyco thy algbr eqngr permissive tyco =
     val (vs, cos) = Code.get_type thy tyco;
     val stmt_datatype =
       fold_map (translate_tyvar_sort thy algbr eqngr permissive) vs
-      ##>> fold_map (fn (c, tys) =>
+      ##>> fold_map (fn ((c, vs), tys) =>
         ensure_const thy algbr eqngr permissive c
+        ##>> pair (map (unprefix "'") vs)
         ##>> fold_map (translate_typ thy algbr eqngr permissive) tys) cos
       #>> (fn info => Datatype (tyco, info));
   in ensure_stmt lookup_tyco (declare_tyco thy) stmt_datatype tyco end
@@ -565,12 +580,12 @@ and ensure_const thy algbr eqngr permissive c =
     fun stmt_fun cert =
       let
         val ((vs, ty), eqns) = Code.equations_of_cert thy cert;
+        val some_case_cong = Code.get_case_cong thy c;
       in
         fold_map (translate_tyvar_sort thy algbr eqngr permissive) vs
         ##>> translate_typ thy algbr eqngr permissive ty
-        ##>> (fold_map (translate_equation thy algbr eqngr permissive) eqns
-          #>> map_filter I)
-        #>> (fn info => Fun (c, info))
+        ##>> translate_eqns thy algbr eqngr permissive eqns
+        #>> (fn info => Fun (c, (info, some_case_cong)))
       end;
     val stmt_const = case Code.get_type_of_constr_or_abstr thy c
      of SOME (tyco, _) => stmt_datatypecons tyco
@@ -580,57 +595,63 @@ and ensure_const thy algbr eqngr permissive c =
   in ensure_stmt lookup_const (declare_const thy) stmt_const c end
 and ensure_class thy (algbr as (_, algebra)) eqngr permissive class =
   let
-    val superclasses = (Sorts.minimize_sort algebra o Sorts.super_classes algebra) class;
+    val super_classes = (Sorts.minimize_sort algebra o Sorts.super_classes algebra) class;
     val cs = #params (AxClass.get_info thy class);
     val stmt_class =
-      fold_map (fn superclass => ensure_class thy algbr eqngr permissive superclass
-        ##>> ensure_classrel thy algbr eqngr permissive (class, superclass)) superclasses
+      fold_map (fn super_class => ensure_class thy algbr eqngr permissive super_class
+        ##>> ensure_classrel thy algbr eqngr permissive (class, super_class)) super_classes
       ##>> fold_map (fn (c, ty) => ensure_const thy algbr eqngr permissive c
         ##>> translate_typ thy algbr eqngr permissive ty) cs
       #>> (fn info => Class (class, (unprefix "'" Name.aT, info)))
   in ensure_stmt lookup_class (declare_class thy) stmt_class class end
-and ensure_classrel thy algbr eqngr permissive (subclass, superclass) =
+and ensure_classrel thy algbr eqngr permissive (sub_class, super_class) =
   let
     val stmt_classrel =
-      ensure_class thy algbr eqngr permissive subclass
-      ##>> ensure_class thy algbr eqngr permissive superclass
+      ensure_class thy algbr eqngr permissive sub_class
+      ##>> ensure_class thy algbr eqngr permissive super_class
       #>> Classrel;
-  in ensure_stmt lookup_classrel (declare_classrel thy) stmt_classrel (subclass, superclass) end
+  in ensure_stmt lookup_classrel (declare_classrel thy) stmt_classrel (sub_class, super_class) end
 and ensure_inst thy (algbr as (_, algebra)) eqngr permissive (class, tyco) =
   let
-    val superclasses = (Sorts.minimize_sort algebra o Sorts.super_classes algebra) class;
-    val classparams = these (try (#params o AxClass.get_info thy) class);
+    val super_classes = (Sorts.minimize_sort algebra o Sorts.super_classes algebra) class;
+    val these_classparams = these o try (#params o AxClass.get_info thy);
+    val classparams = these_classparams class;
+    val further_classparams = maps these_classparams
+      ((Sorts.complete_sort algebra o Sorts.super_classes algebra) class);
     val vs = Name.names Name.context "'a" (Sorts.mg_domain algebra tyco [class]);
     val sorts' = Sorts.mg_domain (Sign.classes_of thy) tyco [class];
     val vs' = map2 (fn (v, sort1) => fn sort2 => (v,
       Sorts.inter_sort (Sign.classes_of thy) (sort1, sort2))) vs sorts';
     val arity_typ = Type (tyco, map TFree vs);
     val arity_typ' = Type (tyco, map (fn (v, sort) => TVar ((v, 0), sort)) vs');
-    fun translate_superarity superclass =
-      ensure_class thy algbr eqngr permissive superclass
-      ##>> ensure_classrel thy algbr eqngr permissive (class, superclass)
-      ##>> translate_dicts thy algbr eqngr permissive NONE (arity_typ, [superclass])
-      #>> (fn ((superclass, classrel), [DictConst (inst, dss)]) =>
-            (superclass, (classrel, (inst, dss))));
-    fun translate_classparam_inst (c, ty) =
+    fun translate_super_instance super_class =
+      ensure_class thy algbr eqngr permissive super_class
+      ##>> ensure_classrel thy algbr eqngr permissive (class, super_class)
+      ##>> translate_dicts thy algbr eqngr permissive NONE (arity_typ, [super_class])
+      #>> (fn ((super_class, classrel), [DictConst (inst, dss)]) =>
+            (super_class, (classrel, (inst, dss))));
+    fun translate_classparam_instance (c, ty) =
       let
-        val c_inst = Const (c, map_type_tfree (K arity_typ') ty);
-        val thm = AxClass.unoverload_conv thy (Thm.cterm_of thy c_inst);
-        val c_ty = (apsnd Logic.unvarifyT_global o dest_Const o snd
+        val raw_const = Const (c, map_type_tfree (K arity_typ') ty);
+        val thm = AxClass.unoverload_conv thy (Thm.cterm_of thy raw_const);
+        val const = (apsnd Logic.unvarifyT_global o dest_Const o snd
           o Logic.dest_equals o Thm.prop_of) thm;
       in
         ensure_const thy algbr eqngr permissive c
-        ##>> translate_const thy algbr eqngr permissive (SOME thm) (c_ty, NONE)
-        #>> (fn (c, IConst c_inst) => ((c, c_inst), (thm, true)))
+        ##>> translate_const thy algbr eqngr permissive (SOME thm) (const, NONE)
+        #>> (fn (c, IConst const') => ((c, const'), (thm, true)))
       end;
     val stmt_inst =
       ensure_class thy algbr eqngr permissive class
       ##>> ensure_tyco thy algbr eqngr permissive tyco
       ##>> fold_map (translate_tyvar_sort thy algbr eqngr permissive) vs
-      ##>> fold_map translate_superarity superclasses
-      ##>> fold_map translate_classparam_inst classparams
-      #>> (fn ((((class, tyco), arity), superinsts), classparams) =>
-             Classinst ((class, (tyco, arity)), (superinsts, classparams)));
+      ##>> fold_map translate_super_instance super_classes
+      ##>> fold_map translate_classparam_instance classparams
+      ##>> fold_map translate_classparam_instance further_classparams
+      #>> (fn (((((class, tyco), arity_args), super_instances),
+        classparam_instances), further_classparam_instances) =>
+          Classinst ((class, (tyco, arity_args)), (super_instances,
+            (classparam_instances, further_classparam_instances))));
   in ensure_stmt lookup_instance (declare_instance thy) stmt_inst (class, tyco) end
 and translate_typ thy algbr eqngr permissive (TFree (v, _)) =
       pair (ITyVar (unprefix "'" v))
@@ -664,9 +685,9 @@ and translate_eqn thy algbr eqngr permissive ((args, (rhs, some_abs)), (some_thm
   fold_map (translate_term thy algbr eqngr permissive some_thm) args
   ##>> translate_term thy algbr eqngr permissive some_thm (rhs, some_abs)
   #>> rpair (some_thm, proper)
-and translate_equation thy algbr eqngr permissive eqn prgrm =
-  prgrm |> translate_eqn thy algbr eqngr permissive eqn |>> SOME
-    handle PERMISSIVE () => (NONE, prgrm)
+and translate_eqns thy algbr eqngr permissive eqns prgrm =
+  prgrm |> fold_map (translate_eqn thy algbr eqngr permissive) eqns
+    handle PERMISSIVE () => ([], prgrm)
 and translate_const thy algbr eqngr permissive some_thm ((c, ty), some_abs) =
   let
     val _ = if (case some_abs of NONE => true | SOME abs => not (c = abs))
@@ -674,15 +695,15 @@ and translate_const thy algbr eqngr permissive some_thm ((c, ty), some_abs) =
         then translation_error thy permissive some_thm
           "Abstraction violation" ("constant " ^ Code.string_of_const thy c)
       else ()
-    val tys = Sign.const_typargs thy (c, ty);
+    val arg_typs = Sign.const_typargs thy (c, ty);
     val sorts = Code_Preproc.sortargs eqngr c;
-    val tys_args = (fst o Term.strip_type) ty;
+    val function_typs = (fst o Term.strip_type) ty;
   in
     ensure_const thy algbr eqngr permissive c
-    ##>> fold_map (translate_typ thy algbr eqngr permissive) tys
-    ##>> fold_map (translate_dicts thy algbr eqngr permissive some_thm) (tys ~~ sorts)
-    ##>> fold_map (translate_typ thy algbr eqngr permissive) tys_args
-    #>> (fn (((c, tys), iss), tys_args) => IConst (c, ((tys, iss), tys_args)))
+    ##>> fold_map (translate_typ thy algbr eqngr permissive) arg_typs
+    ##>> fold_map (translate_dicts thy algbr eqngr permissive some_thm) (arg_typs ~~ sorts)
+    ##>> fold_map (translate_typ thy algbr eqngr permissive) function_typs
+    #>> (fn (((c, arg_typs), dss), function_typs) => IConst (c, ((arg_typs, dss), function_typs)))
   end
 and translate_app_const thy algbr eqngr permissive some_thm ((c_ty, ts), some_abs) =
   translate_const thy algbr eqngr permissive some_thm (c_ty, some_abs)
@@ -772,8 +793,8 @@ and translate_dicts thy (algbr as (proj_sort, algebra)) eqngr permissive some_th
       | Local of (class * class) list * (string * (int * sort));
     fun class_relation (Global ((_, tyco), yss), _) class =
           Global ((class, tyco), yss)
-      | class_relation (Local (classrels, v), subclass) superclass =
-          Local ((subclass, superclass) :: classrels, v);
+      | class_relation (Local (classrels, v), sub_class) super_class =
+          Local ((sub_class, super_class) :: classrels, v);
     fun type_constructor (tyco, _) yss class =
       Global ((class, tyco), (map o map) fst yss);
     fun type_variable (TFree (v, sort)) =
@@ -844,10 +865,10 @@ fun ensure_value thy algbr eqngr t =
       ##>> translate_typ thy algbr eqngr false ty
       ##>> translate_term thy algbr eqngr false NONE (Code.subst_signatures thy t, NONE)
       #>> (fn ((vs, ty), t) => Fun
-        (Term.dummy_patternN, ((vs, ty), [(([], t), (NONE, true))])));
+        (Term.dummy_patternN, (((vs, ty), [(([], t), (NONE, true))]), NONE)));
     fun term_value (dep, (naming, program1)) =
       let
-        val Fun (_, (vs_ty, [(([], t), _)])) =
+        val Fun (_, ((vs_ty, [(([], t), _)]), _)) =
           Graph.get_node program1 Term.dummy_patternN;
         val deps = Graph.imm_succs program1 Term.dummy_patternN;
         val program2 = Graph.del_nodes [Term.dummy_patternN] program1;

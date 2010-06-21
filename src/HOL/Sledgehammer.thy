@@ -25,6 +25,9 @@ uses
   ("Tools/Sledgehammer/metis_tactics.ML")
 begin
 
+definition skolem_id :: "'a \<Rightarrow> 'a" where
+[no_atp]: "skolem_id = (\<lambda>x. x)"
+
 definition COMBI :: "'a \<Rightarrow> 'a" where
 [no_atp]: "COMBI P \<equiv> P"
 

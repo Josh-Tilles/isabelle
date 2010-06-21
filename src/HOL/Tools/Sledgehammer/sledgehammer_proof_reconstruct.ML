@@ -14,17 +14,17 @@ sig
   val invert_type_const: string -> string
   val num_type_args: theory -> string -> int
   val strip_prefix: string -> string -> string option
-  val metis_line: int -> int -> string list -> string
+  val metis_line: bool -> int -> int -> string list -> string
   val metis_proof_text:
-    minimize_command * string * string vector * thm * int
+    bool * minimize_command * string * string vector * thm * int
     -> string * string list
   val isar_proof_text:
-    name_pool option * bool * bool * int * Proof.context * int list list
-    -> minimize_command * string * string vector * thm * int
+    name_pool option * bool * int * Proof.context * int list list
+    -> bool * minimize_command * string * string vector * thm * int
     -> string * string list
   val proof_text:
-    bool -> name_pool option * bool * bool * int * Proof.context * int list list
-    -> minimize_command * string * string vector * thm * int
+    bool -> name_pool option * bool * int * Proof.context * int list list
+    -> bool * minimize_command * string * string vector * thm * int
     -> string * string list
 end;
 
@@ -40,12 +40,6 @@ type minimize_command = string list -> string
 
 fun is_ident_char c = Char.isAlphaNum c orelse c = #"_"
 fun is_head_digit s = Char.isDigit (String.sub (s, 0))
-
-(* Hack: Could return false positives (e.g., a user happens to declare a
-   constant called "SomeTheory.sko_means_shoe_in_$wedish". *)
-val is_skolem_const_name =
-  Long_Name.base_name
-  #> String.isPrefix skolem_prefix andf String.isSubstring skolem_infix
 
 val index_in_shape : int -> int list list -> int =
   find_index o exists o curry (op =)
@@ -263,9 +257,16 @@ val const_trans_table_inv =
 
 fun invert_const c = c |> Symtab.lookup const_trans_table_inv |> the_default c
 
-(*The number of type arguments of a constant, zero if it's monomorphic*)
+(* The number of type arguments of a constant, zero if it's monomorphic. For
+   (instances of) Skolem pseudoconstants, this information is encoded in the
+   constant name. *)
 fun num_type_args thy s =
-  length (Sign.const_typargs thy (s, Sign.the_const_type thy s))
+  if String.isPrefix skolem_theory_name s then
+    s |> unprefix skolem_theory_name
+      |> space_explode skolem_infix |> hd
+      |> space_explode "_" |> List.last |> Int.fromString |> the
+  else
+    (s, Sign.the_const_type thy s) |> Sign.const_typargs thy |> length
 
 fun fix_atp_variable_name s =
   let
@@ -323,9 +324,12 @@ fun term_from_node thy full_types tfrees =
                         else
                           (* Extra args from "hAPP" come after any arguments
                              given directly to the constant. *)
-                          Sign.const_instance thy (c,
-                                    map (type_from_node tfrees)
-                                        (drop num_term_args us)))
+                          if String.isPrefix skolem_theory_name c then
+                            map fastype_of ts ---> HOLogic.typeT
+                          else
+                            Sign.const_instance thy (c,
+                                map (type_from_node tfrees)
+                                    (drop num_term_args us)))
           in list_comb (t, ts) end
         | NONE => (* a free or schematic variable *)
           let
@@ -580,16 +584,31 @@ fun extract_clause_numbers_in_atp_proof atp_proof =
       | extract_num (num :: "0" :: "Inp" :: _) = Int.fromString num
       | extract_num _ = NONE
   in atp_proof |> split_lines |> map_filter (extract_num o tokens_of) end
-  
-fun apply_command _ 1 = "by "
-  | apply_command 1 _ = "apply "
-  | apply_command i _ = "prefer " ^ string_of_int i ^ " apply "
-fun metis_command i n [] = apply_command i n ^ "metis"
-  | metis_command i n ss =
-    apply_command i n ^ "(metis " ^ space_implode " " ss ^ ")"
-fun metis_line i n xs =
+
+val indent_size = 2
+val no_label = ("", ~1)
+
+val raw_prefix = "X"
+val assum_prefix = "A"
+val fact_prefix = "F"
+
+fun string_for_label (s, num) = s ^ string_of_int num
+
+fun metis_using [] = ""
+  | metis_using ls =
+    "using " ^ space_implode " " (map string_for_label ls) ^ " "
+fun metis_apply _ 1 = "by "
+  | metis_apply 1 _ = "apply "
+  | metis_apply i _ = "prefer " ^ string_of_int i ^ " apply "
+fun metis_name full_types = if full_types then "metisFT" else "metis"
+fun metis_call full_types [] = metis_name full_types
+  | metis_call full_types ss =
+    "(" ^ metis_name full_types ^ " " ^ space_implode " " ss ^ ")"
+fun metis_command full_types i n (ls, ss) =
+  metis_using ls ^ metis_apply i n ^ metis_call full_types ss
+fun metis_line full_types i n ss =
   "Try this command: " ^
-  Markup.markup Markup.sendback (metis_command i n xs) ^ ".\n" 
+  Markup.markup Markup.sendback (metis_command full_types i n ([], ss)) ^ ".\n"
 fun minimize_line _ [] = ""
   | minimize_line minimize_command facts =
     case minimize_command facts of
@@ -600,7 +619,8 @@ fun minimize_line _ [] = ""
 
 val unprefix_chained = perhaps (try (unprefix chained_prefix))
 
-fun metis_proof_text (minimize_command, atp_proof, thm_names, goal, i) =
+fun metis_proof_text (full_types, minimize_command, atp_proof, thm_names, goal,
+                      i) =
   let
     val raw_lemmas =
       atp_proof |> extract_clause_numbers_in_atp_proof
@@ -613,8 +633,8 @@ fun metis_proof_text (minimize_command, atp_proof, thm_names, goal, i) =
     val lemmas = other_lemmas @ chained_lemmas
     val n = Logic.count_prems (prop_of goal)
   in
-    (metis_line i n other_lemmas ^ minimize_line minimize_command lemmas,
-     lemmas)
+    (metis_line full_types i n other_lemmas ^
+     minimize_line minimize_command lemmas, lemmas)
   end
 
 (** Isar proof construction and manipulation **)
@@ -638,15 +658,6 @@ and byline =
 
 fun smart_case_split [] facts = ByMetis facts
   | smart_case_split proofs facts = CaseSplit (proofs, facts)
-
-val indent_size = 2
-val no_label = ("", ~1)
-
-val raw_prefix = "X"
-val assum_prefix = "A"
-val fact_prefix = "F"
-
-fun string_for_label (s, num) = s ^ string_of_int num
 
 fun add_fact_from_dep thm_names num =
   if is_axiom_clause_number thm_names num then
@@ -924,7 +935,7 @@ val relabel_proof =
         step :: aux subst depth nextp proof
   in aux [] 0 (1, 1) end
 
-fun string_for_proof ctxt i n =
+fun string_for_proof ctxt full_types i n =
   let
     fun fix_print_mode f x =
       setmp_CRITICAL show_no_free_types true
@@ -948,7 +959,7 @@ fun string_for_proof ctxt i n =
       let
         val ls = ls |> sort_distinct (prod_ord string_ord int_ord)
         val ss = ss |> map unprefix_chained |> sort_distinct string_ord
-      in metis_command 1 1 (map string_for_label ls @ ss) end
+      in metis_command full_types 1 1 (ls, ss) end
     and do_step ind (Fix xs) =
         do_indent ind ^ "fix " ^ space_implode " and " (map do_free xs) ^ "\n"
       | do_step ind (Let (t1, t2)) =
@@ -981,17 +992,16 @@ fun string_for_proof ctxt i n =
         do_indent 0 ^ (if n <> 1 then "next" else "qed") ^ "\n"
   in do_proof end
 
-fun isar_proof_text (pool, debug, full_types, isar_shrink_factor, ctxt,
-                     conjecture_shape)
-                    (minimize_command, atp_proof, thm_names, goal, i) =
+fun isar_proof_text (pool, debug, isar_shrink_factor, ctxt, conjecture_shape)
+                    (other_params as (full_types, _, atp_proof, thm_names, goal,
+                                      i)) =
   let
     val thy = ProofContext.theory_of ctxt
     val (params, hyp_ts, concl_t) = strip_subgoal goal i
     val frees = fold Term.add_frees (concl_t :: hyp_ts) []
     val tfrees = fold Term.add_tfrees (concl_t :: hyp_ts) []
     val n = Logic.count_prems (prop_of goal)
-    val (one_line_proof, lemma_names) =
-      metis_proof_text (minimize_command, atp_proof, thm_names, goal, i)
+    val (one_line_proof, lemma_names) = metis_proof_text other_params
     fun isar_proof_for () =
       case proof_from_atp_proof pool ctxt full_types tfrees isar_shrink_factor
                                 atp_proof conjecture_shape thm_names params
@@ -1001,7 +1011,7 @@ fun isar_proof_text (pool, debug, full_types, isar_shrink_factor, ctxt,
            |> then_chain_proof
            |> kill_useless_labels_in_proof
            |> relabel_proof
-           |> string_for_proof ctxt i n of
+           |> string_for_proof ctxt full_types i n of
         "" => ""
       | proof => "\nStructured proof:\n" ^ Markup.markup Markup.sendback proof
     val isar_proof =

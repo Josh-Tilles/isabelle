@@ -87,6 +87,8 @@ fun extract_proof_and_outcome res_code proof_delims known_failures output =
   | (failure :: _) => ("", SOME failure)
 
 fun string_for_failure Unprovable = "The ATP problem is unprovable."
+  | string_for_failure IncompleteUnprovable =
+    "The ATP cannot prove the problem."
   | string_for_failure TimedOut = "Timed out."
   | string_for_failure OutOfResources = "The ATP ran out of resources."
   | string_for_failure OldSpass =
@@ -220,9 +222,9 @@ fun generic_prover overlord get_facts prepare write_file home_var executable
       case outcome of
         NONE =>
         proof_text isar_proof
-            (pool, debug, full_types, isar_shrink_factor, ctxt,
-             conjecture_shape)
-            (minimize_command, proof, internal_thm_names, th, subgoal)
+            (pool, debug, isar_shrink_factor, ctxt, conjecture_shape)
+            (full_types, minimize_command, proof, internal_thm_names, th,
+             subgoal)
       | SOME failure => (string_for_failure failure ^ "\n", [])
   in
     {outcome = outcome, message = message, pool = pool,
@@ -247,7 +249,7 @@ fun generic_tptp_prover
       (relevant_facts full_types respect_no_atp relevance_threshold
                       relevance_convergence defs_relevant max_axiom_clauses
                       (the_default prefers_theory_relevant theory_relevant))
-      (prepare_clauses false)
+      (prepare_clauses false full_types)
       (write_tptp_file (debug andalso overlord)) home_var
       executable (arguments timeout) proof_delims known_failures name params
       minimize_command
@@ -274,9 +276,9 @@ val vampire_config : prover_config =
        "======= End of refutation ======="),
       ("% SZS output start Refutation", "% SZS output end Refutation")],
    known_failures =
-     [(Unprovable, "Satisfiability detected"),
-      (Unprovable, "UNPROVABLE"),
-      (Unprovable, "CANNOT PROVE"),
+     [(Unprovable, "UNPROVABLE"),
+      (IncompleteUnprovable, "CANNOT PROVE"),
+      (Unprovable, "Satisfiability detected"),
       (OutOfResources, "Refutation not found")],
    max_axiom_clauses = 60,
    prefers_theory_relevant = false}
@@ -321,7 +323,7 @@ fun generic_dfg_prover
       (relevant_facts full_types respect_no_atp relevance_threshold
                       relevance_convergence defs_relevant max_axiom_clauses
                       (the_default prefers_theory_relevant theory_relevant))
-      (prepare_clauses true) write_dfg_file home_var executable
+      (prepare_clauses true full_types) write_dfg_file home_var executable
       (arguments timeout) proof_delims known_failures name params
       minimize_command
 
@@ -329,39 +331,29 @@ fun dfg_prover name p = (name, generic_dfg_prover (name, p))
 
 (* The "-VarWeight=3" option helps the higher-order problems, probably by
    counteracting the presence of "hAPP". *)
-val spass_config : prover_config =
+fun generic_spass_config dfg : prover_config =
   {home_var = "SPASS_HOME",
    executable = "SPASS",
    arguments = fn timeout =>
      "-Auto -SOS=1 -PGiven=0 -PProblem=0 -Splits=0 -FullRed=0 -DocProof \
-     \-VarWeight=3 -TimeLimit=" ^ string_of_int (to_generous_secs timeout),
+     \-VarWeight=3 -TimeLimit=" ^ string_of_int (to_generous_secs timeout)
+     |> not dfg ? prefix "-TPTP ",
    proof_delims = [("Here is a proof", "Formulae used in the proof")],
    known_failures =
-     [(Unprovable, "SPASS beiseite: Completion found"),
+     [(IncompleteUnprovable, "SPASS beiseite: Completion found"),
       (TimedOut, "SPASS beiseite: Ran out of time"),
       (OutOfResources, "SPASS beiseite: Maximal number of loops exceeded"),
-      (MalformedInput, "Undefined symbol")],
+      (MalformedInput, "Undefined symbol"),
+      (MalformedInput, "Free Variable"),
+      (OldSpass, "unrecognized option `-TPTP'"),
+      (OldSpass, "Unrecognized option TPTP")],
    max_axiom_clauses = 40,
    prefers_theory_relevant = true}
-val spass = dfg_prover "spass" spass_config
+val spass_dfg_config = generic_spass_config true
+val spass_dfg = dfg_prover "spass_dfg" spass_dfg_config
 
-(* SPASS 3.7 supports both the DFG and the TPTP syntax, whereas SPASS 3.0
-   supports only the DFG syntax. As soon as all Isabelle repository/snapshot
-   users have upgraded to 3.7, we can kill "spass" (and all DFG support in
-   Sledgehammer) and rename "spass_tptp" "spass". *)
-
-val spass_tptp_config =
-  {home_var = #home_var spass_config,
-   executable = #executable spass_config,
-   arguments = prefix "-TPTP " o #arguments spass_config,
-   proof_delims = #proof_delims spass_config,
-   known_failures =
-     #known_failures spass_config @
-     [(OldSpass, "unrecognized option `-TPTP'"),
-      (OldSpass, "Unrecognized option TPTP")],
-   max_axiom_clauses = #max_axiom_clauses spass_config,
-   prefers_theory_relevant = #prefers_theory_relevant spass_config}
-val spass_tptp = tptp_prover "spass_tptp" spass_tptp_config
+val spass_config = generic_spass_config false
+val spass = tptp_prover "spass" spass_config
 
 (* remote prover invocation via SystemOnTPTP *)
 
@@ -423,7 +415,7 @@ fun default_atps_param_value () =
                      remotify (fst vampire)]
 
 val provers =
-  [spass, spass_tptp, vampire, e, remote_vampire, remote_spass, remote_e]
+  [spass, spass_dfg, vampire, e, remote_vampire, remote_spass, remote_e]
 val prover_setup = fold add_prover provers
 
 val setup =
