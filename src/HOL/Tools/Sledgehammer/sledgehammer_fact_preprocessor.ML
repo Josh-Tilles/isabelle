@@ -8,6 +8,8 @@ Transformation of axiom rules (elim/intro/etc) into CNF forms.
 signature SLEDGEHAMMER_FACT_PREPROCESSOR =
 sig
   type cnf_thm = thm * ((string * int) * thm)
+
+  val sledgehammer_prefix: string
   val chained_prefix: string
   val trace: bool Unsynchronized.ref
   val trace_msg: (unit -> string) -> unit
@@ -35,13 +37,15 @@ open Sledgehammer_FOL_Clause
 
 type cnf_thm = thm * ((string * int) * thm)
 
+val sledgehammer_prefix = "Sledgehammer" ^ Long_Name.separator
+
 (* Used to label theorems chained into the goal. *)
-val chained_prefix = "Sledgehammer.chained_"
+val chained_prefix = sledgehammer_prefix ^ "chained_"
 
 val trace = Unsynchronized.ref false;
 fun trace_msg msg = if !trace then tracing (msg ()) else ();
 
-val skolem_theory_name = "Sledgehammer.Sko"
+val skolem_theory_name = sledgehammer_prefix ^ "Sko"
 val skolem_prefix = "sko_"
 val skolem_infix = "$"
 
@@ -183,25 +187,14 @@ fun assume_skolem_funs s th =
 fun vars_of_thm th =
   map (Thm.cterm_of (theory_of_thm th) o Var) (Thm.fold_terms Term.add_vars th []);
 
-(*Make a version of fun_cong with a given variable name*)
-local
-    val fun_cong' = fun_cong RS asm_rl; (*renumber f, g to prevent clashes with (a,0)*)
-    val cx = hd (vars_of_thm fun_cong');
-    val ty = typ_of (ctyp_of_term cx);
-    val thy = theory_of_thm fun_cong;
-    fun mkvar a = cterm_of thy (Var((a,0),ty));
-in
-fun xfun_cong x = Thm.instantiate ([], [(cx, mkvar x)]) fun_cong'
-end;
+val fun_cong_all = @{thm expand_fun_eq [THEN iffD1]}
 
-(*Removes the lambdas from an equation of the form t = (%x. u).  A non-negative n,
-  serves as an upper bound on how many to remove.*)
-fun strip_lambdas 0 th = th
-  | strip_lambdas n th =
-      case prop_of th of
-          _ $ (Const (@{const_name "op ="}, _) $ _ $ Abs (x, _, _)) =>
-              strip_lambdas (n-1) (freeze_thm (th RS xfun_cong x))
-        | _ => th;
+(* Removes the lambdas from an equation of the form t = (%x. u). *)
+fun extensionalize th =
+  case prop_of th of
+    _ $ (Const (@{const_name "op ="}, Type (_, [Type (@{type_name fun}, _), _]))
+         $ _ $ Abs (s, _, _)) => extensionalize (th RS fun_cong_all)
+  | _ => th
 
 fun is_quasi_lambda_free (Const (@{const_name skolem_id}, _) $ _) = true
   | is_quasi_lambda_free (t1 $ t2) =
@@ -339,9 +332,9 @@ fun skolem_theorem_of_def inline def =
 fun to_nnf th ctxt0 =
   let val th1 = th |> transform_elim |> zero_var_indexes
       val ((_, [th2]), ctxt) = Variable.import true [th1] ctxt0
-      val th3 = th2
-        |> Conv.fconv_rule Object_Logic.atomize
-        |> Meson.make_nnf ctxt |> strip_lambdas ~1
+      val th3 = th2 |> Conv.fconv_rule Object_Logic.atomize
+                    |> extensionalize
+                    |> Meson.make_nnf ctxt
   in  (th3, ctxt)  end;
 
 (*Generate Skolem functions for a theorem supplied in nnf*)
