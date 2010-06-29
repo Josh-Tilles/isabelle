@@ -12,7 +12,7 @@ sig
   val quotdef_cmd: (binding option * mixfix) * (Attrib.binding * (string * string)) ->
     local_theory -> Quotient_Info.qconsts_info * local_theory
 
-  val lift_raw_const: typ list -> string * term -> local_theory ->
+  val lift_raw_const: typ list -> (string * term * mixfix) -> local_theory ->
     Quotient_Info.qconsts_info * local_theory
 end;
 
@@ -50,6 +50,7 @@ fun quotient_def ((optbind, mx), (attr, (lhs, rhs))) lthy =
 let
   val (lhs_str, lhs_ty) = dest_Free lhs handle TERM _ => error "Constant already defined."
   val _ = if null (strip_abs_vars rhs) then () else error "The definiens cannot be an abstraction"
+  val _ = if is_Const rhs then () else warning "The definiens is not a constant"
   
   fun sanity_test NONE _ = true
     | sanity_test (SOME bind) str =
@@ -88,13 +89,13 @@ in
 end
 
 (* a wrapper for automatically lifting a raw constant *)
-fun lift_raw_const qtys (qconst_name, rconst) ctxt =
+fun lift_raw_const qtys (qconst_name, rconst, mx) ctxt =
 let
   val rty = fastype_of rconst
   val qty = derive_qtyp qtys rty ctxt
+  val lhs = Free (qconst_name, qty)
 in
-  quotient_def ((NONE, NoSyn), (Attrib.empty_binding,
-    (Free (qconst_name, qty), rconst))) ctxt
+  quotient_def ((NONE, mx), (Attrib.empty_binding, (lhs, rconst))) ctxt
 end
 
 (* parser and command *)

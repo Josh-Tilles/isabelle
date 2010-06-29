@@ -11,10 +11,13 @@ sig
   val injection_tac: Proof.context -> int -> tactic
   val all_injection_tac: Proof.context -> int -> tactic
   val clean_tac: Proof.context -> int -> tactic
-  val procedure_tac: Proof.context -> thm -> int -> tactic
+  
+  val descend_procedure_tac: Proof.context -> int -> tactic
+  val descend_tac: Proof.context -> int -> tactic
+ 
+  val lift_procedure_tac: Proof.context -> thm -> int -> tactic
   val lift_tac: Proof.context -> thm list -> int -> tactic
-  val quotient_tac: Proof.context -> int -> tactic
-  val quot_true_tac: Proof.context -> (term -> term) -> int -> tactic
+
   val lifted: typ list -> Proof.context -> thm -> thm
   val lifted_attrib: attribute
 end;
@@ -615,8 +618,39 @@ in
      SOME (cterm_of thy inj_goal)] lifting_procedure_thm
 end
 
+
+(** descending as tactic **)
+
+fun descend_procedure_tac ctxt =
+  Object_Logic.full_atomize_tac
+  THEN' gen_frees_tac ctxt
+  THEN' SUBGOAL (fn (goal, i) =>
+        let
+          val qtys = map #qtyp (Quotient_Info.quotdata_dest ctxt)
+          val rtrm = derive_rtrm qtys goal ctxt
+          val rule = procedure_inst ctxt rtrm  goal
+        in
+          rtac rule i
+        end)
+
+fun descend_tac ctxt =
+let
+  val mk_tac_raw =
+    descend_procedure_tac ctxt
+    THEN' RANGE
+      [Object_Logic.rulify_tac THEN' (K all_tac),
+       regularize_tac ctxt,
+       all_injection_tac ctxt,
+       clean_tac ctxt]
+in
+  Goal.conjunction_tac THEN_ALL_NEW mk_tac_raw
+end
+
+
+(** lifting as tactic **)
+
 (* the tactic leaves three subgoals to be proved *)
-fun procedure_tac ctxt rthm =
+fun lift_procedure_tac ctxt rthm =
   Object_Logic.full_atomize_tac
   THEN' gen_frees_tac ctxt
   THEN' SUBGOAL (fn (goal, i) =>
@@ -627,21 +661,20 @@ fun procedure_tac ctxt rthm =
       (rtac rule THEN' rtac rthm') i
     end)
 
-
-(* Automatic Proofs *)
-
 fun lift_tac ctxt rthms =
 let
   fun mk_tac rthm =
-    procedure_tac ctxt rthm
+    lift_procedure_tac ctxt rthm
     THEN' RANGE
-      [regularize_tac ctxt,
-       all_injection_tac ctxt,
-       clean_tac ctxt]
+      [ regularize_tac ctxt,
+        all_injection_tac ctxt,
+        clean_tac ctxt ]
 in
-  simp_tac (mk_minimal_ss ctxt) (* unfolding multiple &&& *)
-  THEN' RANGE (map mk_tac rthms)
+  Goal.conjunction_tac THEN' RANGE (map mk_tac rthms)
 end
+
+
+(** lifting as attribute **)
 
 fun lifted qtys ctxt thm =
 let
@@ -649,13 +682,18 @@ let
      so we do it both in the original theorem *)
   val thm' = Drule.eta_contraction_rule thm
   val ((_, [thm'']), ctxt') = Variable.import false [thm'] ctxt
-  val goal = (quotient_lift_all qtys ctxt' o prop_of) thm''
+  val goal = derive_qtrm qtys (prop_of thm'') ctxt'
 in
   Goal.prove ctxt' [] [] goal (K (lift_tac ctxt' [thm'] 1))
   |> singleton (ProofContext.export ctxt' ctxt)
 end;
 
-(* An Attribute which automatically constructs the qthm *)
-val lifted_attrib = Thm.rule_attribute (fn ctxt => lifted [] (Context.proof_of ctxt))
+val lifted_attrib = Thm.rule_attribute (fn context => 
+  let
+    val ctxt = Context.proof_of context
+    val qtys = map #qtyp (Quotient_Info.quotdata_dest ctxt)
+  in
+    lifted qtys ctxt
+  end)
 
 end; (* structure *)

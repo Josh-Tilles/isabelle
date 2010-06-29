@@ -22,12 +22,12 @@ end;
 structure ATP_Systems : ATP_SYSTEMS =
 struct
 
+open Clausifier
+open Metis_Clauses
 open Sledgehammer_Util
-open Sledgehammer_Fact_Preprocessor
-open Sledgehammer_HOL_Clause
 open Sledgehammer_Fact_Filter
-open Sledgehammer_Proof_Reconstruct
 open Sledgehammer_TPTP_Format
+open Sledgehammer_Proof_Reconstruct
 open ATP_Manager
 
 (** generic ATP **)
@@ -126,9 +126,9 @@ fun shape_of_clauses _ [] = []
 fun generic_tptp_prover
         (name, {home_var, executable, arguments, proof_delims, known_failures,
                 max_axiom_clauses, prefers_theory_relevant})
-        ({debug, overlord, full_types, explicit_apply, respect_no_atp,
-          relevance_threshold, relevance_convergence, theory_relevant,
-          defs_relevant, isar_proof, isar_shrink_factor, ...} : params)
+        ({debug, overlord, full_types, explicit_apply, relevance_threshold,
+          relevance_convergence, theory_relevant, defs_relevant, isar_proof,
+          isar_shrink_factor, ...} : params)
         minimize_command timeout
         ({subgoal, goal, relevance_override, axiom_clauses, filtered_clauses}
          : problem) =
@@ -140,7 +140,7 @@ fun generic_tptp_prover
     val goal_cls = List.concat goal_clss
     val the_filtered_clauses =
       (case filtered_clauses of
-        NONE => relevant_facts full_types respect_no_atp relevance_threshold
+        NONE => relevant_facts full_types relevance_threshold
                     relevance_convergence defs_relevant max_axiom_clauses
                     (the_default prefers_theory_relevant theory_relevant)
                     relevance_override goal goal_cls
@@ -223,7 +223,7 @@ fun generic_tptp_prover
           val conjecture_shape = shape_of_clauses (conjecture_offset + 1) goal_clss
           val result =
             do_run false
-            |> (fn (_, msecs0, _, SOME IncompleteUnprovable) =>
+            |> (fn (_, msecs0, _, SOME _) =>
                    do_run true
                    |> (fn (output, msecs, proof, outcome) =>
                           (output, msecs0 + msecs, proof, outcome))
@@ -298,9 +298,11 @@ val e = tptp_prover "e" e_config
 val spass_config : prover_config =
   {home_var = "SPASS_HOME",
    executable = "SPASS",
+   (* "div 2" accounts for the fact that SPASS is often run twice. *)
    arguments = fn complete => fn timeout =>
      ("-TPTP -Auto -PGiven=0 -PProblem=0 -Splits=0 -FullRed=0 -DocProof \
-      \-VarWeight=3 -TimeLimit=" ^ string_of_int (to_generous_secs timeout))
+      \-VarWeight=3 -TimeLimit=" ^
+      string_of_int (to_generous_secs timeout div 2))
      |> not complete ? prefix "-SOS=1 ",
    proof_delims = [("Here is a proof", "Formulae used in the proof")],
    known_failures =
