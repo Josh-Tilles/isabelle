@@ -1498,8 +1498,6 @@ qed
 
 subsection{*Numerals and Arithmetic*}
 
-declare number_of_real_def [code del]
-
 lemma [code_unfold_post]:
   "number_of k = real_of_int (number_of k)"
   unfolding number_of_is_id number_of_real_def ..
