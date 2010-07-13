@@ -218,49 +218,45 @@ lemma update_change [code]:
 
 text {* Non-interaction between imperative array and imperative references *}
 
-lemma get_array_set [simp]:
-  "get_array a (set r v h) = get_array a h"
-  by (simp add: get_array_def set_def)
-
-lemma nth_set [simp]:
-  "get_array a (set r v h) ! i = get_array a h ! i"
-  by simp
+lemma array_get_set [simp]:
+  "Array.get (set r v h) = Array.get h"
+  by (simp add: Array.get_def set_def expand_fun_eq)
 
 lemma get_update [simp]:
-  "get (Array.update a i v h) r  = get h r"
-  by (simp add: get_def Array.update_def set_array_def)
+  "get (Array.update a i v h) r = get h r"
+  by (simp add: get_def Array.update_def Array.set_def)
 
 lemma alloc_update:
   "fst (alloc v (Array.update a i v' h)) = fst (alloc v h)"
-  by (simp add: Array.update_def get_array_def set_array_def alloc_def Let_def)
+  by (simp add: Array.update_def Array.get_def Array.set_def alloc_def Let_def)
 
 lemma update_set_swap:
   "Array.update a i v (set r v' h) = set r v' (Array.update a i v h)"
-  by (simp add: Array.update_def get_array_def set_array_def set_def)
+  by (simp add: Array.update_def Array.get_def Array.set_def set_def)
 
 lemma length_alloc [simp]: 
-  "Array.length a (snd (alloc v h)) = Array.length a h"
-  by (simp add: Array.length_def get_array_def alloc_def set_def Let_def)
+  "Array.length (snd (alloc v h)) a = Array.length h a"
+  by (simp add: Array.length_def Array.get_def alloc_def set_def Let_def)
 
-lemma get_array_alloc [simp]: 
-  "get_array a (snd (alloc v h)) = get_array a h"
-  by (simp add: get_array_def alloc_def set_def Let_def)
+lemma array_get_alloc [simp]: 
+  "Array.get (snd (alloc v h)) = Array.get h"
+  by (simp add: Array.get_def alloc_def set_def Let_def expand_fun_eq)
 
 lemma present_update [simp]: 
   "present (Array.update a i v h) = present h"
-  by (simp add: Array.update_def set_array_def expand_fun_eq present_def)
+  by (simp add: Array.update_def Array.set_def expand_fun_eq present_def)
 
 lemma array_present_set [simp]:
-  "array_present a (set r v h) = array_present a h"
-  by (simp add: array_present_def set_def)
+  "Array.present (set r v h) = Array.present h"
+  by (simp add: Array.present_def set_def expand_fun_eq)
 
 lemma array_present_alloc [simp]:
-  "array_present a h \<Longrightarrow> array_present a (snd (alloc v h))"
-  by (simp add: array_present_def alloc_def Let_def)
+  "Array.present h a \<Longrightarrow> Array.present (snd (alloc v h)) a"
+  by (simp add: Array.present_def alloc_def Let_def)
 
 lemma set_array_set_swap:
-  "set_array a xs (set r x' h) = set r x' (set_array a xs h)"
-  by (simp add: set_array_def set_def)
+  "Array.set a xs (set r x' h) = set r x' (Array.set a xs h)"
+  by (simp add: Array.set_def set_def)
 
 hide_const (open) present get set alloc noteq lookup update change
 
