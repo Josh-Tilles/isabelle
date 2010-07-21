@@ -6,20 +6,25 @@ Generic counterexample search engine.
 
 signature QUICKCHECK =
 sig
+  val setup: theory -> theory
+  (* configuration *)
   val auto: bool Unsynchronized.ref
   val timing : bool Unsynchronized.ref
   datatype report = Report of
     { iterations : int, raised_match_errors : int,
       satisfied_assms : int list, positive_concl_tests : int }
+  datatype test_params = Test_Params of
+  { size: int, iterations: int, default_type: typ list, no_assms: bool, report: bool, quiet : bool};
+  val test_params_of: theory -> test_params 
+  val add_generator:
+    string * (Proof.context -> bool -> term -> int -> term list option * (bool list * bool))
+      -> theory -> theory
+  (* testing terms and proof states *)
   val gen_test_term: Proof.context -> bool -> bool -> string option -> int -> int -> term ->
     (string * term) list option * ((string * int) list * ((int * report list) list) option)
   val test_term: Proof.context -> bool -> string option -> int -> int -> term ->
     (string * term) list option
-  val add_generator:
-    string * (Proof.context -> bool -> term -> int -> term list option * (bool list * bool))
-      -> theory -> theory
-  val setup: theory -> theory
-  val quickcheck: (string * string) list -> int -> Proof.state -> (string * term) list option
+  val quickcheck: (string * string list) list -> int -> Proof.state -> (string * term) list option
 end;
 
 structure Quickcheck : QUICKCHECK =
@@ -63,7 +68,7 @@ fun collect_single_report single_report
 (* quickcheck configuration -- default parameters, test generators *)
 
 datatype test_params = Test_Params of
-  { size: int, iterations: int, default_type: typ option, no_assms: bool, report: bool, quiet : bool};
+  { size: int, iterations: int, default_type: typ list, no_assms: bool, report: bool, quiet : bool};
 
 fun dest_test_params (Test_Params { size, iterations, default_type, no_assms, report, quiet }) =
   ((size, iterations), ((default_type, no_assms), (report, quiet)));
@@ -77,7 +82,7 @@ fun merge_test_params (Test_Params { size = size1, iterations = iterations1, def
   Test_Params { size = size2, iterations = iterations2, default_type = default_type2,
                 no_assms = no_assms2, report = report2, quiet = quiet2 }) =
   make_test_params ((Int.max (size1, size2), Int.max (iterations1, iterations2)),
-    ((case default_type1 of NONE => default_type2 | _ => default_type1, no_assms1 orelse no_assms2),
+    ((merge (op =) (default_type1, default_type2), no_assms1 orelse no_assms2),
     (report1 orelse report2, quiet1 orelse quiet2)));
 
 structure Data = Theory_Data
@@ -85,12 +90,14 @@ structure Data = Theory_Data
   type T = (string * (Proof.context -> bool -> term -> int -> term list option * (bool list * bool))) list
     * test_params;
   val empty = ([], Test_Params
-    { size = 10, iterations = 100, default_type = NONE, no_assms = false, report = false, quiet = false});
+    { size = 10, iterations = 100, default_type = [], no_assms = false, report = false, quiet = false});
   val extend = I;
   fun merge ((generators1, params1), (generators2, params2)) : T =
     (AList.merge (op =) (K true) (generators1, generators2),
       merge_test_params (params1, params2));
 );
+
+val test_params_of = snd o Data.get;
 
 val add_generator = Data.map o apfst o AList.update (op =);
 
@@ -173,20 +180,25 @@ fun gen_test_term ctxt quiet report generator_name size i t =
 fun test_term ctxt quiet generator_name size i t =
   fst (gen_test_term ctxt quiet false generator_name size i t)
 
+exception WELLSORTED of string
+
 fun monomorphic_term thy insts default_T = 
   let
     fun subst (T as TFree (v, S)) =
           let
             val T' = AList.lookup (op =) insts v
-              |> the_default (the_default T default_T)
-          in if Sign.of_sort thy (T, S) then T'
-            else error ("Type " ^ Syntax.string_of_typ_global thy T ^
+              |> the_default default_T
+          in if Sign.of_sort thy (T', S) then T'
+            else raise (WELLSORTED ("For instantiation with default_type " ^ Syntax.string_of_typ_global thy default_T ^
+              ":\n" ^ Syntax.string_of_typ_global thy T' ^
               " to be substituted for variable " ^
-              Syntax.string_of_typ_global thy T ^ "\ndoes not have sort " ^
-              Syntax.string_of_sort_global thy S)
+              Syntax.string_of_typ_global thy T ^ " does not have sort " ^
+              Syntax.string_of_sort_global thy S))
           end
       | subst T = T;
   in (map_types o map_atyps) subst end;
+
+datatype wellsorted_error = Wellsorted_Error of string | Term of term
 
 fun test_goal quiet report generator_name size iterations default_T no_assms insts i assms state =
   let
@@ -198,9 +210,23 @@ fun test_goal quiet report generator_name size iterations default_T no_assms ins
     val (gi, frees) = Logic.goal_params (prop_of st) i;
     val gi' = Logic.list_implies (if no_assms then [] else assms,
                                   subst_bounds (frees, strip gi))
-      |> monomorphic_term thy insts default_T
-      |> Object_Logic.atomize_term thy;
-  in gen_test_term ctxt quiet report generator_name size iterations gi' end;
+    val inst_goals = map (fn T =>
+      Term (monomorphic_term thy insts T gi |> Object_Logic.atomize_term thy)
+        handle WELLSORTED s => Wellsorted_Error s) default_T
+    val error_msg = cat_lines (map_filter (fn Term t => NONE | Wellsorted_Error s => SOME s) inst_goals)
+    val correct_inst_goals =
+      case map_filter (fn Term t => SOME t | Wellsorted_Error s => NONE) inst_goals of
+        [] => error error_msg
+      | xs => xs
+    val _ = if quiet then () else warning error_msg
+    fun collect_results f reports [] = (NONE, rev reports)
+      | collect_results f reports (t :: ts) =
+        case f t of
+          (SOME res, report) => (SOME res, rev (report :: reports))
+        | (NONE, report) => collect_results f (report :: reports) ts
+  in collect_results (gen_test_term ctxt quiet report generator_name size iterations) [] correct_inst_goals end;
+
+(* pretty printing *)
 
 fun pretty_counterex ctxt NONE = Pretty.str "Quickcheck found no counterexample."
   | pretty_counterex ctxt (SOME cex) =
@@ -233,8 +259,8 @@ fun pretty_reports ctxt (SOME reports) =
       (rev reports))
   | pretty_reports ctxt NONE = Pretty.str ""
 
-fun pretty_counterex_and_reports ctxt (cex, (timing, reports)) =
-  Pretty.chunks [pretty_counterex ctxt cex, pretty_reports ctxt reports]
+fun pretty_counterex_and_reports ctxt (cex, timing_and_reports) =
+  Pretty.chunks (pretty_counterex ctxt cex :: map (pretty_reports ctxt) (map snd timing_and_reports))
 
 (* automatic testing *)
 
@@ -266,31 +292,32 @@ fun read_nat s = case (Library.read_int o Symbol.explode) s
  of (k, []) => if k >= 0 then k
       else error ("Not a natural number: " ^ s)
   | (_, _ :: _) => error ("Not a natural number: " ^ s);
+
 fun read_bool "false" = false
   | read_bool "true" = true
   | read_bool s = error ("Not a Boolean value: " ^ s)
 
-fun parse_test_param ctxt ("size", arg) =
+fun parse_test_param ctxt ("size", [arg]) =
       (apfst o apfst o K) (read_nat arg)
-  | parse_test_param ctxt ("iterations", arg) =
+  | parse_test_param ctxt ("iterations", [arg]) =
       (apfst o apsnd o K) (read_nat arg)
   | parse_test_param ctxt ("default_type", arg) =
-      (apsnd o apfst o apfst o K o SOME) (ProofContext.read_typ ctxt arg)
-  | parse_test_param ctxt ("no_assms", arg) =
+      (apsnd o apfst o apfst o K) (map (ProofContext.read_typ ctxt) arg)
+  | parse_test_param ctxt ("no_assms", [arg]) =
       (apsnd o apfst o apsnd o K) (read_bool arg)
-  | parse_test_param ctxt ("report", arg) =
+  | parse_test_param ctxt ("report", [arg]) =
       (apsnd o apsnd o apfst o K) (read_bool arg)
-  | parse_test_param ctxt ("quiet", arg) =
+  | parse_test_param ctxt ("quiet", [arg]) =
       (apsnd o apsnd o apsnd o K) (read_bool arg)
   | parse_test_param ctxt (name, _) =
       error ("Unknown test parameter: " ^ name);
 
-fun parse_test_param_inst ctxt ("generator", arg) =
+fun parse_test_param_inst ctxt ("generator", [arg]) =
       (apsnd o apfst o K o SOME) arg
   | parse_test_param_inst ctxt (name, arg) =
       case try (ProofContext.read_typ ctxt) name
        of SOME (TFree (v, _)) => (apsnd o apsnd o AList.update (op =))
-              (v, ProofContext.read_typ ctxt arg)
+              (v, ProofContext.read_typ ctxt (the_single arg))
         | _ => (apfst o parse_test_param ctxt) (name, arg);
 
 fun quickcheck_params_cmd args thy =
@@ -321,7 +348,8 @@ fun quickcheck_cmd args i state =
   gen_quickcheck args i (Toplevel.proof_of state)
   |> Pretty.writeln o pretty_counterex_and_reports (Toplevel.context_of state);
 
-val parse_arg = Parse.name -- (Scan.optional (Parse.$$$ "=" |-- Parse.name) "true");
+val parse_arg = Parse.name -- (Scan.optional (Parse.$$$ "=" |-- 
+  ((Parse.name >> single) || (Parse.$$$ "[" |-- Parse.list1 Parse.name --| Parse.$$$ "]"))) ["true"]);
 
 val parse_args = Parse.$$$ "[" |-- Parse.list1 parse_arg --| Parse.$$$ "]"
   || Scan.succeed [];
