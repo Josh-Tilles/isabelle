@@ -15,7 +15,6 @@ sig
   val is_finished: string -> bool
   val master_directory: string -> Path.T
   val loaded_files: string -> Path.T list
-  val thy_ord: theory * theory -> order
   val remove_thy: string -> unit
   val kill_thy: string -> unit
   val use_thys: string list -> unit
@@ -144,8 +143,6 @@ structure Update_Time = Theory_Data
   fun merge _ = empty;
 );
 
-val thy_ord = int_ord o pairself Update_Time.get;
-
 
 (* remove theory *)
 
@@ -238,12 +235,13 @@ local
 fun required_by _ [] = ""
   | required_by s initiators = s ^ "(required by " ^ show_path (rev initiators) ^ ")";
 
-fun load_thy initiators update_time (deps: deps) text dir name parent_thys =
+fun load_thy initiators update_time (deps: deps) text name parent_thys =
   let
     val _ = kill_thy name;
     val _ = priority ("Loading theory " ^ quote name ^ required_by " " initiators);
 
     val {master = (thy_path, _), ...} = deps;
+    val dir = Path.dir thy_path;
     val pos = Path.position thy_path;
     val uses = map (apfst Path.explode) (#3 (Thy_Header.read pos text));
     fun init () =
@@ -317,7 +315,7 @@ and require_thy initiators dir str tasks =
                   let
                     val text = (case opt_text of SOME text => text | NONE => File.read thy_path);
                     val update_time = serial ();
-                  in Task (parent_names, load_thy initiators update_time dep text dir' name) end);
+                  in Task (parent_names, load_thy initiators update_time dep text name) end);
         in (all_current, new_entry name parent_names task tasks') end)
   end;
 
