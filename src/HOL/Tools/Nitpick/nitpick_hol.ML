@@ -22,6 +22,7 @@ sig
      wfs: (styp option * bool option) list,
      user_axioms: bool option,
      debug: bool,
+     whacks: term list,
      binary_ints: bool option,
      destroy_constrs: bool,
      specialize: bool,
@@ -76,6 +77,7 @@ sig
   val unarize_unbox_etc_type : typ -> typ
   val uniterize_unarize_unbox_etc_type : typ -> typ
   val string_for_type : Proof.context -> typ -> string
+  val pretty_for_type : Proof.context -> typ -> Pretty.T
   val prefix_name : string -> string -> string
   val shortest_name : string -> string
   val short_name : string -> string
@@ -111,8 +113,8 @@ sig
   val dest_n_tuple : int -> term -> term list
   val is_real_datatype : theory -> string -> bool
   val is_standard_datatype : theory -> (typ option * bool) list -> typ -> bool
-  val is_quot_type : theory -> typ -> bool
   val is_codatatype : theory -> typ -> bool
+  val is_quot_type : theory -> typ -> bool
   val is_pure_typedef : Proof.context -> typ -> bool
   val is_univ_typedef : Proof.context -> typ -> bool
   val is_datatype : Proof.context -> (typ option * bool) list -> typ -> bool
@@ -140,7 +142,6 @@ sig
   val sel_no_from_name : string -> int
   val close_form : term -> term
   val eta_expand : typ list -> term -> int -> term
-  val extensionalize : term -> term
   val distinctness_formula : typ -> term list -> term
   val register_frac_type : string -> (string * string) list -> theory -> theory
   val unregister_frac_type : string -> theory -> theory
@@ -197,20 +198,24 @@ sig
   val fixpoint_kind_of_rhs : term -> fixpoint_kind
   val fixpoint_kind_of_const :
     theory -> const_table -> string * typ -> fixpoint_kind
-  val is_inductive_pred : hol_context -> styp -> bool
-  val is_equational_fun : hol_context -> styp -> bool
+  val is_real_inductive_pred : hol_context -> styp -> bool
   val is_constr_pattern_lhs : Proof.context -> term -> bool
   val is_constr_pattern_formula : Proof.context -> term -> bool
   val nondef_props_for_const :
     theory -> bool -> const_table -> styp -> term list
   val is_choice_spec_fun : hol_context -> styp -> bool
   val is_choice_spec_axiom : theory -> const_table -> term -> bool
+  val is_real_equational_fun : hol_context -> styp -> bool
+  val is_equational_fun_but_no_plain_def : hol_context -> styp -> bool
   val codatatype_bisim_axioms : hol_context -> typ -> term list
   val is_well_founded_inductive_pred : hol_context -> styp -> bool
   val unrolled_inductive_pred_const : hol_context -> bool -> styp -> term
   val equational_fun_axioms : hol_context -> styp -> term list
   val is_equational_fun_surely_complete : hol_context -> styp -> bool
-  val merge_type_vars_in_terms : term list -> term list
+  val merged_type_var_table_for_terms :
+    theory -> term list -> (sort * string) list
+  val merge_type_vars_in_term :
+    theory -> bool -> (sort * string) list -> term -> term
   val ground_types_in_type : hol_context -> bool -> typ -> typ list
   val ground_types_in_terms : hol_context -> bool -> term list -> typ list
 end;
@@ -234,6 +239,7 @@ type hol_context =
    wfs: (styp option * bool option) list,
    user_axioms: bool option,
    debug: bool,
+   whacks: term list,
    binary_ints: bool option,
    destroy_constrs: bool,
    specialize: bool,
@@ -398,7 +404,6 @@ val built_in_consts =
    (@{const_name "op -->"}, 2),
    (@{const_name If}, 3),
    (@{const_name Let}, 2),
-   (@{const_name Unity}, 0),
    (@{const_name Pair}, 2),
    (@{const_name fst}, 1),
    (@{const_name snd}, 1),
@@ -454,7 +459,7 @@ fun unarize_unbox_etc_type (Type (@{type_name fin_fun}, Ts)) =
   | unarize_unbox_etc_type (Type (@{type_name fun_box}, Ts)) =
     unarize_unbox_etc_type (Type (@{type_name fun}, Ts))
   | unarize_unbox_etc_type (Type (@{type_name pair_box}, Ts)) =
-    Type (@{type_name Product_Type.prod}, map unarize_unbox_etc_type Ts)
+    Type (@{type_name prod}, map unarize_unbox_etc_type Ts)
   | unarize_unbox_etc_type @{typ "unsigned_bit word"} = nat_T
   | unarize_unbox_etc_type @{typ "signed_bit word"} = int_T
   | unarize_unbox_etc_type (Type (s, Ts as _ :: _)) =
@@ -466,6 +471,7 @@ fun uniterize_type (Type (s, Ts as _ :: _)) = Type (s, map uniterize_type Ts)
 val uniterize_unarize_unbox_etc_type = uniterize_type o unarize_unbox_etc_type
 
 fun string_for_type ctxt = Syntax.string_of_typ ctxt o unarize_unbox_etc_type
+fun pretty_for_type ctxt = Syntax.pretty_typ ctxt o unarize_unbox_etc_type
 
 val prefix_name = Long_Name.qualify o Long_Name.base_name
 fun shortest_name s = List.last (space_explode "." s) handle List.Empty => ""
@@ -509,7 +515,7 @@ fun is_fun_type (Type (@{type_name fun}, _)) = true
   | is_fun_type _ = false
 fun is_set_type (Type (@{type_name fun}, [_, @{typ bool}])) = true
   | is_set_type _ = false
-fun is_pair_type (Type (@{type_name Product_Type.prod}, _)) = true
+fun is_pair_type (Type (@{type_name prod}, _)) = true
   | is_pair_type _ = false
 fun is_lfp_iterator_type (Type (s, _)) = String.isPrefix lfp_iterator_prefix s
   | is_lfp_iterator_type _ = false
@@ -546,7 +552,7 @@ fun strip_n_binders 0 T = ([], T)
   | strip_n_binders _ T = raise TYPE ("Nitpick_HOL.strip_n_binders", [T], [])
 val nth_range_type = snd oo strip_n_binders
 
-fun num_factors_in_type (Type (@{type_name Product_Type.prod}, [T1, T2])) =
+fun num_factors_in_type (Type (@{type_name prod}, [T1, T2])) =
     fold (Integer.add o num_factors_in_type) [T1, T2] 0
   | num_factors_in_type _ = 1
 fun num_binder_types (Type (@{type_name fun}, [_, T2])) =
@@ -557,7 +563,7 @@ fun maybe_curried_binder_types T =
   (if is_pair_type (body_type T) then binder_types else curried_binder_types) T
 
 fun mk_flat_tuple _ [t] = t
-  | mk_flat_tuple (Type (@{type_name Product_Type.prod}, [T1, T2])) (t :: ts) =
+  | mk_flat_tuple (Type (@{type_name prod}, [T1, T2])) (t :: ts) =
     HOLogic.pair_const T1 T2 $ t $ (mk_flat_tuple T2 ts)
   | mk_flat_tuple T ts = raise TYPE ("Nitpick_HOL.mk_flat_tuple", [T], ts)
 fun dest_n_tuple 1 t = [t]
@@ -595,8 +601,8 @@ fun is_standard_datatype thy = the oo triple_lookup (type_match thy)
 (* FIXME: Use antiquotation for "code_numeral" below or detect "rep_datatype",
    e.g., by adding a field to "Datatype_Aux.info". *)
 fun is_basic_datatype thy stds s =
-  member (op =) [@{type_name Product_Type.prod}, @{type_name bool}, @{type_name unit},
-                 @{type_name int}, "Code_Numeral.code_numeral"] s orelse
+  member (op =) [@{type_name prod}, @{type_name bool}, @{type_name int},
+                 "Code_Numeral.code_numeral"] s orelse
   (s = @{type_name nat} andalso is_standard_datatype thy stds nat_T)
 
 fun instantiate_type thy T1 T1' T2 =
@@ -634,17 +640,19 @@ fun register_codatatype co_T case_name constr_xs thy =
   in Data.put {frac_types = frac_types, codatatypes = codatatypes} thy end
 fun unregister_codatatype co_T = register_codatatype co_T "" []
 
-fun is_quot_type thy (Type (s, _)) =
-    is_some (Quotient_Info.quotdata_lookup_raw thy s)
-  | is_quot_type _ _ = false
 fun is_codatatype thy (Type (s, _)) =
     not (null (AList.lookup (op =) (#codatatypes (Data.get thy)) s
                |> Option.map snd |> these))
   | is_codatatype _ _ = false
+fun is_real_quot_type thy (Type (s, _)) =
+    is_some (Quotient_Info.quotdata_lookup_raw thy s)
+  | is_real_quot_type _ _ = false
+fun is_quot_type thy T =
+  is_real_quot_type thy T andalso not (is_codatatype thy T)
 fun is_pure_typedef ctxt (T as Type (s, _)) =
     let val thy = ProofContext.theory_of ctxt in
       is_typedef ctxt s andalso
-      not (is_real_datatype thy s orelse is_quot_type thy T orelse
+      not (is_real_datatype thy s orelse is_real_quot_type thy T orelse
            is_codatatype thy T orelse is_record_type T orelse
            is_integer_like_type T)
     end
@@ -675,7 +683,7 @@ fun is_univ_typedef ctxt (Type (s, _)) =
 fun is_datatype ctxt stds (T as Type (s, _)) =
     let val thy = ProofContext.theory_of ctxt in
       (is_typedef ctxt s orelse is_codatatype thy T orelse T = @{typ ind} orelse
-       is_quot_type thy T) andalso not (is_basic_datatype thy stds s)
+       is_real_quot_type thy T) andalso not (is_basic_datatype thy stds s)
     end
   | is_datatype _ _ _ = false
 
@@ -712,15 +720,19 @@ fun is_rep_fun ctxt (s, Type (@{type_name fun}, [Type (s', _), _])) =
        SOME {Rep_name, ...} => s = Rep_name
      | NONE => false)
   | is_rep_fun _ _ = false
-fun is_quot_abs_fun ctxt
-                    (x as (_, Type (@{type_name fun}, [_, Type (s', _)]))) =
-    (try (Quotient_Term.absrep_const_chk Quotient_Term.AbsF ctxt) s'
-     = SOME (Const x))
+fun is_quot_abs_fun ctxt (x as (_, Type (@{type_name fun},
+                                         [_, abs_T as Type (s', _)]))) =
+    let val thy = ProofContext.theory_of ctxt in
+      (try (Quotient_Term.absrep_const_chk Quotient_Term.AbsF ctxt) s'
+       = SOME (Const x)) andalso not (is_codatatype thy abs_T)
+    end
   | is_quot_abs_fun _ _ = false
-fun is_quot_rep_fun ctxt
-                    (x as (_, Type (@{type_name fun}, [Type (s', _), _]))) =
-    (try (Quotient_Term.absrep_const_chk Quotient_Term.RepF ctxt) s'
-     = SOME (Const x))
+fun is_quot_rep_fun ctxt (x as (_, Type (@{type_name fun},
+                                         [abs_T as Type (s', _), _]))) =
+    let val thy = ProofContext.theory_of ctxt in
+      (try (Quotient_Term.absrep_const_chk Quotient_Term.RepF ctxt) s'
+       = SOME (Const x)) andalso not (is_codatatype thy abs_T)
+    end
   | is_quot_rep_fun _ _ = false
 
 fun mate_of_rep_fun ctxt (x as (_, Type (@{type_name fun},
@@ -792,7 +804,7 @@ fun is_boxing_worth_it (hol_ctxt : hol_context) boxy T =
     Type (@{type_name fun}, _) =>
     (boxy = InPair orelse boxy = InFunLHS) andalso
     not (is_boolean_type (body_type T))
-  | Type (@{type_name Product_Type.prod}, Ts) =>
+  | Type (@{type_name prod}, Ts) =>
     boxy = InPair orelse boxy = InFunRHS1 orelse boxy = InFunRHS2 orelse
     ((boxy = InExpr orelse boxy = InFunLHS) andalso
      exists (is_boxing_worth_it hol_ctxt InPair)
@@ -812,12 +824,12 @@ and box_type hol_ctxt boxy T =
     else
       box_type hol_ctxt (in_fun_lhs_for boxy) T1
       --> box_type hol_ctxt (in_fun_rhs_for boxy) T2
-  | Type (z as (@{type_name Product_Type.prod}, Ts)) =>
+  | Type (z as (@{type_name prod}, Ts)) =>
     if boxy <> InConstr andalso boxy <> InSel
        andalso should_box_type hol_ctxt boxy z then
       Type (@{type_name pair_box}, map (box_type hol_ctxt InSel) Ts)
     else
-      Type (@{type_name Product_Type.prod},
+      Type (@{type_name prod},
             map (box_type hol_ctxt
                           (if boxy = InConstr orelse boxy = InSel then boxy
                            else InPair)) Ts)
@@ -877,15 +889,6 @@ fun eta_expand _ t 0 = t
              (List.take (binder_types (fastype_of1 (Ts, t)), n))
              (list_comb (incr_boundvars n t, map Bound (n - 1 downto 0)))
 
-fun extensionalize t =
-  case t of
-    (t0 as @{const Trueprop}) $ t1 => t0 $ extensionalize t1
-  | Const (@{const_name "op ="}, _) $ t1 $ Abs (s, T, t2) =>
-    let val v = Var ((s, maxidx_of_term t + 1), T) in
-      extensionalize (HOLogic.mk_eq (t1 $ v, subst_bound (v, t2)))
-    end
-  | _ => t
-
 fun distinctness_formula T =
   all_distinct_unordered_pairs_of
   #> map (fn (t1, t2) => @{const Not} $ (HOLogic.eq_const T $ t1 $ t2))
@@ -916,7 +919,7 @@ fun uncached_datatype_constrs ({thy, ctxt, stds, ...} : hol_context)
                val T' = (Record.get_extT_fields thy T
                         |> apsnd single |> uncurry append |> map snd) ---> T
              in [(s', T')] end
-           else if is_quot_type thy T then
+           else if is_real_quot_type thy T then
              [(@{const_name Quot}, rep_type_for_quot_type thy T --> T)]
            else case typedef_info ctxt s of
              SOME {abs_type, rep_type, Abs_name, ...} =>
@@ -979,7 +982,7 @@ fun nth_arg_sel_term_for_constr thy stds (x as (s, T)) n =
       Const (nth_sel_for_constr x n)
     else
       let
-        fun aux m (Type (@{type_name Product_Type.prod}, [T1, T2])) =
+        fun aux m (Type (@{type_name prod}, [T1, T2])) =
             let
               val (m, t1) = aux m T1
               val (m, t2) = aux m T2
@@ -1069,7 +1072,7 @@ and coerce_term (hol_ctxt as {ctxt, stds, fast_descrs, ...}) Ts new_T old_T t =
     | (Type (new_s, new_Ts as [new_T1, new_T2]),
        Type (old_s, old_Ts as [old_T1, old_T2])) =>
       if old_s = @{type_name fin_fun} orelse old_s = @{type_name fun_box} orelse
-         old_s = @{type_name pair_box} orelse old_s = @{type_name Product_Type.prod} then
+         old_s = @{type_name pair_box} orelse old_s = @{type_name prod} then
         case constr_expand hol_ctxt old_T t of
           Const (old_s, _) $ t1 =>
           if new_s = @{type_name fun} then
@@ -1081,7 +1084,7 @@ and coerce_term (hol_ctxt as {ctxt, stds, fast_descrs, ...}) Ts new_T old_T t =
                              (Type (@{type_name fun}, old_Ts)) t1]
         | Const _ $ t1 $ t2 =>
           construct_value ctxt stds
-              (if new_s = @{type_name Product_Type.prod} then @{const_name Pair}
+              (if new_s = @{type_name prod} then @{const_name Pair}
                else @{const_name PairBox}, new_Ts ---> new_T)
               (map3 (coerce_term hol_ctxt Ts) [new_T1, new_T2] [old_T1, old_T2]
                     [t1, t2])
@@ -1092,12 +1095,11 @@ and coerce_term (hol_ctxt as {ctxt, stds, fast_descrs, ...}) Ts new_T old_T t =
 
 fun card_of_type assigns (Type (@{type_name fun}, [T1, T2])) =
     reasonable_power (card_of_type assigns T2) (card_of_type assigns T1)
-  | card_of_type assigns (Type (@{type_name Product_Type.prod}, [T1, T2])) =
+  | card_of_type assigns (Type (@{type_name prod}, [T1, T2])) =
     card_of_type assigns T1 * card_of_type assigns T2
   | card_of_type _ (Type (@{type_name itself}, _)) = 1
   | card_of_type _ @{typ prop} = 2
   | card_of_type _ @{typ bool} = 2
-  | card_of_type _ @{typ unit} = 1
   | card_of_type assigns T =
     case AList.lookup (op =) assigns T of
       SOME k => k
@@ -1113,7 +1115,7 @@ fun bounded_card_of_type max default_card assigns
       else Int.min (max, reasonable_power k2 k1)
     end
   | bounded_card_of_type max default_card assigns
-                         (Type (@{type_name Product_Type.prod}, [T1, T2])) =
+                         (Type (@{type_name prod}, [T1, T2])) =
     let
       val k1 = bounded_card_of_type max default_card assigns T1
       val k2 = bounded_card_of_type max default_card assigns T2
@@ -1143,7 +1145,7 @@ fun bounded_exact_card_of_type hol_ctxt finitizable_dataTs max default_card
            else if k1 >= max orelse k2 >= max then max
            else Int.min (max, reasonable_power k2 k1)
          end
-       | Type (@{type_name Product_Type.prod}, [T1, T2]) =>
+       | Type (@{type_name prod}, [T1, T2]) =>
          let
            val k1 = aux avoid T1
            val k2 = aux avoid T2
@@ -1155,7 +1157,6 @@ fun bounded_exact_card_of_type hol_ctxt finitizable_dataTs max default_card
        | Type (@{type_name itself}, _) => 1
        | @{typ prop} => 2
        | @{typ bool} => 2
-       | @{typ unit} => 1
        | Type _ =>
          (case datatype_constrs hol_ctxt T of
             [] => if is_integer_type T orelse is_bit_type T then 0
@@ -1195,9 +1196,10 @@ val hash_term = Word.toInt o hashw_term
 fun special_bounds ts =
   fold Term.add_vars ts [] |> sort (Term_Ord.fast_indexname_ord o pairself fst)
 
+(* FIXME: detect "rep_datatype"? *)
 fun is_funky_typedef_name thy s =
-  member (op =) [@{type_name unit}, @{type_name Product_Type.prod}, @{type_name Sum_Type.sum},
-                 @{type_name int}] s orelse
+  member (op =) [@{type_name unit}, @{type_name prod},
+                 @{type_name Sum_Type.sum}, @{type_name int}] s orelse
   is_frac_type thy (Type (s, []))
 fun is_funky_typedef thy (Type (s, _)) = is_funky_typedef_name thy s
   | is_funky_typedef _ _ = false
@@ -1373,7 +1375,8 @@ fun is_mutually_inductive_pred_def thy table t =
     case t |> strip_abs_body |> strip_comb of
       (Const x, ts as (_ :: _)) =>
       (case def_of_const thy table x of
-         SOME t' => fixpoint_kind_of_rhs t' <> NoFp andalso forall is_good_arg ts
+         SOME t' => fixpoint_kind_of_rhs t' <> NoFp andalso
+                    forall is_good_arg ts
        | NONE => false)
     | _ => false
   end
@@ -1409,16 +1412,9 @@ fun is_real_inductive_pred ({thy, stds, fast_descrs, def_table, intro_table,
                              ...} : hol_context) x =
   fixpoint_kind_of_const thy def_table x <> NoFp andalso
   not (null (def_props_for_const thy stds fast_descrs intro_table x))
-fun is_real_equational_fun ({thy, stds, fast_descrs, simp_table, psimp_table,
-                             ...} : hol_context) x =
-  exists (fn table => not (null (def_props_for_const thy stds fast_descrs table
-                                                     x)))
-         [!simp_table, psimp_table]
-fun is_inductive_pred hol_ctxt =
-  is_real_inductive_pred hol_ctxt andf (not o is_real_equational_fun hol_ctxt)
-fun is_equational_fun hol_ctxt =
-  (is_real_equational_fun hol_ctxt orf is_real_inductive_pred hol_ctxt orf
-   (String.isPrefix ubfp_prefix orf String.isPrefix lbfp_prefix) o fst)
+fun is_inductive_pred hol_ctxt (x as (s, _)) =
+  is_real_inductive_pred hol_ctxt x orelse String.isPrefix ubfp_prefix s orelse
+  String.isPrefix lbfp_prefix s
 
 fun lhs_of_equation t =
   case t of
@@ -1500,6 +1496,14 @@ fun is_choice_spec_axiom thy choice_spec_table t =
                     exists (curry (op aconv) t o axiom_for_choice_spec thy) ts)
                 choice_spec_table
 
+fun is_real_equational_fun ({thy, stds, fast_descrs, simp_table, psimp_table,
+                             ...} : hol_context) x =
+  exists (fn table => not (null (def_props_for_const thy stds fast_descrs table
+                                                     x)))
+         [!simp_table, psimp_table]
+fun is_equational_fun_but_no_plain_def hol_ctxt =
+  is_real_equational_fun hol_ctxt orf is_inductive_pred hol_ctxt
+
 (** Constant unfolding **)
 
 fun constr_case_body ctxt stds (func_t, (x as (_, T))) =
@@ -1579,9 +1583,14 @@ fun optimized_record_update (hol_ctxt as {thy, ctxt, stds, ...}) s rec_T fun_t
 (* Prevents divergence in case of cyclic or infinite definition dependencies. *)
 val unfold_max_depth = 255
 
-fun unfold_defs_in_term (hol_ctxt as {thy, ctxt, stds, fast_descrs, case_names,
-                                      def_table, ground_thm_table, ersatz_table,
-                                      ...}) =
+(* Inline definitions or define as an equational constant? Booleans tend to
+   benefit more from inlining, due to the polarity analysis. *)
+val def_inline_threshold_for_booleans = 50
+val def_inline_threshold_for_non_booleans = 20
+
+fun unfold_defs_in_term
+        (hol_ctxt as {thy, ctxt, stds, whacks, fast_descrs, case_names,
+                      def_table, ground_thm_table, ersatz_table, ...}) =
   let
     fun do_term depth Ts t =
       case t of
@@ -1629,21 +1638,33 @@ fun unfold_defs_in_term (hol_ctxt as {thy, ctxt, stds, fast_descrs, case_names,
         (case strip_comb t of
            (Const x, ts) => do_const depth Ts t x ts
          | _ => s_betapply [] (do_term depth Ts t1, do_term depth Ts t2))
-      | Free _ => t
-      | Var _ => t
       | Bound _ => t
       | Abs (s, T, body) => Abs (s, T, do_term depth (T :: Ts) body)
+      | _ => if member (term_match thy) whacks t then
+               Const (@{const_name unknown}, fastype_of1 (Ts, t))
+             else
+               t
     and select_nth_constr_arg_with_args _ _ (x as (_, T)) [] n res_T =
         (Abs (Name.uu, body_type T,
               select_nth_constr_arg ctxt stds x (Bound 0) n res_T), [])
       | select_nth_constr_arg_with_args depth Ts x (t :: ts) n res_T =
         (select_nth_constr_arg ctxt stds x (do_term depth Ts t) n res_T, ts)
+    and quot_rep_of depth Ts abs_T rep_T ts =
+      select_nth_constr_arg_with_args depth Ts
+          (@{const_name Quot}, rep_T --> abs_T) ts 0 rep_T
     and do_const depth Ts t (x as (s, T)) ts =
-      case AList.lookup (op =) ersatz_table s of
+      if member (term_match thy) whacks (Const x) then
+        Const (@{const_name unknown}, fastype_of1 (Ts, t))
+      else case AList.lookup (op =) ersatz_table s of
         SOME s' =>
         do_const (depth + 1) Ts (list_comb (Const (s', T), ts)) (s', T) ts
       | NONE =>
         let
+          fun def_inline_threshold () =
+            if is_boolean_type (nth_range_type (length ts) T) then
+              def_inline_threshold_for_booleans
+            else
+              def_inline_threshold_for_non_booleans
           val (const, ts) =
             if is_built_in_const thy stds fast_descrs x then
               (Const x, ts)
@@ -1677,11 +1698,7 @@ fun unfold_defs_in_term (hol_ctxt as {thy, ctxt, stds, fast_descrs, case_names,
                                          rep_T --> rep_T) $ Bound 0)), ts)
                 end
               else if is_quot_rep_fun ctxt x then
-                let
-                  val abs_T = domain_type T
-                  val rep_T = range_type T
-                  val x' = (@{const_name Quot}, rep_T --> abs_T)
-                in select_nth_constr_arg_with_args depth Ts x' ts 0 rep_T end
+                quot_rep_of depth Ts (domain_type T) (range_type T) ts
               else if is_record_get thy x then
                 case length ts of
                   0 => (do_term depth Ts (eta_expand Ts t 1), [])
@@ -1694,15 +1711,41 @@ fun unfold_defs_in_term (hol_ctxt as {thy, ctxt, stds, fast_descrs, case_names,
                             (do_term depth Ts (hd ts))
                             (do_term depth Ts (nth ts 1)), [])
                 | n => (do_term depth Ts (eta_expand Ts t (2 - n)), [])
+              else if is_abs_fun ctxt x andalso
+                      is_quot_type thy (range_type T) then
+                let
+                  val abs_T = range_type T
+                  val rep_T = domain_type (domain_type T)
+                  val eps_fun = Const (@{const_name Eps},
+                                       (rep_T --> bool_T) --> rep_T)
+                  val normal_fun = 
+                    Const (quot_normal_name_for_type ctxt abs_T,
+                           rep_T --> rep_T)
+                  val abs_fun = Const (@{const_name Quot}, rep_T --> abs_T)
+                in
+                  (Abs (Name.uu, rep_T --> bool_T,
+                        abs_fun $ (normal_fun $ (eps_fun $ Bound 0)))
+                   |> do_term (depth + 1) Ts, ts)
+                end
               else if is_rep_fun ctxt x then
                 let val x' = mate_of_rep_fun ctxt x in
                   if is_constr ctxt stds x' then
                     select_nth_constr_arg_with_args depth Ts x' ts 0
                                                     (range_type T)
+                  else if is_quot_type thy (domain_type T) then
+                    let
+                      val abs_T = domain_type T
+                      val rep_T = domain_type (range_type T)
+                      val (rep_fun, _) = quot_rep_of depth Ts abs_T rep_T []
+                      val equiv_rel = equiv_relation_for_quot_type thy abs_T
+                    in
+                      (Abs (Name.uu, abs_T, equiv_rel $ (rep_fun $ Bound 0)),
+                       ts)
+                    end
                   else
                     (Const x, ts)
                 end
-              else if is_equational_fun hol_ctxt x orelse
+              else if is_equational_fun_but_no_plain_def hol_ctxt x orelse
                       is_choice_spec_fun hol_ctxt x then
                 (Const x, ts)
               else case def_of_const thy def_table x of
@@ -1714,6 +1757,8 @@ fun unfold_defs_in_term (hol_ctxt as {thy, ctxt, stds, fast_descrs, case_names,
                                    quote s)
                 else if s = @{const_name wfrec'} then
                   (do_term (depth + 1) Ts (s_betapplys Ts (def, ts)), [])
+                else if size_of_term def > def_inline_threshold () then
+                  (Const x, ts)
                 else
                   (do_term (depth + 1) Ts def, ts)
               | NONE => (Const x, ts)
@@ -1725,25 +1770,64 @@ fun unfold_defs_in_term (hol_ctxt as {thy, ctxt, stds, fast_descrs, case_names,
 
 (** Axiom extraction/generation **)
 
+fun extensional_equal j (Type (@{type_name fun}, [dom_T, ran_T])) t1 t2 =
+    let val var_t = Var (("x", j), dom_T) in
+      extensional_equal (j + 1) ran_T (betapply (t1, var_t))
+                        (betapply (t2, var_t))
+    end
+  | extensional_equal _ T t1 t2 =
+    Const (@{const_name "op ="}, T --> T --> bool_T) $ t1 $ t2
+
+fun equationalize_term ctxt tag t =
+  let
+    val j = maxidx_of_term t + 1
+    val (prems, concl) = Logic.strip_horn t
+  in
+    Logic.list_implies (prems,
+        case concl of
+          @{const Trueprop} $ (Const (@{const_name "op ="}, Type (_, [T, _]))
+                               $ t1 $ t2) =>
+          @{const Trueprop} $ extensional_equal j T t1 t2
+        | @{const Trueprop} $ t' =>
+          @{const Trueprop} $ HOLogic.mk_eq (t', @{const True})
+        | Const (@{const_name "=="}, Type (_, [T, _])) $ t1 $ t2 =>
+          @{const Trueprop} $ extensional_equal j T t1 t2
+        | _ => (warning ("Ignoring " ^ quote tag ^ " for non-equation" ^
+                         quote (Syntax.string_of_term ctxt t) ^ ".");
+                raise SAME ()))
+    |> SOME
+  end
+  handle SAME () => NONE
+
 fun pair_for_prop t =
   case term_under_def t of
     Const (s, _) => (s, t)
   | t' => raise TERM ("Nitpick_HOL.pair_for_prop", [t, t'])
+
 fun def_table_for get ctxt subst =
   ctxt |> get |> map (pair_for_prop o subst_atomic subst)
        |> AList.group (op =) |> Symtab.make
-fun paired_with_consts t = map (rpair t) (Term.add_const_names t [])
+
 fun const_def_table ctxt subst ts =
   def_table_for (map prop_of o Nitpick_Defs.get) ctxt subst
   |> fold (fn (s, t) => Symtab.map_default (s, []) (cons t))
           (map pair_for_prop ts)
+
+fun paired_with_consts t = map (rpair t) (Term.add_const_names t [])
 fun const_nondef_table ts =
   fold (append o paired_with_consts) ts [] |> AList.group (op =) |> Symtab.make
-val const_simp_table = def_table_for (map prop_of o Nitpick_Simps.get)
-val const_psimp_table = def_table_for (map prop_of o Nitpick_Psimps.get)
+
+fun const_simp_table ctxt =
+  def_table_for (map_filter (equationalize_term ctxt "nitpick_simp" o prop_of)
+                 o Nitpick_Simps.get) ctxt
+fun const_psimp_table ctxt =
+  def_table_for (map_filter (equationalize_term ctxt "nitpick_psimp" o prop_of)
+                 o Nitpick_Psimps.get) ctxt
+
 fun const_choice_spec_table ctxt subst =
   map (subst_atomic subst o prop_of) (Nitpick_Choice_Specs.get ctxt)
   |> const_nondef_table
+
 fun inductive_intro_table ctxt subst def_table =
   let val thy = ProofContext.theory_of ctxt in
     def_table_for
@@ -1753,6 +1837,7 @@ fun inductive_intro_table ctxt subst def_table =
                                   cat = Spec_Rules.Co_Inductive)
          o Spec_Rules.get) ctxt subst
   end
+
 fun ground_theorem_table thy =
   fold ((fn @{const Trueprop} $ t1 =>
             is_ground_term t1 ? Inttab.map_default (hash_term t1, []) (cons t1)
@@ -1820,12 +1905,13 @@ fun optimized_quot_type_axioms ctxt stds abs_z =
     val y_var = Var (("y", 0), rep_T)
     val x = (@{const_name Quot}, rep_T --> abs_T)
     val sel_a_t = select_nth_constr_arg ctxt stds x a_var 0 rep_T
-    val normal_t = Const (quot_normal_name_for_type ctxt abs_T, rep_T --> rep_T)
-    val normal_x = normal_t $ x_var
-    val normal_y = normal_t $ y_var
+    val normal_fun =
+      Const (quot_normal_name_for_type ctxt abs_T, rep_T --> rep_T)
+    val normal_x = normal_fun $ x_var
+    val normal_y = normal_fun $ y_var
     val is_unknown_t = Const (@{const_name is_unknown}, rep_T --> bool_T)
   in
-    [Logic.mk_equals (normal_t $ sel_a_t, sel_a_t),
+    [Logic.mk_equals (normal_fun $ sel_a_t, sel_a_t),
      Logic.list_implies
          ([@{const Not} $ (is_unknown_t $ normal_x),
            @{const Not} $ (is_unknown_t $ normal_y),
@@ -1842,7 +1928,6 @@ fun codatatype_bisim_axioms (hol_ctxt as {ctxt, thy, stds, ...}) T =
     val xs = datatype_constrs hol_ctxt T
     val set_T = T --> bool_T
     val iter_T = @{typ bisim_iterator}
-    val bisim_const = Const (@{const_name bisim}, iter_T --> T --> T --> bool_T)
     val bisim_max = @{const bisim_iterator_max}
     val n_var = Var (("n", 0), iter_T)
     val n_var_minus_1 =
@@ -1851,8 +1936,10 @@ fun codatatype_bisim_axioms (hol_ctxt as {ctxt, thy, stds, ...}) T =
                           $ (suc_const iter_T $ Bound 0) $ n_var)
     val x_var = Var (("x", 0), T)
     val y_var = Var (("y", 0), T)
+    fun bisim_const T =
+      Const (@{const_name bisim}, iter_T --> T --> T --> bool_T)
     fun nth_sub_bisim x n nth_T =
-      (if is_codatatype thy nth_T then bisim_const $ n_var_minus_1
+      (if is_codatatype thy nth_T then bisim_const nth_T $ n_var_minus_1
        else HOLogic.eq_const nth_T)
       $ select_nth_constr_arg ctxt stds x x_var n nth_T
       $ select_nth_constr_arg ctxt stds x y_var n nth_T
@@ -1865,12 +1952,12 @@ fun codatatype_bisim_axioms (hol_ctxt as {ctxt, thy, stds, ...}) T =
           |> foldr1 s_conj
       in List.foldr absdummy core_t arg_Ts end
   in
-    [HOLogic.eq_const bool_T $ (bisim_const $ n_var $ x_var $ y_var)
-     $ (@{term "op |"} $ (HOLogic.eq_const iter_T $ n_var $ zero_const iter_T)
-        $ (s_betapply []
-                      (optimized_case_def hol_ctxt T bool_T (map case_func xs),
-                       x_var))),
-     HOLogic.eq_const set_T $ (bisim_const $ bisim_max $ x_var)
+    [HOLogic.mk_imp
+       (HOLogic.mk_disj (HOLogic.eq_const iter_T $ n_var $ zero_const iter_T,
+            s_betapply [] (optimized_case_def hol_ctxt T bool_T
+                                              (map case_func xs), x_var)),
+        bisim_const T $ n_var $ x_var $ y_var),
+     HOLogic.eq_const set_T $ (bisim_const T $ bisim_max $ x_var)
      $ (Const (@{const_name insert}, T --> set_T --> set_T)
         $ x_var $ Const (@{const_name bot_class.bot}, set_T))]
     |> map HOLogic.mk_Trueprop
@@ -2066,7 +2153,7 @@ fun starred_linear_pred_const (hol_ctxt as {simp_table, ...}) (s, T) def =
     val tuple_T = HOLogic.mk_tupleT tuple_arg_Ts
     val set_T = tuple_T --> bool_T
     val curried_T = tuple_T --> set_T
-    val uncurried_T = Type (@{type_name Product_Type.prod}, [tuple_T, tuple_T]) --> bool_T
+    val uncurried_T = Type (@{type_name prod}, [tuple_T, tuple_T]) --> bool_T
     val (base_rhs, step_rhs) = linear_pred_base_and_step_rhss fp_app
     val base_x as (base_s, _) = (base_prefix ^ s, outer_Ts ---> set_T)
     val base_eq = HOLogic.mk_eq (list_comb (Const base_x, outer_vars), base_rhs)
@@ -2087,6 +2174,10 @@ fun starred_linear_pred_const (hol_ctxt as {simp_table, ...}) (s, T) def =
     |> unfold_defs_in_term hol_ctxt
   end
 
+fun is_good_starred_linear_pred_type (Type (@{type_name fun}, Ts)) =
+    forall (not o (is_fun_type orf is_pair_type)) Ts
+  | is_good_starred_linear_pred_type _ = false
+
 fun unrolled_inductive_pred_const (hol_ctxt as {thy, star_linear_preds,
                                                 def_table, simp_table, ...})
                                   gfp (x as (s, T)) =
@@ -2096,10 +2187,11 @@ fun unrolled_inductive_pred_const (hol_ctxt as {thy, star_linear_preds,
     val unrolled_const = Const x' $ zero_const iter_T
     val def = the (def_of_const thy def_table x)
   in
-    if is_equational_fun hol_ctxt x' then
+    if is_equational_fun_but_no_plain_def hol_ctxt x' then
       unrolled_const (* already done *)
-    else if not gfp andalso is_linear_inductive_pred_def def andalso
-         star_linear_preds then
+    else if not gfp andalso star_linear_preds andalso
+         is_linear_inductive_pred_def def andalso
+         is_good_starred_linear_pred_type T then
       starred_linear_pred_const hol_ctxt x def
     else
       let
@@ -2150,46 +2242,57 @@ fun inductive_pred_axiom hol_ctxt (x as (s, T)) =
   else
     raw_inductive_pred_axiom hol_ctxt x
 
-fun raw_equational_fun_axioms (hol_ctxt as {thy, stds, fast_descrs, simp_table,
-                                            psimp_table, ...}) x =
+fun equational_fun_axioms (hol_ctxt as {ctxt, thy, stds, fast_descrs, def_table,
+                                        simp_table, psimp_table, ...}) x =
   case def_props_for_const thy stds fast_descrs (!simp_table) x of
     [] => (case def_props_for_const thy stds fast_descrs psimp_table x of
-             [] => [inductive_pred_axiom hol_ctxt x]
+             [] => (if is_inductive_pred hol_ctxt x then
+                      [inductive_pred_axiom hol_ctxt x]
+                    else case def_of_const thy def_table x of
+                      SOME def =>
+                      @{const Trueprop} $ HOLogic.mk_eq (Const x, def)
+                      |> equationalize_term ctxt "" |> the |> single
+                    | NONE => [])
            | psimps => psimps)
   | simps => simps
-val equational_fun_axioms = map extensionalize oo raw_equational_fun_axioms
 fun is_equational_fun_surely_complete hol_ctxt x =
-  case raw_equational_fun_axioms hol_ctxt x of
+  case equational_fun_axioms hol_ctxt x of
     [@{const Trueprop} $ (Const (@{const_name "op ="}, _) $ t1 $ _)] =>
     strip_comb t1 |> snd |> forall is_Var
   | _ => false
 
 (** Type preprocessing **)
 
-fun merge_type_vars_in_terms ts =
+fun merged_type_var_table_for_terms thy ts =
   let
-    fun add_type (TFree (s, S)) table =
-        (case AList.lookup (op =) table S of
-           SOME s' =>
-           if string_ord (s', s) = LESS then AList.update (op =) (S, s') table
-           else table
-         | NONE => (S, s) :: table)
-      | add_type _ table = table
-    val table = fold (fold_types (fold_atyps add_type)) ts []
-    fun coalesce (TFree (_, S)) = TFree (AList.lookup (op =) table S |> the, S)
-      | coalesce T = T
-  in map (map_types (map_atyps coalesce)) ts end
+    fun add (s, S) table =
+      table
+      |> (case AList.lookup (Sign.subsort thy o swap) table S of
+            SOME _ => I
+          | NONE =>
+            filter_out (fn (S', _) => Sign.subsort thy (S, S'))
+            #> cons (S, s))
+    val tfrees = [] |> fold Term.add_tfrees ts
+                    |> sort (string_ord o pairself fst)
+  in [] |> fold add tfrees |> rev end
+
+fun merge_type_vars_in_term thy merge_type_vars table =
+  merge_type_vars
+  ? map_types (map_atyps
+        (fn TFree (_, S) =>
+            TFree (table |> find_first (fn (S', _) => Sign.subsort thy (S', S))
+                         |> the |> swap)
+          | T => T))
 
 fun add_ground_types hol_ctxt binarize =
   let
     fun aux T accum =
       case T of
         Type (@{type_name fun}, Ts) => fold aux Ts accum
-      | Type (@{type_name Product_Type.prod}, Ts) => fold aux Ts accum
+      | Type (@{type_name prod}, Ts) => fold aux Ts accum
       | Type (@{type_name itself}, [T1]) => aux T1 accum
       | Type (_, Ts) =>
-        if member (op =) (@{typ prop} :: @{typ bool} :: @{typ unit} :: accum)
-                  T then
+        if member (op =) (@{typ prop} :: @{typ bool} :: accum) T then
           accum
         else
           T :: accum
