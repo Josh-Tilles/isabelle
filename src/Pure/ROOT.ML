@@ -205,12 +205,12 @@ use "Isar/obtain.ML";
 
 (*local theories and targets*)
 use "Isar/local_theory.ML";
+use "Isar/locale.ML";
 use "Isar/generic_target.ML";
 use "Isar/overloading.ML";
-use "Isar/locale.ML";
 use "axclass.ML";
 use "Isar/class_target.ML";
-use "Isar/theory_target.ML";
+use "Isar/named_target.ML";
 use "Isar/expression.ML";
 use "Isar/class.ML";
 

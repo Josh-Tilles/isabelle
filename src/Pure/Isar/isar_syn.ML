@@ -406,7 +406,7 @@ val _ =
 val _ =
   Outer_Syntax.command "context" "enter local theory context" Keyword.thy_decl
     (Parse.name --| Parse.begin >> (fn name =>
-      Toplevel.print o Toplevel.begin_local_theory true (Theory_Target.context_cmd name)));
+      Toplevel.print o Toplevel.begin_local_theory true (Named_Target.context_cmd name)));
 
 
 (* locales *)
@@ -472,7 +472,7 @@ val _ =
   Outer_Syntax.command "instantiation" "instantiate and prove type arity" Keyword.thy_decl
    (Parse.multi_arity --| Parse.begin
      >> (fn arities => Toplevel.print o
-         Toplevel.begin_local_theory true (Theory_Target.instantiation_cmd arities)));
+         Toplevel.begin_local_theory true (Class.instantiation_cmd arities)));
 
 val _ =
   Outer_Syntax.command "instance" "prove type arity or subclass relation" Keyword.thy_goal
@@ -492,7 +492,7 @@ val _ =
       Scan.optional (Parse.$$$ "(" |-- (Parse.$$$ "unchecked" >> K false) --| Parse.$$$ ")") true
       >> Parse.triple1) --| Parse.begin
    >> (fn operations => Toplevel.print o
-         Toplevel.begin_local_theory true (Theory_Target.overloading_cmd operations)));
+         Toplevel.begin_local_theory true (Overloading.overloading_cmd operations)));
 
 
 (* code generation *)
