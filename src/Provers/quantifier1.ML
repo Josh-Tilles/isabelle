@@ -17,7 +17,7 @@ Simplification procedures for turning
      And analogously for t=x, but the eqn is not turned around!
 
      NB Simproc is only triggered by "!x. P(x) & P'(x) --> Q(x)";
-        "!x. x=t --> P(x)" is covered by the congreunce rule for -->;
+        "!x. x=t --> P(x)" is covered by the congruence rule for -->;
         "!x. t=x --> P(x)" must be taken care of by an ordinary rewrite rule.
         As must be "? x. t=x & P(x)".
         
@@ -26,7 +26,7 @@ Simplification procedures for turning
 Gries etc call this the "1 point rules"
 
 The above also works for !x1..xn. and ?x1..xn by moving the defined
-qunatifier inside first, but not for nested bounded quantifiers.
+quantifier inside first, but not for nested bounded quantifiers.
 
 For set comprehensions the basic permutations
       ... & x = t & ...  ->  x = t & (... & ...)
@@ -113,8 +113,13 @@ fun extract_quant extract q =
   in exqu [] end;
 
 fun prove_conv tac thy tu =
-  Goal.prove (ProofContext.init_global thy) [] [] (Logic.mk_equals tu)
-    (K (rtac iff_reflection 1 THEN tac));
+  let val ctxt = ProofContext.init_global thy;
+      val eq_tu = Logic.mk_equals tu;
+      val ([fixed_goal], ctxt') = Variable.import_terms true [eq_tu] ctxt;
+      val thm = Goal.prove ctxt' [] [] fixed_goal
+            (K (rtac iff_reflection 1 THEN tac));
+      val [gen_thm] = Variable.export ctxt' ctxt [thm];
+  in gen_thm end;
 
 fun qcomm_tac qcomm qI i = REPEAT_DETERM (rtac qcomm i THEN rtac qI i) 
 
