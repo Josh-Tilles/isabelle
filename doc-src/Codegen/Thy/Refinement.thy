@@ -116,7 +116,7 @@ text {*
   "{\<alpha>\<^isub>1, \<dots>, \<alpha>\<^isub>n}"} is exactly the set of \emph{all} type variables in
   @{text "\<tau>"}; then @{text "\<kappa>"} is its corresponding datatype.  The
   HOL datatype package by default registers any new datatype with its
-  constructors, but this may be changed using @{command
+  constructors, but this may be changed using @{command_def
   code_datatype}; the currently chosen constructors can be inspected
   using the @{command print_codesetup} command.
 
@@ -158,7 +158,7 @@ text %quote {*@{code_stmts empty enqueue dequeue (SML)}*}
 text {*
   The same techniques can also be applied to types which are not
   specified as datatypes, e.g.~type @{typ int} is originally specified
-  as quotient type by means of @{command typedef}, but for code
+  as quotient type by means of @{command_def typedef}, but for code
   generation constants allowing construction of binary numeral values
   are used as constructors for @{typ int}.
 
@@ -170,7 +170,95 @@ text {*
 subsection {* Datatype refinement involving invariants *}
 
 text {*
-  FIXME
+  Datatype representation involving invariants require a dedicated
+  setup for the type and its primitive operations.  As a running
+  example, we implement a type @{text "'a dlist"} of list consisting
+  of distinct elements.
+
+  The first step is to decide on which representation the abstract
+  type (in our example @{text "'a dlist"}) should be implemented.
+  Here we choose @{text "'a list"}.  Then a conversion from the concrete
+  type to the abstract type must be specified, here:
+*}
+
+text %quote {*
+  @{term_type Dlist}
+*}
+
+text {*
+  \noindent Next follows the specification of a suitable \emph{projection},
+  i.e.~a conversion from abstract to concrete type:
+*}
+
+text %quote {*
+  @{term_type list_of_dlist}
+*}
+
+text {*
+  \noindent This projection must be specified such that the following
+  \emph{abstract datatype certificate} can be proven:
+*}
+
+lemma %quote [code abstype]:
+  "Dlist (list_of_dlist dxs) = dxs"
+  by (fact Dlist_list_of_dlist)
+
+text {*
+  \noindent Note that so far the invariant on representations
+  (@{term_type distinct}) has never been mentioned explicitly:
+  the invariant is only referred to implicitly: all values in
+  set @{term "{xs. list_of_dlist (Dlist xs) = xs}"} are invariant,
+  and in our example this is exactly @{term "{xs. distinct xs}"}.
+  
+  The primitive operations on @{typ "'a dlist"} are specified
+  indirectly using the projection @{const list_of_dlist}.  For
+  the empty @{text "dlist"}, @{const Dlist.empty}, we finally want
+  the code equation
+*}
+
+text %quote {*
+  @{term "Dlist.empty = Dlist []"}
+*}
+
+text {*
+  \noindent This we have to prove indirectly as follows:
+*}
+
+lemma %quote [code abstract]:
+  "list_of_dlist Dlist.empty = []"
+  by (fact list_of_dlist_empty)
+
+text {*
+  \noindent This equation logically encodes both the desired code
+  equation and that the expression @{const Dlist} is applied to obeys
+  the implicit invariant.  Equations for insertion and removal are
+  similar:
+*}
+
+lemma %quote [code abstract]:
+  "list_of_dlist (Dlist.insert x dxs) = List.insert x (list_of_dlist dxs)"
+  by (fact list_of_dlist_insert)
+
+lemma %quote [code abstract]:
+  "list_of_dlist (Dlist.remove x dxs) = remove1 x (list_of_dlist dxs)"
+  by (fact list_of_dlist_remove)
+
+text {*
+  \noindent Then the corresponding code is as follows:
+*}
+
+text %quote {*
+  @{code_stmts Dlist.empty Dlist.insert Dlist.remove list_of_dlist (Haskell)}
+*} (*(types) dlist (consts) dempty dinsert dremove list_of List.member insert remove *)
+
+text {*
+  Typical data structures implemented by representations involving
+  invariants are available in the library, e.g.~theories @{theory
+  Fset} and @{theory Mapping} specify sets (type @{typ "'a fset"}) and
+  key-value-mappings (type @{typ "('a, 'b) mapping"}) respectively;
+  these can be implemented by distinct lists as presented here as
+  example (theory @{theory Dlist}) and red-black-trees respectively
+  (theory @{theory RBT}).
 *}
 
 end

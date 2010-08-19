@@ -147,7 +147,7 @@ fun imp_prems_conv cv ct =
 
 fun Trueprop_conv cv ct =
   case Thm.term_of ct of
-    Const ("Trueprop", _) $ _ => Conv.arg_conv cv ct  
+    Const (@{const_name Trueprop}, _) $ _ => Conv.arg_conv cv ct  
   | _ => raise Fail "Trueprop_conv"
 
 fun preprocess_intro thy rule =
@@ -414,6 +414,6 @@ val opt_print_modes =
 val _ = Outer_Syntax.improper_command "values" "enumerate and print comprehensions" Keyword.diag
   (opt_print_modes -- Scan.optional (Parse.nat >> SOME) NONE -- Parse.term
    >> (fn ((print_modes, soln), t) => Toplevel.keep
-        (values_cmd print_modes soln t)));
+        (values_cmd print_modes soln t))); (*FIXME does not preserve the previous functionality*)
 
 end;

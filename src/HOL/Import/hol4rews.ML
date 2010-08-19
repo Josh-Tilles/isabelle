@@ -616,7 +616,7 @@ local
     fun handle_meta [x as Appl[Appl[Constant "_constrain", Constant @{const_syntax "=="}, _],_,_]] = x
       | handle_meta [x as Appl[Appl[Constant "_constrain", Constant @{const_syntax all}, _],_]] = x
       | handle_meta [x as Appl[Appl[Constant "_constrain", Constant @{const_syntax "==>"}, _],_,_]] = x
-      | handle_meta [x] = Appl[Constant "Trueprop",x]
+      | handle_meta [x] = Appl[Constant @{const_syntax Trueprop}, x]
       | handle_meta _ = error "hol4rews error: Trueprop not applied to single argument"
 in
 val smarter_trueprop_parsing = [(@{const_syntax Trueprop},handle_meta)]
@@ -624,12 +624,12 @@ end
 
 local
     fun initial_maps thy =
-        thy |> add_hol4_type_mapping "min" "bool" false "bool"
+        thy |> add_hol4_type_mapping "min" "bool" false @{type_name bool}
             |> add_hol4_type_mapping "min" "fun" false "fun"
-            |> add_hol4_type_mapping "min" "ind" false "Nat.ind"
-            |> add_hol4_const_mapping "min" "=" false "op ="
-            |> add_hol4_const_mapping "min" "==>" false "op -->"
-            |> add_hol4_const_mapping "min" "@" false "Hilbert_Choice.Eps"
+            |> add_hol4_type_mapping "min" "ind" false @{type_name ind}
+            |> add_hol4_const_mapping "min" "=" false @{const_name "op ="}
+            |> add_hol4_const_mapping "min" "==>" false @{const_name "op -->"}
+            |> add_hol4_const_mapping "min" "@" false @{const_name "Eps"}
 in
 val hol4_setup =
   initial_maps #>

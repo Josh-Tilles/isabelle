@@ -35,6 +35,18 @@ in addition to interpretations in theories.
 
 *** HOL ***
 
+* Records: logical foundation type for records do not carry a '_type' suffix
+any longer.  INCOMPATIBILITY.
+
+* Code generation for records: more idiomatic representation of record types.
+Warning: records are not covered by ancient SML code generation any longer.
+INCOMPATIBILITY.  In cases of need, a suitable rep_datatype declaration
+helps to succeed then:
+
+  record 'a foo = ...
+  ...
+  rep_datatype foo_ext ...
+
 * Session Imperative_HOL: revamped, corrected dozens of inadequacies.
 INCOMPATIBILITY.
 
@@ -74,9 +86,20 @@ generation.
 * Some previously unqualified names have been qualified:
 
   types
+    bool ~> HOL.bool
     nat ~> Nat.nat
 
   constants
+    Trueprop ~> HOL.Trueprop
+    True ~> HOL.True
+    False ~> HOL.False
+    Not ~> HOL.Not
+    The ~> HOL.The
+    All ~> HOL.All
+    Ex ~> HOL.Ex
+    Ex1 ~> HOL.Ex1
+    Let ~> HOL.Let
+    If ~> HOL.If
     Ball ~> Set.Ball
     Bex ~> Set.Bex
     Suc ~> Nat.Suc
@@ -90,7 +113,7 @@ generation.
 INCOMPATIBILITY.
 
 * Removed simplifier congruence rule of "prod_case", as has for long
-been the case with "split".
+been the case with "split".  INCOMPATIBILITY.
 
 * Datatype package: theorems generated for executable equality
 (class eq) carry proper names and are treated as default code
@@ -99,8 +122,8 @@ equations.
 * List.thy: use various operations from the Haskell prelude when
 generating Haskell code.
 
-* code_simp.ML: simplification with rules determined by
-code generator.
+* code_simp.ML and method code_simp: simplification with rules determined
+by code generator.
 
 * code generator: do not print function definitions for case
 combinators any longer.
@@ -129,6 +152,16 @@ INCOMPATIBILITY.
 * Inductive package: offers new command "inductive_simps" to automatically
 derive instantiated and simplified equations for inductive predicates,
 similar to inductive_cases.
+
+
+*** FOL ***
+
+* All constant names are now qualified.  INCOMPATIBILITY.
+
+
+*** ZF ***
+
+* All constant names are now qualified.  INCOMPATIBILITY.
 
 
 *** ML ***

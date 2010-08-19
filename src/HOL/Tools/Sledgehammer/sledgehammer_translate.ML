@@ -55,8 +55,10 @@ fun combformula_for_prop thy =
   let
     val do_term = combterm_from_term thy
     fun do_quant bs q s T t' =
-      do_formula ((s, T) :: bs) t'
-      #>> (fn phi => AQuant (q, [`make_bound_var s], phi))
+      let val s = Name.variant (map fst bs) s in
+        do_formula ((s, T) :: bs) t'
+        #>> (fn phi => AQuant (q, [`make_bound_var s], phi))
+      end
     and do_conn bs c t1 t2 =
       do_formula bs t1 ##>> do_formula bs t2
       #>> (fn (phi1, phi2) => AConn (c, [phi1, phi2]))
@@ -102,41 +104,41 @@ fun reveal_bounds Ts =
                     (0 upto length Ts - 1 ~~ Ts))
 
 fun introduce_combinators_in_term ctxt kind t =
-  let
-    val thy = ProofContext.theory_of ctxt
-    fun aux Ts t =
-      case t of
-        @{const Not} $ t1 => @{const Not} $ aux Ts t1
-      | (t0 as Const (@{const_name All}, _)) $ Abs (s, T, t') =>
-        t0 $ Abs (s, T, aux (T :: Ts) t')
-      | (t0 as Const (@{const_name Ex}, _)) $ Abs (s, T, t') =>
-        t0 $ Abs (s, T, aux (T :: Ts) t')
-      | (t0 as @{const "op &"}) $ t1 $ t2 => t0 $ aux Ts t1 $ aux Ts t2
-      | (t0 as @{const "op |"}) $ t1 $ t2 => t0 $ aux Ts t1 $ aux Ts t2
-      | (t0 as @{const "op -->"}) $ t1 $ t2 => t0 $ aux Ts t1 $ aux Ts t2
-      | (t0 as Const (@{const_name "op ="}, Type (_, [@{typ bool}, _])))
-          $ t1 $ t2 =>
-        t0 $ aux Ts t1 $ aux Ts t2
-      | _ => if not (exists_subterm (fn Abs _ => true | _ => false) t) then
-               t
-             else
-               let
-                 val t = t |> conceal_bounds Ts
-                           |> Envir.eta_contract
-                 val ([t], ctxt') = Variable.import_terms true [t] ctxt
-               in
-                 t |> cterm_of thy
-                   |> Clausifier.introduce_combinators_in_cterm
-                   |> singleton (Variable.export ctxt' ctxt)
-                   |> prop_of |> Logic.dest_equals |> snd
-                   |> reveal_bounds Ts
-               end
-  in t |> not (Meson.is_fol_term thy t) ? aux [] end
-  handle THM _ =>
-         (* A type variable of sort "{}" will make abstraction fail. *)
-         case kind of
-           Axiom => HOLogic.true_const
-         | Conjecture => HOLogic.false_const
+  let val thy = ProofContext.theory_of ctxt in
+    if Meson.is_fol_term thy t then
+      t
+    else
+      let
+        fun aux Ts t =
+          case t of
+            @{const Not} $ t1 => @{const Not} $ aux Ts t1
+          | (t0 as Const (@{const_name All}, _)) $ Abs (s, T, t') =>
+            t0 $ Abs (s, T, aux (T :: Ts) t')
+          | (t0 as Const (@{const_name Ex}, _)) $ Abs (s, T, t') =>
+            t0 $ Abs (s, T, aux (T :: Ts) t')
+          | (t0 as @{const "op &"}) $ t1 $ t2 => t0 $ aux Ts t1 $ aux Ts t2
+          | (t0 as @{const "op |"}) $ t1 $ t2 => t0 $ aux Ts t1 $ aux Ts t2
+          | (t0 as @{const "op -->"}) $ t1 $ t2 => t0 $ aux Ts t1 $ aux Ts t2
+          | (t0 as Const (@{const_name "op ="}, Type (_, [@{typ bool}, _])))
+              $ t1 $ t2 =>
+            t0 $ aux Ts t1 $ aux Ts t2
+          | _ => if not (exists_subterm (fn Abs _ => true | _ => false) t) then
+                   t
+                 else
+                   t |> conceal_bounds Ts
+                     |> Envir.eta_contract
+                     |> cterm_of thy
+                     |> Clausifier.introduce_combinators_in_cterm
+                     |> prop_of |> Logic.dest_equals |> snd
+                     |> reveal_bounds Ts
+        val ([t], ctxt') = Variable.import_terms true [t] ctxt
+      in t |> aux [] |> singleton (Variable.export_terms ctxt' ctxt) end
+      handle THM _ =>
+             (* A type variable of sort "{}" will make abstraction fail. *)
+             case kind of
+               Axiom => HOLogic.true_const
+             | Conjecture => HOLogic.false_const
+  end
 
 (* Metis's use of "resolve_tac" freezes the schematic variables. We simulate the
    same in Sledgehammer to prevent the discovery of unreplable proofs. *)
@@ -267,16 +269,18 @@ fun fo_term_for_combterm full_types =
         val (x, ty_args) =
           case head of
             CombConst (name as (s, s'), _, ty_args) =>
-            if s = "equal" then
-              (if top_level andalso length args = 2 then name
-               else ("c_fequal", @{const_name fequal}), [])
-            else if top_level then
-              case s of
-                "c_False" => (("$false", s'), [])
-              | "c_True" => (("$true", s'), [])
-              | _ => (name, if full_types then [] else ty_args)
-            else
-              (name, if full_types then [] else ty_args)
+            let val ty_args = if full_types then [] else ty_args in
+              if s = "equal" then
+                if top_level andalso length args = 2 then (name, [])
+                else (("c_fequal", @{const_name fequal}), ty_args)
+              else if top_level then
+                case s of
+                  "c_False" => (("$false", s'), [])
+                | "c_True" => (("$true", s'), [])
+                | _ => (name, ty_args)
+              else
+                (name, ty_args)
+            end
           | CombVar (name, _) => (name, [])
           | CombApp _ => raise Fail "impossible \"CombApp\""
         val t = ATerm (x, map fo_term_for_combtyp ty_args @

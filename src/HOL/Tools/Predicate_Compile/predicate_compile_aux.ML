@@ -405,13 +405,13 @@ fun map_indprem f (Prem t) = Prem (f t)
 (* general syntactic functions *)
 
 (*Like dest_conj, but flattens conjunctions however nested*)
-fun conjuncts_aux (Const ("op &", _) $ t $ t') conjs = conjuncts_aux t (conjuncts_aux t' conjs)
+fun conjuncts_aux (Const (@{const_name "op &"}, _) $ t $ t') conjs = conjuncts_aux t (conjuncts_aux t' conjs)
   | conjuncts_aux t conjs = t::conjs;
 
 fun conjuncts t = conjuncts_aux t [];
 
 fun is_equationlike_term (Const ("==", _) $ _ $ _) = true
-  | is_equationlike_term (Const ("Trueprop", _) $ (Const ("op =", _) $ _ $ _)) = true
+  | is_equationlike_term (Const (@{const_name Trueprop}, _) $ (Const (@{const_name "op ="}, _) $ _ $ _)) = true
   | is_equationlike_term _ = false
   
 val is_equationlike = is_equationlike_term o prop_of 
@@ -429,10 +429,7 @@ fun is_intro_term constname t =
   
 fun is_intro constname t = is_intro_term constname (prop_of t)
 
-fun is_pred thy constname =
-  let
-    val T = (Sign.the_const_type thy constname)
-  in body_type T = @{typ "bool"} end;
+fun is_pred thy constname = (body_type (Sign.the_const_type thy constname) = HOLogic.boolT);
 
 fun is_predT (T as Type("fun", [_, _])) = (snd (strip_type T) = @{typ bool})
   | is_predT _ = false
@@ -482,7 +479,7 @@ val is_constr = Code.is_constr o ProofContext.theory_of;
 
 fun strip_all t = (Term.strip_all_vars t, Term.strip_all_body t)
 
-fun strip_ex (Const ("Ex", _) $ Abs (x, T, t)) =
+fun strip_ex (Const (@{const_name Ex}, _) $ Abs (x, T, t)) =
   let
     val (xTs, t') = strip_ex t
   in
