@@ -18,7 +18,7 @@ sig
   val lift_procedure_tac: Proof.context -> thm -> int -> tactic
   val lift_tac: Proof.context -> thm list -> int -> tactic
 
-  val lifted: typ list -> Proof.context -> thm -> thm
+  val lifted: Proof.context -> typ list -> thm list -> thm -> thm
   val lifted_attrib: attribute
 end;
 
@@ -627,7 +627,7 @@ fun descend_procedure_tac ctxt =
   THEN' SUBGOAL (fn (goal, i) =>
         let
           val qtys = map #qtyp (Quotient_Info.quotdata_dest ctxt)
-          val rtrm = derive_rtrm qtys goal ctxt
+          val rtrm = derive_rtrm ctxt qtys goal
           val rule = procedure_inst ctxt rtrm  goal
         in
           rtac rule i
@@ -647,7 +647,7 @@ in
 end
 
 
-(** lifting as tactic **)
+(** lifting as a tactic **)
 
 (* the tactic leaves three subgoals to be proved *)
 fun lift_procedure_tac ctxt rthm =
@@ -661,39 +661,48 @@ fun lift_procedure_tac ctxt rthm =
       (rtac rule THEN' rtac rthm') i
     end)
 
+
+fun lift_single_tac ctxt rthm = 
+  lift_procedure_tac ctxt rthm
+  THEN' RANGE
+    [ regularize_tac ctxt,
+      all_injection_tac ctxt,
+      clean_tac ctxt ]
+
 fun lift_tac ctxt rthms =
+  Goal.conjunction_tac 
+  THEN' RANGE (map (lift_single_tac ctxt) rthms)
+
+
+(* automated lifting with pre-simplification of the theorems;
+   for internal usage *)
+fun lifted ctxt qtys simps rthm =
 let
-  fun mk_tac rthm =
-    lift_procedure_tac ctxt rthm
-    THEN' RANGE
-      [ regularize_tac ctxt,
-        all_injection_tac ctxt,
-        clean_tac ctxt ]
+  val ss = (mk_minimal_ss ctxt) addsimps simps
+
+  (* When the theorem is atomized, eta redexes are contracted,
+     so we do it both in the original theorem *)
+  val rthm' =
+    rthm 
+    |> asm_full_simplify ss
+    |> Drule.eta_contraction_rule 
+  val ((_, [rthm'']), ctxt') = Variable.import false [rthm'] ctxt
+  val goal = derive_qtrm ctxt qtys (prop_of rthm'')
 in
-  Goal.conjunction_tac THEN' RANGE (map mk_tac rthms)
+  Goal.prove ctxt' [] [] goal 
+    (K ((asm_full_simp_tac ss THEN' lift_single_tac ctxt' rthm') 1))
+  |> singleton (ProofContext.export ctxt' ctxt)
 end
 
 
-(** lifting as attribute **)
-
-fun lifted qtys ctxt thm =
-let
-  (* When the theorem is atomized, eta redexes are contracted,
-     so we do it both in the original theorem *)
-  val thm' = Drule.eta_contraction_rule thm
-  val ((_, [thm'']), ctxt') = Variable.import false [thm'] ctxt
-  val goal = derive_qtrm qtys (prop_of thm'') ctxt'
-in
-  Goal.prove ctxt' [] [] goal (K (lift_tac ctxt' [thm'] 1))
-  |> singleton (ProofContext.export ctxt' ctxt)
-end;
+(* lifting as an attribute *)
 
 val lifted_attrib = Thm.rule_attribute (fn context => 
   let
     val ctxt = Context.proof_of context
     val qtys = map #qtyp (Quotient_Info.quotdata_dest ctxt)
   in
-    lifted qtys ctxt
+    lifted ctxt qtys []
   end)
 
 end; (* structure *)

@@ -20,12 +20,12 @@ sig
      explicit_apply: bool,
      relevance_threshold: real,
      relevance_convergence: real,
+     max_relevant_per_iter: int option,
      theory_relevant: bool option,
      defs_relevant: bool,
      isar_proof: bool,
      isar_shrink_factor: int,
-     timeout: Time.time,
-     minimize_timeout: Time.time}
+     timeout: Time.time}
   type problem =
     {subgoal: int,
      goal: Proof.context * (thm list * thm),
@@ -89,12 +89,12 @@ type params =
    explicit_apply: bool,
    relevance_threshold: real,
    relevance_convergence: real,
+   max_relevant_per_iter: int option,
    theory_relevant: bool option,
    defs_relevant: bool,
    isar_proof: bool,
    isar_shrink_factor: int,
-   timeout: Time.time,
-   minimize_timeout: Time.time}
+   timeout: Time.time}
 
 type problem =
   {subgoal: int,
@@ -208,10 +208,11 @@ fun repair_conjecture_shape_and_theorem_names output conjecture_shape
 
 fun prover_fun atp_name
         {exec, required_execs, arguments, proof_delims, known_failures,
-         max_new_relevant_facts_per_iter, prefers_theory_relevant,
-         explicit_forall}
+         default_max_relevant_per_iter, default_theory_relevant,
+         explicit_forall, use_conjecture_for_hypotheses}
         ({debug, verbose, overlord, full_types, explicit_apply,
-          relevance_threshold, relevance_convergence, theory_relevant,
+          relevance_threshold, relevance_convergence,
+          max_relevant_per_iter, theory_relevant,
           defs_relevant, isar_proof, isar_shrink_factor, timeout, ...} : params)
         minimize_command
         ({subgoal, goal, relevance_override, axioms} : problem) =
@@ -231,8 +232,10 @@ fun prover_fun atp_name
         (print_d (fn () => "Selecting relevant facts for " ^ quote atp_name ^
                            ".");
          relevant_facts full_types relevance_threshold relevance_convergence
-                        defs_relevant max_new_relevant_facts_per_iter
-                        (the_default prefers_theory_relevant theory_relevant)
+                        defs_relevant
+                        (the_default default_max_relevant_per_iter
+                                     max_relevant_per_iter)
+                        (the_default default_theory_relevant theory_relevant)
                         relevance_override goal hyp_ts concl_t
          |> tap ((fn n => print_v (fn () =>
                       "Selected " ^ string_of_int n ^ " fact" ^ plural_s n ^
@@ -306,7 +309,9 @@ fun prover_fun atp_name
             val (problem, pool, conjecture_offset, axiom_names) =
               prepare_problem ctxt readable_names explicit_forall full_types
                               explicit_apply hyp_ts concl_t the_axioms
-            val _ = File.write_list probfile (strings_for_tptp_problem problem)
+            val ss = strings_for_tptp_problem use_conjecture_for_hypotheses
+                                              problem
+            val _ = File.write_list probfile ss
             val conjecture_shape =
               conjecture_offset + 1 upto conjecture_offset + length hyp_ts + 1
               |> map single
@@ -331,21 +336,19 @@ fun prover_fun atp_name
         ()
       else
         File.write (Path.explode (Path.implode probfile ^ "_proof")) output
-
     val ((pool, conjecture_shape, axiom_names),
          (output, msecs, proof, outcome)) =
       with_path cleanup export run_on (prob_pathname subgoal)
     val (conjecture_shape, axiom_names) =
       repair_conjecture_shape_and_theorem_names output conjecture_shape
                                                 axiom_names
-
     val (message, used_thm_names) =
       case outcome of
         NONE =>
         proof_text isar_proof
             (pool, debug, isar_shrink_factor, ctxt, conjecture_shape)
             (full_types, minimize_command, proof, axiom_names, th, subgoal)
-      | SOME failure => (string_for_failure failure ^ "\n", [])
+      | SOME failure => (string_for_failure failure, [])
   in
     {outcome = outcome, message = message, pool = pool,
      used_thm_names = used_thm_names, atp_run_time_in_msecs = msecs,

@@ -18,9 +18,10 @@ sig
      arguments: bool -> Time.time -> string,
      proof_delims: (string * string) list,
      known_failures: (failure * string) list,
-     max_new_relevant_facts_per_iter: int,
-     prefers_theory_relevant: bool,
-     explicit_forall: bool}
+     default_max_relevant_per_iter: int,
+     default_theory_relevant: bool,
+     explicit_forall: bool,
+     use_conjecture_for_hypotheses: bool}
 
   val string_for_failure : failure -> string
   val known_failure_in_output :
@@ -49,9 +50,10 @@ type prover_config =
    arguments: bool -> Time.time -> string,
    proof_delims: (string * string) list,
    known_failures: (failure * string) list,
-   max_new_relevant_facts_per_iter: int,
-   prefers_theory_relevant: bool,
-   explicit_forall: bool}
+   default_max_relevant_per_iter: int,
+   default_theory_relevant: bool,
+   explicit_forall: bool,
+   use_conjecture_for_hypotheses: bool}
 
 val missing_message_tail =
   " appears to be missing. You will need to install it if you want to run \
@@ -144,9 +146,10 @@ val e_config : prover_config =
        "# Cannot determine problem status within resource limit"),
       (OutOfResources, "SZS status: ResourceOut"),
       (OutOfResources, "SZS status ResourceOut")],
-   max_new_relevant_facts_per_iter = 50 (* FIXME *),
-   prefers_theory_relevant = false,
-   explicit_forall = false}
+   default_max_relevant_per_iter = 50 (* FIXME *),
+   default_theory_relevant = false,
+   explicit_forall = false,
+   use_conjecture_for_hypotheses = true}
 
 val e = ("e", e_config)
 
@@ -171,9 +174,10 @@ val spass_config : prover_config =
       (MalformedInput, "Undefined symbol"),
       (MalformedInput, "Free Variable"),
       (SpassTooOld, "tptp2dfg")],
-   max_new_relevant_facts_per_iter = 35 (* FIXME *),
-   prefers_theory_relevant = true,
-   explicit_forall = true}
+   default_max_relevant_per_iter = 35 (* FIXME *),
+   default_theory_relevant = true,
+   explicit_forall = true,
+   use_conjecture_for_hypotheses = true}
 
 val spass = ("spass", spass_config)
 
@@ -185,7 +189,7 @@ val vampire_config : prover_config =
    required_execs = [],
    arguments = fn _ => fn timeout =>
      "--mode casc -t " ^ string_of_int (to_generous_secs timeout) ^
-     " --input_file",
+     " --thanks Andrei --input_file",
    proof_delims =
      [("=========== Refutation ==========",
        "======= End of refutation ======="),
@@ -196,11 +200,11 @@ val vampire_config : prover_config =
       (IncompleteUnprovable, "CANNOT PROVE"),
       (TimedOut, "SZS status Timeout"),
       (Unprovable, "Satisfiability detected"),
-      (OutOfResources, "Refutation not found"),
       (VampireTooOld, "not a valid option")],
-   max_new_relevant_facts_per_iter = 45 (* FIXME *),
-   prefers_theory_relevant = false,
-   explicit_forall = false}
+   default_max_relevant_per_iter = 45 (* FIXME *),
+   default_theory_relevant = false,
+   explicit_forall = false,
+   use_conjecture_for_hypotheses = true}
 
 val vampire = ("vampire", vampire_config)
 
@@ -220,52 +224,79 @@ fun get_systems () =
 fun refresh_systems_on_tptp () =
   Synchronized.change systems (fn _ => get_systems ())
 
-fun get_system prefix = Synchronized.change_result systems (fn systems =>
-  (if null systems then get_systems () else systems)
-  |> `(find_first (String.isPrefix prefix)));
+fun get_system prefix =
+  Synchronized.change_result systems
+      (fn systems => (if null systems then get_systems () else systems)
+                     |> `(find_first (String.isPrefix prefix)))
 
 fun the_system prefix =
   (case get_system prefix of
     NONE => error ("System " ^ quote prefix ^ " not available at SystemOnTPTP.")
   | SOME sys => sys);
 
-fun remote_config atp_prefix
-        ({proof_delims, known_failures, max_new_relevant_facts_per_iter,
-          prefers_theory_relevant, ...} : prover_config) : prover_config =
+fun remote_config system_prefix proof_delims known_failures
+                  default_max_relevant_per_iter default_theory_relevant
+                  use_conjecture_for_hypotheses =
   {exec = ("ISABELLE_ATP", "scripts/remote_atp"),
    required_execs = [],
    arguments = fn _ => fn timeout =>
      " -t " ^ string_of_int (to_generous_secs timeout) ^ " -s " ^
-     the_system atp_prefix,
+     the_system system_prefix,
    proof_delims = insert (op =) tstp_proof_delims proof_delims,
    known_failures =
      known_failures @ known_perl_failures @
      [(TimedOut, "says Timeout")],
-   max_new_relevant_facts_per_iter = max_new_relevant_facts_per_iter,
-   prefers_theory_relevant = prefers_theory_relevant,
-   explicit_forall = true}
+   default_max_relevant_per_iter = default_max_relevant_per_iter,
+   default_theory_relevant = default_theory_relevant,
+   explicit_forall = true,
+   use_conjecture_for_hypotheses = use_conjecture_for_hypotheses}
 
-val remote_name = prefix "remote_"
-fun remote_prover (name, config) atp_prefix =
-  (remote_name name, remote_config atp_prefix config)
+fun remotify_config system_prefix
+        ({proof_delims, known_failures, default_max_relevant_per_iter,
+          default_theory_relevant, use_conjecture_for_hypotheses, ...}
+         : prover_config) : prover_config =
+  remote_config system_prefix proof_delims known_failures
+                default_max_relevant_per_iter default_theory_relevant
+                use_conjecture_for_hypotheses
 
-val remote_e = remote_prover e "EP---"
-val remote_vampire = remote_prover vampire "Vampire---9"
+val remotify_name = prefix "remote_"
+fun remote_prover name system_prefix proof_delims known_failures
+                  default_max_relevant_per_iter default_theory_relevant
+                  use_conjecture_for_hypotheses =
+  (remotify_name name,
+   remote_config system_prefix proof_delims known_failures
+                 default_max_relevant_per_iter default_theory_relevant
+                 use_conjecture_for_hypotheses)
+fun remotify_prover (name, config) system_prefix =
+  (remotify_name name, remotify_config system_prefix config)
 
+val remote_e = remotify_prover e "EP---"
+val remote_vampire = remotify_prover vampire "Vampire---9"
+val remote_sine_e =
+  remote_prover "sine_e" "SInE---" []
+                [(Unprovable, "says Unknown")] 150 (* FIXME *) false true
+val remote_snark =
+  remote_prover "snark" "SNARK---" [("refutation.", "end_refutation.")] []
+                50 (* FIXME *) false true
 
 (* Setup *)
 
 fun is_installed ({exec, required_execs, ...} : prover_config) =
   forall (curry (op <>) "" o getenv o fst) (exec :: required_execs)
 fun maybe_remote (name, config) =
-  name |> not (is_installed config) ? remote_name
+  name |> not (is_installed config) ? remotify_name
 
 fun default_atps_param_value () =
   space_implode " " ([maybe_remote e] @
                      (if is_installed (snd spass) then [fst spass] else []) @
-                     [remote_name (fst vampire)])
+                     [if forall (is_installed o snd) [e, spass] then
+                        remotify_name (fst vampire)
+                      else
+                        maybe_remote vampire,
+                      fst remote_sine_e])
 
-val provers = [e, spass, vampire, remote_e, remote_vampire]
+val provers = [e, spass, vampire, remote_e, remote_vampire, remote_sine_e,
+               remote_snark]
 val setup = fold add_prover provers
 
 end;
