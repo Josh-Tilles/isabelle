@@ -18,8 +18,8 @@ sig
   val tfrees_name : string
   val prepare_problem :
     Proof.context -> bool -> bool -> bool -> bool -> term list -> term
-    -> (string * thm) list
-    -> string problem * string Symtab.table * int * string Vector.vector
+    -> ((string * bool) * thm) list
+    -> string problem * string Symtab.table * int * (string * bool) vector
 end;
 
 structure Sledgehammer_Translate : SLEDGEHAMMER_TRANSLATE =
@@ -194,11 +194,11 @@ fun make_formula ctxt presimp name kind t =
                 ctypes_sorts = ctypes_sorts}
   end
 
-fun make_axiom ctxt presimp (name, th) =
+fun make_axiom ctxt presimp ((name, chained), th) =
   case make_formula ctxt presimp name Axiom (prop_of th) of
     FOLFormula {combformula = AAtom (CombConst (("c_True", _), _, _)), ...} =>
     NONE
-  | formula => SOME (name, formula)
+  | formula => SOME ((name, chained), formula)
 fun make_conjecture ctxt ts =
   let val last = length ts - 1 in
     map2 (fn j => make_formula ctxt true (Int.toString j)
@@ -223,32 +223,32 @@ val optional_helpers =
    (["c_COMBB", "c_COMBC"], @{thms COMBB_def COMBC_def}),
    (["c_COMBS"], @{thms COMBS_def})]
 val optional_typed_helpers =
-  [(["c_True", "c_False"], @{thms True_or_False}),
-   (["c_If"], @{thms if_True if_False True_or_False})]
+  [(["c_True", "c_False", "c_If"], @{thms True_or_False}),
+   (["c_If"], @{thms if_True if_False})]
 val mandatory_helpers = @{thms fequal_def}
 
 val init_counters =
-  Symtab.make (maps (maps (map (rpair 0) o fst))
-                    [optional_helpers, optional_typed_helpers])
+  [optional_helpers, optional_typed_helpers] |> maps (maps fst)
+  |> sort_distinct string_ord |> map (rpair 0) |> Symtab.make
 
 fun get_helper_facts ctxt is_FO full_types conjectures axioms =
   let
     val ct = fold (fold count_fol_formula) [conjectures, axioms] init_counters
     fun is_needed c = the (Symtab.lookup ct c) > 0
+    fun baptize th = ((Thm.get_name_hint th, false), th)
   in
     (optional_helpers
      |> full_types ? append optional_typed_helpers
      |> maps (fn (ss, ths) =>
-                 if exists is_needed ss then map (`Thm.get_name_hint) ths
-                 else [])) @
-    (if is_FO then [] else map (`Thm.get_name_hint) mandatory_helpers)
+                 if exists is_needed ss then map baptize ths else [])) @
+    (if is_FO then [] else map baptize mandatory_helpers)
     |> map_filter (Option.map snd o make_axiom ctxt false)
   end
 
-fun prepare_formulas ctxt full_types hyp_ts concl_t axioms =
+fun prepare_formulas ctxt full_types hyp_ts concl_t axiom_pairs =
   let
     val thy = ProofContext.theory_of ctxt
-    val axiom_ts = map (prop_of o snd) axioms
+    val axiom_ts = map (prop_of o snd) axiom_pairs
     val hyp_ts =
       if null hyp_ts then
         []
@@ -267,7 +267,7 @@ fun prepare_formulas ctxt full_types hyp_ts concl_t axioms =
     (* TFrees in the conjecture; TVars in the axioms *)
     val conjectures = make_conjecture ctxt (hyp_ts @ [concl_t])
     val (axiom_names, axioms) =
-      ListPair.unzip (map_filter (make_axiom ctxt true) axioms)
+      ListPair.unzip (map_filter (make_axiom ctxt true) axiom_pairs)
     val helper_facts = get_helper_facts ctxt is_FO full_types conjectures axioms
     val (supers', arity_clauses) = make_arity_clauses thy tycons supers
     val class_rel_clauses = make_class_rel_clauses thy subs supers'
@@ -472,7 +472,7 @@ fun close_universally phi =
         (is_tptp_variable s andalso not (member (op =) bounds name))
           ? insert (op =) name
         #> fold (term_vars bounds) tms
-    fun formula_vars bounds (AQuant (q, xs, phi)) =
+    fun formula_vars bounds (AQuant (_, xs, phi)) =
         formula_vars (xs @ bounds) phi
       | formula_vars bounds (AConn (_, phis)) = fold (formula_vars bounds) phis
       | formula_vars bounds (AAtom tm) = term_vars bounds tm
@@ -500,12 +500,12 @@ fun repair_problem thy explicit_forall full_types explicit_apply problem =
       (const_table_for_problem explicit_apply problem) problem
 
 fun prepare_problem ctxt readable_names explicit_forall full_types
-                    explicit_apply hyp_ts concl_t axiom_ts =
+                    explicit_apply hyp_ts concl_t axiom_pairs =
   let
     val thy = ProofContext.theory_of ctxt
     val (axiom_names, (conjectures, axioms, helper_facts, class_rel_clauses,
                        arity_clauses)) =
-      prepare_formulas ctxt full_types hyp_ts concl_t axiom_ts
+      prepare_formulas ctxt full_types hyp_ts concl_t axiom_pairs
     val axiom_lines = map (problem_line_for_fact axiom_prefix full_types) axioms
     val helper_lines =
       map (problem_line_for_fact helper_prefix full_types) helper_facts
