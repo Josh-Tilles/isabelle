@@ -208,29 +208,29 @@ fun conj_elims th =
   let val (th1, th2) = conj_elim th
   in conj_elims th1 @ conj_elims th2 end handle THM _ => [th];
 
-val conj = @{term "op &"}
-and disj = @{term "op |"}
-and imp = @{term "op -->"}
-and Not = @{term "Not"};
+val conj = @{term HOL.conj}
+and disj = @{term HOL.disj}
+and imp = @{term implies}
+and Not = @{term Not};
 
 fun mk_conj (t1, t2) = conj $ t1 $ t2
 and mk_disj (t1, t2) = disj $ t1 $ t2
 and mk_imp (t1, t2) = imp $ t1 $ t2
 and mk_not t = Not $ t;
 
-fun dest_conj (Const ("op &", _) $ t $ t') = t :: dest_conj t'
+fun dest_conj (Const ("HOL.conj", _) $ t $ t') = t :: dest_conj t'
   | dest_conj t = [t];
 
-fun dest_disj (Const ("op |", _) $ t $ t') = t :: dest_disj t'
+fun dest_disj (Const ("HOL.disj", _) $ t $ t') = t :: dest_disj t'
   | dest_disj t = [t];
 
 (*Like dest_disj, but flattens disjunctions however nested*)
-fun disjuncts_aux (Const ("op |", _) $ t $ t') disjs = disjuncts_aux t (disjuncts_aux t' disjs)
+fun disjuncts_aux (Const ("HOL.disj", _) $ t $ t') disjs = disjuncts_aux t (disjuncts_aux t' disjs)
   | disjuncts_aux t disjs = t::disjs;
 
 fun disjuncts t = disjuncts_aux t [];
 
-fun dest_imp (Const ("op -->", _) $ A $ B) = (A, B)
+fun dest_imp (Const ("HOL.implies", _) $ A $ B) = (A, B)
   | dest_imp  t = raise TERM ("dest_imp", [t]);
 
 fun dest_not (Const ("HOL.Not", _) $ t) = t

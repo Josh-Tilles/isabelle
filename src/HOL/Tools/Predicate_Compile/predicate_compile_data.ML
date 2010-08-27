@@ -218,11 +218,11 @@ val logic_operator_names =
    @{const_name Trueprop},
    @{const_name Not},
    @{const_name "op ="},
-   @{const_name "op -->"},
+   @{const_name HOL.implies},
    @{const_name All},
    @{const_name Ex}, 
-   @{const_name "op &"},
-   @{const_name "op |"}]
+   @{const_name HOL.conj},
+   @{const_name HOL.disj}]
 
 fun special_cases (c, T) = member (op =) [
   @{const_name Product_Type.Unity},

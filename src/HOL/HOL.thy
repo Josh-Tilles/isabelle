@@ -57,13 +57,13 @@ consts
   False         :: bool
   Not           :: "bool => bool"                   ("~ _" [40] 40)
 
+  conj          :: "[bool, bool] => bool"           (infixr "&" 35)
+  disj          :: "[bool, bool] => bool"           (infixr "|" 30)
+  implies       :: "[bool, bool] => bool"           (infixr "-->" 25)
+
 setup Sign.root_path
 
 consts
-  "op &"        :: "[bool, bool] => bool"           (infixr "&" 35)
-  "op |"        :: "[bool, bool] => bool"           (infixr "|" 30)
-  "op -->"      :: "[bool, bool] => bool"           (infixr "-->" 25)
-
   "op ="        :: "['a, 'a] => bool"               (infixl "=" 50)
 
 setup Sign.local_path
@@ -89,15 +89,15 @@ notation (output)
 
 notation (xsymbols)
   Not  ("\<not> _" [40] 40) and
-  "op &"  (infixr "\<and>" 35) and
-  "op |"  (infixr "\<or>" 30) and
-  "op -->"  (infixr "\<longrightarrow>" 25) and
+  HOL.conj  (infixr "\<and>" 35) and
+  HOL.disj  (infixr "\<or>" 30) and
+  HOL.implies  (infixr "\<longrightarrow>" 25) and
   not_equal  (infix "\<noteq>" 50)
 
 notation (HTML output)
   Not  ("\<not> _" [40] 40) and
-  "op &"  (infixr "\<and>" 35) and
-  "op |"  (infixr "\<or>" 30) and
+  HOL.conj  (infixr "\<and>" 35) and
+  HOL.disj  (infixr "\<or>" 30) and
   not_equal  (infix "\<noteq>" 50)
 
 abbreviation (iff)
@@ -184,7 +184,7 @@ axioms
 
 finalconsts
   "op ="
-  "op -->"
+  HOL.implies
   The
 
 definition If :: "bool \<Rightarrow> 'a \<Rightarrow> 'a \<Rightarrow> 'a" ("(if (_)/ then (_)/ else (_))" [0, 0, 10] 10) where
@@ -1578,7 +1578,7 @@ structure Coherent = Coherent
   val atomize_conjL = @{thm atomize_conjL}
   val atomize_disjL = @{thm atomize_disjL}
   val operator_names =
-    [@{const_name "op |"}, @{const_name "op &"}, @{const_name Ex}]
+    [@{const_name HOL.disj}, @{const_name HOL.conj}, @{const_name Ex}]
 );
 *}
 
@@ -1737,8 +1737,8 @@ consts_code
   "True"    ("true")
   "False"   ("false")
   "Not"     ("Bool.not")
-  "op |"    ("(_ orelse/ _)")
-  "op &"    ("(_ andalso/ _)")
+  HOL.disj    ("(_ orelse/ _)")
+  HOL.conj    ("(_ andalso/ _)")
   "If"      ("(if _/ then _/ else _)")
 
 setup {*
@@ -1914,7 +1914,7 @@ code_type bool
   (Haskell "Bool")
   (Scala "Boolean")
 
-code_const True and False and Not and "op &" and "op |" and If
+code_const True and False and Not and HOL.conj and HOL.disj and If
   (SML "true" and "false" and "not"
     and infixl 1 "andalso" and infixl 0 "orelse"
     and "!(if (_)/ then (_)/ else (_))")
@@ -1924,7 +1924,7 @@ code_const True and False and Not and "op &" and "op |" and If
   (Haskell "True" and "False" and "not"
     and infixl 3 "&&" and infixl 2 "||"
     and "!(if (_)/ then (_)/ else (_))")
-  (Scala "true" and "false" and "'!/ _"
+  (Scala "true" and "false" and "'! _"
     and infixl 3 "&&" and infixl 1 "||"
     and "!(if ((_))/ (_)/ else (_))")
 
