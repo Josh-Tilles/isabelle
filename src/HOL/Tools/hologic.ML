@@ -49,7 +49,7 @@ sig
   val exists_const: typ -> term
   val mk_exists: string * typ * term -> term
   val choice_const: typ -> term
-  val class_eq: string
+  val class_equal: string
   val mk_binop: string -> term * term -> term
   val mk_binrel: string -> term * term -> term
   val dest_bin: string -> typ -> term -> term * term
@@ -236,10 +236,10 @@ fun dest_imp (Const ("HOL.implies", _) $ A $ B) = (A, B)
 fun dest_not (Const ("HOL.Not", _) $ t) = t
   | dest_not t = raise TERM ("dest_not", [t]);
 
-fun eq_const T = Const ("op =", T --> T --> boolT);
+fun eq_const T = Const ("HOL.eq", T --> T --> boolT);
 fun mk_eq (t, u) = eq_const (fastype_of t) $ t $ u;
 
-fun dest_eq (Const ("op =", _) $ lhs $ rhs) = (lhs, rhs)
+fun dest_eq (Const ("HOL.eq", _) $ lhs $ rhs) = (lhs, rhs)
   | dest_eq t = raise TERM ("dest_eq", [t])
 
 fun all_const T = Const ("HOL.All", [T --> boolT] ---> boolT);
@@ -251,7 +251,7 @@ fun mk_exists (x, T, P) = exists_const T $ absfree (x, T, P);
 
 fun choice_const T = Const("Hilbert_Choice.Eps", (T --> boolT) --> T);
 
-val class_eq = "HOL.eq";
+val class_equal = "HOL.equal";
 
 
 (* binary operations and relations *)

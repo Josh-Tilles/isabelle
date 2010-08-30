@@ -39,6 +39,12 @@ Isar declaration attributes to access these.
 Note that the corresponding "..._default" references may be only
 changed globally at the ROOT session setup, but *not* within a theory.
 
+* ML structure Unsynchronized never opened, not even in Isar
+interaction mode as before.  Old Unsynchronized.set etc. have been
+discontinued -- use plain := instead.  This should be *rare* anyway,
+since modern tools always work via official context data, notably
+configuration options.
+
 
 *** Pure ***
 
@@ -55,6 +61,10 @@ feature is still required for historical reasons.
 
 
 *** HOL ***
+
+* Renamed class eq and constant eq (for code generation) to class equal
+and constant equal, plus renaming of related facts and various tuning.
+INCOMPATIBILITY.
 
 * Scala (2.8 or higher) has been added to the target languages of
 the code generator.
@@ -126,6 +136,7 @@ generation.
     op & ~> HOL.conj
     op | ~> HOL.disj
     op --> ~> HOL.implies
+    op = ~> HOL.eq
     Not ~> HOL.Not
     The ~> HOL.The
     All ~> HOL.All

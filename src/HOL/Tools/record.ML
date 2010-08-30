@@ -1342,7 +1342,7 @@ end;
 val eq_simproc =
   Simplifier.simproc_global @{theory HOL} "record_eq_simp" ["r = s"]
     (fn thy => fn _ => fn t =>
-      (case t of Const (@{const_name "op ="}, Type (_, [T, _])) $ _ $ _ =>
+      (case t of Const (@{const_name HOL.eq}, Type (_, [T, _])) $ _ $ _ =>
         (case rec_id ~1 T of
           "" => NONE
         | name =>
@@ -1405,12 +1405,12 @@ val ex_sel_eq_simproc =
                 else raise TERM ("", [x]);
               val sel' = Const (sel, Tsel) $ Bound 0;
               val (l, r) = if lr then (sel', x') else (x', sel');
-            in Const (@{const_name "op ="}, Teq) $ l $ r end
+            in Const (@{const_name HOL.eq}, Teq) $ l $ r end
           else raise TERM ("", [Const (sel, Tsel)]);
 
-        fun dest_sel_eq (Const (@{const_name "op ="}, Teq) $ (Const (sel, Tsel) $ Bound 0) $ X) =
+        fun dest_sel_eq (Const (@{const_name HOL.eq}, Teq) $ (Const (sel, Tsel) $ Bound 0) $ X) =
               (true, Teq, (sel, Tsel), X)
-          | dest_sel_eq (Const (@{const_name "op ="}, Teq) $ X $ (Const (sel, Tsel) $ Bound 0)) =
+          | dest_sel_eq (Const (@{const_name HOL.eq}, Teq) $ X $ (Const (sel, Tsel) $ Bound 0)) =
               (false, Teq, (sel, Tsel), X)
           | dest_sel_eq _ = raise TERM ("", []);
       in
@@ -1844,8 +1844,8 @@ fun add_code ext_tyco vs extT ext simps inject thy =
   let
     val eq =
       (HOLogic.mk_Trueprop o HOLogic.mk_eq)
-        (Const (@{const_name eq_class.eq}, extT --> extT --> HOLogic.boolT),
-         Const (@{const_name "op ="}, extT --> extT --> HOLogic.boolT));
+        (Const (@{const_name HOL.equal}, extT --> extT --> HOLogic.boolT),
+         Const (@{const_name HOL.eq}, extT --> extT --> HOLogic.boolT));
     fun tac eq_def =
       Class.intro_classes_tac []
       THEN (Simplifier.rewrite_goals_tac [Simpdata.mk_eq eq_def])
@@ -1853,15 +1853,15 @@ fun add_code ext_tyco vs extT ext simps inject thy =
     fun mk_eq thy eq_def = Simplifier.rewrite_rule
       [(AxClass.unoverload thy o Thm.symmetric o Simpdata.mk_eq) eq_def] inject;
     fun mk_eq_refl thy =
-      @{thm HOL.eq_refl}
+      @{thm equal_refl}
       |> Thm.instantiate
-        ([pairself (Thm.ctyp_of thy) (TVar (("'a", 0), @{sort eq}), Logic.varifyT_global extT)], [])
+        ([pairself (Thm.ctyp_of thy) (TVar (("'a", 0), @{sort equal}), Logic.varifyT_global extT)], [])
       |> AxClass.unoverload thy;
   in
     thy
     |> Code.add_datatype [ext]
     |> fold Code.add_default_eqn simps
-    |> Class.instantiation ([ext_tyco], vs, [HOLogic.class_eq])
+    |> Class.instantiation ([ext_tyco], vs, [HOLogic.class_equal])
     |> `(fn lthy => Syntax.check_term lthy eq)
     |-> (fn eq => Specification.definition
          (NONE, (Attrib.empty_binding, eq)))
