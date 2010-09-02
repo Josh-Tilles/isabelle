@@ -44,7 +44,6 @@ object Document
   {
     val empty: Node = new Node(Linear_Set())
 
-    // FIXME not scalable
     def command_starts(commands: Iterator[Command], offset: Text.Offset = 0)
       : Iterator[(Command, Text.Offset)] =
     {
@@ -57,16 +56,36 @@ object Document
     }
   }
 
+  private val block_size = 1024
+
   class Node(val commands: Linear_Set[Command])
   {
-    def command_starts: Iterator[(Command, Text.Offset)] =
-      Node.command_starts(commands.iterator)
+    private lazy val full_index: (Array[(Command, Text.Offset)], Text.Range) =
+    {
+      val blocks = new mutable.ListBuffer[(Command, Text.Offset)]
+      var next_block = 0
+      var last_stop = 0
+      for ((command, start) <- Node.command_starts(commands.iterator)) {
+        last_stop = start + command.length
+        while (last_stop + 1 > next_block) {
+          blocks += (command -> start)
+          next_block += block_size
+        }
+      }
+      (blocks.toArray, Text.Range(0, last_stop))
+    }
 
-    def command_start(cmd: Command): Option[Text.Offset] =
-      command_starts.find(_._1 == cmd).map(_._2)
+    def full_range: Text.Range = full_index._2
 
     def command_range(i: Text.Offset = 0): Iterator[(Command, Text.Offset)] =
-      command_starts dropWhile { case (cmd, start) => start + cmd.length <= i }
+    {
+      if (!commands.isEmpty && full_range.contains(i)) {
+        val (cmd0, start0) = full_index._1(i / block_size)
+        Node.command_starts(commands.iterator(cmd0), start0) dropWhile {
+          case (cmd, start) => start + cmd.length <= i }
+      }
+      else Iterator.empty
+    }
 
     def command_range(range: Text.Range): Iterator[(Command, Text.Offset)] =
       command_range(range.start) takeWhile { case (_, start) => start < range.stop }
@@ -83,6 +102,12 @@ object Document
           commands.reverse_iterator(command).find(cmd => !cmd.is_ignored)
         case None => None
       }
+
+    def command_start(cmd: Command): Option[Text.Offset] =
+      command_starts.find(_._1 == cmd).map(_._2)
+
+    def command_starts: Iterator[(Command, Text.Offset)] =
+      Node.command_starts(commands.iterator)
   }
 
 
@@ -155,19 +180,17 @@ object Document
   {
     class Fail(state: State) extends Exception
 
-    val init = State().define_version(Version.init, Map()).assign(Version.init.id, Nil)
+    val init = State().define_version(Version.init, Map()).assign(Version.init.id, Nil)._2
 
-    class Assignment(former_assignment: Map[Command, Exec_ID])
+    case class Assignment(
+      val assignment: Map[Command, Exec_ID],
+      val is_finished: Boolean = false)
     {
-      @volatile private var tmp_assignment = former_assignment
-      private val promise = Future.promise[Map[Command, Exec_ID]]
-      def is_finished: Boolean = promise.is_finished
-      def join: Map[Command, Exec_ID] = promise.join
-      def get_finished: Map[Command, Exec_ID] = promise.get_finished
-      def assign(command_execs: List[(Command, Exec_ID)])
+      def get_finished: Map[Command, Exec_ID] = { require(is_finished); assignment }
+      def assign(command_execs: List[(Command, Exec_ID)]): Assignment =
       {
-        promise.fulfill(tmp_assignment ++ command_execs)
-        tmp_assignment = Map()
+        require(!is_finished)
+        Assignment(assignment ++ command_execs, true)
       }
     }
   }
@@ -187,7 +210,7 @@ object Document
       val id = version.id
       if (versions.isDefinedAt(id) || disposed(id)) fail
       copy(versions = versions + (id -> version),
-        assignments = assignments + (version -> new State.Assignment(former_assignment)))
+        assignments = assignments + (version -> State.Assignment(former_assignment)))
     }
 
     def define_command(command: Command): State =
@@ -204,7 +227,7 @@ object Document
     def the_exec_state(id: Exec_ID): Command.State = execs.getOrElse(id, fail)._1
     def the_assignment(version: Version): State.Assignment = assignments.getOrElse(version, fail)
 
-    def accumulate(id: ID, message: XML.Tree): (Command.State, State) =
+    def accumulate(id: ID, message: XML.Elem): (Command.State, State) =
       execs.get(id) match {
         case Some((st, occs)) =>
           val new_st = st.accumulate(message)
@@ -218,7 +241,7 @@ object Document
           }
       }
 
-    def assign(id: Version_ID, edits: List[(Command_ID, Exec_ID)]): State =
+    def assign(id: Version_ID, edits: List[(Command_ID, Exec_ID)]): (List[Command], State) =
     {
       val version = the_version(id)
       val occs = Set(version)  // FIXME unused (!?)
@@ -231,8 +254,10 @@ object Document
           new_execs += (exec_id -> (st, occs))
           (st.command, exec_id)
         }
-      the_assignment(version).assign(assigned_execs)  // FIXME explicit value instead of promise (!?)
-      copy(execs = new_execs)
+      val new_assignment = the_assignment(version).assign(assigned_execs)
+      val new_state =
+        copy(assignments = assignments + (version -> new_assignment), execs = new_execs)
+      (assigned_execs.map(_._1), new_state)
     }
 
     def is_assigned(version: Version): Boolean =

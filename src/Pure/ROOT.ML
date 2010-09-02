@@ -179,9 +179,9 @@ use "Isar/args.ML";
 use "ML/ml_syntax.ML";
 use "ML/ml_env.ML";
 use "Isar/runtime.ML";
+use "ML/ml_compiler.ML";
 if ml_system = "polyml-5.2" orelse ml_system = "polyml-5.2.1" orelse
-  String.isPrefix "smlnj" ml_system
-then use "ML/ml_compiler.ML"
+  String.isPrefix "smlnj" ml_system then ()
 else use "ML/ml_compiler_polyml-5.3.ML";
 use "ML/ml_context.ML";
 
@@ -238,7 +238,6 @@ use "Thy/present.ML";
 use "Thy/term_style.ML";
 use "Thy/thy_output.ML";
 use "Thy/thy_syntax.ML";
-use "old_goals.ML";
 use "Isar/outer_syntax.ML";
 use "PIDE/document.ML";
 use "Thy/thy_info.ML";
