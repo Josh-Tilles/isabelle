@@ -244,7 +244,7 @@ proof -
 qed
 
 lemma measure_eq:
-  assumes fin: "\<mu> (space M) = \<nu> (space M)" "\<nu> (space M) < \<omega>" 
+  assumes fin: "\<mu> (space M) = \<nu> (space M)" "\<nu> (space M) < \<omega>"
   assumes E: "M = sigma (space E) (sets E)" "Int_stable E"
   assumes eq: "\<And> e. e \<in> sets E \<Longrightarrow> \<mu> e = \<nu> e"
   assumes ms: "measure_space M \<mu>" "measure_space M \<nu>"
