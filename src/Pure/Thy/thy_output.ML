@@ -446,12 +446,12 @@ end;
 
 val _ = add_option "show_types" (add_wrapper o setmp_CRITICAL Syntax.show_types o boolean);
 val _ = add_option "show_sorts" (add_wrapper o setmp_CRITICAL Syntax.show_sorts o boolean);
-val _ = add_option "show_structs" (add_wrapper o setmp_CRITICAL show_structs o boolean);
+val _ = add_option "show_structs" (Config.put show_structs o boolean);
 val _ = add_option "show_question_marks" (Config.put show_question_marks o boolean);
 val _ = add_option "long_names" (add_wrapper o setmp_CRITICAL Name_Space.long_names o boolean);
 val _ = add_option "short_names" (add_wrapper o setmp_CRITICAL Name_Space.short_names o boolean);
 val _ = add_option "unique_names" (add_wrapper o setmp_CRITICAL Name_Space.unique_names o boolean);
-val _ = add_option "eta_contract" (add_wrapper o setmp_CRITICAL Syntax.eta_contract o boolean);
+val _ = add_option "eta_contract" (Config.put eta_contract o boolean);
 val _ = add_option "display" (Config.put display o boolean);
 val _ = add_option "break" (Config.put break o boolean);
 val _ = add_option "quotes" (Config.put quotes o boolean);
@@ -459,7 +459,7 @@ val _ = add_option "mode" (add_wrapper o Print_Mode.with_modes o single);
 val _ = add_option "margin" (add_wrapper o setmp_CRITICAL Pretty.margin_default o integer);
 val _ = add_option "indent" (Config.put indent o integer);
 val _ = add_option "source" (Config.put source o boolean);
-val _ = add_option "goals_limit" (add_wrapper o setmp_CRITICAL goals_limit o integer);
+val _ = add_option "goals_limit" (Config.put Goal_Display.goals_limit o integer);
 
 
 (* basic pretty printing *)
@@ -582,8 +582,9 @@ fun proof_state state =
   | _ => error "No proof state");
 
 fun goal_state name main_goal = antiquotation name (Scan.succeed ())
-  (fn {state, context, ...} => fn () => output context
-    [Pretty.chunks (Proof.pretty_goals main_goal (proof_state state))]);
+  (fn {state, context = ctxt, ...} => fn () => output ctxt
+    [Pretty.chunks
+      (Proof.pretty_goals main_goal (Proof.map_context (K ctxt) (proof_state state)))]);
 
 in
 

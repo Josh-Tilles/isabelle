@@ -374,7 +374,7 @@ fun register_config config thy =
 
 fun declare_config make coerce global name default =
   let
-    val config_value = Config.declare global name (make o default);
+    val config_value = Config.declare_generic {global = global} name (make o default);
     val config = coerce config_value;
   in (config, register_config config_value) end;
 
@@ -392,7 +392,13 @@ end;
 (* theory setup *)
 
 val _ = Context.>> (Context.map_theory
- (register_config show_question_marks_value #>
+ (register_config Syntax.show_structs_value #>
+  register_config Syntax.show_question_marks_value #>
+  register_config Syntax.ambiguity_level_value #>
+  register_config Syntax.eta_contract_value #>
+  register_config Goal_Display.goals_limit_value #>
+  register_config Goal_Display.show_main_goal_value #>
+  register_config Goal_Display.show_consts_value #>
   register_config Unify.trace_bound_value #>
   register_config Unify.search_bound_value #>
   register_config Unify.trace_simp_value #>
