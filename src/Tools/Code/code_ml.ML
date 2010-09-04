@@ -785,9 +785,9 @@ fun ml_program_of_program labelled_name reserved module_alias program =
       cyclic_modules = false, empty_data = (), memorize_data = K I, modify_stmts = modify_stmts } program
   end;
 
-fun serialize_ml target print_ml_module print_ml_stmt with_signatures { labelled_name,
-  reserved_syms, includes, module_alias, class_syntax, tyco_syntax,
-  const_syntax, program, names } =
+fun serialize_ml target print_ml_module print_ml_stmt with_signatures
+    { labelled_name, reserved_syms, includes, module_alias,
+      class_syntax, tyco_syntax, const_syntax, program } =
   let
 
     (* build program *)
