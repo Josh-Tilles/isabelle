@@ -243,6 +243,8 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Map.thy \
   Nat_Numeral.thy \
   Nat_Transfer.thy \
+  New_DSequence.thy \
+  New_Random_Sequence.thy \
   Nitpick.thy \
   Numeral_Simprocs.thy \
   Presburger.thy \
@@ -1339,8 +1341,15 @@ $(LOG)/HOL-Predicate_Compile_Examples.gz: $(OUT)/HOL			\
   Predicate_Compile_Examples/Predicate_Compile_Examples.thy		\
   Predicate_Compile_Examples/Predicate_Compile_Quickcheck_Examples.thy  \
   Predicate_Compile_Examples/Code_Prolog_Examples.thy 			\
+  Predicate_Compile_Examples/Context_Free_Grammar_Example.thy 		\
   Predicate_Compile_Examples/Hotel_Example.thy 				\
-  Predicate_Compile_Examples/Lambda_Example.thy 
+  Predicate_Compile_Examples/IMP_1.thy 					\
+  Predicate_Compile_Examples/IMP_2.thy 					\
+  Predicate_Compile_Examples/IMP_3.thy 					\
+  Predicate_Compile_Examples/IMP_4.thy 					\
+  Predicate_Compile_Examples/Lambda_Example.thy 			\
+  Predicate_Compile_Examples/List_Examples.thy 				\
+  Predicate_Compile_Examples/Reg_Exp_Example.thy
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Predicate_Compile_Examples
 
 

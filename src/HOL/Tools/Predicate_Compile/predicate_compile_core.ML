@@ -164,8 +164,8 @@ fun mode_of (Context m) = m
   | mode_of (Term m) = m
   | mode_of (Mode_App (d1, d2)) =
     (case mode_of d1 of Fun (m, m') =>
-        (if eq_mode (m, mode_of d2) then m' else raise Fail "mode_of")
-      | _ => raise Fail "mode_of2")
+        (if eq_mode (m, mode_of d2) then m' else raise Fail "mode_of: derivation has mismatching modes")
+      | _ => raise Fail "mode_of: derivation has a non-functional mode")
   | mode_of (Mode_Pair (d1, d2)) =
     Pair (mode_of d1, mode_of d2)
 
@@ -1123,9 +1123,13 @@ fun all_input_of T =
       raise Fail "all_input_of: not a predicate"
   end
 
-fun partial_hd [] = NONE
-  | partial_hd (x :: xs) = SOME x
-
+fun find_least ord xs =
+  let
+    fun find' x y = (case y of NONE => SOME x | SOME y' => if ord (x, y') = LESS then SOME x else y) 
+  in
+    fold find' xs NONE
+  end
+  
 fun term_vs tm = fold_aterms (fn Free (x, T) => cons x | _ => I) tm [];
 val terms_vs = distinct (op =) o maps term_vs;
 
@@ -1268,11 +1272,11 @@ and all_derivations_of ctxt modes vs (Const (@{const_name Pair}, _) $ t1 $ t2) =
       case mode_of d1 of
         Fun (m', _) => map (fn (d2, mvars2) =>
           (Mode_App (d1, d2), union (op =) mvars1 mvars2)) (derivations_of ctxt modes vs t2 m')
-        | _ => raise Fail "Something went wrong") derivs1
+        | _ => raise Fail "all_derivations_of: derivation has an unexpected non-functional mode") derivs1
   end
   | all_derivations_of _ modes vs (Const (s, T)) = the (lookup_mode modes (Const (s, T)))
   | all_derivations_of _ modes vs (Free (x, T)) = the (lookup_mode modes (Free (x, T)))
-  | all_derivations_of _ modes vs _ = raise Fail "all_derivations_of"
+  | all_derivations_of _ modes vs _ = raise Fail "all_derivations_of: unexpected term"
 
 fun rev_option_ord ord (NONE, NONE) = EQUAL
   | rev_option_ord ord (NONE, SOME _) = GREATER
@@ -1362,17 +1366,16 @@ fun print_mode_list modes =
 fun select_mode_prem (mode_analysis_options : mode_analysis_options) (ctxt : Proof.context) pred
   pol (modes, (pos_modes, neg_modes)) vs ps =
   let
-    fun choose_mode_of_prem (Prem t) = partial_hd
-        (sort (deriv_ord ctxt pol pred modes t) (all_derivations_of ctxt pos_modes vs t))
+    fun choose_mode_of_prem (Prem t) =
+          find_least (deriv_ord ctxt pol pred modes t) (all_derivations_of ctxt pos_modes vs t)
       | choose_mode_of_prem (Sidecond t) = SOME (Context Bool, missing_vars vs t)
-      | choose_mode_of_prem (Negprem t) = partial_hd
-          (sort (deriv_ord ctxt (not pol) pred modes t)
+      | choose_mode_of_prem (Negprem t) = find_least (deriv_ord ctxt (not pol) pred modes t)
           (filter (fn (d, missing_vars) => is_all_input (head_mode_of d))
-             (all_derivations_of ctxt neg_modes vs t)))
-      | choose_mode_of_prem p = raise Fail ("choose_mode_of_prem: " ^ string_of_prem ctxt p)
+             (all_derivations_of ctxt neg_modes vs t))
+      | choose_mode_of_prem p = raise Fail ("choose_mode_of_prem: unexpected premise " ^ string_of_prem ctxt p)
   in
     if #reorder_premises mode_analysis_options then
-      partial_hd (sort (premise_ord ctxt pol pred modes) (ps ~~ map choose_mode_of_prem ps))
+      find_least (premise_ord ctxt pol pred modes) (ps ~~ map choose_mode_of_prem ps)
     else
       SOME (hd ps, choose_mode_of_prem (hd ps))
   end
@@ -1398,7 +1401,7 @@ fun check_mode_clause' (mode_analysis_options : mode_analysis_options) ctxt pred
         Prem t => union (op =) vs (term_vs t)
       | Sidecond t => union (op =) vs (term_vs t)
       | Negprem t => union (op =) vs (term_vs t)
-      | _ => raise Fail "I do not know")
+      | _ => raise Fail "unexpected premise")
     fun check_mode_prems acc_ps rnd vs [] = SOME (acc_ps, vs, rnd)
       | check_mode_prems acc_ps rnd vs ps =
         (case
@@ -2303,9 +2306,10 @@ fun prove_match options ctxt out_ts =
       if (is_constructor thy t) then let
         val case_rewrites = (#case_rewrites (Datatype.the_info thy
           ((fst o dest_Type o fastype_of) t)))
-        in case_rewrites @ maps get_case_rewrite (snd (strip_comb t)) end
+        in fold (union Thm.eq_thm) (case_rewrites :: map get_case_rewrite (snd (strip_comb t))) [] end
       else []
-    val simprules = @{thm "unit.cases"} :: @{thm "prod.cases"} :: maps get_case_rewrite out_ts
+    val simprules = insert Thm.eq_thm @{thm "unit.cases"} (insert Thm.eq_thm @{thm "prod.cases"}
+      (fold (union Thm.eq_thm) (map get_case_rewrite out_ts) []))
   (* replace TRY by determining if it necessary - are there equations when calling compile match? *)
   in
      (* make this simpset better! *)
