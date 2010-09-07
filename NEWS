@@ -68,6 +68,8 @@ feature is still required for historical reasons.
 
 *** HOL ***
 
+* Renamed lemmas: expand_fun_eq -> ext_iff, expand_set_eq -> set_ext_iff
+
 * Renamed class eq and constant eq (for code generation) to class equal
 and constant equal, plus renaming of related facts and various tuning.
 INCOMPATIBILITY.
@@ -231,6 +233,10 @@ The theorems bij_def and surj_def are unchanged.
 
 * Configuration option show_question_marks only affects regular pretty
 printing of types and terms, not raw Term.string_of_vname.
+
+* ML_Context.thm and ML_Context.thms are no longer pervasive.  Rare
+INCOMPATIBILITY, superseded by static antiquotations @{thm} and
+@{thms} for most purposes.
 
 * ML structure Unsynchronized never opened, not even in Isar
 interaction mode as before.  Old Unsynchronized.set etc. have been
