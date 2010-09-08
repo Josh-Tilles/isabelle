@@ -65,8 +65,13 @@ the theory name space.  Rare INCOMPATIBILITY.  The ML functions
 Sign.root_path and Sign.local_path may be applied directly where this
 feature is still required for historical reasons.
 
+* Discontinued ancient 'constdefs' command.  INCOMPATIBILITY, use
+'definition' instead.
+
 
 *** HOL ***
+
+* Renamed lemmas: expand_fun_eq -> ext_iff, expand_set_eq -> set_ext_iff
 
 * Renamed class eq and constant eq (for code generation) to class equal
 and constant equal, plus renaming of related facts and various tuning.
