@@ -33,7 +33,7 @@ text {*
     ;
     ( 'prf' | 'full\_prf' ) modes? thmrefs?
     ;
-    'pr' modes? nat? (',' nat)?
+    'pr' modes? nat?
     ;
 
     modes: '(' (name + ) ')'
@@ -69,11 +69,11 @@ text {*
   compact proof term, which is denoted by ``@{text _}'' placeholders
   there.
 
-  \item @{command "pr"}~@{text "goals, prems"} prints the current
-  proof state (if present), including the proof context, current facts
-  and goals.  The optional limit arguments affect the number of goals
-  and premises to be displayed, which is initially 10 for both.
-  Omitting limit values leaves the current setting unchanged.
+  \item @{command "pr"}~@{text "goals"} prints the current proof state
+  (if present), including current facts and goals.  The optional limit
+  arguments affect the number of goals to be displayed, which is
+  initially 10.  Omitting limit value leaves the current setting
+  unchanged.
 
   \end{description}
 
@@ -96,13 +96,13 @@ subsection {* Details of printed content *}
 
 text {*
   \begin{mldecls} 
-    @{index_ML show_types: "bool Unsynchronized.ref"} & default @{ML false} \\
-    @{index_ML show_sorts: "bool Unsynchronized.ref"} & default @{ML false} \\
+    @{index_ML show_types: "bool Config.T"} & default @{ML false} \\
+    @{index_ML show_sorts: "bool Config.T"} & default @{ML false} \\
     @{index_ML show_consts: "bool Config.T"} & default @{ML false} \\
     @{index_ML long_names: "bool Unsynchronized.ref"} & default @{ML false} \\
     @{index_ML short_names: "bool Unsynchronized.ref"} & default @{ML false} \\
     @{index_ML unique_names: "bool Unsynchronized.ref"} & default @{ML true} \\
-    @{index_ML show_brackets: "bool Unsynchronized.ref"} & default @{ML false} \\
+    @{index_ML show_brackets: "bool Config.T"} & default @{ML false} \\
     @{index_ML eta_contract: "bool Config.T"} & default @{ML true} \\
     @{index_ML Goal_Display.goals_limit: "int Config.T"} & default @{ML 10} \\
     @{index_ML Goal_Display.show_main_goal: "bool Config.T"} & default @{ML false} \\

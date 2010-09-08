@@ -203,25 +203,6 @@ val _ =
       >> (Toplevel.theory o Isar_Cmd.add_defs));
 
 
-(* old constdefs *)
-
-val old_constdecl =
-  Parse.binding --| Parse.where_ >> (fn x => (x, NONE, NoSyn)) ||
-  Parse.binding -- (Parse.$$$ "::" |-- Parse.!!! Parse.typ >> SOME) -- Parse.opt_mixfix'
-    --| Scan.option Parse.where_ >> Parse.triple1 ||
-  Parse.binding -- (Parse.mixfix >> pair NONE) --| Scan.option Parse.where_ >> Parse.triple2;
-
-val old_constdef = Scan.option old_constdecl -- (Parse_Spec.opt_thm_name ":" -- Parse.prop);
-
-val structs =
-  Scan.optional ((Parse.$$$ "(" -- Parse.$$$ "structure")
-    |-- Parse.!!! (Parse.simple_fixes --| Parse.$$$ ")")) [];
-
-val _ =
-  Outer_Syntax.command "constdefs" "old-style constant definition" Keyword.thy_decl
-    (structs -- Scan.repeat1 old_constdef >> (Toplevel.theory o Constdefs.add_constdefs));
-
-
 (* constant definitions and abbreviations *)
 
 val _ =
@@ -964,20 +945,21 @@ val _ =
   Outer_Syntax.improper_command "print_drafts" "print raw source files with symbols"
     Keyword.diag (Scan.repeat1 Parse.path >> (Toplevel.no_timing oo Isar_Cmd.print_drafts));
 
-val opt_limits =
-  Scan.option Parse.nat -- Scan.option (Parse.$$$ "," |-- Parse.!!! Parse.nat);
-
-val _ =
+val _ =  (* FIXME tty only *)
   Outer_Syntax.improper_command "pr" "print current proof state (if present)" Keyword.diag
-    (opt_modes -- opt_limits >> (Toplevel.no_timing oo Isar_Cmd.pr));
+    (opt_modes -- Scan.option Parse.nat >> (fn (modes, limit) =>
+      Toplevel.no_timing o Toplevel.keep (fn state =>
+       (case limit of NONE => () | SOME n => Goal_Display.goals_limit_default := n;
+        Toplevel.quiet := false;
+        Print_Mode.with_modes modes (Toplevel.print_state true) state))));
 
 val _ =
   Outer_Syntax.improper_command "disable_pr" "disable printing of toplevel state" Keyword.control
-    (Scan.succeed (Toplevel.no_timing o Isar_Cmd.disable_pr));
+    (Scan.succeed (Toplevel.no_timing o Toplevel.imperative (fn () => Toplevel.quiet := true)));
 
 val _ =
   Outer_Syntax.improper_command "enable_pr" "enable printing of toplevel state" Keyword.control
-    (Scan.succeed (Toplevel.no_timing o Isar_Cmd.enable_pr));
+    (Scan.succeed (Toplevel.no_timing o Toplevel.imperative (fn () => Toplevel.quiet := false)));
 
 val _ =
   Outer_Syntax.improper_command "commit" "commit current session to ML database" Keyword.diag

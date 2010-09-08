@@ -55,7 +55,7 @@
     ;
     ( 'prf' | 'full\_prf' ) modes? thmrefs?
     ;
-    'pr' modes? nat? (',' nat)?
+    'pr' modes? nat?
     ;
 
     modes: '(' (name + ) ')'
@@ -90,11 +90,11 @@
   compact proof term, which is denoted by ``\isa{{\isacharunderscore}}'' placeholders
   there.
 
-  \item \hyperlink{command.pr}{\mbox{\isa{\isacommand{pr}}}}~\isa{{\isachardoublequote}goals{\isacharcomma}\ prems{\isachardoublequote}} prints the current
-  proof state (if present), including the proof context, current facts
-  and goals.  The optional limit arguments affect the number of goals
-  and premises to be displayed, which is initially 10 for both.
-  Omitting limit values leaves the current setting unchanged.
+  \item \hyperlink{command.pr}{\mbox{\isa{\isacommand{pr}}}}~\isa{{\isachardoublequote}goals{\isachardoublequote}} prints the current proof state
+  (if present), including current facts and goals.  The optional limit
+  arguments affect the number of goals to be displayed, which is
+  initially 10.  Omitting limit value leaves the current setting
+  unchanged.
 
   \end{description}
 
@@ -118,13 +118,13 @@
 %
 \begin{isamarkuptext}%
 \begin{mldecls} 
-    \indexdef{}{ML}{show\_types}\verb|show_types: bool Unsynchronized.ref| & default \verb|false| \\
-    \indexdef{}{ML}{show\_sorts}\verb|show_sorts: bool Unsynchronized.ref| & default \verb|false| \\
+    \indexdef{}{ML}{show\_types}\verb|show_types: bool Config.T| & default \verb|false| \\
+    \indexdef{}{ML}{show\_sorts}\verb|show_sorts: bool Config.T| & default \verb|false| \\
     \indexdef{}{ML}{show\_consts}\verb|show_consts: bool Config.T| & default \verb|false| \\
     \indexdef{}{ML}{long\_names}\verb|long_names: bool Unsynchronized.ref| & default \verb|false| \\
     \indexdef{}{ML}{short\_names}\verb|short_names: bool Unsynchronized.ref| & default \verb|false| \\
     \indexdef{}{ML}{unique\_names}\verb|unique_names: bool Unsynchronized.ref| & default \verb|true| \\
-    \indexdef{}{ML}{show\_brackets}\verb|show_brackets: bool Unsynchronized.ref| & default \verb|false| \\
+    \indexdef{}{ML}{show\_brackets}\verb|show_brackets: bool Config.T| & default \verb|false| \\
     \indexdef{}{ML}{eta\_contract}\verb|eta_contract: bool Config.T| & default \verb|true| \\
     \indexdef{}{ML}{Goal\_Display.goals\_limit}\verb|Goal_Display.goals_limit: int Config.T| & default \verb|10| \\
     \indexdef{}{ML}{Goal\_Display.show\_main\_goal}\verb|Goal_Display.show_main_goal: bool Config.T| & default \verb|false| \\

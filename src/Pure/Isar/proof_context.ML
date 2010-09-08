@@ -144,7 +144,6 @@ sig
   val print_cases: Proof.context -> unit
   val debug: bool Unsynchronized.ref
   val verbose: bool Unsynchronized.ref
-  val prems_limit: int Unsynchronized.ref
   val pretty_ctxt: Proof.context -> Pretty.T list
   val pretty_context: Proof.context -> Pretty.T list
 end;
@@ -737,18 +736,22 @@ end;
 
 local
 
+fun parse_failed ctxt pos msg kind =
+ (Context_Position.report ctxt Markup.bad pos;
+  cat_error msg ("Failed to parse " ^ kind));
+
 fun parse_sort ctxt text =
   let
     val (syms, pos) = Syntax.parse_token ctxt Markup.sort text;
     val S = Syntax.standard_parse_sort ctxt (syn_of ctxt) (syms, pos)
-      handle ERROR msg => cat_error msg "Failed to parse sort";
+      handle ERROR msg => parse_failed ctxt pos msg "sort";
   in Type.minimize_sort (tsig_of ctxt) S end;
 
 fun parse_typ ctxt text =
   let
     val (syms, pos) = Syntax.parse_token ctxt Markup.typ text;
     val T = Syntax.standard_parse_typ ctxt (syn_of ctxt) (get_sort ctxt) (syms, pos)
-      handle ERROR msg => cat_error msg "Failed to parse type";
+      handle ERROR msg => parse_failed ctxt pos msg "type";
   in T end;
 
 fun parse_term T ctxt text =
@@ -763,9 +766,9 @@ fun parse_term T ctxt text =
     fun check t = (Syntax.check_term ctxt (Type_Infer.constrain T' t); NONE)
       handle ERROR msg => SOME msg;
     val t =
-      Syntax.standard_parse_term (Syntax.pp ctxt) check get_sort map_const map_free
+      Syntax.standard_parse_term check get_sort map_const map_free
         ctxt (Type.is_logtype (tsig_of ctxt)) (syn_of ctxt) T' (syms, pos)
-      handle ERROR msg => cat_error msg ("Failed to parse " ^ kind);
+      handle ERROR msg => parse_failed ctxt pos msg kind;
   in t end;
 
 
@@ -1403,10 +1406,9 @@ end;
 
 val debug = Unsynchronized.ref false;
 val verbose = Unsynchronized.ref false;
-val prems_limit = Unsynchronized.ref ~1;
 
 fun pretty_ctxt ctxt =
-  if ! prems_limit < 0 andalso not (! debug) then []
+  if not (! debug) then []
   else
     let
       val prt_term = Syntax.pretty_term ctxt;
@@ -1432,12 +1434,9 @@ fun pretty_ctxt ctxt =
 
       (*prems*)
       val prems = Assumption.all_prems_of ctxt;
-      val len = length prems;
-      val suppressed = len - ! prems_limit;
       val prt_prems =
         if null prems then []
-        else [Pretty.big_list "prems:" ((if suppressed <= 0 then [] else [Pretty.str "..."]) @
-          map (Display.pretty_thm ctxt) (drop suppressed prems))];
+        else [Pretty.big_list "prems:" (map (Display.pretty_thm ctxt) prems)];
     in prt_structs @ prt_fixes @ prt_prems end;
 
 
