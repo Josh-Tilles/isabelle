@@ -1419,7 +1419,110 @@ thm test_minus_bool.equation
 
 values "{x. test_minus_bool x}"
 
-subsection {* Examples for detecting switches *}
+subsection {* Functions *}
+
+fun partial_hd :: "'a list => 'a option"
+where
+  "partial_hd [] = Option.None"
+| "partial_hd (x # xs) = Some x"
+
+inductive hd_predicate
+where
+  "partial_hd xs = Some x ==> hd_predicate xs x"
+
+code_pred (expected_modes: i => i => bool, i => o => bool) hd_predicate .
+
+thm hd_predicate.equation
+
+subsection {* Locales *}
+
+inductive hd_predicate2 :: "('a list => 'a option) => 'a list => 'a => bool"
+where
+  "partial_hd' xs = Some x ==> hd_predicate2 partial_hd' xs x"
+
+
+thm hd_predicate2.intros
+
+code_pred (expected_modes: i => i => i => bool, i => i => o => bool) hd_predicate2 .
+thm hd_predicate2.equation
+
+locale A = fixes partial_hd :: "'a list => 'a option" begin
+
+inductive hd_predicate_in_locale :: "'a list => 'a => bool"
+where
+  "partial_hd xs = Some x ==> hd_predicate_in_locale xs x"
+
+end
+
+text {* The global introduction rules must be redeclared as introduction rules and then 
+  one could invoke code_pred. *}
+
+declare A.hd_predicate_in_locale.intros [unfolded Predicate.eq_is_eq[symmetric], code_pred_intro]
+
+code_pred (expected_modes: i => i => i => bool, i => i => o => bool) A.hd_predicate_in_locale
+unfolding eq_is_eq by (auto elim: A.hd_predicate_in_locale.cases)
+    
+interpretation A partial_hd .
+thm hd_predicate_in_locale.intros
+text {* A locally compliant solution with a trivial interpretation fails, because
+the predicate compiler has very strict assumptions about the terms and their structure. *}
+ 
+(*code_pred hd_predicate_in_locale .*)
+
+section {* Integer example *}
+
+definition three :: int
+where "three = 3"
+
+inductive is_three
+where
+  "is_three three"
+
+code_pred is_three .
+
+thm is_three.equation
+
+section {* String.literal example *}
+
+definition Error_1
+where
+  "Error_1 = STR ''Error 1''"
+
+definition Error_2
+where
+  "Error_2 = STR ''Error 2''"
+
+inductive "is_error" :: "String.literal \<Rightarrow> bool"
+where
+  "is_error Error_1"
+| "is_error Error_2"
+
+code_pred is_error .
+
+thm is_error.equation
+
+inductive is_error' :: "String.literal \<Rightarrow> bool"
+where
+  "is_error' (STR ''Error1'')"
+| "is_error' (STR ''Error2'')"
+
+code_pred is_error' .
+
+thm is_error'.equation
+
+datatype ErrorObject = Error String.literal int
+
+inductive is_error'' :: "ErrorObject \<Rightarrow> bool"
+where
+  "is_error'' (Error Error_1 3)"
+| "is_error'' (Error Error_2 4)"
+
+code_pred is_error'' .
+
+thm is_error''.equation
+
+
+section {* Examples for detecting switches *}
 
 inductive detect_switches1 where
   "detect_switches1 [] []"

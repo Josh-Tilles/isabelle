@@ -34,7 +34,7 @@ code_reserved Scala
 code_const "HOL.equal \<Colon> char \<Rightarrow> char \<Rightarrow> bool"
   (SML "!((_ : char) = _)")
   (OCaml "!((_ : char) = _)")
-  (Haskell infixl 4 "==")
+  (Haskell infix 4 "==")
   (Scala infixl 5 "==")
 
 code_const "Code_Evaluation.term_of \<Colon> char \<Rightarrow> term"
@@ -43,14 +43,6 @@ code_const "Code_Evaluation.term_of \<Colon> char \<Rightarrow> term"
 
 definition implode :: "string \<Rightarrow> String.literal" where
   "implode = STR"
-
-primrec explode :: "String.literal \<Rightarrow> string" where
-  "explode (STR s) = s"
-
-lemma [code]:
-  "literal_case f s = f (explode s)"
-  "literal_rec f s = f (explode s)"
-  by (cases s, simp)+
 
 code_reserved SML String
 

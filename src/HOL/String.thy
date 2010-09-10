@@ -152,17 +152,37 @@ definition chars :: string where
   Char NibbleF NibbleD, Char NibbleF NibbleE, Char NibbleF NibbleF]"
 
 
-subsection {* Strings as dedicated datatype *}
+subsection {* Strings as dedicated type *}
 
-datatype literal = STR string
+typedef (open) literal = "UNIV :: string \<Rightarrow> bool"
+  morphisms explode STR ..
 
-declare literal.cases [code del] literal.recs [code del]
+instantiation literal :: size
+begin
 
-lemma [code]: "size (s\<Colon>literal) = 0"
-  by (cases s) simp_all
+definition size_literal :: "literal \<Rightarrow> nat"
+where
+  [code]: "size_literal (s\<Colon>literal) = 0"
 
-lemma [code]: "literal_size (s\<Colon>literal) = 0"
-  by (cases s) simp_all
+instance ..
+
+end
+
+instantiation literal :: equal
+begin
+
+definition equal_literal :: "literal \<Rightarrow> literal \<Rightarrow> bool"
+where
+  "equal_literal s1 s2 \<longleftrightarrow> explode s1 = explode s2"
+
+instance
+proof
+qed (auto simp add: equal_literal_def explode_inject)
+
+end
+
+lemma STR_inject' [simp]: "(STR xs = STR ys) = (xs = ys)"
+by(simp add: STR_inject)
 
 
 subsection {* Code generator *}
@@ -189,7 +209,7 @@ code_instance literal :: equal
 code_const "HOL.equal \<Colon> literal \<Rightarrow> literal \<Rightarrow> bool"
   (SML "!((_ : string) = _)")
   (OCaml "!((_ : string) = _)")
-  (Haskell infixl 4 "==")
+  (Haskell infix 4 "==")
   (Scala infixl 5 "==")
 
 types_code
