@@ -482,7 +482,7 @@ fun pretty_thm_style ctxt (style, th) =
 
 fun pretty_term_typ ctxt (style, t) =
   let val t' = style t
-  in pretty_term ctxt (Type_Infer.constrain (Term.fastype_of t') t') end;
+  in pretty_term ctxt (Type.constraint (Term.fastype_of t') t') end;
 
 fun pretty_term_typeof ctxt (style, t) =
   Syntax.pretty_typ ctxt (Term.fastype_of (style t));
@@ -506,6 +506,15 @@ fun pretty_abbrev ctxt s =
     val eq = Logic.mk_equals (t, t');
     val ctxt' = Variable.auto_fixes eq ctxt;
   in ProofContext.pretty_term_abbrev ctxt' eq end;
+
+fun pretty_class ctxt =
+  Pretty.str o Type.extern_class (ProofContext.tsig_of ctxt) o ProofContext.read_class ctxt;
+
+fun pretty_type ctxt s =
+  let
+    val tsig = ProofContext.tsig_of ctxt;
+    val _ = ProofContext.read_type_name ctxt false s;
+  in (Pretty.str o Type.extern_type tsig o Type.intern_type tsig) s end;
 
 fun pretty_prf full ctxt = Proof_Syntax.pretty_proof_of ctxt full;
 
@@ -561,6 +570,8 @@ val _ = basic_entity "typeof" (Term_Style.parse -- Args.term) pretty_term_typeof
 val _ = basic_entity "const" (Args.const_proper false) pretty_const;
 val _ = basic_entity "abbrev" (Scan.lift Args.name_source) pretty_abbrev;
 val _ = basic_entity "typ" Args.typ_abbrev Syntax.pretty_typ;
+val _ = basic_entity "class" (Scan.lift Args.name) pretty_class;
+val _ = basic_entity "type" (Scan.lift Args.name) pretty_type;
 val _ = basic_entity "text" (Scan.lift Args.name) pretty_text;
 val _ = basic_entities "prf" Attrib.thms (pretty_prf false);
 val _ = basic_entities "full_prf" Attrib.thms (pretty_prf true);

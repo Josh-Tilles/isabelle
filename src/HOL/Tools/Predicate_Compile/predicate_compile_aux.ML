@@ -15,6 +15,7 @@ sig
   (* mode *)
   datatype mode = Bool | Input | Output | Pair of mode * mode | Fun of mode * mode
   val eq_mode : mode * mode -> bool
+  val mode_ord: mode * mode -> order
   val list_fun_mode : mode list -> mode
   val strip_fun_mode : mode -> mode list
   val dest_fun_mode : mode -> mode list
@@ -27,6 +28,8 @@ sig
   val ho_arg_modes_of : mode -> mode list
   val ho_argsT_of : mode -> typ list -> typ list
   val ho_args_of : mode -> term list -> term list
+  val ho_args_of_typ : typ -> term list -> term list
+  val ho_argsT_of_typ : typ list -> typ list
   val split_map_mode : (mode -> term -> term option * term option)
     -> mode -> term list -> term list * term list
   val split_map_modeT : (mode -> typ -> typ option * typ option)
@@ -185,6 +188,14 @@ fun eq_mode (Fun (m1, m2), Fun (m3, m4)) = eq_mode (m1, m3) andalso eq_mode (m2,
   | eq_mode (Bool, Bool) = true
   | eq_mode _ = false
 
+fun mode_ord (Input, Output) = LESS
+  | mode_ord (Output, Input) = GREATER
+  | mode_ord (Input, Input) = EQUAL
+  | mode_ord (Output, Output) = EQUAL
+  | mode_ord (Bool, Bool) = EQUAL
+  | mode_ord (Pair (m1, m2), Pair (m3, m4)) = prod_ord mode_ord mode_ord ((m1, m2), (m3, m4))
+  | mode_ord (Fun (m1, m2), Fun (m3, m4)) = prod_ord mode_ord mode_ord ((m1, m2), (m3, m4))
+ 
 fun list_fun_mode [] = Bool
   | list_fun_mode (m :: ms) = Fun (m, list_fun_mode ms)
 
@@ -261,6 +272,31 @@ fun ho_args_of mode ts =
   in
     flat (map2_optional ho_arg (strip_fun_mode mode) ts)
   end
+
+fun ho_args_of_typ T ts =
+  let
+    fun ho_arg (T as Type("fun", [_,_])) (SOME t) = if body_type T = @{typ bool} then [t] else []
+      | ho_arg (Type("fun", [_,_])) NONE = raise Fail "mode and term do not match"
+      | ho_arg (Type(@{type_name "Product_Type.prod"}, [T1, T2]))
+         (SOME (Const (@{const_name Pair}, _) $ t1 $ t2)) =
+          ho_arg T1 (SOME t1) @ ho_arg T2 (SOME t2)
+      | ho_arg (Type(@{type_name "Product_Type.prod"}, [T1, T2])) NONE =
+          ho_arg T1 NONE @ ho_arg T2 NONE
+      | ho_arg _ _ = []
+  in
+    flat (map2_optional ho_arg (binder_types T) ts)
+  end
+
+fun ho_argsT_of_typ Ts =
+  let
+    fun ho_arg (T as Type("fun", [_,_])) = if body_type T = @{typ bool} then [T] else []
+      | ho_arg (Type(@{type_name "Product_Type.prod"}, [T1, T2])) =
+          ho_arg T1 @ ho_arg T2
+      | ho_arg _ = []
+  in
+    maps ho_arg Ts
+  end
+  
 
 (* temporary function should be replaced by unsplit_input or so? *)
 fun replace_ho_args mode hoargs ts =
