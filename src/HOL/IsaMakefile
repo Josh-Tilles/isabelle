@@ -106,12 +106,12 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   $(SRC)/Provers/quantifier1.ML \
   $(SRC)/Provers/splitter.ML \
   $(SRC)/Tools/cache_io.ML \
-  $(SRC)/Tools/Code/code_eval.ML \
   $(SRC)/Tools/Code/code_haskell.ML \
   $(SRC)/Tools/Code/code_ml.ML \
   $(SRC)/Tools/Code/code_namespace.ML \
   $(SRC)/Tools/Code/code_preproc.ML \
   $(SRC)/Tools/Code/code_printer.ML \
+  $(SRC)/Tools/Code/code_runtime.ML \
   $(SRC)/Tools/Code/code_scala.ML \
   $(SRC)/Tools/Code/code_simp.ML \
   $(SRC)/Tools/Code/code_target.ML \
@@ -1011,6 +1011,7 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Decision_Procs/Commutative_Ring.thy	\
   ex/InductiveInvariant_examples.thy ex/Intuitionistic.thy		\
   ex/Lagrange.thy ex/LocaleTest2.thy ex/MT.thy ex/MergeSort.thy		\
   ex/Meson_Test.thy ex/MonoidGroup.thy ex/Multiquote.thy ex/NatSum.thy	\
+  ex/Normalization_by_Evaluation.thy					\
   ex/Numeral.thy ex/PER.thy ex/PresburgerEx.thy ex/Primrec.thy		\
   ex/Quickcheck_Examples.thy ex/Quickcheck_Lattice_Examples.thy		\
   ex/ROOT.ML ex/Recdefs.thy ex/Records.thy ex/ReflectionEx.thy		\

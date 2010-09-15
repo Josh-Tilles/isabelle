@@ -1,23 +1,46 @@
-(*  Title:      Tools/Code/code_eval.ML
+(*  Title:      Tools/Code/code_runtime.ML
     Author:     Florian Haftmann, TU Muenchen
 
 Runtime services building on code generation into implementation language SML.
 *)
 
-signature CODE_EVAL =
+signature CODE_RUNTIME =
 sig
   val target: string
-  val eval: string option -> string * (unit -> 'a) option Unsynchronized.ref
+  val value: string option
+    -> (Proof.context -> unit -> 'a) * ((unit -> 'a) -> Proof.context -> Proof.context) * string
     -> ((term -> term) -> 'a -> 'a) -> theory -> term -> string list -> 'a
   val setup: theory -> theory
 end;
 
-structure Code_Eval : CODE_EVAL =
+structure Code_Runtime : CODE_RUNTIME =
 struct
 
-(** generic **)
+(** evaluation **)
 
 val target = "Eval";
+
+fun value some_target cookie postproc thy t args =
+  let
+    val ctxt = ProofContext.init_global thy;
+    fun evaluator naming program ((_, (_, ty)), t) deps =
+      let
+        val _ = if Code_Thingol.contains_dictvar t then
+          error "Term to be evaluated contains free dictionaries" else ();
+        val value_name = "Value.VALUE.value"
+        val program' = program
+          |> Graph.new_node (value_name,
+              Code_Thingol.Fun (Term.dummy_patternN, ((([], ty), [(([], t), (NONE, true))]), NONE)))
+          |> fold (curry Graph.add_edge value_name) deps;
+        val (program_code, [SOME value_name']) = Code_Target.produce_code_for thy
+          (the_default target some_target) NONE "Code" [] naming program' [value_name];
+        val value_code = space_implode " "
+          (value_name' :: map (enclose "(" ")") args);
+      in ML_Context.value ctxt cookie (program_code, value_code) end;
+  in Code_Thingol.dynamic_eval_value thy postproc evaluator t end;
+
+
+(** instrumentalization **)
 
 fun evaluation_code thy module_name tycos consts =
   let
@@ -37,29 +60,7 @@ fun evaluation_code thy module_name tycos consts =
   in (ml_code, (tycos_map, consts_map)) end;
 
 
-(** evaluation **)
-
-fun eval some_target reff postproc thy t args =
-  let
-    val ctxt = ProofContext.init_global thy;
-    fun evaluator naming program ((_, (_, ty)), t) deps =
-      let
-        val _ = if Code_Thingol.contains_dictvar t then
-          error "Term to be evaluated contains free dictionaries" else ();
-        val value_name = "Value.VALUE.value"
-        val program' = program
-          |> Graph.new_node (value_name,
-              Code_Thingol.Fun (Term.dummy_patternN, ((([], ty), [(([], t), (NONE, true))]), NONE)))
-          |> fold (curry Graph.add_edge value_name) deps;
-        val (program_code, [SOME value_name']) = Code_Target.produce_code_for thy
-          (the_default target some_target) NONE "Code" [] naming program' [value_name];
-        val value_code = space_implode " "
-          (value_name' :: map (enclose "(" ")") args);
-      in ML_Context.evaluate ctxt false reff (program_code, value_code) end;
-  in Code_Thingol.dynamic_eval_value thy postproc evaluator t end;
-
-
-(** instrumentalization by antiquotation **)
+(* by antiquotation *)
 
 local
 
@@ -109,7 +110,7 @@ fun ml_code_antiq raw_const background =
 end; (*local*)
 
 
-(** reflection support **)
+(* reflection support *)
 
 fun check_datatype thy tyco consts =
   let
