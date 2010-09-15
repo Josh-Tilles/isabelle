@@ -8,6 +8,7 @@ signature NBE =
 sig
   val dynamic_eval_conv: conv
   val dynamic_eval_value: theory -> term -> term
+  val static_eval_conv: theory -> string list -> conv
 
   datatype Univ =
       Const of int * Univ list               (*named (uninterpreted) constants*)
@@ -228,9 +229,9 @@ fun ml_fundefs ([(name, [([], e)])]) =
 
 (* nbe specific syntax and sandbox communication *)
 
-structure Univs = Proof_Data(
+structure Univs = Proof_Data (
   type T = unit -> Univ list -> Univ list
-  fun init thy () = error "Univs"
+  fun init _ () = error "Univs"
 );
 val put_result = Univs.put;
 
@@ -377,15 +378,16 @@ fun assemble_eqnss idx_of deps eqnss =
   in ml_abs deps_vars (ml_Let (ml_fundefs (flat fun_vars)) (ml_list fun_vals)) end;
 
 
-(* code compilation *)
+(* compile equations *)
 
-fun compile_eqnss ctxt gr raw_deps [] = []
-  | compile_eqnss ctxt gr raw_deps eqnss =
+fun compile_eqnss thy nbe_program raw_deps [] = []
+  | compile_eqnss thy nbe_program raw_deps eqnss =
       let
+        val ctxt = ProofContext.init_global thy;
         val (deps, deps_vals) = split_list (map_filter
-          (fn dep => Option.map (fn univ => (dep, univ)) (fst ((Graph.get_node gr dep)))) raw_deps);
+          (fn dep => Option.map (fn univ => (dep, univ)) (fst ((Graph.get_node nbe_program dep)))) raw_deps);
         val idx_of = raw_deps
-          |> map (fn dep => (dep, snd (Graph.get_node gr dep)))
+          |> map (fn dep => (dep, snd (Graph.get_node nbe_program dep)))
           |> AList.lookup (op =)
           |> (fn f => the o f);
         val s = assemble_eqnss idx_of deps eqnss;
@@ -400,7 +402,7 @@ fun compile_eqnss ctxt gr raw_deps [] = []
       end;
 
 
-(* preparing function equations *)
+(* extract equations from statements *)
 
 fun eqns_of_stmt (_, Code_Thingol.Fun (_, ((_, []), _))) =
       []
@@ -428,7 +430,16 @@ fun eqns_of_stmt (_, Code_Thingol.Fun (_, ((_, []), _))) =
         map (fn (_, (_, (inst, dss))) => IConst (inst, (([], dss), []))) super_instances
         @ map (IConst o snd o fst) classparam_instances)]))];
 
-fun compile_stmts ctxt stmts_deps =
+
+(* compile whole programs *)
+
+fun ensure_const_idx name (nbe_program, (maxidx, idx_tab)) =
+  if can (Graph.get_node nbe_program) name
+  then (nbe_program, (maxidx, idx_tab))
+  else (Graph.new_node (name, (NONE, maxidx)) nbe_program,
+    (maxidx + 1, Inttab.update_new (maxidx, name) idx_tab));
+
+fun compile_stmts thy stmts_deps =
   let
     val names = map (fst o fst) stmts_deps;
     val names_deps = map (fn ((name, _), deps) => (name, deps)) stmts_deps;
@@ -437,26 +448,22 @@ fun compile_stmts ctxt stmts_deps =
       |> maps snd
       |> distinct (op =)
       |> fold (insert (op =)) names;
-    fun new_node name (gr, (maxidx, idx_tab)) = if can (Graph.get_node gr) name
-      then (gr, (maxidx, idx_tab))
-      else (Graph.new_node (name, (NONE, maxidx)) gr,
-        (maxidx + 1, Inttab.update_new (maxidx, name) idx_tab));
-    fun compile gr = eqnss
-      |> compile_eqnss ctxt gr refl_deps
-      |> rpair gr;
+    fun compile nbe_program = eqnss
+      |> compile_eqnss thy nbe_program refl_deps
+      |> rpair nbe_program;
   in
-    fold new_node refl_deps
+    fold ensure_const_idx refl_deps
     #> apfst (fold (fn (name, deps) => fold (curry Graph.add_edge name) deps) names_deps
       #> compile
       #-> fold (fn (name, univ) => (Graph.map_node name o apfst) (K (SOME univ))))
   end;
 
-fun ensure_stmts ctxt program =
+fun compile_program thy program =
   let
-    fun add_stmts names (gr, (maxidx, idx_tab)) = if exists ((can o Graph.get_node) gr) names
-      then (gr, (maxidx, idx_tab))
-      else (gr, (maxidx, idx_tab))
-        |> compile_stmts ctxt (map (fn name => ((name, Graph.get_node program name),
+    fun add_stmts names (nbe_program, (maxidx, idx_tab)) = if exists ((can o Graph.get_node) nbe_program) names
+      then (nbe_program, (maxidx, idx_tab))
+      else (nbe_program, (maxidx, idx_tab))
+        |> compile_stmts thy (map (fn name => ((name, Graph.get_node program name),
           Graph.imm_succs program name)) names);
   in
     fold_rev add_stmts (Graph.strong_conn program)
@@ -465,20 +472,20 @@ fun ensure_stmts ctxt program =
 
 (** evaluation **)
 
-(* term evaluation *)
+(* term evaluation by compilation *)
 
-fun eval_term ctxt gr deps (vs : (string * sort) list, t) =
+fun compile_term thy nbe_program deps (vs : (string * sort) list, t) =
   let 
     val dict_frees = maps (fn (v, sort) => map_index (curry DFree v o fst) sort) vs;
   in
     ("", (vs, [([], t)]))
-    |> singleton (compile_eqnss ctxt gr deps)
+    |> singleton (compile_eqnss thy nbe_program deps)
     |> snd
     |> (fn t => apps t (rev dict_frees))
   end;
 
 
-(* reification *)
+(* reconstruction *)
 
 fun typ_of_itype program vs (ityco `%% itys) =
       let
@@ -525,6 +532,29 @@ fun term_of_univ thy program idx_tab t =
   in of_univ 0 t 0 |> fst end;
 
 
+(* evaluation with type reconstruction *)
+
+fun eval_term thy program (nbe_program, idx_tab) ((vs0, (vs, ty)), t) deps =
+  let
+    val ctxt = Syntax.init_pretty_global thy;
+    val string_of_term = Syntax.string_of_term (Config.put show_types true ctxt);
+    val ty' = typ_of_itype program vs0 ty;
+    fun type_infer t = singleton
+      (Type_Infer.infer_types ctxt (try (Type.strip_sorts o Sign.the_const_type thy)) (K NONE))
+      (Type.constraint ty' t);
+    fun check_tvars t =
+      if null (Term.add_tvars t []) then t
+      else error ("Illegal schematic type variables in normalized term: " ^ string_of_term t);
+  in
+    compile_term thy nbe_program deps (vs, t)
+    |> term_of_univ thy program idx_tab
+    |> traced (fn t => "Normalized:\n" ^ string_of_term t)
+    |> type_infer
+    |> traced (fn t => "Types inferred:\n" ^ string_of_term t)
+    |> check_tvars
+    |> traced (fn _ => "---\n")
+  end;
+
 (* function store *)
 
 structure Nbe_Functions = Code_Data
@@ -533,46 +563,15 @@ structure Nbe_Functions = Code_Data
   val empty = (Graph.empty, (0, Inttab.empty));
 );
 
-
-(* compilation, evaluation and reification *)
-
-fun compile_eval thy program =
+fun compile ignore_cache thy program =
   let
-    val ctxt = ProofContext.init_global thy;
-    val (gr, (_, idx_tab)) =
-      Nbe_Functions.change thy (ensure_stmts ctxt program);
-  in fn vs_t => fn deps =>
-    vs_t
-    |> eval_term ctxt gr deps
-    |> term_of_univ thy program idx_tab
-  end;
+    val (nbe_program, (_, idx_tab)) =
+      Nbe_Functions.change (if ignore_cache then NONE else SOME thy)
+        (compile_program thy program);
+  in (nbe_program, idx_tab) end;
 
 
-(* evaluation with type reconstruction *)
-
-fun normalize thy program ((vs0, (vs, ty)), t) deps =
-  let
-    val ctxt = Syntax.init_pretty_global thy;
-    val ty' = typ_of_itype program vs0 ty;
-    fun type_infer t =
-      singleton
-        (Type_Infer.infer_types ctxt (try (Type.strip_sorts o Sign.the_const_type thy)) (K NONE))
-        (Type.constraint ty' t);
-    val string_of_term = Syntax.string_of_term (Config.put show_types true ctxt);
-    fun check_tvars t =
-      if null (Term.add_tvars t []) then t
-      else error ("Illegal schematic type variables in normalized term: " ^ string_of_term t);
-  in
-    compile_eval thy program (vs, t) deps
-    |> traced (fn t => "Normalized:\n" ^ string_of_term t)
-    |> type_infer
-    |> traced (fn t => "Types inferred:\n" ^ string_of_term t)
-    |> check_tvars
-    |> traced (fn _ => "---\n")
-  end;
-
-
-(* evaluation oracle *)
+(* dynamic evaluation oracle *)
 
 fun mk_equals thy lhs raw_rhs =
   let
@@ -582,10 +581,12 @@ fun mk_equals thy lhs raw_rhs =
   in Thm.mk_binop eq lhs rhs end;
 
 val (_, raw_oracle) = Context.>>> (Context.map_theory_result
-  (Thm.add_oracle (Binding.name "norm", fn (thy, program, vsp_ty_t, deps, ct) =>
-    mk_equals thy ct (normalize thy program vsp_ty_t deps))));
+  (Thm.add_oracle (Binding.name "normalization_by_evaluation",
+    fn (thy, program, nbe_program_idx_tab, vsp_ty_t, deps, ct) =>
+      mk_equals thy ct (eval_term thy program nbe_program_idx_tab vsp_ty_t deps))));
 
-fun oracle thy program vsp_ty_t deps ct = raw_oracle (thy, program, vsp_ty_t, deps, ct);
+fun oracle thy program nbe_program_idx_tab vsp_ty_t deps ct =
+  raw_oracle (thy, program, nbe_program_idx_tab, vsp_ty_t, deps, ct);
 
 fun no_frees_rew rew t =
   let
@@ -597,41 +598,22 @@ fun no_frees_rew rew t =
     |> curry (Term.betapplys o swap) frees
   end;
 
-val dynamic_eval_conv = Code_Simp.no_frees_conv (Conv.tap_thy
-  (fn thy => lift_triv_classes_conv thy (Code_Thingol.dynamic_eval_conv thy (K (oracle thy)))));
+val dynamic_eval_conv = Conv.tap_thy (fn thy => Code_Simp.no_frees_conv
+  (lift_triv_classes_conv thy (Code_Thingol.dynamic_eval_conv thy
+    (K (fn program => oracle thy program (compile false thy program))))));
 
 fun dynamic_eval_value thy = lift_triv_classes_rew thy
-  (no_frees_rew (Code_Thingol.dynamic_eval_value thy I (K (normalize thy))));
+  (no_frees_rew (Code_Thingol.dynamic_eval_value thy I
+    (K (fn program => eval_term thy program (compile false thy program)))));
+
+fun static_eval_conv thy consts = Code_Simp.no_frees_conv
+  (lift_triv_classes_conv thy (Code_Thingol.static_eval_conv thy consts
+    (K (fn program => oracle thy program (compile true thy program)))));
 
 
-(* evaluation command *)
-
-fun norm_print_term ctxt modes t =
-  let
-    val thy = ProofContext.theory_of ctxt;
-    val t' = dynamic_eval_value thy t;
-    val ty' = Term.type_of t';
-    val ctxt' = Variable.auto_fixes t ctxt;
-    val p = Print_Mode.with_modes modes (fn () =>
-      Pretty.block [Pretty.quote (Syntax.pretty_term ctxt' t'), Pretty.fbrk,
-        Pretty.str "::", Pretty.brk 1, Pretty.quote (Syntax.pretty_typ ctxt' ty')]) ();
-  in Pretty.writeln p end;
-
-
-(** Isar setup **)
-
-fun norm_print_term_cmd (modes, s) state =
-  let val ctxt = Toplevel.context_of state
-  in norm_print_term ctxt modes (Syntax.read_term ctxt s) end;
+(** setup **)
 
 val setup = Value.add_evaluator ("nbe", dynamic_eval_value o ProofContext.theory_of);
-
-val opt_modes =
-  Scan.optional (Parse.$$$ "(" |-- Parse.!!! (Scan.repeat1 Parse.xname --| Parse.$$$ ")")) [];
-
-val _ =
-  Outer_Syntax.improper_command "normal_form" "normalize term by evaluation" Keyword.diag
-    (opt_modes -- Parse.term >> (Toplevel.keep o norm_print_term_cmd));
 
 end;
  
