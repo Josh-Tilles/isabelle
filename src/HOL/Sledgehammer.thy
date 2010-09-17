@@ -11,11 +11,13 @@ theory Sledgehammer
 imports Plain Hilbert_Choice
 uses
   ("Tools/ATP/atp_problem.ML")
+  ("Tools/ATP/atp_proof.ML")
   ("Tools/ATP/atp_systems.ML")
   ("~~/src/Tools/Metis/metis.ML")
   ("Tools/Sledgehammer/clausifier.ML")
   ("Tools/Sledgehammer/meson_tactic.ML")
-  ("Tools/Sledgehammer/metis_clauses.ML")
+  ("Tools/Sledgehammer/metis_translate.ML")
+  ("Tools/Sledgehammer/metis_reconstruct.ML")
   ("Tools/Sledgehammer/metis_tactics.ML")
   ("Tools/Sledgehammer/sledgehammer_util.ML")
   ("Tools/Sledgehammer/sledgehammer_filter.ML")
@@ -92,6 +94,7 @@ apply (simp add: COMBC_def)
 done
 
 use "Tools/ATP/atp_problem.ML"
+use "Tools/ATP/atp_proof.ML"
 use "Tools/ATP/atp_systems.ML"
 setup ATP_Systems.setup
 
@@ -100,7 +103,8 @@ use "Tools/Sledgehammer/clausifier.ML"
 use "Tools/Sledgehammer/meson_tactic.ML"
 setup Meson_Tactic.setup
 
-use "Tools/Sledgehammer/metis_clauses.ML"
+use "Tools/Sledgehammer/metis_translate.ML"
+use "Tools/Sledgehammer/metis_reconstruct.ML"
 use "Tools/Sledgehammer/metis_tactics.ML"
 setup Metis_Tactics.setup
 

@@ -15,11 +15,11 @@ setup {* Code_Prolog.map_code_options (K
    limited_types = [],
    limited_predicates = [],
    replacing = [],
-   manual_reorder = [],
-   timeout = Time.fromSeconds 10,
-   prolog_system = Code_Prolog.SWI_PROLOG}) *}
+   manual_reorder = []}) *}
 
 values "{(x, y, z). append x y z}"
+
+values 4 "{(z, x, y). append x y ((1::nat) # (2 # (3 # z)))}"
 
 values 3 "{(x, y, z). append x y z}"
 
@@ -28,9 +28,7 @@ setup {* Code_Prolog.map_code_options (K
    limited_types = [],
    limited_predicates = [],
    replacing = [],
-   manual_reorder = [],
-   timeout = Time.fromSeconds 10,
-   prolog_system = Code_Prolog.YAP}) *}
+   manual_reorder = []}) *}
 
 values "{(x, y, z). append x y z}"
 
@@ -39,9 +37,7 @@ setup {* Code_Prolog.map_code_options (K
    limited_types = [],
    limited_predicates = [],
    replacing = [],
-   manual_reorder = [],
-   timeout = Time.fromSeconds 10,
-   prolog_system = Code_Prolog.SWI_PROLOG}) *}
+   manual_reorder = []}) *}
 
 
 section {* Example queens *}
@@ -209,9 +205,7 @@ setup {* Code_Prolog.map_code_options (K
    limited_types = [],
    limited_predicates = [],
    replacing = [],
-   manual_reorder = [], 
-   timeout = Time.fromSeconds 10,
-   prolog_system = Code_Prolog.SWI_PROLOG}) *}
+   manual_reorder = []}) *}
 
 values 2 "{y. notB y}"
 

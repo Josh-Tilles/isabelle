@@ -1,6 +1,6 @@
 (* ========================================================================= *)
 (* NORMALIZING FORMULAS                                                      *)
-(* Copyright (c) 2001-2007 Joe Hurd, distributed under the BSD License       *)
+(* Copyright (c) 2001 Joe Hurd, distributed under the BSD License            *)
 (* ========================================================================= *)
 
 structure Normalize :> Normalize =
@@ -685,23 +685,23 @@ fun nnf fm = toFormula (fromFormula fm);
 (* Basic conjunctive normal form.                                            *)
 (* ------------------------------------------------------------------------- *)
 
-val newSkolemFunction =
-    let
-      val counter : int StringMap.map ref = ref (StringMap.new ())
-    in
-      (* MODIFIED by Jasmin Blanchette *)
-      fn n => CRITICAL (fn () =>
-         let
-           val ref m = counter
-           val s = Name.toString n
-           val i = Option.getOpt (StringMap.peek m s, 0)
-           val () = counter := StringMap.insert m (s, i + 1)
-           val i = if i = 0 then "" else "_" ^ Int.toString i
-           val s = skolemPrefix ^ "_" ^ s ^ i
-         in
-           Name.fromString s
-         end)
-    end;
+local
+  val counter : int StringMap.map ref = ref (StringMap.new ());
+
+  fun new n () =
+      let
+        val ref m = counter
+        val s = Name.toString n
+        val i = Option.getOpt (StringMap.peek m s, 0)
+        val () = counter := StringMap.insert m (s, i + 1)
+        val i = if i = 0 then "" else "_" ^ Int.toString i
+        val s = skolemPrefix ^ "_" ^ s ^ i
+      in
+        Name.fromString s
+      end;
+in
+  fun newSkolemFunction n = Portable.critical (new n) ();
+end;
 
 fun skolemize fv bv fm =
     let
@@ -815,8 +815,8 @@ local
                     (c2', s2', (c1,s1,fm,c2,s2) :: l)
                   end
 
-              val (c1,_,fms) = foldl fwd (count0,empty,[]) fms
-              val (c2,_,fms) = foldl bwd (count0,empty,[]) fms
+              val (c1,_,fms) = List.foldl fwd (count0,empty,[]) fms
+              val (c2,_,fms) = List.foldl bwd (count0,empty,[]) fms
 
 (*MetisDebug
               val _ = countEquivish c1 c2 orelse
@@ -861,10 +861,10 @@ local
             let
               val fms = sortMap (measure o count) countCompare fms
             in
-              foldl breakSet1 best (cumulatives fms)
+              List.foldl breakSet1 best (cumulatives fms)
             end
 
-        val best = foldl breakSing best (cumulatives fms)
+        val best = List.foldl breakSing best (cumulatives fms)
         val best = breakSet I best
         val best = breakSet countNegate best
         val best = breakSet countClauses best
@@ -1240,19 +1240,19 @@ val simplify = fn simp => fn th as Thm (fm,_) =>
 (* Definitions.                                                              *)
 (* ------------------------------------------------------------------------- *)
 
-val newDefinitionRelation =
-    let
-      val counter : int ref = ref 0
-    in
-      (* MODIFIED by Jasmin Blanchette *)
-      fn () => CRITICAL (fn () =>
-         let
-           val ref i = counter
-           val () = counter := i + 1
-         in
-           definitionPrefix ^ "_" ^ Int.toString i
-         end)
-    end;
+local
+  val counter : int ref = ref 0;
+
+  fun new () =
+      let
+        val ref i = counter
+        val () = counter := i + 1
+      in
+        definitionPrefix ^ "_" ^ Int.toString i
+      end;
+in
+  fun newDefinitionRelation () = Portable.critical new ();
+end;
 
 fun newDefinition def =
     let

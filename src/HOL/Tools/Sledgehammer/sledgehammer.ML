@@ -13,6 +13,7 @@ sig
   type relevance_override = Sledgehammer_Filter.relevance_override
   type fol_formula = Sledgehammer_Translate.fol_formula
   type minimize_command = Sledgehammer_Reconstruct.minimize_command
+
   type params =
     {blocking: bool,
      debug: bool,
@@ -27,12 +28,14 @@ sig
      isar_shrink_factor: int,
      timeout: Time.time,
      expect: string}
+
   type problem =
     {state: Proof.state,
      goal: thm,
      subgoal: int,
      axioms: (term * ((string * locality) * fol_formula) option) list,
      only: bool}
+
   type prover_result =
     {outcome: failure option,
      message: string,
@@ -40,9 +43,10 @@ sig
      used_thm_names: (string * locality) list,
      atp_run_time_in_msecs: int,
      output: string,
-     proof: string,
+     tstplike_proof: string,
      axiom_names: (string * locality) list vector,
      conjecture_shape: int list list}
+
   type prover = params -> minimize_command -> problem -> prover_result
 
   val dest_dir : string Config.T
@@ -62,8 +66,9 @@ structure Sledgehammer : SLEDGEHAMMER =
 struct
 
 open ATP_Problem
+open ATP_Proof
 open ATP_Systems
-open Metis_Clauses
+open Metis_Translate
 open Sledgehammer_Util
 open Sledgehammer_Filter
 open Sledgehammer_Translate
@@ -111,7 +116,7 @@ type prover_result =
    used_thm_names: (string * locality) list,
    atp_run_time_in_msecs: int,
    output: string,
-   proof: string,
+   tstplike_proof: string,
    axiom_names: (string * locality) list vector,
    conjecture_shape: int list list}
 
@@ -135,102 +140,11 @@ fun with_path cleanup after f path =
   |> Exn.release
   |> tap (after path)
 
-fun extract_delimited (begin_delim, end_delim) output =
-  output |> first_field begin_delim |> the |> snd
-         |> first_field end_delim |> the |> fst
-         |> first_field "\n" |> the |> snd
-  handle Option.Option => ""
-
-val tstp_important_message_delims =
-  ("% SZS start RequiredInformation", "% SZS end RequiredInformation")
-
-fun extract_important_message output =
-  case extract_delimited tstp_important_message_delims output of
-    "" => ""
-  | s => s |> space_explode "\n" |> filter_out (curry (op =) "")
-           |> map (perhaps (try (unprefix "%")))
-           |> map (perhaps (try (unprefix " ")))
-           |> space_implode "\n " |> quote
-
-(* Splits by the first possible of a list of delimiters. *)
-fun extract_proof delims output =
-  case pairself (find_first (fn s => String.isSubstring s output))
-                (ListPair.unzip delims) of
-    (SOME begin_delim, SOME end_delim) =>
-    extract_delimited (begin_delim, end_delim) output
-  | _ => ""
-
-fun extract_proof_and_outcome complete res_code proof_delims known_failures
-                              output =
-  case known_failure_in_output output known_failures of
-    NONE => (case extract_proof proof_delims output of
-             "" => ("", SOME (if res_code = 0 andalso output = "" then
-                                Interrupted
-                              else
-                                 UnknownError))
-           | proof => if res_code = 0 then (proof, NONE)
-                      else ("", SOME UnknownError))
-  | SOME failure =>
-    ("", SOME (if failure = IncompleteUnprovable andalso complete then
-                 Unprovable
-               else
-                 failure))
-
-fun extract_clause_sequence output =
-  let
-    val tokens_of = String.tokens (not o Char.isAlphaNum)
-    fun extract_num ("clause" :: (ss as _ :: _)) =
-    Int.fromString (List.last ss)
-      | extract_num _ = NONE
-  in output |> split_lines |> map_filter (extract_num o tokens_of) end
-
-val set_ClauseFormulaRelationN = "set_ClauseFormulaRelation"
-
-val parse_clause_formula_pair =
-  $$ "(" |-- scan_integer --| $$ ","
-  -- (Symbol.scan_id ::: Scan.repeat ($$ "," |-- Symbol.scan_id)) --| $$ ")"
-  --| Scan.option ($$ ",")
-val parse_clause_formula_relation =
-  Scan.this_string set_ClauseFormulaRelationN |-- $$ "("
-  |-- Scan.repeat parse_clause_formula_pair
-val extract_clause_formula_relation =
-  Substring.full #> Substring.position set_ClauseFormulaRelationN
-  #> snd #> Substring.position "." #> fst #> Substring.string
-  #> explode #> filter_out Symbol.is_blank #> parse_clause_formula_relation
-  #> fst
-
-(* TODO: move to "Sledgehammer_Reconstruct" *)
-fun repair_conjecture_shape_and_theorem_names output conjecture_shape
-                                              axiom_names =
-  if String.isSubstring set_ClauseFormulaRelationN output then
-    (* This is a hack required for keeping track of axioms after they have been
-       clausified by SPASS's Flotter tool. The "ATP/scripts/spass" script is
-       also part of this hack. *)
-    let
-      val j0 = hd (hd conjecture_shape)
-      val seq = extract_clause_sequence output
-      val name_map = extract_clause_formula_relation output
-      fun renumber_conjecture j =
-        conjecture_prefix ^ string_of_int (j - j0)
-        |> AList.find (fn (s, ss) => member (op =) ss s) name_map
-        |> map (fn s => find_index (curry (op =) s) seq + 1)
-      fun names_for_number j =
-        j |> AList.lookup (op =) name_map |> these
-          |> map_filter (try (unprefix axiom_prefix)) |> map unascii_of
-          |> map (fn name =>
-                     (name, name |> find_first_in_list_vector axiom_names
-                                 |> the)
-                     handle Option.Option =>
-                            error ("No such fact: " ^ quote name ^ "."))
-    in
-      (conjecture_shape |> map (maps renumber_conjecture),
-       seq |> map names_for_number |> Vector.fromList)
-    end
-  else
-    (conjecture_shape, axiom_names)
-
-
 (* generic TPTP-based provers *)
+
+(* Important messages are important but not so important that users want to see
+   them each time. *)
+val important_message_keep_factor = 0.1
 
 fun prover_fun auto atp_name
         {exec, required_execs, arguments, has_incomplete_mode, proof_delims,
@@ -297,16 +211,16 @@ fun prover_fun auto atp_name
                        else
                          I)
                   |>> (if measure_run_time then split_time else rpair 0)
-                val (proof, outcome) =
-                  extract_proof_and_outcome complete res_code proof_delims
-                                            known_failures output
-              in (output, msecs, proof, outcome) end
+                val (tstplike_proof, outcome) =
+                  extract_tstplike_proof_and_outcome complete res_code
+                      proof_delims known_failures output
+              in (output, msecs, tstplike_proof, outcome) end
             val readable_names = debug andalso overlord
             val (problem, pool, conjecture_offset, axiom_names) =
               prepare_problem ctxt readable_names explicit_forall full_types
                               explicit_apply hyp_ts concl_t axioms
-            val ss = strings_for_tptp_problem use_conjecture_for_hypotheses
-                                              problem
+            val ss = tptp_strings_for_atp_problem use_conjecture_for_hypotheses
+                                                  problem
             val _ = File.write_list probfile ss
             val conjecture_shape =
               conjecture_offset + 1 upto conjecture_offset + length hyp_ts + 1
@@ -322,8 +236,8 @@ fun prover_fun auto atp_name
               |> run_twice
                  ? (fn (_, msecs0, _, SOME _) =>
                        run true (Time.- (timeout, Timer.checkRealTimer timer))
-                       |> (fn (output, msecs, proof, outcome) =>
-                              (output, msecs0 + msecs, proof, outcome))
+                       |> (fn (output, msecs, tstplike_proof, outcome) =>
+                              (output, msecs0 + msecs, tstplike_proof, outcome))
                      | result => result)
           in ((pool, conjecture_shape, axiom_names), result) end
         else
@@ -339,12 +253,16 @@ fun prover_fun auto atp_name
       else
         File.write (Path.explode (Path.implode probfile ^ "_proof")) output
     val ((pool, conjecture_shape, axiom_names),
-         (output, msecs, proof, outcome)) =
+         (output, msecs, tstplike_proof, outcome)) =
       with_path cleanup export run_on problem_path_name
     val (conjecture_shape, axiom_names) =
-      repair_conjecture_shape_and_theorem_names output conjecture_shape
-                                                axiom_names
-    val important_message = extract_important_message output
+      repair_conjecture_shape_and_axiom_names output conjecture_shape
+                                              axiom_names
+    val important_message =
+      if random () <= important_message_keep_factor then
+        extract_important_message output
+      else
+        ""
     val banner = if auto then "Sledgehammer found a proof"
                  else "Try this command"
     val (message, used_thm_names) =
@@ -352,8 +270,8 @@ fun prover_fun auto atp_name
         NONE =>
         proof_text isar_proof
             (pool, debug, isar_shrink_factor, ctxt, conjecture_shape)
-            (banner, full_types, minimize_command, proof, axiom_names, goal,
-             subgoal)
+            (banner, full_types, minimize_command, tstplike_proof, axiom_names,
+             goal, subgoal)
         |>> (fn message =>
                 message ^ (if verbose then
                              "\nATP real CPU time: " ^ string_of_int msecs ^
@@ -369,14 +287,14 @@ fun prover_fun auto atp_name
   in
     {outcome = outcome, message = message, pool = pool,
      used_thm_names = used_thm_names, atp_run_time_in_msecs = msecs,
-     output = output, proof = proof, axiom_names = axiom_names,
-     conjecture_shape = conjecture_shape}
+     output = output, tstplike_proof = tstplike_proof,
+     axiom_names = axiom_names, conjecture_shape = conjecture_shape}
   end
 
 fun get_prover_fun thy name = prover_fun false name (get_prover thy name)
 
-fun run_prover (params as {blocking, verbose, max_relevant, timeout, expect,
-                           ...})
+fun run_prover (params as {blocking, debug, verbose, max_relevant, timeout,
+                           expect, ...})
                auto i n minimize_command (problem as {state, goal, axioms, ...})
                (prover as {default_max_relevant, ...}, atp_name) =
   let
@@ -398,14 +316,19 @@ fun run_prover (params as {blocking, verbose, max_relevant, timeout, expect,
          "\n" ^ Syntax.string_of_term ctxt (Thm.term_of (Thm.cprem_of goal i)))
     fun go () =
       let
-        val (outcome_code, message) =
+        fun really_go () =
           prover_fun auto atp_name prover params (minimize_command atp_name)
                      problem
           |> (fn {outcome, message, ...} =>
                  (if is_some outcome then "none" else "some", message))
-          handle ERROR message => ("unknown", "Error: " ^ message ^ "\n")
-               | exn => ("unknown", "Internal error:\n" ^
-                                    ML_Compiler.exn_message exn ^ "\n")
+        val (outcome_code, message) =
+          if debug then
+            really_go ()
+          else
+            (really_go ()
+             handle ERROR message => ("unknown", "Error: " ^ message ^ "\n")
+                  | exn => ("unknown", "Internal error:\n" ^
+                                       ML_Compiler.exn_message exn ^ "\n"))
         val _ =
           if expect = "" orelse outcome_code = expect then
             ()
