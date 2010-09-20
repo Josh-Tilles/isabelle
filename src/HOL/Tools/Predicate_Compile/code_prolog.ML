@@ -662,6 +662,18 @@ fun rename_vars_clause ((rel, args), prem) =
   
 val rename_vars_program = map rename_vars_clause
 
+(* post processing of generated prolog program *)
+
+fun post_process ctxt options (p, constant_table) =
+  (p, constant_table)
+  |> (if #ensure_groundness options then
+        add_ground_predicates ctxt (#limited_types options)
+      else I)
+  |> add_limited_predicates (#limited_predicates options)
+  |> apfst (fold replace (#replacing options))
+  |> apfst (reorder_manually (#manual_reorder options))
+  |> apfst rename_vars_program
+
 (* code printer *)
 
 fun write_arith_op Plus = "+"
@@ -704,9 +716,9 @@ fun swi_prolog_query_firstn n (rel, args) vnames =
   "eval :- findnsols(" ^ string_of_int n ^ ", (" ^ space_implode ", " vnames ^ "), " ^
     rel ^ "(" ^ space_implode ", " (map write_term args) ^ "), Sols), writelist(Sols).\n" ^
     "writelist([]).\n" ^
-    "writelist([(" ^ space_implode ", " vnames ^ ")|T]) :- " ^
+    "writelist([(" ^ space_implode ", " vnames ^ ")|SolutionTail]) :- " ^
     "writef('" ^ space_implode ";" (map (fn v => v ^ " = %w") vnames) ^
-    "\\n', [" ^ space_implode ", " vnames ^ "]), writelist(T).\n"
+    "\\n', [" ^ space_implode ", " vnames ^ "]), writelist(SolutionTail).\n"
   
 val swi_prolog_prelude =
   "#!/usr/bin/swipl -q -t main -f\n\n" ^
@@ -809,12 +821,10 @@ fun parse_solutions sol =
 
 fun run (timeout, system) p (query_rel, args) vnames nsols =
   let
-    val p' = rename_vars_program p
-    val _ = tracing "Renaming variable names..."
     val renaming = fold mk_renaming (fold add_vars args vnames) [] 
     val vnames' = map (fn v => the (AList.lookup (op =) renaming v)) vnames
     val args' = map (rename_vars_term renaming) args
-    val prog = prelude system ^ query system nsols (query_rel, args') vnames' ^ write_program p'
+    val prog = prelude system ^ query system nsols (query_rel, args') vnames' ^ write_program p
     val _ = tracing ("Generated prolog program:\n" ^ prog)
     val solution = TimeLimit.timeLimit timeout (fn prog => Cache_IO.with_tmp_file "prolog_file" (fn prolog_file =>
       (File.write prolog_file prog; invoke system (Path.implode prolog_file)))) prog
@@ -902,12 +912,7 @@ fun values ctxt soln t_compr =
     val ctxt' = ProofContext.init_global thy'
     val _ = tracing "Generating prolog program..."
     val (p, constant_table) = generate (NONE, #ensure_groundness options) ctxt' name (* FIXME *)
-      |> (if #ensure_groundness options then
-          add_ground_predicates ctxt' (#limited_types options)
-        else I)
-      |> add_limited_predicates (#limited_predicates options)
-      |> apfst (fold replace (#replacing options))
-      |> apfst (reorder_manually (#manual_reorder options))
+      |> post_process ctxt' options
     val constant_table' = declare_consts (fold Term.add_const_names all_args []) constant_table
     val args' = map (translate_term ctxt constant_table') all_args
     val _ = tracing "Running prolog program..."
@@ -970,44 +975,20 @@ val _ = Outer_Syntax.improper_command "values" "enumerate and print comprehensio
 
 (* quickcheck generator *)
 
-(* FIXME: large copy of Predicate_Compile_Quickcheck - refactor out commons *)
-
-fun strip_imp_prems (Const(@{const_name HOL.implies}, _) $ A $ B) = A :: strip_imp_prems B
-  | strip_imp_prems _ = [];
-
-fun strip_imp_concl (Const(@{const_name HOL.implies}, _) $ A $ B) = strip_imp_concl B
-  | strip_imp_concl A = A : term;
-
-fun strip_horn A = (strip_imp_prems A, strip_imp_concl A);
+(* FIXME: a small clone of Predicate_Compile_Quickcheck - maybe refactor out commons *)
 
 fun quickcheck ctxt t size =
   let
     val options = code_options_of (ProofContext.theory_of ctxt)
     val thy = Theory.copy (ProofContext.theory_of ctxt)
-    val (vs, t') = strip_abs t
-    val vs' = Variable.variant_frees ctxt [] vs
-    val Ts = map snd vs'
-    val t'' = subst_bounds (map Free (rev vs'), t')
-    val (prems, concl) = strip_horn t''
-    val constname = "quickcheck"
-    val full_constname = Sign.full_bname thy constname
-    val constT = Ts ---> @{typ bool}
-    val thy1 = Sign.add_consts_i [(Binding.name constname, constT, NoSyn)] thy
-    val const = Const (full_constname, constT)
-    val t = Logic.list_implies
-      (map HOLogic.mk_Trueprop (prems @ [HOLogic.mk_not concl]),
-       HOLogic.mk_Trueprop (list_comb (Const (full_constname, constT), map Free vs')))
-    val tac = fn _ => Skip_Proof.cheat_tac thy1
-    val intro = Goal.prove (ProofContext.init_global thy1) (map fst vs') [] t tac
+    val ((((full_constname, constT), vs'), intro), thy1) =
+      Predicate_Compile_Aux.define_quickcheck_predicate t thy
     val thy2 = Context.theory_map (Predicate_Compile_Alternative_Defs.add_thm intro) thy1
-    val thy3 = Predicate_Compile.preprocess preprocess_options const thy2
+    val thy3 = Predicate_Compile.preprocess preprocess_options (Const (full_constname, constT)) thy2
     val ctxt' = ProofContext.init_global thy3
     val _ = tracing "Generating prolog program..."
     val (p, constant_table) = generate (NONE, true) ctxt' full_constname
-      |> add_ground_predicates ctxt' (#limited_types options)
-      |> add_limited_predicates (#limited_predicates options)
-      |> apfst (fold replace (#replacing options))
-      |> apfst (reorder_manually (#manual_reorder options))
+      |> post_process ctxt' (set_ensure_groundness options)
     val _ = tracing "Running prolog program..."
     val system_config = System_Config.get (Context.Proof ctxt)
     val tss = run (#timeout system_config, #prolog_system system_config)
@@ -1015,7 +996,7 @@ fun quickcheck ctxt t size =
     val _ = tracing "Restoring terms..."
     val res =
       case tss of
-        [ts] => SOME (map (restore_term ctxt' constant_table) (ts ~~ Ts))
+        [ts] => SOME (map (restore_term ctxt' constant_table) (ts ~~ map snd vs'))
       | _ => NONE
     val empty_report = ([], false)
   in
