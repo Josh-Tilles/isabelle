@@ -1483,6 +1483,34 @@ code_pred [detect_switches, skip_proof] detect_switches9 .
 
 thm detect_switches9.equation
 
+text {* The higher-order predicate r is in an output term *}
+
+datatype result = Result bool
+
+inductive fixed_relation :: "'a => bool"
+
+inductive test_relation_in_output_terms :: "('a => bool) => 'a => result => bool"
+where
+  "test_relation_in_output_terms r x (Result (r x))"
+| "test_relation_in_output_terms r x (Result (fixed_relation x))"
+
+code_pred test_relation_in_output_terms .
+
+thm test_relation_in_output_terms.equation
+
+
+text {*
+  We want that the argument r is not treated as a higher-order relation, but simply as input.
+*}
+
+inductive test_uninterpreted_relation :: "('a => bool) => 'a list => bool"
+where
+  "list_all r xs ==> test_uninterpreted_relation r xs"
+
+code_pred (modes: i => i => bool) test_uninterpreted_relation .
+
+thm test_uninterpreted_relation.equation
+
 
 
 end
