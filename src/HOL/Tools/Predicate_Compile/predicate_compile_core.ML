@@ -1696,7 +1696,13 @@ fun compile_expr compilation_modifiers ctxt (t, deriv) param_modes additional_ar
             ctxt name mode,
             Comp_Mod.funT_of compilation_modifiers mode T)))
       | (Free (s, T), Context m) =>
-        SOME (Free (s, Comp_Mod.funT_of compilation_modifiers m T))
+        (case (AList.lookup (op =) param_modes s) of
+          SOME mode => SOME (Free (s, Comp_Mod.funT_of compilation_modifiers m T))
+        | NONE =>
+        let
+          val bs = map (pair "x") (binder_types (fastype_of t))
+          val bounds = map Bound (rev (0 upto (length bs) - 1))
+        in SOME (list_abs (bs, mk_if compfuns (list_comb (t, bounds)))) end)
       | (t, Context m) =>
         let
           val bs = map (pair "x") (binder_types (fastype_of t))
@@ -2556,15 +2562,17 @@ fun prove_clause2 options ctxt pred mode (ts, ps) i =
       THEN (etac @{thm singleE} 1)
       THEN (REPEAT_DETERM (etac @{thm Pair_inject} 1))
       THEN (asm_full_simp_tac HOL_basic_ss' 1)
-      THEN (REPEAT_DETERM (etac @{thm Pair_inject} 1))
-      THEN (asm_full_simp_tac HOL_basic_ss' 1)
-      THEN SOLVED (print_tac options "state before applying intro rule:"
-      THEN (rtac pred_intro_rule
-      (* How to handle equality correctly? *)
-      THEN_ALL_NEW (K (print_tac options "state before assumption matching")
-      THEN' (atac ORELSE' ((CHANGED o asm_full_simp_tac split_ss) THEN' (TRY o atac)))
-        THEN' (K (print_tac options "state after pre-simplification:"))
-      THEN' (K (print_tac options "state after assumption matching:")))) 1)
+      THEN TRY (
+        (REPEAT_DETERM (etac @{thm Pair_inject} 1))
+        THEN (asm_full_simp_tac HOL_basic_ss' 1)
+        
+        THEN SOLVED (print_tac options "state before applying intro rule:"
+        THEN (rtac pred_intro_rule
+        (* How to handle equality correctly? *)
+        THEN_ALL_NEW (K (print_tac options "state before assumption matching")
+        THEN' (atac ORELSE' ((CHANGED o asm_full_simp_tac split_ss) THEN' (TRY o atac)))
+          THEN' (K (print_tac options "state after pre-simplification:"))
+        THEN' (K (print_tac options "state after assumption matching:")))) 1))
     | prove_prems2 out_ts ((p, deriv) :: ps) =
       let
         val mode = head_mode_of deriv
