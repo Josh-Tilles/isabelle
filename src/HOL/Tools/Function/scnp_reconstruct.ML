@@ -298,52 +298,7 @@ fun reconstruct_tac ctxt D cs (GP (_, gs)) certificate =
     end
 
 
-
-local open Termination in
-fun print_cell (SOME (Less _)) = "<"
-  | print_cell (SOME (LessEq _)) = "\<le>"
-  | print_cell (SOME (None _)) = "-"
-  | print_cell (SOME (False _)) = "-"
-  | print_cell (NONE) = "?"
-
-fun print_error ctxt D = CALLS (fn (cs, _) =>
-  let
-    val np = get_num_points D
-    val ms = map_range (get_measures D) np
-    fun index xs = (1 upto length xs) ~~ xs
-    fun outp s t f xs = map (fn (x, y) => s ^ Int.toString x ^ t ^ f y ^ "\n") xs
-    val ims = index (map index ms)
-    val _ = tracing (implode (outp "fn #" ":\n" (implode o outp "\tmeasure #" ": " (Syntax.string_of_term ctxt)) ims))
-    fun print_call (k, c) =
-      let
-        val (_, p, _, q, _, _) = dest_call D c
-        val _ = tracing ("call table for call #" ^ Int.toString k ^ ": fn " ^ 
-                                Int.toString (p + 1) ^ " ~> fn " ^ Int.toString (q + 1))
-        val caller_ms = nth ms p
-        val callee_ms = nth ms q
-        val entries = map (fn x => map (pair x) (callee_ms)) (caller_ms)
-        fun print_ln (i : int, l) = implode (Int.toString i :: "   " :: map (enclose " " " " o print_cell o (uncurry (get_descent D c))) l)
-        val _ = tracing (implode (Int.toString (p + 1) ^ "|" ^ Int.toString (q + 1) ^ 
-                                        " " :: map (enclose " " " " o Int.toString) (1 upto length callee_ms)) ^ "\n" 
-                                ^ cat_lines (map print_ln ((1 upto (length entries)) ~~ entries)))
-      in
-        true
-      end
-    fun list_call (k, c) =
-      let
-        val (_, p, _, q, _, _) = dest_call D c
-        val _ = tracing ("call #" ^ (Int.toString k) ^ ": fn " ^
-                                Int.toString (p + 1) ^ " ~> fn " ^ Int.toString (q + 1) ^ "\n" ^ 
-                                (Syntax.string_of_term ctxt c))
-      in true end
-    val _ = forall list_call ((1 upto length cs) ~~ cs)
-    val _ = forall print_call ((1 upto length cs) ~~ cs)
-  in
-    all_tac
-  end)
-end
-
-fun single_scnp_tac use_tags orders ctxt cont err_cont D = Termination.CALLS (fn (cs, i) =>
+fun single_scnp_tac use_tags orders ctxt D = Termination.CALLS (fn (cs, i) =>
   let
     val ms_configured = is_some (Multiset_Setup.get (ProofContext.theory_of ctxt))
     val orders' = if ms_configured then orders
@@ -352,56 +307,40 @@ fun single_scnp_tac use_tags orders ctxt cont err_cont D = Termination.CALLS (fn
     val certificate = generate_certificate use_tags orders' gp
   in
     case certificate
-     of NONE => err_cont D i
+     of NONE => no_tac
       | SOME cert =>
           SELECT_GOAL (reconstruct_tac ctxt D cs gp cert) i
-          THEN (rtac @{thm wf_empty} i ORELSE cont D i)
+          THEN TRY (rtac @{thm wf_empty} i)
   end)
 
-fun gen_decomp_scnp_tac orders autom_tac ctxt err_cont =
+local open Termination in
+
+fun gen_decomp_scnp_tac orders autom_tac ctxt =
+TERMINATION ctxt autom_tac (fn D => 
   let
-    open Termination
-    val derive_diag = Termination.derive_diag ctxt autom_tac
-    val derive_all = Termination.derive_all ctxt autom_tac
-    val decompose = Termination.decompose_tac ctxt autom_tac
-    val scnp_no_tags = single_scnp_tac false orders ctxt
-    val scnp_full = single_scnp_tac true orders ctxt
-
-    fun first_round c e =
-        derive_diag (REPEAT scnp_no_tags c e)
-
-    val second_round =
-        REPEAT (fn c => fn e => decompose (scnp_no_tags c c) e)
-
-    val third_round =
-        derive_all oo
-        REPEAT (fn c => fn e =>
-          scnp_full (decompose c c) e)
-
-    fun Then s1 s2 c e = s1 (s2 c c) (s2 c e)
-
-    val strategy = Then (Then first_round second_round) third_round
-
+    val decompose = decompose_tac D
+    val scnp_full = single_scnp_tac true orders ctxt D
   in
-    TERMINATION ctxt (strategy err_cont err_cont)
-  end
+    REPEAT_ALL_NEW (scnp_full ORELSE' decompose)
+  end)
+end
 
-fun gen_sizechange_tac orders autom_tac ctxt err_cont =
+fun gen_sizechange_tac orders autom_tac ctxt =
   TRY (Function_Common.apply_termination_rule ctxt 1)
   THEN TRY (Termination.wf_union_tac ctxt)
   THEN
    (rtac @{thm wf_empty} 1
-    ORELSE gen_decomp_scnp_tac orders autom_tac ctxt err_cont 1)
+    ORELSE gen_decomp_scnp_tac orders autom_tac ctxt 1)
 
 fun sizechange_tac ctxt autom_tac =
-  gen_sizechange_tac [MAX, MS, MIN] autom_tac ctxt (K (K all_tac))
+  gen_sizechange_tac [MAX, MS, MIN] autom_tac ctxt
 
 fun decomp_scnp_tac orders ctxt =
   let
     val extra_simps = Function_Common.Termination_Simps.get ctxt
     val autom_tac = auto_tac (clasimpset_of ctxt addsimps2 extra_simps)
   in
-     gen_sizechange_tac orders autom_tac ctxt (print_error ctxt)
+     gen_sizechange_tac orders autom_tac ctxt
   end
 
 

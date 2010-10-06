@@ -9,7 +9,7 @@ signature TERMINATION =
 sig
 
   type data
-  datatype cell = Less of thm | LessEq of (thm * thm) | None of (thm * thm) | False of thm
+  datatype cell = Less of thm | LessEq of thm * thm | None of thm * thm | False of thm
 
   val mk_sumcases : data -> typ -> term list -> term
 
@@ -17,7 +17,6 @@ sig
   val get_types      : data -> int -> typ
   val get_measures   : data -> int -> term list
 
-  (* read from cache *)
   val get_chain      : data -> term -> term -> thm option option
   val get_descent    : data -> term -> term -> term -> cell option
 
@@ -25,23 +24,14 @@ sig
 
   val CALLS : (term list * int -> tactic) -> int -> tactic
 
-  (* Termination tactics. Sequential composition via continuations. (2nd argument is the error continuation) *)
-  type ttac = (data -> int -> tactic) -> (data -> int -> tactic) -> data -> int -> tactic
+  (* Termination tactics *)
+  type ttac = data -> int -> tactic
 
-  val TERMINATION : Proof.context -> (data -> int -> tactic) -> int -> tactic
-
-  val REPEAT : ttac -> ttac
+  val TERMINATION : Proof.context -> tactic -> ttac -> int -> tactic
 
   val wf_union_tac : Proof.context -> tactic
 
-  val decompose_tac : Proof.context -> tactic -> ttac
-
-  val derive_diag : Proof.context -> tactic -> 
-    (data -> int -> tactic) -> data -> int -> tactic
-
-  val derive_all  : Proof.context -> tactic ->
-    (data -> int -> tactic) -> data -> int -> tactic
-
+  val decompose_tac : ttac
 end
 
 
@@ -119,22 +109,16 @@ fun dest_inj (SLeaf i) trm = (i, trm)
 
 (** Matrix cell datatype **)
 
-datatype cell = Less of thm | LessEq of (thm * thm) | None of (thm * thm) | False of thm;
+datatype cell = Less of thm | LessEq of thm * thm | None of thm * thm | False of thm;
 
 
 type data =
   skel                            (* structure of the sum type encoding "program points" *)
   * (int -> typ)                  (* types of program points *)
   * (term list Inttab.table)      (* measures for program points *)
-  * (thm option Term2tab.table)   (* which calls form chains? *)
-  * (cell Term3tab.table)         (* local descents *)
+  * (term * term -> thm option)   (* which calls form chains? (cached) *)
+  * (term * (term * term) -> cell)(* local descents (cached) *)
 
-
-fun map_chains f (p, T, M, C, D) = (p, T, M, f C, D)
-fun map_descent f (p, T, M, C, D) = (p, T, M, C, f D)
-
-fun note_chain c1 c2 res = map_chains (Term2tab.update ((c1, c2), res))
-fun note_descent c m1 m2 res = map_descent (Term3tab.update ((c,(m1, m2)), res))
 
 (* Build case expression *)
 fun mk_sumcases (sk, _, _, _, _) T fs =
@@ -155,33 +139,21 @@ fun mk_sum_skel rel =
     mk_skel (fold collect_pats cs [])
   end
 
-fun create ctxt T rel =
+fun prove_chain thy chain_tac (c1, c2) =
   let
-    val sk = mk_sum_skel rel
-    val Ts = node_types sk T
-    val M = Inttab.make (map_index (apsnd (MeasureFunctions.get_measure_functions ctxt)) Ts)
+    val goal =
+      HOLogic.mk_eq (HOLogic.mk_binop @{const_name Relation.rel_comp} (c1, c2),
+        Const (@{const_abbrev Set.empty}, fastype_of c1))
+      |> HOLogic.mk_Trueprop (* "C1 O C2 = {}" *)
   in
-    (sk, nth Ts, M, Term2tab.empty, Term3tab.empty)
+    case Function_Lib.try_proof (cterm_of thy goal) chain_tac of
+      Function_Lib.Solved thm => SOME thm
+    | _ => NONE
   end
 
-fun get_num_points (sk, _, _, _, _) =
+
+fun dest_call' sk (Const (@{const_name Collect}, _) $ Abs (_, _, c)) =
   let
-    fun num (SLeaf i) = i + 1
-      | num (SBranch (s, t)) = num t
-  in num sk end
-
-fun get_types (_, T, _, _, _) = T
-fun get_measures (_, _, M, _, _) = Inttab.lookup_list M
-
-fun get_chain (_, _, _, C, _) c1 c2 =
-  Term2tab.lookup C (c1, c2)
-
-fun get_descent (_, _, _, _, D) c m1 m2 =
-  Term3tab.lookup D (c, (m1, m2))
-
-fun dest_call D (Const (@{const_name Collect}, _) $ Abs (_, _, c)) =
-  let
-    val (sk, _, _, _, _) = D
     val vs = Term.strip_qnt_vars @{const_name Ex} c
 
     (* FIXME: throw error "dest_call" for malformed terms *)
@@ -192,8 +164,9 @@ fun dest_call D (Const (@{const_name Collect}, _) $ Abs (_, _, c)) =
   in
     (vs, p, l', q, r', Gam)
   end
-  | dest_call D t = error "dest_call"
+  | dest_call' _ _ = error "dest_call"
 
+fun dest_call (sk, _, _, _, _) = dest_call' sk
 
 fun mk_desc thy tac vs Gam l r m1 m2 =
   let
@@ -216,15 +189,41 @@ fun mk_desc thy tac vs Gam l r m1 m2 =
      | _ => raise Match
 end
 
-fun derive_descent thy tac c m1 m2 D =
-  case get_descent D c m1 m2 of
-    SOME _ => D
-  | NONE => 
-    let
-      val (vs, _, l, _, r, Gam) = dest_call D c
-    in 
-      note_descent c m1 m2 (mk_desc thy tac vs Gam l r m1 m2) D
-    end
+fun prove_descent thy tac sk (c, (m1, m2)) =
+  let
+    val (vs, _, l, _, r, Gam) = dest_call' sk c
+  in 
+    mk_desc thy tac vs Gam l r m1 m2
+  end
+
+fun create ctxt chain_tac descent_tac T rel =
+  let
+    val thy = ProofContext.theory_of ctxt
+    val sk = mk_sum_skel rel
+    val Ts = node_types sk T
+    val M = Inttab.make (map_index (apsnd (MeasureFunctions.get_measure_functions ctxt)) Ts)
+    val chain_cache = Cache.create Term2tab.empty Term2tab.lookup Term2tab.update
+      (prove_chain thy chain_tac)
+    val descent_cache = Cache.create Term3tab.empty Term3tab.lookup Term3tab.update
+      (prove_descent thy descent_tac sk)
+  in
+    (sk, nth Ts, M, chain_cache, descent_cache)
+  end
+
+fun get_num_points (sk, _, _, _, _) =
+  let
+    fun num (SLeaf i) = i + 1
+      | num (SBranch (s, t)) = num t
+  in num sk end
+
+fun get_types (_, T, _, _, _) = T
+fun get_measures (_, _, M, _, _) = Inttab.lookup_list M
+
+fun get_chain (_, _, _, C, _) c1 c2 =
+  SOME (C (c1, c2))
+
+fun get_descent (_, _, _, _, D) c m1 m2 =
+  SOME (D (c, (m1, m2)))
 
 fun CALLS tac i st =
   if Thm.no_prems st then all_tac st
@@ -232,14 +231,14 @@ fun CALLS tac i st =
     (_ $ (_ $ rel)) => tac (Function_Lib.dest_binop_list @{const_name Lattices.sup} rel, i) st
   |_ => no_tac st
 
-type ttac = (data -> int -> tactic) -> (data -> int -> tactic) -> data -> int -> tactic
+type ttac = data -> int -> tactic
 
-fun TERMINATION ctxt tac =
+fun TERMINATION ctxt atac tac =
   SUBGOAL (fn (_ $ (Const (@{const_name wf}, wfT) $ rel), i) =>
   let
     val (T, _) = HOLogic.dest_prodT (HOLogic.dest_setT (domain_type wfT))
   in
-    tac (create ctxt T rel) i
+    tac (create ctxt atac atac T rel) i
   end)
 
 
@@ -309,35 +308,8 @@ fun wf_union_tac ctxt st =
 end
 
 
-(* continuation passing repeat combinator *)
-fun REPEAT ttac cont err_cont =
-    ttac (fn D => fn i => (REPEAT ttac cont cont D i)) err_cont
 
 (*** DEPENDENCY GRAPHS ***)
-
-fun prove_chain thy chain_tac c1 c2 =
-  let
-    val goal =
-      HOLogic.mk_eq (HOLogic.mk_binop @{const_name Relation.rel_comp} (c1, c2),
-        Const (@{const_abbrev Set.empty}, fastype_of c1))
-      |> HOLogic.mk_Trueprop (* "C1 O C2 = {}" *)
-  in
-    case Function_Lib.try_proof (cterm_of thy goal) chain_tac of
-      Function_Lib.Solved thm => SOME thm
-    | _ => NONE
-  end
-
-fun derive_chains ctxt chain_tac cont D = CALLS (fn (cs, i) =>
-  let
-    val thy = ProofContext.theory_of ctxt
-
-    fun derive_chain c1 c2 D =
-      if is_some (get_chain D c1 c2) then D else
-      note_chain c1 c2 (prove_chain thy chain_tac c1 c2) D
-  in
-    cont (fold_product derive_chain cs cs D) i
-  end)
-
 
 fun mk_dgraph D cs =
   Term_Graph.empty
@@ -368,50 +340,23 @@ fun solve_trivial_tac D = CALLS (fn ([c], i) =>
    | _ => no_tac)
   | _ => no_tac)
 
-fun decompose_tac' cont err_cont D = CALLS (fn (cs, i) =>
+fun decompose_tac D = CALLS (fn (cs, i) =>
   let
     val G = mk_dgraph D cs
     val sccs = Term_Graph.strong_conn G
 
-    fun split [SCC] i = (solve_trivial_tac D i ORELSE cont D i)
+    fun split [SCC] i = TRY (solve_trivial_tac D i)
       | split (SCC::rest) i =
         regroup_calls_tac SCC i
         THEN rtac @{thm wf_union_compatible} i
         THEN rtac @{thm less_by_empty} (i + 2)
         THEN ucomp_empty_tac (the o the oo get_chain D) (i + 2)
         THEN split rest (i + 1)
-        THEN (solve_trivial_tac D i ORELSE cont D i)
+        THEN TRY (solve_trivial_tac D i)
   in
     if length sccs > 1 then split sccs i
-    else solve_trivial_tac D i ORELSE err_cont D i
+    else solve_trivial_tac D i
   end)
-
-fun decompose_tac ctxt chain_tac cont err_cont =
-  derive_chains ctxt chain_tac (decompose_tac' cont err_cont)
-
-
-(*** Local Descent Proofs ***)
-
-fun gen_descent diag ctxt tac cont D = CALLS (fn (cs, i) =>
-  let
-    val thy = ProofContext.theory_of ctxt
-    val measures_of = get_measures D
-
-    fun derive c D =
-      let
-        val (_, p, _, q, _, _) = dest_call D c
-      in
-        if diag andalso p = q
-        then fold (fn m => derive_descent thy tac c m m) (measures_of p) D
-        else fold_product (derive_descent thy tac c)
-               (measures_of p) (measures_of q) D
-      end
-  in
-    cont (Function_Common.PROFILE "deriving descents" (fold derive cs) D) i
-  end)
-
-fun derive_diag ctxt = gen_descent true ctxt
-fun derive_all ctxt = gen_descent false ctxt
 
 
 end

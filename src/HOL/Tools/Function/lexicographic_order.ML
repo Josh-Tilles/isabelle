@@ -1,7 +1,8 @@
 (*  Title:       HOL/Tools/Function/lexicographic_order.ML
     Author:      Lukas Bulwahn, TU Muenchen
+    Author:      Alexander Krauss, TU Muenchen
 
-Method for termination proofs with lexicographic orderings.
+Termination proofs with lexicographic orders.
 *)
 
 signature LEXICOGRAPHIC_ORDER =
@@ -41,23 +42,15 @@ fun transpose ([]::_) = []
 (** Matrix cell datatype **)
 
 datatype cell =
-  Less of thm| LessEq of (thm * thm) | None of (thm * thm) | False of thm;
+  Less of thm | LessEq of (thm * thm) | None of (thm * thm) | False of thm;
 
-fun is_Less (Less _) = true
-  | is_Less _ = false
-
-fun is_LessEq (LessEq _) = true
-  | is_LessEq _ = false
-
-fun pr_cell (Less _ ) = " < "
-  | pr_cell (LessEq _) = " <="
-  | pr_cell (None _) = " ? "
-  | pr_cell (False _) = " F "
+fun is_Less lcell = case Lazy.force lcell of Less _ => true | _ => false;
+fun is_LessEq lcell = case Lazy.force lcell of LessEq _ => true | _ => false;
 
 
 (** Proof attempts to build the matrix **)
 
-fun dest_term (t : term) =
+fun dest_term t =
   let
     val (vars, prop) = Function_Lib.dest_all_all t
     val (prems, concl) = Logic.strip_horn prop
@@ -76,7 +69,7 @@ fun mk_goal (vars, prems, lhs, rhs) rel =
     fold_rev Logic.all vars (Logic.list_implies (prems, concl))
   end
 
-fun mk_cell (thy : theory) solve_tac (vars, prems, lhs, rhs) mfun =
+fun mk_cell thy solve_tac (vars, prems, lhs, rhs) mfun = Lazy.lazy (fn _ =>
   let
     val goals = cterm_of thy o mk_goal (vars, prems, mfun $ lhs, mfun $ rhs)
   in
@@ -90,46 +83,42 @@ fun mk_cell (thy : theory) solve_tac (vars, prems, lhs, rhs) mfun =
          else None (thm2, thm)
        | _ => raise Match) (* FIXME *)
     | _ => raise Match
-  end
+  end);
 
 
 (** Search algorithms **)
 
-fun check_col ls = forall (fn c => is_Less c orelse is_LessEq c) ls andalso not (forall (is_LessEq) ls)
+fun check_col ls = forall (fn c => is_Less c orelse is_LessEq c) ls andalso not (forall is_LessEq ls)
 
 fun transform_table table col = table |> filter_out (fn x => is_Less (nth x col)) |> map (del_index col)
 
 fun transform_order col order = map (fn x => if x >= col then x + 1 else x) order
 
 (* simple depth-first search algorithm for the table *)
-fun search_table table =
-  case table of
-    [] => SOME []
-  | _ =>
-    let
-      val col = find_index (check_col) (transpose table)
-    in case col of
-         ~1 => NONE
-       | _ =>
-         let
-           val order_opt = (table, col) |-> transform_table |> search_table
-         in case order_opt of
-              NONE => NONE
-            | SOME order =>SOME (col :: transform_order col order)
-         end
-    end
+fun search_table [] = SOME []
+  | search_table table =
+    case find_index check_col (transpose table) of
+       ~1 => NONE
+     | col =>
+         (case (table, col) |-> transform_table |> search_table of
+            NONE => NONE
+          | SOME order => SOME (col :: transform_order col order))
+
 
 (** Proof Reconstruction **)
 
 (* prove row :: cell list -> tactic *)
-fun prove_row (Less less_thm :: _) =
-    (rtac @{thm "mlex_less"} 1)
-    THEN PRIMITIVE (Thm.elim_implies less_thm)
-  | prove_row (LessEq (lesseq_thm, _) :: tail) =
-    (rtac @{thm "mlex_leq"} 1)
-    THEN PRIMITIVE (Thm.elim_implies lesseq_thm)
-    THEN prove_row tail
-  | prove_row _ = sys_error "lexicographic_order"
+fun prove_row (c :: cs) =
+  (case Lazy.force c of
+     Less thm =>
+       rtac @{thm "mlex_less"} 1
+       THEN PRIMITIVE (Thm.elim_implies thm)
+   | LessEq (thm, _) =>
+       rtac @{thm "mlex_leq"} 1
+       THEN PRIMITIVE (Thm.elim_implies thm)
+       THEN prove_row cs
+   | _ => sys_error "lexicographic_order")
+ | prove_row [] = no_tac;
 
 
 (** Error reporting **)
@@ -158,8 +147,14 @@ fun pr_unprovable_subgoals ctxt table =
   |> flat
   |> map (pr_unprovable_cell ctxt)
 
-fun no_order_msg ctxt table tl measure_funs =
+fun pr_cell (Less _ ) = " < "
+  | pr_cell (LessEq _) = " <="
+  | pr_cell (None _) = " ? "
+  | pr_cell (False _) = " F "
+
+fun no_order_msg ctxt ltable tl measure_funs =
   let
+    val table = map (map Lazy.force) ltable
     val prterm = Syntax.string_of_term ctxt
     fun pr_fun t i = string_of_int i ^ ") " ^ prterm t
 
@@ -195,7 +190,7 @@ fun lex_order_tac quiet ctxt solve_tac (st: thm) =
       MeasureFunctions.get_measure_functions ctxt domT
 
     val table = (* 2: create table *)
-      Par_List.map (fn t => Par_List.map (mk_cell thy solve_tac (dest_term t)) measure_funs) tl
+      map (fn t => map (mk_cell thy solve_tac (dest_term t)) measure_funs) tl
   in
     case search_table table of
       NONE => if quiet then no_tac st else error (no_order_msg ctxt table tl measure_funs)
