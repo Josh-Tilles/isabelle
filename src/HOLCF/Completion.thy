@@ -40,17 +40,6 @@ lemma idealD3:
   "\<lbrakk>ideal A; x \<preceq> y; y \<in> A\<rbrakk> \<Longrightarrow> x \<in> A"
 unfolding ideal_def by fast
 
-lemma ideal_directed_finite:
-  assumes A: "ideal A"
-  shows "\<lbrakk>finite U; U \<subseteq> A\<rbrakk> \<Longrightarrow> \<exists>z\<in>A. \<forall>x\<in>U. x \<preceq> z"
-apply (induct U set: finite)
-apply (simp add: idealD1 [OF A])
-apply (simp, clarify, rename_tac y)
-apply (drule (1) idealD2 [OF A])
-apply (clarify, erule_tac x=z in rev_bexI)
-apply (fast intro: r_trans)
-done
-
 lemma ideal_principal: "ideal {x. x \<preceq> z}"
 apply (rule idealI)
 apply (rule_tac x=z in exI)
@@ -62,20 +51,6 @@ done
 
 lemma ex_ideal: "\<exists>A. ideal A"
 by (rule exI, rule ideal_principal)
-
-lemma directed_image_ideal:
-  assumes A: "ideal A"
-  assumes f: "\<And>x y. x \<preceq> y \<Longrightarrow> f x \<sqsubseteq> f y"
-  shows "directed (f ` A)"
-apply (rule directedI)
-apply (cut_tac idealD1 [OF A], fast)
-apply (clarify, rename_tac a b)
-apply (drule (1) idealD2 [OF A])
-apply (clarify, rename_tac c)
-apply (rule_tac x="f c" in rev_bexI)
-apply (erule imageI)
-apply (simp add: f)
-done
 
 lemma lub_image_principal:
   assumes f: "\<And>x y. x \<preceq> y \<Longrightarrow> f x \<sqsubseteq> f y"
@@ -226,10 +201,6 @@ by (simp only: principal_below_iff)
 lemma ch2ch_principal [simp]:
   "\<forall>i. Y i \<preceq> Y (Suc i) \<Longrightarrow> chain (\<lambda>i. principal (Y i))"
 by (simp add: chainI principal_mono)
-
-lemma belowI: "(\<And>a. principal a \<sqsubseteq> x \<Longrightarrow> principal a \<sqsubseteq> u) \<Longrightarrow> x \<sqsubseteq> u"
-unfolding principal_below_iff_mem_rep
-by (simp add: below_def subset_eq)
 
 lemma lub_principal_rep: "principal ` rep x <<| x"
 apply (rule is_lubI)
@@ -438,5 +409,27 @@ lemma basis_fun_mono:
 done
 
 end
+
+lemma (in preorder) typedef_ideal_completion:
+  fixes Abs :: "'a set \<Rightarrow> 'b::cpo"
+  assumes type: "type_definition Rep Abs {S. ideal S}"
+  assumes below: "\<And>x y. x \<sqsubseteq> y \<longleftrightarrow> Rep x \<subseteq> Rep y"
+  assumes principal: "\<And>a. principal a = Abs {b. b \<preceq> a}"
+  assumes countable: "\<exists>f::'a \<Rightarrow> nat. inj f"
+  shows "ideal_completion r principal Rep"
+proof
+  interpret type_definition Rep Abs "{S. ideal S}" by fact
+  fix a b :: 'a and x y :: 'b and Y :: "nat \<Rightarrow> 'b"
+  show "ideal (Rep x)"
+    using Rep [of x] by simp
+  show "chain Y \<Longrightarrow> Rep (\<Squnion>i. Y i) = (\<Union>i. Rep (Y i))"
+    using type below by (rule typedef_ideal_rep_contlub)
+  show "Rep (principal a) = {b. b \<preceq> a}"
+    by (simp add: principal Abs_inverse ideal_principal)
+  show "Rep x \<subseteq> Rep y \<Longrightarrow> x \<sqsubseteq> y"
+    by (simp only: below)
+  show "\<exists>f::'a \<Rightarrow> nat. inj f"
+    by (rule countable)
+qed
 
 end

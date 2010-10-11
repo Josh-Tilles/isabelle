@@ -123,7 +123,7 @@ typedef (open) 'a convex_pd =
   "{S::'a pd_basis set. convex_le.ideal S}"
 by (fast intro: convex_le.ideal_principal)
 
-instantiation convex_pd :: (sfp) below
+instantiation convex_pd :: (bifinite) below
 begin
 
 definition
@@ -132,47 +132,30 @@ definition
 instance ..
 end
 
-instance convex_pd :: (sfp) po
+instance convex_pd :: (bifinite) po
 using type_definition_convex_pd below_convex_pd_def
 by (rule convex_le.typedef_ideal_po)
 
-instance convex_pd :: (sfp) cpo
+instance convex_pd :: (bifinite) cpo
 using type_definition_convex_pd below_convex_pd_def
 by (rule convex_le.typedef_ideal_cpo)
-
-lemma Rep_convex_pd_lub:
-  "chain Y \<Longrightarrow> Rep_convex_pd (\<Squnion>i. Y i) = (\<Union>i. Rep_convex_pd (Y i))"
-using type_definition_convex_pd below_convex_pd_def
-by (rule convex_le.typedef_ideal_rep_contlub)
-
-lemma ideal_Rep_convex_pd: "convex_le.ideal (Rep_convex_pd xs)"
-by (rule Rep_convex_pd [unfolded mem_Collect_eq])
 
 definition
   convex_principal :: "'a pd_basis \<Rightarrow> 'a convex_pd" where
   "convex_principal t = Abs_convex_pd {u. u \<le>\<natural> t}"
 
-lemma Rep_convex_principal:
-  "Rep_convex_pd (convex_principal t) = {u. u \<le>\<natural> t}"
-unfolding convex_principal_def
-by (simp add: Abs_convex_pd_inverse convex_le.ideal_principal)
-
 interpretation convex_pd:
   ideal_completion convex_le convex_principal Rep_convex_pd
-apply unfold_locales
-apply (rule ideal_Rep_convex_pd)
-apply (erule Rep_convex_pd_lub)
-apply (rule Rep_convex_principal)
-apply (simp only: below_convex_pd_def)
-apply (rule pd_basis_countable)
-done
+using type_definition_convex_pd below_convex_pd_def
+using convex_principal_def pd_basis_countable
+by (rule convex_le.typedef_ideal_completion)
 
 text {* Convex powerdomain is pointed *}
 
 lemma convex_pd_minimal: "convex_principal (PDUnit compact_bot) \<sqsubseteq> ys"
 by (induct ys rule: convex_pd.principal_induct, simp, simp)
 
-instance convex_pd :: (sfp) pcpo
+instance convex_pd :: (bifinite) pcpo
 by intro_classes (fast intro: convex_pd_minimal)
 
 lemma inst_convex_pd_pcpo: "\<bottom> = convex_principal (PDUnit compact_bot)"
@@ -461,7 +444,7 @@ proof (rule finite_deflation_intro)
     by (rule finite_range_imp_finite_fixes)
 qed
 
-subsection {* Convex powerdomain is an SFP domain *}
+subsection {* Convex powerdomain is a bifinite domain *}
 
 definition
   convex_approx :: "nat \<Rightarrow> udom convex_pd \<rightarrow> udom convex_pd"
@@ -491,7 +474,7 @@ apply (rule cast_sfp_fun1 [OF convex_approx])
 apply (erule finite_deflation_convex_map)
 done
 
-instantiation convex_pd :: (sfp) sfp
+instantiation convex_pd :: (bifinite) bifinite
 begin
 
 definition

@@ -5,10 +5,10 @@
 header {* A compact basis for powerdomains *}
 
 theory CompactBasis
-imports Algebraic
+imports Bifinite
 begin
 
-default_sort sfp
+default_sort bifinite
 
 subsection {* A compact basis for powerdomains *}
 
@@ -24,7 +24,7 @@ by (insert Rep_pd_basis [of u, unfolded pd_basis_def]) simp
 
 text {* The powerdomain basis type is countable. *}
 
-lemma pd_basis_countable: "\<exists>f::'a::sfp pd_basis \<Rightarrow> nat. inj f"
+lemma pd_basis_countable: "\<exists>f::'a pd_basis \<Rightarrow> nat. inj f"
 proof -
   obtain g :: "'a compact_basis \<Rightarrow> nat" where "inj g"
     using compact_basis.countable ..
@@ -107,27 +107,5 @@ proof -
   show ?thesis unfolding fold_pd_def Rep_PDPlus
     by (simp add: image_Un fold1_Un2)
 qed
-
-subsection {* Lemmas for proving if-and-only-if inequalities *}
-
-lemma chain_max_below_iff:
-  assumes Y: "chain Y" shows "Y (max i j) \<sqsubseteq> x \<longleftrightarrow> Y i \<sqsubseteq> x \<and> Y j \<sqsubseteq> x"
-apply auto
-apply (erule below_trans [OF chain_mono [OF Y le_maxI1]])
-apply (erule below_trans [OF chain_mono [OF Y le_maxI2]])
-apply (simp add: max_def)
-done
-
-lemma all_ex_below_disj_iff:
-  assumes "chain X" and "chain Y"
-  shows "(\<forall>i. \<exists>j. X i \<sqsubseteq> Z j \<or> Y i \<sqsubseteq> Z j) \<longleftrightarrow>
-         (\<forall>i. \<exists>j. X i \<sqsubseteq> Z j) \<or> (\<forall>i. \<exists>j. Y i \<sqsubseteq> Z j)"
-by (metis chain_max_below_iff assms)
-
-lemma all_ex_below_conj_iff:
-  assumes "chain X" and "chain Y" and "chain Z"
-  shows "(\<forall>i. \<exists>j. X i \<sqsubseteq> Z j \<and> Y i \<sqsubseteq> Z j) \<longleftrightarrow>
-         (\<forall>i. \<exists>j. X i \<sqsubseteq> Z j) \<and> (\<forall>i. \<exists>j. Y i \<sqsubseteq> Z j)"
-oops
 
 end
