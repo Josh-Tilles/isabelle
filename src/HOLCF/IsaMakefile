@@ -48,9 +48,9 @@ $(OUT)/HOLCF: $(OUT)/HOL \
   Deflation.thy \
   Domain.thy \
   Domain_Aux.thy \
-  Ffun.thy \
   Fixrec.thy \
   Fix.thy \
+  Fun_Cpo.thy \
   HOLCF.thy \
   Lift.thy \
   LowerPD.thy \
@@ -74,7 +74,6 @@ $(OUT)/HOLCF: $(OUT)/HOL \
   Tools/Domain/domain_axioms.ML \
   Tools/Domain/domain_constructors.ML \
   Tools/Domain/domain_isomorphism.ML \
-  Tools/Domain/domain_library.ML \
   Tools/Domain/domain_take_proofs.ML \
   Tools/Domain/domain_theorems.ML \
   Tools/fixrec.ML \
@@ -102,6 +101,7 @@ $(LOG)/HOLCF-Tutorial.gz: $(OUT)/HOLCF \
 HOLCF-Library: HOLCF $(LOG)/HOLCF-Library.gz
 
 $(LOG)/HOLCF-Library.gz: $(OUT)/HOLCF \
+  Library/Defl_Bifinite.thy \
   Library/List_Cpo.thy \
   Library/Stream.thy \
   Library/Strict_Fun.thy \

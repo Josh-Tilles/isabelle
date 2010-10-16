@@ -24,6 +24,7 @@ sig
       take_0_thms : thm list,
       take_Suc_thms : thm list,
       deflation_take_thms : thm list,
+      take_strict_thms : thm list,
       finite_consts : term list,
       finite_defs : thm list
     }
@@ -35,6 +36,7 @@ sig
       take_0_thms         : thm list,
       take_Suc_thms       : thm list,
       deflation_take_thms : thm list,
+      take_strict_thms    : thm list,
       finite_consts       : term list,
       finite_defs         : thm list,
       lub_take_thms       : thm list,
@@ -80,6 +82,7 @@ type take_info =
     take_0_thms : thm list,
     take_Suc_thms : thm list,
     deflation_take_thms : thm list,
+    take_strict_thms : thm list,
     finite_consts : term list,
     finite_defs : thm list
   };
@@ -92,6 +95,7 @@ type take_induct_info =
     take_0_thms         : thm list,
     take_Suc_thms       : thm list,
     deflation_take_thms : thm list,
+    take_strict_thms    : thm list,
     finite_consts       : term list,
     finite_defs         : thm list,
     lub_take_thms       : thm list,
@@ -299,7 +303,7 @@ fun define_take_functions
         val tac = simp_tac (HOL_basic_ss addsimps rules) 1;
         val take_0_thm = Goal.prove_global thy [] [] goal (K tac);
       in
-        add_qualified_thm "take_0" (dbind, take_0_thm) thy
+        add_qualified_simp_thm "take_0" (dbind, take_0_thm) thy
       end;
     val (take_0_thms, thy) =
       fold_map prove_take_0 (take_consts ~~ dbinds ~~ dom_eqns) thy;
@@ -369,7 +373,7 @@ fun define_take_functions
             Drule.zero_var_indexes
               (@{thm deflation_strict} OF [deflation_take]);
       in
-        add_qualified_thm "take_strict" (dbind, take_strict_thm) thy
+        add_qualified_simp_thm "take_strict" (dbind, take_strict_thm) thy
       end;
     val (take_strict_thms, thy) =
       fold_map prove_take_strict
@@ -429,6 +433,7 @@ fun define_take_functions
         take_0_thms = take_0_thms,
         take_Suc_thms = take_Suc_thms,
         deflation_take_thms = deflation_take_thms,
+        take_strict_thms = take_strict_thms,
         finite_consts = finite_consts,
         finite_defs = finite_defs
       };
@@ -593,6 +598,7 @@ fun add_lub_take_theorems
         take_0_thms         = #take_0_thms take_info,
         take_Suc_thms       = #take_Suc_thms take_info,
         deflation_take_thms = #deflation_take_thms take_info,
+        take_strict_thms    = #take_strict_thms take_info,
         finite_consts       = #finite_consts take_info,
         finite_defs         = #finite_defs take_info,
         lub_take_thms       = lub_take_thms,

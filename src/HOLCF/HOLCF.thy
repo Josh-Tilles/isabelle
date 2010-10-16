@@ -15,7 +15,20 @@ default_sort pcpo
 
 ML {* path_add "~~/src/HOLCF/Library" *}
 
-text {* Legacy theorem names *}
+text {* Legacy theorem names deprecated after Isabelle2009-2: *}
+
+lemmas expand_fun_below = fun_below_iff
+lemmas below_fun_ext = fun_belowI
+lemmas expand_cfun_eq = cfun_eq_iff
+lemmas ext_cfun = cfun_eqI
+lemmas expand_cfun_below = cfun_below_iff
+lemmas below_cfun_ext = cfun_belowI
+lemmas monofun_fun_fun = fun_belowD
+lemmas monofun_fun_arg = monofunE
+lemmas monofun_lub_fun = adm_monofun [THEN admD]
+lemmas cont_lub_fun = adm_cont [THEN admD]
+
+text {* Older legacy theorem names: *}
 
 lemmas sq_ord_less_eq_trans = below_eq_trans
 lemmas sq_ord_eq_less_trans = eq_below_trans
