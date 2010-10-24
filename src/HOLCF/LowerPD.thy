@@ -71,27 +71,6 @@ apply (simp add: 2)
 apply (simp add: lower_le_PDPlus_iff 3)
 done
 
-lemma pd_take_lower_chain:
-  "pd_take n t \<le>\<flat> pd_take (Suc n) t"
-apply (induct t rule: pd_basis_induct)
-apply (simp add: compact_basis.take_chain)
-apply (simp add: PDPlus_lower_mono)
-done
-
-lemma pd_take_lower_le: "pd_take i t \<le>\<flat> t"
-apply (induct t rule: pd_basis_induct)
-apply (simp add: compact_basis.take_less)
-apply (simp add: PDPlus_lower_mono)
-done
-
-lemma pd_take_lower_mono:
-  "t \<le>\<flat> u \<Longrightarrow> pd_take n t \<le>\<flat> pd_take n u"
-apply (erule lower_le_induct)
-apply (simp add: compact_basis.take_mono)
-apply (simp add: lower_le_PDUnit_PDPlus_iff)
-apply (simp add: lower_le_PDPlus_iff)
-done
-
 
 subsection {* Type definition *}
 
@@ -99,7 +78,7 @@ typedef (open) 'a lower_pd =
   "{S::'a pd_basis set. lower_le.ideal S}"
 by (fast intro: lower_le.ideal_principal)
 
-instantiation lower_pd :: (profinite) below
+instantiation lower_pd :: (bifinite) below
 begin
 
 definition
@@ -108,45 +87,23 @@ definition
 instance ..
 end
 
-instance lower_pd :: (profinite) po
-by (rule lower_le.typedef_ideal_po
-    [OF type_definition_lower_pd below_lower_pd_def])
+instance lower_pd :: (bifinite) po
+using type_definition_lower_pd below_lower_pd_def
+by (rule lower_le.typedef_ideal_po)
 
-instance lower_pd :: (profinite) cpo
-by (rule lower_le.typedef_ideal_cpo
-    [OF type_definition_lower_pd below_lower_pd_def])
-
-lemma Rep_lower_pd_lub:
-  "chain Y \<Longrightarrow> Rep_lower_pd (\<Squnion>i. Y i) = (\<Union>i. Rep_lower_pd (Y i))"
-by (rule lower_le.typedef_ideal_rep_contlub
-    [OF type_definition_lower_pd below_lower_pd_def])
-
-lemma ideal_Rep_lower_pd: "lower_le.ideal (Rep_lower_pd xs)"
-by (rule Rep_lower_pd [unfolded mem_Collect_eq])
+instance lower_pd :: (bifinite) cpo
+using type_definition_lower_pd below_lower_pd_def
+by (rule lower_le.typedef_ideal_cpo)
 
 definition
   lower_principal :: "'a pd_basis \<Rightarrow> 'a lower_pd" where
   "lower_principal t = Abs_lower_pd {u. u \<le>\<flat> t}"
 
-lemma Rep_lower_principal:
-  "Rep_lower_pd (lower_principal t) = {u. u \<le>\<flat> t}"
-unfolding lower_principal_def
-by (simp add: Abs_lower_pd_inverse lower_le.ideal_principal)
-
 interpretation lower_pd:
-  ideal_completion lower_le pd_take lower_principal Rep_lower_pd
-apply unfold_locales
-apply (rule pd_take_lower_le)
-apply (rule pd_take_idem)
-apply (erule pd_take_lower_mono)
-apply (rule pd_take_lower_chain)
-apply (rule finite_range_pd_take)
-apply (rule pd_take_covers)
-apply (rule ideal_Rep_lower_pd)
-apply (erule Rep_lower_pd_lub)
-apply (rule Rep_lower_principal)
-apply (simp only: below_lower_pd_def)
-done
+  ideal_completion lower_le lower_principal Rep_lower_pd
+using type_definition_lower_pd below_lower_pd_def
+using lower_principal_def pd_basis_countable
+by (rule lower_le.typedef_ideal_completion)
 
 text {* Lower powerdomain is pointed *}
 
@@ -158,36 +115,6 @@ by intro_classes (fast intro: lower_pd_minimal)
 
 lemma inst_lower_pd_pcpo: "\<bottom> = lower_principal (PDUnit compact_bot)"
 by (rule lower_pd_minimal [THEN UU_I, symmetric])
-
-text {* Lower powerdomain is profinite *}
-
-instantiation lower_pd :: (profinite) profinite
-begin
-
-definition
-  approx_lower_pd_def: "approx = lower_pd.completion_approx"
-
-instance
-apply (intro_classes, unfold approx_lower_pd_def)
-apply (rule lower_pd.chain_completion_approx)
-apply (rule lower_pd.lub_completion_approx)
-apply (rule lower_pd.completion_approx_idem)
-apply (rule lower_pd.finite_fixes_completion_approx)
-done
-
-end
-
-instance lower_pd :: (bifinite) bifinite ..
-
-lemma approx_lower_principal [simp]:
-  "approx n\<cdot>(lower_principal t) = lower_principal (pd_take n t)"
-unfolding approx_lower_pd_def
-by (rule lower_pd.completion_approx_principal)
-
-lemma approx_eq_lower_principal:
-  "\<exists>t\<in>Rep_lower_pd xs. approx n\<cdot>xs = lower_principal (pd_take n t)"
-unfolding approx_lower_pd_def
-by (rule lower_pd.completion_approx_eq_principal)
 
 
 subsection {* Monadic unit and plus *}
@@ -223,16 +150,6 @@ lemma lower_plus_principal [simp]:
 unfolding lower_plus_def
 by (simp add: lower_pd.basis_fun_principal
     lower_pd.basis_fun_mono PDPlus_lower_mono)
-
-lemma approx_lower_unit [simp]:
-  "approx n\<cdot>{x}\<flat> = {approx n\<cdot>x}\<flat>"
-apply (induct x rule: compact_basis.principal_induct, simp)
-apply (simp add: approx_Rep_compact_basis)
-done
-
-lemma approx_lower_plus [simp]:
-  "approx n\<cdot>(xs +\<flat> ys) = (approx n\<cdot>xs) +\<flat> (approx n\<cdot>ys)"
-by (induct xs ys rule: lower_pd.principal_induct2, simp, simp, simp)
 
 interpretation lower_add: semilattice lower_add proof
   fix xs ys zs :: "'a lower_pd"
@@ -288,30 +205,16 @@ done
 
 lemma lower_unit_below_plus_iff:
   "{x}\<flat> \<sqsubseteq> ys +\<flat> zs \<longleftrightarrow> {x}\<flat> \<sqsubseteq> ys \<or> {x}\<flat> \<sqsubseteq> zs"
- apply (rule iffI)
-  apply (subgoal_tac
-    "adm (\<lambda>f. f\<cdot>{x}\<flat> \<sqsubseteq> f\<cdot>ys \<or> f\<cdot>{x}\<flat> \<sqsubseteq> f\<cdot>zs)")
-   apply (drule admD, rule chain_approx)
-    apply (drule_tac f="approx i" in monofun_cfun_arg)
-    apply (cut_tac x="approx i\<cdot>x" in compact_basis.compact_imp_principal, simp)
-    apply (cut_tac x="approx i\<cdot>ys" in lower_pd.compact_imp_principal, simp)
-    apply (cut_tac x="approx i\<cdot>zs" in lower_pd.compact_imp_principal, simp)
-    apply (clarify, simp add: lower_le_PDUnit_PDPlus_iff)
-   apply simp
-  apply simp
- apply (erule disjE)
-  apply (erule below_trans [OF _ lower_plus_below1])
- apply (erule below_trans [OF _ lower_plus_below2])
+apply (induct x rule: compact_basis.principal_induct, simp)
+apply (induct ys rule: lower_pd.principal_induct, simp)
+apply (induct zs rule: lower_pd.principal_induct, simp)
+apply (simp add: lower_le_PDUnit_PDPlus_iff)
 done
 
 lemma lower_unit_below_iff [simp]: "{x}\<flat> \<sqsubseteq> {y}\<flat> \<longleftrightarrow> x \<sqsubseteq> y"
- apply (rule iffI)
-  apply (rule profinite_below_ext)
-  apply (drule_tac f="approx i" in monofun_cfun_arg, simp)
-  apply (cut_tac x="approx i\<cdot>x" in compact_basis.compact_imp_principal, simp)
-  apply (cut_tac x="approx i\<cdot>y" in compact_basis.compact_imp_principal, simp)
-  apply clarsimp
- apply (erule monofun_cfun_arg)
+apply (induct x rule: compact_basis.principal_induct, simp)
+apply (induct y rule: compact_basis.principal_induct, simp)
+apply simp
 done
 
 lemmas lower_pd_below_simps =
@@ -323,7 +226,8 @@ lemma lower_unit_eq_iff [simp]: "{x}\<flat> = {y}\<flat> \<longleftrightarrow> x
 by (simp add: po_eq_conv)
 
 lemma lower_unit_strict [simp]: "{\<bottom>}\<flat> = \<bottom>"
-unfolding inst_lower_pd_pcpo Rep_compact_bot [symmetric] by simp
+using lower_unit_Rep_compact_basis [of compact_bot]
+by (simp add: inst_lower_pd_pcpo)
 
 lemma lower_unit_strict_iff [simp]: "{x}\<flat> = \<bottom> \<longleftrightarrow> x = \<bottom>"
 unfolding lower_unit_strict [symmetric] by (rule lower_unit_eq_iff)
@@ -346,8 +250,14 @@ apply (rule below_antisym [OF _ lower_plus_below1])
 apply (simp add: lower_plus_least)
 done
 
+lemma compact_lower_unit: "compact x \<Longrightarrow> compact {x}\<flat>"
+by (auto dest!: compact_basis.compact_imp_principal)
+
 lemma compact_lower_unit_iff [simp]: "compact {x}\<flat> \<longleftrightarrow> compact x"
-unfolding profinite_compact_iff by simp
+apply (safe elim!: compact_lower_unit)
+apply (simp only: compact_def lower_unit_below_iff [symmetric])
+apply (erule adm_subst [OF cont_Rep_CFun2])
+done
 
 lemma compact_lower_plus [simp]:
   "\<lbrakk>compact xs; compact ys\<rbrakk> \<Longrightarrow> compact (xs +\<flat> ys)"
@@ -413,7 +323,7 @@ done
 
 lemma lower_bind_basis_mono:
   "t \<le>\<flat> u \<Longrightarrow> lower_bind_basis t \<sqsubseteq> lower_bind_basis u"
-unfolding expand_cfun_below
+unfolding cfun_below_iff
 apply (erule lower_le_induct, safe)
 apply (simp add: monofun_cfun)
 apply (simp add: rev_below_trans [OF lower_plus_below1])
@@ -443,15 +353,11 @@ lemma lower_bind_strict [simp]: "lower_bind\<cdot>\<bottom>\<cdot>f = f\<cdot>\<
 unfolding lower_unit_strict [symmetric] by (rule lower_bind_unit)
 
 
-subsection {* Map and join *}
+subsection {* Map *}
 
 definition
   lower_map :: "('a \<rightarrow> 'b) \<rightarrow> 'a lower_pd \<rightarrow> 'b lower_pd" where
   "lower_map = (\<Lambda> f xs. lower_bind\<cdot>xs\<cdot>(\<Lambda> x. {f\<cdot>x}\<flat>))"
-
-definition
-  lower_join :: "'a lower_pd lower_pd \<rightarrow> 'a lower_pd" where
-  "lower_join = (\<Lambda> xss. lower_bind\<cdot>xss\<cdot>(\<Lambda> xs. xs))"
 
 lemma lower_map_unit [simp]:
   "lower_map\<cdot>f\<cdot>{x}\<flat> = {f\<cdot>x}\<flat>"
@@ -461,38 +367,14 @@ lemma lower_map_plus [simp]:
   "lower_map\<cdot>f\<cdot>(xs +\<flat> ys) = lower_map\<cdot>f\<cdot>xs +\<flat> lower_map\<cdot>f\<cdot>ys"
 unfolding lower_map_def by simp
 
-lemma lower_join_unit [simp]:
-  "lower_join\<cdot>{xs}\<flat> = xs"
-unfolding lower_join_def by simp
-
-lemma lower_join_plus [simp]:
-  "lower_join\<cdot>(xss +\<flat> yss) = lower_join\<cdot>xss +\<flat> lower_join\<cdot>yss"
-unfolding lower_join_def by simp
-
 lemma lower_map_ident: "lower_map\<cdot>(\<Lambda> x. x)\<cdot>xs = xs"
 by (induct xs rule: lower_pd_induct, simp_all)
 
 lemma lower_map_ID: "lower_map\<cdot>ID = ID"
-by (simp add: expand_cfun_eq ID_def lower_map_ident)
+by (simp add: cfun_eq_iff ID_def lower_map_ident)
 
 lemma lower_map_map:
   "lower_map\<cdot>f\<cdot>(lower_map\<cdot>g\<cdot>xs) = lower_map\<cdot>(\<Lambda> x. f\<cdot>(g\<cdot>x))\<cdot>xs"
-by (induct xs rule: lower_pd_induct, simp_all)
-
-lemma lower_join_map_unit:
-  "lower_join\<cdot>(lower_map\<cdot>lower_unit\<cdot>xs) = xs"
-by (induct xs rule: lower_pd_induct, simp_all)
-
-lemma lower_join_map_join:
-  "lower_join\<cdot>(lower_map\<cdot>lower_join\<cdot>xsss) = lower_join\<cdot>(lower_join\<cdot>xsss)"
-by (induct xsss rule: lower_pd_induct, simp_all)
-
-lemma lower_join_map_map:
-  "lower_join\<cdot>(lower_map\<cdot>(lower_map\<cdot>f)\<cdot>xss) =
-   lower_map\<cdot>f\<cdot>(lower_join\<cdot>xss)"
-by (induct xss rule: lower_pd_induct, simp_all)
-
-lemma lower_map_approx: "lower_map\<cdot>(approx n)\<cdot>xs = approx n\<cdot>xs"
 by (induct xs rule: lower_pd_induct, simp_all)
 
 lemma ep_pair_lower_map: "ep_pair e p \<Longrightarrow> ep_pair (lower_map\<cdot>e) (lower_map\<cdot>p)"
@@ -508,5 +390,133 @@ apply (induct_tac x rule: lower_pd_induct, simp_all add: deflation.idem)
 apply (induct_tac x rule: lower_pd_induct)
 apply (simp_all add: deflation.below monofun_cfun)
 done
+
+(* FIXME: long proof! *)
+lemma finite_deflation_lower_map:
+  assumes "finite_deflation d" shows "finite_deflation (lower_map\<cdot>d)"
+proof (rule finite_deflation_intro)
+  interpret d: finite_deflation d by fact
+  have "deflation d" by fact
+  thus "deflation (lower_map\<cdot>d)" by (rule deflation_lower_map)
+  have "finite (range (\<lambda>x. d\<cdot>x))" by (rule d.finite_range)
+  hence "finite (Rep_compact_basis -` range (\<lambda>x. d\<cdot>x))"
+    by (rule finite_vimageI, simp add: inj_on_def Rep_compact_basis_inject)
+  hence "finite (Pow (Rep_compact_basis -` range (\<lambda>x. d\<cdot>x)))" by simp
+  hence "finite (Rep_pd_basis -` (Pow (Rep_compact_basis -` range (\<lambda>x. d\<cdot>x))))"
+    by (rule finite_vimageI, simp add: inj_on_def Rep_pd_basis_inject)
+  hence *: "finite (lower_principal ` Rep_pd_basis -` (Pow (Rep_compact_basis -` range (\<lambda>x. d\<cdot>x))))" by simp
+  hence "finite (range (\<lambda>xs. lower_map\<cdot>d\<cdot>xs))"
+    apply (rule rev_finite_subset)
+    apply clarsimp
+    apply (induct_tac xs rule: lower_pd.principal_induct)
+    apply (simp add: adm_mem_finite *)
+    apply (rename_tac t, induct_tac t rule: pd_basis_induct)
+    apply (simp only: lower_unit_Rep_compact_basis [symmetric] lower_map_unit)
+    apply simp
+    apply (subgoal_tac "\<exists>b. d\<cdot>(Rep_compact_basis a) = Rep_compact_basis b")
+    apply clarsimp
+    apply (rule imageI)
+    apply (rule vimageI2)
+    apply (simp add: Rep_PDUnit)
+    apply (rule range_eqI)
+    apply (erule sym)
+    apply (rule exI)
+    apply (rule Abs_compact_basis_inverse [symmetric])
+    apply (simp add: d.compact)
+    apply (simp only: lower_plus_principal [symmetric] lower_map_plus)
+    apply clarsimp
+    apply (rule imageI)
+    apply (rule vimageI2)
+    apply (simp add: Rep_PDPlus)
+    done
+  thus "finite {xs. lower_map\<cdot>d\<cdot>xs = xs}"
+    by (rule finite_range_imp_finite_fixes)
+qed
+
+subsection {* Lower powerdomain is a bifinite domain *}
+
+definition
+  lower_approx :: "nat \<Rightarrow> udom lower_pd \<rightarrow> udom lower_pd"
+where
+  "lower_approx = (\<lambda>i. lower_map\<cdot>(udom_approx i))"
+
+lemma lower_approx: "approx_chain lower_approx"
+proof (rule approx_chain.intro)
+  show "chain (\<lambda>i. lower_approx i)"
+    unfolding lower_approx_def by simp
+  show "(\<Squnion>i. lower_approx i) = ID"
+    unfolding lower_approx_def
+    by (simp add: lub_distribs lower_map_ID)
+  show "\<And>i. finite_deflation (lower_approx i)"
+    unfolding lower_approx_def
+    by (intro finite_deflation_lower_map finite_deflation_udom_approx)
+qed
+
+definition lower_defl :: "defl \<rightarrow> defl"
+where "lower_defl = defl_fun1 lower_approx lower_map"
+
+lemma cast_lower_defl:
+  "cast\<cdot>(lower_defl\<cdot>A) =
+    udom_emb lower_approx oo lower_map\<cdot>(cast\<cdot>A) oo udom_prj lower_approx"
+unfolding lower_defl_def
+apply (rule cast_defl_fun1 [OF lower_approx])
+apply (erule finite_deflation_lower_map)
+done
+
+instantiation lower_pd :: (bifinite) bifinite
+begin
+
+definition
+  "emb = udom_emb lower_approx oo lower_map\<cdot>emb"
+
+definition
+  "prj = lower_map\<cdot>prj oo udom_prj lower_approx"
+
+definition
+  "defl (t::'a lower_pd itself) = lower_defl\<cdot>DEFL('a)"
+
+instance proof
+  show "ep_pair emb (prj :: udom \<rightarrow> 'a lower_pd)"
+    unfolding emb_lower_pd_def prj_lower_pd_def
+    using ep_pair_udom [OF lower_approx]
+    by (intro ep_pair_comp ep_pair_lower_map ep_pair_emb_prj)
+next
+  show "cast\<cdot>DEFL('a lower_pd) = emb oo (prj :: udom \<rightarrow> 'a lower_pd)"
+    unfolding emb_lower_pd_def prj_lower_pd_def defl_lower_pd_def cast_lower_defl
+    by (simp add: cast_DEFL oo_def cfun_eq_iff lower_map_map)
+qed
+
+end
+
+lemma DEFL_lower: "DEFL('a lower_pd) = lower_defl\<cdot>DEFL('a)"
+by (rule defl_lower_pd_def)
+
+
+subsection {* Join *}
+
+definition
+  lower_join :: "'a lower_pd lower_pd \<rightarrow> 'a lower_pd" where
+  "lower_join = (\<Lambda> xss. lower_bind\<cdot>xss\<cdot>(\<Lambda> xs. xs))"
+
+lemma lower_join_unit [simp]:
+  "lower_join\<cdot>{xs}\<flat> = xs"
+unfolding lower_join_def by simp
+
+lemma lower_join_plus [simp]:
+  "lower_join\<cdot>(xss +\<flat> yss) = lower_join\<cdot>xss +\<flat> lower_join\<cdot>yss"
+unfolding lower_join_def by simp
+
+lemma lower_join_map_unit:
+  "lower_join\<cdot>(lower_map\<cdot>lower_unit\<cdot>xs) = xs"
+by (induct xs rule: lower_pd_induct, simp_all)
+
+lemma lower_join_map_join:
+  "lower_join\<cdot>(lower_map\<cdot>lower_join\<cdot>xsss) = lower_join\<cdot>(lower_join\<cdot>xsss)"
+by (induct xsss rule: lower_pd_induct, simp_all)
+
+lemma lower_join_map_map:
+  "lower_join\<cdot>(lower_map\<cdot>(lower_map\<cdot>f)\<cdot>xss) =
+   lower_map\<cdot>f\<cdot>(lower_join\<cdot>xss)"
+by (induct xss rule: lower_pd_induct, simp_all)
 
 end

@@ -34,28 +34,28 @@ subsection {* Definitions of constructors *}
 
 definition
   sinl :: "'a \<rightarrow> ('a ++ 'b)" where
-  "sinl = (\<Lambda> a. Abs_Ssum (strictify\<cdot>(\<Lambda> _. TT)\<cdot>a, a, \<bottom>))"
+  "sinl = (\<Lambda> a. Abs_Ssum (strict\<cdot>a\<cdot>TT, a, \<bottom>))"
 
 definition
   sinr :: "'b \<rightarrow> ('a ++ 'b)" where
-  "sinr = (\<Lambda> b. Abs_Ssum (strictify\<cdot>(\<Lambda> _. FF)\<cdot>b, \<bottom>, b))"
+  "sinr = (\<Lambda> b. Abs_Ssum (strict\<cdot>b\<cdot>FF, \<bottom>, b))"
 
-lemma sinl_Ssum: "(strictify\<cdot>(\<Lambda> _. TT)\<cdot>a, a, \<bottom>) \<in> Ssum"
-by (simp add: Ssum_def strictify_conv_if)
+lemma sinl_Ssum: "(strict\<cdot>a\<cdot>TT, a, \<bottom>) \<in> Ssum"
+by (simp add: Ssum_def strict_conv_if)
 
-lemma sinr_Ssum: "(strictify\<cdot>(\<Lambda> _. FF)\<cdot>b, \<bottom>, b) \<in> Ssum"
-by (simp add: Ssum_def strictify_conv_if)
+lemma sinr_Ssum: "(strict\<cdot>b\<cdot>FF, \<bottom>, b) \<in> Ssum"
+by (simp add: Ssum_def strict_conv_if)
 
-lemma sinl_Abs_Ssum: "sinl\<cdot>a = Abs_Ssum (strictify\<cdot>(\<Lambda> _. TT)\<cdot>a, a, \<bottom>)"
+lemma sinl_Abs_Ssum: "sinl\<cdot>a = Abs_Ssum (strict\<cdot>a\<cdot>TT, a, \<bottom>)"
 by (unfold sinl_def, simp add: cont_Abs_Ssum sinl_Ssum)
 
-lemma sinr_Abs_Ssum: "sinr\<cdot>b = Abs_Ssum (strictify\<cdot>(\<Lambda> _. FF)\<cdot>b, \<bottom>, b)"
+lemma sinr_Abs_Ssum: "sinr\<cdot>b = Abs_Ssum (strict\<cdot>b\<cdot>FF, \<bottom>, b)"
 by (unfold sinr_def, simp add: cont_Abs_Ssum sinr_Ssum)
 
-lemma Rep_Ssum_sinl: "Rep_Ssum (sinl\<cdot>a) = (strictify\<cdot>(\<Lambda> _. TT)\<cdot>a, a, \<bottom>)"
+lemma Rep_Ssum_sinl: "Rep_Ssum (sinl\<cdot>a) = (strict\<cdot>a\<cdot>TT, a, \<bottom>)"
 by (simp add: sinl_Abs_Ssum Abs_Ssum_inverse sinl_Ssum)
 
-lemma Rep_Ssum_sinr: "Rep_Ssum (sinr\<cdot>b) = (strictify\<cdot>(\<Lambda> _. FF)\<cdot>b, \<bottom>, b)"
+lemma Rep_Ssum_sinr: "Rep_Ssum (sinr\<cdot>b) = (strict\<cdot>b\<cdot>FF, \<bottom>, b)"
 by (simp add: sinr_Abs_Ssum Abs_Ssum_inverse sinr_Ssum)
 
 subsection {* Properties of \emph{sinl} and \emph{sinr} *}
@@ -63,16 +63,16 @@ subsection {* Properties of \emph{sinl} and \emph{sinr} *}
 text {* Ordering *}
 
 lemma sinl_below [simp]: "(sinl\<cdot>x \<sqsubseteq> sinl\<cdot>y) = (x \<sqsubseteq> y)"
-by (simp add: below_Ssum_def Rep_Ssum_sinl strictify_conv_if)
+by (simp add: below_Ssum_def Rep_Ssum_sinl strict_conv_if)
 
 lemma sinr_below [simp]: "(sinr\<cdot>x \<sqsubseteq> sinr\<cdot>y) = (x \<sqsubseteq> y)"
-by (simp add: below_Ssum_def Rep_Ssum_sinr strictify_conv_if)
+by (simp add: below_Ssum_def Rep_Ssum_sinr strict_conv_if)
 
 lemma sinl_below_sinr [simp]: "(sinl\<cdot>x \<sqsubseteq> sinr\<cdot>y) = (x = \<bottom>)"
-by (simp add: below_Ssum_def Rep_Ssum_sinl Rep_Ssum_sinr strictify_conv_if)
+by (simp add: below_Ssum_def Rep_Ssum_sinl Rep_Ssum_sinr strict_conv_if)
 
 lemma sinr_below_sinl [simp]: "(sinr\<cdot>x \<sqsubseteq> sinl\<cdot>y) = (x = \<bottom>)"
-by (simp add: below_Ssum_def Rep_Ssum_sinl Rep_Ssum_sinr strictify_conv_if)
+by (simp add: below_Ssum_def Rep_Ssum_sinl Rep_Ssum_sinr strict_conv_if)
 
 text {* Equality *}
 
@@ -117,10 +117,10 @@ by simp
 text {* Compactness *}
 
 lemma compact_sinl: "compact x \<Longrightarrow> compact (sinl\<cdot>x)"
-by (rule compact_Ssum, simp add: Rep_Ssum_sinl strictify_conv_if)
+by (rule compact_Ssum, simp add: Rep_Ssum_sinl strict_conv_if)
 
 lemma compact_sinr: "compact x \<Longrightarrow> compact (sinr\<cdot>x)"
-by (rule compact_Ssum, simp add: Rep_Ssum_sinr strictify_conv_if)
+by (rule compact_Ssum, simp add: Rep_Ssum_sinr strict_conv_if)
 
 lemma compact_sinlD: "compact (sinl\<cdot>x) \<Longrightarrow> compact x"
 unfolding compact_def
@@ -234,7 +234,7 @@ lemma ssum_map_sinr': "g\<cdot>\<bottom> = \<bottom> \<Longrightarrow> ssum_map\
 by (cases "x = \<bottom>") simp_all
 
 lemma ssum_map_ID: "ssum_map\<cdot>ID\<cdot>ID = ID"
-unfolding ssum_map_def by (simp add: expand_cfun_eq eta_cfun)
+unfolding ssum_map_def by (simp add: cfun_eq_iff eta_cfun)
 
 lemma ssum_map_map:
   "\<lbrakk>f1\<cdot>\<bottom> = \<bottom>; g1\<cdot>\<bottom> = \<bottom>\<rbrakk> \<Longrightarrow>
@@ -282,7 +282,7 @@ qed
 lemma finite_deflation_ssum_map:
   assumes "finite_deflation d1" and "finite_deflation d2"
   shows "finite_deflation (ssum_map\<cdot>d1\<cdot>d2)"
-proof (intro finite_deflation.intro finite_deflation_axioms.intro)
+proof (rule finite_deflation_intro)
   interpret d1: finite_deflation d1 by fact
   interpret d2: finite_deflation d2 by fact
   have "deflation d1" and "deflation d2" by fact+
@@ -294,38 +294,5 @@ proof (intro finite_deflation.intro finite_deflation_axioms.intro)
   thus "finite {x. ssum_map\<cdot>d1\<cdot>d2\<cdot>x = x}"
     by (rule finite_subset, simp add: d1.finite_fixes d2.finite_fixes)
 qed
-
-subsection {* Strict sum is a bifinite domain *}
-
-instantiation ssum :: (bifinite, bifinite) bifinite
-begin
-
-definition
-  approx_ssum_def:
-    "approx = (\<lambda>n. ssum_map\<cdot>(approx n)\<cdot>(approx n))"
-
-lemma approx_sinl [simp]: "approx i\<cdot>(sinl\<cdot>x) = sinl\<cdot>(approx i\<cdot>x)"
-unfolding approx_ssum_def by (cases "x = \<bottom>") simp_all
-
-lemma approx_sinr [simp]: "approx i\<cdot>(sinr\<cdot>x) = sinr\<cdot>(approx i\<cdot>x)"
-unfolding approx_ssum_def by (cases "x = \<bottom>") simp_all
-
-instance proof
-  fix i :: nat and x :: "'a \<oplus> 'b"
-  show "chain (approx :: nat \<Rightarrow> 'a \<oplus> 'b \<rightarrow> 'a \<oplus> 'b)"
-    unfolding approx_ssum_def by simp
-  show "(\<Squnion>i. approx i\<cdot>x) = x"
-    unfolding approx_ssum_def
-    by (cases x, simp_all add: lub_distribs)
-  show "approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    by (cases x, simp add: approx_ssum_def, simp, simp)
-  show "finite {x::'a \<oplus> 'b. approx i\<cdot>x = x}"
-    unfolding approx_ssum_def
-    by (intro finite_deflation.finite_fixes
-              finite_deflation_ssum_map
-              finite_deflation_approx)
-qed
-
-end
 
 end

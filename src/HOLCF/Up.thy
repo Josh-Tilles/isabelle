@@ -5,7 +5,7 @@
 header {* The type of lifted values *}
 
 theory Up
-imports Bifinite
+imports Deflation
 begin
 
 default_sort cpo
@@ -303,7 +303,7 @@ lemma u_map_up [simp]: "u_map\<cdot>f\<cdot>(up\<cdot>x) = up\<cdot>(f\<cdot>x)"
 unfolding u_map_def by simp
 
 lemma u_map_ID: "u_map\<cdot>ID = ID"
-unfolding u_map_def by (simp add: expand_cfun_eq eta_cfun)
+unfolding u_map_def by (simp add: cfun_eq_iff eta_cfun)
 
 lemma u_map_map: "u_map\<cdot>f\<cdot>(u_map\<cdot>g\<cdot>p) = u_map\<cdot>(\<Lambda> x. f\<cdot>(g\<cdot>x))\<cdot>p"
 by (induct p) simp_all
@@ -322,7 +322,7 @@ done
 
 lemma finite_deflation_u_map:
   assumes "finite_deflation d" shows "finite_deflation (u_map\<cdot>d)"
-proof (intro finite_deflation.intro finite_deflation_axioms.intro)
+proof (rule finite_deflation_intro)
   interpret d: finite_deflation d by fact
   have "deflation d" by fact
   thus "deflation (u_map\<cdot>d)" by (rule deflation_u_map)
@@ -331,36 +331,5 @@ proof (intro finite_deflation.intro finite_deflation_axioms.intro)
   thus "finite {x. u_map\<cdot>d\<cdot>x = x}"
     by (rule finite_subset, simp add: d.finite_fixes)
 qed
-
-subsection {* Lifted cpo is a bifinite domain *}
-
-instantiation u :: (profinite) bifinite
-begin
-
-definition
-  approx_up_def:
-    "approx = (\<lambda>n. u_map\<cdot>(approx n))"
-
-instance proof
-  fix i :: nat and x :: "'a u"
-  show "chain (approx :: nat \<Rightarrow> 'a u \<rightarrow> 'a u)"
-    unfolding approx_up_def by simp
-  show "(\<Squnion>i. approx i\<cdot>x) = x"
-    unfolding approx_up_def
-    by (induct x, simp, simp add: lub_distribs)
-  show "approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    unfolding approx_up_def
-    by (induct x) simp_all
-  show "finite {x::'a u. approx i\<cdot>x = x}"
-    unfolding approx_up_def
-    by (intro finite_deflation.finite_fixes
-              finite_deflation_u_map
-              finite_deflation_approx)
-qed
-
-end
-
-lemma approx_up [simp]: "approx i\<cdot>(up\<cdot>x) = up\<cdot>(approx i\<cdot>x)"
-unfolding approx_up_def by simp
 
 end

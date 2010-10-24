@@ -43,12 +43,6 @@ lemmas Def_inject = lift.inject
 
 text {* @{term UU} and @{term Def} *}
 
-lemma Lift_exhaust: "x = \<bottom> \<or> (\<exists>y. x = Def y)"
-  by (induct x) simp_all
-
-lemma Lift_cases: "\<lbrakk>x = \<bottom> \<Longrightarrow> P; \<exists>a. x = Def a \<Longrightarrow> P\<rbrakk> \<Longrightarrow> P"
-  by (insert Lift_exhaust) blast
-
 lemma not_Undef_is_Def: "(x \<noteq> \<bottom>) = (\<exists>y. x = Def y)"
   by (cases x) simp_all
 
@@ -85,17 +79,6 @@ proof
   assume "x \<sqsubseteq> y" thus "x = \<bottom> \<or> x = y"
     by (induct x) auto
 qed
-
-text {*
-  \medskip Two specific lemmas for the combination of LCF and HOL
-  terms.
-*}
-
-lemma cont_Rep_CFun_app [simp]: "\<lbrakk>cont g; cont f\<rbrakk> \<Longrightarrow> cont(\<lambda>x. ((f x)\<cdot>(g x)) s)"
-by (rule cont2cont_Rep_CFun [THEN cont2cont_fun])
-
-lemma cont_Rep_CFun_app_app [simp]: "\<lbrakk>cont g; cont f\<rbrakk> \<Longrightarrow> cont(\<lambda>x. ((f x)\<cdot>(g x)) s t)"
-by (rule cont_Rep_CFun_app [THEN cont2cont_fun])
 
 subsection {* Further operations *}
 
@@ -134,12 +117,12 @@ lemma FLIFT_mono:
   "(\<And>x. f x \<sqsubseteq> g x) \<Longrightarrow> (FLIFT x. f x) \<sqsubseteq> (FLIFT x. g x)"
 apply (rule monofunE [where f=flift1])
 apply (rule cont2mono [OF cont_flift1])
-apply (simp add: below_fun_ext)
+apply (simp add: fun_below_iff)
 done
 
 lemma cont2cont_flift1 [simp, cont2cont]:
   "\<lbrakk>\<And>y. cont (\<lambda>x. f x y)\<rbrakk> \<Longrightarrow> cont (\<lambda>x. FLIFT y. f x y)"
-apply (rule cont_flift1 [THEN cont2cont_app3])
+apply (rule cont_flift1 [THEN cont_compose])
 apply simp
 done
 
@@ -169,53 +152,5 @@ by (erule lift_definedE, simp)
 
 lemma flift2_defined_iff [simp]: "(flift2 f\<cdot>x = \<bottom>) = (x = \<bottom>)"
 by (cases x, simp_all)
-
-
-subsection {* Lifted countable types are bifinite *}
-
-instantiation lift :: (countable) bifinite
-begin
-
-definition
-  approx_lift_def:
-    "approx = (\<lambda>n. FLIFT x. if to_nat x < n then Def x else \<bottom>)"
-
-instance proof
-  fix x :: "'a lift"
-  show "chain (approx :: nat \<Rightarrow> 'a lift \<rightarrow> 'a lift)"
-    unfolding approx_lift_def
-    by (rule chainI, simp add: FLIFT_mono)
-next
-  fix x :: "'a lift"
-  show "(\<Squnion>i. approx i\<cdot>x) = x"
-    unfolding approx_lift_def
-    apply (cases x, simp)
-    apply (rule thelubI)
-    apply (rule is_lubI)
-     apply (rule ub_rangeI, simp)
-    apply (drule ub_rangeD)
-    apply (erule rev_below_trans)
-    apply simp
-    apply (rule lessI)
-    done
-next
-  fix i :: nat and x :: "'a lift"
-  show "approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    unfolding approx_lift_def
-    by (cases x, simp, simp)
-next
-  fix i :: nat
-  show "finite {x::'a lift. approx i\<cdot>x = x}"
-  proof (rule finite_subset)
-    let ?S = "insert (\<bottom>::'a lift) (Def ` to_nat -` {..<i})"
-    show "{x::'a lift. approx i\<cdot>x = x} \<subseteq> ?S"
-      unfolding approx_lift_def
-      by (rule subsetI, case_tac x, simp, simp split: split_if_asm)
-    show "finite ?S"
-      by (simp add: finite_vimageI)
-  qed
-qed
-
-end
 
 end

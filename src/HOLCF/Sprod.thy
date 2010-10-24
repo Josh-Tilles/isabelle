@@ -5,7 +5,7 @@
 header {* The type of strict products *}
 
 theory Sprod
-imports Bifinite
+imports Deflation
 begin
 
 default_sort pcpo
@@ -27,9 +27,8 @@ type_notation (xsymbols)
 type_notation (HTML output)
   sprod  ("(_ \<otimes>/ _)" [21,20] 20)
 
-lemma spair_lemma:
-  "(strictify\<cdot>(\<Lambda> b. a)\<cdot>b, strictify\<cdot>(\<Lambda> a. b)\<cdot>a) \<in> Sprod"
-by (simp add: Sprod_def strictify_conv_if)
+lemma spair_lemma: "(strict\<cdot>b\<cdot>a, strict\<cdot>a\<cdot>b) \<in> Sprod"
+by (simp add: Sprod_def strict_conv_if)
 
 subsection {* Definitions of constants *}
 
@@ -43,12 +42,11 @@ definition
 
 definition
   spair :: "'a \<rightarrow> 'b \<rightarrow> ('a ** 'b)" where
-  "spair = (\<Lambda> a b. Abs_Sprod
-             (strictify\<cdot>(\<Lambda> b. a)\<cdot>b, strictify\<cdot>(\<Lambda> a. b)\<cdot>a))"
+  "spair = (\<Lambda> a b. Abs_Sprod (strict\<cdot>b\<cdot>a, strict\<cdot>a\<cdot>b))"
 
 definition
   ssplit :: "('a \<rightarrow> 'b \<rightarrow> 'c) \<rightarrow> ('a ** 'b) \<rightarrow> 'c" where
-  "ssplit = (\<Lambda> f. strictify\<cdot>(\<Lambda> p. f\<cdot>(sfst\<cdot>p)\<cdot>(ssnd\<cdot>p)))"
+  "ssplit = (\<Lambda> f p. strict\<cdot>p\<cdot>(f\<cdot>(sfst\<cdot>p)\<cdot>(ssnd\<cdot>p)))"
 
 syntax
   "_stuple" :: "['a, args] => 'a ** 'b"  ("(1'(:_,/ _:'))")
@@ -62,7 +60,7 @@ translations
 subsection {* Case analysis *}
 
 lemma Rep_Sprod_spair:
-  "Rep_Sprod (:a, b:) = (strictify\<cdot>(\<Lambda> b. a)\<cdot>b, strictify\<cdot>(\<Lambda> a. b)\<cdot>a)"
+  "Rep_Sprod (:a, b:) = (strict\<cdot>b\<cdot>a, strict\<cdot>a\<cdot>b)"
 unfolding spair_def
 by (simp add: cont_Abs_Sprod Abs_Sprod_inverse spair_lemma)
 
@@ -76,7 +74,7 @@ apply (insert Rep_Sprod [of z])
 apply (simp add: Rep_Sprod_simps Pair_fst_snd_eq)
 apply (simp add: Sprod_def)
 apply (erule disjE, simp)
-apply (simp add: strictify_conv_if)
+apply (simp add: strict_conv_if)
 apply fast
 done
 
@@ -91,22 +89,22 @@ by (cases x, simp_all)
 subsection {* Properties of \emph{spair} *}
 
 lemma spair_strict1 [simp]: "(:\<bottom>, y:) = \<bottom>"
-by (simp add: Rep_Sprod_simps strictify_conv_if)
+by (simp add: Rep_Sprod_simps strict_conv_if)
 
 lemma spair_strict2 [simp]: "(:x, \<bottom>:) = \<bottom>"
-by (simp add: Rep_Sprod_simps strictify_conv_if)
+by (simp add: Rep_Sprod_simps strict_conv_if)
 
 lemma spair_strict_iff [simp]: "((:x, y:) = \<bottom>) = (x = \<bottom> \<or> y = \<bottom>)"
-by (simp add: Rep_Sprod_simps strictify_conv_if)
+by (simp add: Rep_Sprod_simps strict_conv_if)
 
 lemma spair_below_iff:
   "((:a, b:) \<sqsubseteq> (:c, d:)) = (a = \<bottom> \<or> b = \<bottom> \<or> (a \<sqsubseteq> c \<and> b \<sqsubseteq> d))"
-by (simp add: Rep_Sprod_simps strictify_conv_if)
+by (simp add: Rep_Sprod_simps strict_conv_if)
 
 lemma spair_eq_iff:
   "((:a, b:) = (:c, d:)) =
     (a = c \<and> b = d \<or> (a = \<bottom> \<or> b = \<bottom>) \<and> (c = \<bottom> \<or> d = \<bottom>))"
-by (simp add: Rep_Sprod_simps strictify_conv_if)
+by (simp add: Rep_Sprod_simps strict_conv_if)
 
 lemma spair_strict: "x = \<bottom> \<or> y = \<bottom> \<Longrightarrow> (:x, y:) = \<bottom>"
 by simp
@@ -197,7 +195,7 @@ lemma compact_ssnd: "compact x \<Longrightarrow> compact (ssnd\<cdot>x)"
 by (rule compactI, simp add: ssnd_below_iff)
 
 lemma compact_spair: "\<lbrakk>compact x; compact y\<rbrakk> \<Longrightarrow> compact (:x, y:)"
-by (rule compact_Sprod, simp add: Rep_Sprod_spair strictify_conv_if)
+by (rule compact_Sprod, simp add: Rep_Sprod_spair strict_conv_if)
 
 lemma compact_spair_iff:
   "compact (:x, y:) = (x = \<bottom> \<or> y = \<bottom> \<or> (compact x \<and> compact y))"
@@ -250,7 +248,7 @@ lemma sprod_map_spair':
 by (cases "x = \<bottom> \<or> y = \<bottom>") auto
 
 lemma sprod_map_ID: "sprod_map\<cdot>ID\<cdot>ID = ID"
-unfolding sprod_map_def by (simp add: expand_cfun_eq eta_cfun)
+unfolding sprod_map_def by (simp add: cfun_eq_iff eta_cfun)
 
 lemma sprod_map_map:
   "\<lbrakk>f1\<cdot>\<bottom> = \<bottom>; g1\<cdot>\<bottom> = \<bottom>\<rbrakk> \<Longrightarrow>
@@ -298,7 +296,7 @@ qed
 lemma finite_deflation_sprod_map:
   assumes "finite_deflation d1" and "finite_deflation d2"
   shows "finite_deflation (sprod_map\<cdot>d1\<cdot>d2)"
-proof (intro finite_deflation.intro finite_deflation_axioms.intro)
+proof (rule finite_deflation_intro)
   interpret d1: finite_deflation d1 by fact
   interpret d2: finite_deflation d2 by fact
   have "deflation d1" and "deflation d2" by fact+
@@ -309,38 +307,5 @@ proof (intro finite_deflation.intro finite_deflation_axioms.intro)
   thus "finite {x. sprod_map\<cdot>d1\<cdot>d2\<cdot>x = x}"
     by (rule finite_subset, simp add: d1.finite_fixes d2.finite_fixes)
 qed
-
-subsection {* Strict product is a bifinite domain *}
-
-instantiation sprod :: (bifinite, bifinite) bifinite
-begin
-
-definition
-  approx_sprod_def:
-    "approx = (\<lambda>n. sprod_map\<cdot>(approx n)\<cdot>(approx n))"
-
-instance proof
-  fix i :: nat and x :: "'a \<otimes> 'b"
-  show "chain (approx :: nat \<Rightarrow> 'a \<otimes> 'b \<rightarrow> 'a \<otimes> 'b)"
-    unfolding approx_sprod_def by simp
-  show "(\<Squnion>i. approx i\<cdot>x) = x"
-    unfolding approx_sprod_def sprod_map_def
-    by (simp add: lub_distribs eta_cfun)
-  show "approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    unfolding approx_sprod_def sprod_map_def
-    by (simp add: ssplit_def strictify_conv_if)
-  show "finite {x::'a \<otimes> 'b. approx i\<cdot>x = x}"
-    unfolding approx_sprod_def
-    by (intro finite_deflation.finite_fixes
-              finite_deflation_sprod_map
-              finite_deflation_approx)
-qed
-
-end
-
-lemma approx_spair [simp]:
-  "approx i\<cdot>(:x, y:) = (:approx i\<cdot>x, approx i\<cdot>y:)"
-unfolding approx_sprod_def sprod_map_def
-by (simp add: ssplit_def strictify_conv_if)
 
 end

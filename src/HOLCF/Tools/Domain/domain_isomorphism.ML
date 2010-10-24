@@ -57,7 +57,7 @@ structure DeflData = Theory_Data
 
 structure RepData = Theory_Data
 (
-  (* theorems like "REP('a foo) = foo_defl$REP('a)" *)
+  (* theorems like "DEFL('a foo) = foo_defl$DEFL('a)" *)
   type T = thm list;
   val empty = [];
   val extend = I;
@@ -83,11 +83,11 @@ structure IsodeflData = Theory_Data
 );
 
 fun add_type_constructor
-  (tname, defl_const, map_name, REP_thm,
+  (tname, defl_const, map_name, DEFL_thm,
    isodefl_thm, map_ID_thm, defl_map_thm) =
     DeflData.map (Symtab.insert (K true) (tname, defl_const))
     #> Domain_Take_Proofs.add_map_function (tname, map_name, defl_map_thm)
-    #> RepData.map (Thm.add_thm REP_thm)
+    #> RepData.map (Thm.add_thm DEFL_thm)
     #> IsodeflData.map (Thm.add_thm isodefl_thm)
     #> MapIdData.map (Thm.add_thm map_ID_thm);
 
@@ -104,16 +104,19 @@ open HOLCF_Library;
 infixr 6 ->>;
 infix -->>;
 
-val deflT = @{typ "udom alg_defl"};
+val udomT = @{typ udom};
+val deflT = @{typ "defl"};
 
 fun mapT (T as Type (_, Ts)) =
     (map (fn T => T ->> T) Ts) -->> (T ->> T)
   | mapT T = T ->> T;
 
-fun mk_Rep_of T =
-  Const (@{const_name Rep_of}, Term.itselfT T --> deflT) $ Logic.mk_type T;
+fun mk_DEFL T =
+  Const (@{const_name defl}, Term.itselfT T --> deflT) $ Logic.mk_type T;
 
-fun coerce_const T = Const (@{const_name coerce}, T);
+fun emb_const T = Const (@{const_name emb}, T ->> udomT);
+fun prj_const T = Const (@{const_name prj}, udomT ->> T);
+fun coerce_const (T, U) = mk_cfcomp (prj_const U, emb_const T);
 
 fun isodefl_const T =
   Const (@{const_name isodefl}, (T ->> T) --> deflT --> HOLogic.boolT);
@@ -224,7 +227,7 @@ fun defl_of_typ
         case Symtab.lookup tab c of
           SOME t => list_ccomb (t, map defl_of Ts)
         | NONE => if is_closed_typ T
-                  then mk_Rep_of T
+                  then mk_DEFL T
                   else error ("defl_of_typ: type variable under unsupported type constructor " ^ c);
   in defl_of T end;
 
@@ -470,34 +473,34 @@ fun gen_domain_isomorphism
     fun make_repdef ((vs, tbind, mx, _, _), defl_const) thy =
       let
         fun tfree a = TFree (a, the (AList.lookup (op =) sorts a))
-        val reps = map (mk_Rep_of o tfree) vs;
+        val reps = map (mk_DEFL o tfree) vs;
         val defl = list_ccomb (defl_const, reps);
-        val ((_, _, _, {REP, ...}), thy) =
+        val ((_, _, _, {DEFL, ...}), thy) =
           Repdef.add_repdef false NONE (tbind, map (rpair dummyS) vs, mx) defl NONE thy;
       in
-        (REP, thy)
+        (DEFL, thy)
       end;
-    val (REP_thms, thy) = fold_map make_repdef (doms ~~ defl_consts) thy;
-    val thy = RepData.map (fold Thm.add_thm REP_thms) thy;
+    val (DEFL_thms, thy) = fold_map make_repdef (doms ~~ defl_consts) thy;
+    val thy = RepData.map (fold Thm.add_thm DEFL_thms) thy;
 
-    (* prove REP equations *)
-    fun mk_REP_eq_thm (lhsT, rhsT) =
+    (* prove DEFL equations *)
+    fun mk_DEFL_eq_thm (lhsT, rhsT) =
       let
-        val goal = mk_eqs (mk_Rep_of lhsT, mk_Rep_of rhsT);
-        val REP_simps = RepData.get thy;
+        val goal = mk_eqs (mk_DEFL lhsT, mk_DEFL rhsT);
+        val DEFL_simps = RepData.get thy;
         val tac =
-          rewrite_goals_tac (map mk_meta_eq REP_simps)
+          rewrite_goals_tac (map mk_meta_eq DEFL_simps)
           THEN resolve_tac defl_unfold_thms 1;
       in
         Goal.prove_global thy [] [] goal (K tac)
       end;
-    val REP_eq_thms = map mk_REP_eq_thm dom_eqns;
+    val DEFL_eq_thms = map mk_DEFL_eq_thm dom_eqns;
 
-    (* register REP equations *)
-    val REP_eq_binds = map (Binding.prefix_name "REP_eq_") dbinds;
+    (* register DEFL equations *)
+    val DEFL_eq_binds = map (Binding.prefix_name "DEFL_eq_") dbinds;
     val (_, thy) = thy |>
       (Global_Theory.add_thms o map Thm.no_attributes)
-        (REP_eq_binds ~~ REP_eq_thms);
+        (DEFL_eq_binds ~~ DEFL_eq_thms);
 
     (* define rep/abs functions *)
     fun mk_rep_abs ((tbind, morphs), (lhsT, rhsT)) thy =
@@ -505,9 +508,9 @@ fun gen_domain_isomorphism
         val rep_bind = Binding.suffix_name "_rep" tbind;
         val abs_bind = Binding.suffix_name "_abs" tbind;
         val ((rep_const, rep_def), thy) =
-            define_const (rep_bind, coerce_const (lhsT ->> rhsT)) thy;
+            define_const (rep_bind, coerce_const (lhsT, rhsT)) thy;
         val ((abs_const, abs_def), thy) =
-            define_const (abs_bind, coerce_const (rhsT ->> lhsT)) thy;
+            define_const (abs_bind, coerce_const (rhsT, lhsT)) thy;
       in
         (((rep_const, abs_const), (rep_def, abs_def)), thy)
       end;
@@ -516,10 +519,10 @@ fun gen_domain_isomorphism
       |>> ListPair.unzip;
 
     (* prove isomorphism and isodefl rules *)
-    fun mk_iso_thms ((tbind, REP_eq), (rep_def, abs_def)) thy =
+    fun mk_iso_thms ((tbind, DEFL_eq), (rep_def, abs_def)) thy =
       let
         fun make thm =
-            Drule.zero_var_indexes (thm OF [REP_eq, abs_def, rep_def]);
+            Drule.zero_var_indexes (thm OF [DEFL_eq, abs_def, rep_def]);
         val rep_iso_thm = make @{thm domain_rep_iso};
         val abs_iso_thm = make @{thm domain_abs_iso};
         val isodefl_thm = make @{thm isodefl_abs_rep};
@@ -532,7 +535,7 @@ fun gen_domain_isomorphism
       end;
     val ((iso_thms, isodefl_abs_rep_thms), thy) =
       thy
-      |> fold_map mk_iso_thms (dbinds ~~ REP_eq_thms ~~ rep_abs_defs)
+      |> fold_map mk_iso_thms (dbinds ~~ DEFL_eq_thms ~~ rep_abs_defs)
       |>> ListPair.unzip;
 
     (* collect info about rep/abs *)
@@ -579,9 +582,9 @@ fun gen_domain_isomorphism
           @{thms adm_conj adm_isodefl cont2cont_fst cont2cont_snd cont_id};
         val bottom_rules =
           @{thms fst_strict snd_strict isodefl_bottom simp_thms};
-        val REP_simps = map (fn th => th RS sym) (RepData.get thy);
+        val DEFL_simps = map (fn th => th RS sym) (RepData.get thy);
         val isodefl_rules =
-          @{thms conjI isodefl_ID_REP}
+          @{thms conjI isodefl_ID_DEFL}
           @ isodefl_abs_rep_thms
           @ IsodeflData.get thy;
       in
@@ -595,7 +598,7 @@ fun gen_domain_isomorphism
            simp_tac (HOL_basic_ss addsimps bottom_rules) 1,
            simp_tac beta_ss 1,
            simp_tac (HOL_basic_ss addsimps @{thms fst_conv snd_conv}) 1,
-           simp_tac (HOL_basic_ss addsimps REP_simps) 1,
+           simp_tac (HOL_basic_ss addsimps DEFL_simps) 1,
            REPEAT (etac @{thm conjE} 1),
            REPEAT (resolve_tac (isodefl_rules @ prems) 1 ORELSE atac 1)])
       end;
@@ -613,23 +616,23 @@ fun gen_domain_isomorphism
 
     (* prove map_ID theorems *)
     fun prove_map_ID_thm
-        (((map_const, (lhsT, _)), REP_thm), isodefl_thm) =
+        (((map_const, (lhsT, _)), DEFL_thm), isodefl_thm) =
       let
         val Ts = snd (dest_Type lhsT);
         val lhs = list_ccomb (map_const, map mk_ID Ts);
         val goal = mk_eqs (lhs, mk_ID lhsT);
         val tac = EVERY
-          [rtac @{thm isodefl_REP_imp_ID} 1,
-           stac REP_thm 1,
+          [rtac @{thm isodefl_DEFL_imp_ID} 1,
+           stac DEFL_thm 1,
            rtac isodefl_thm 1,
-           REPEAT (rtac @{thm isodefl_ID_REP} 1)];
+           REPEAT (rtac @{thm isodefl_ID_DEFL} 1)];
       in
         Goal.prove_global thy [] [] goal (K tac)
       end;
     val map_ID_binds = map (Binding.suffix_name "_map_ID") dbinds;
     val map_ID_thms =
       map prove_map_ID_thm
-        (map_consts ~~ dom_eqns ~~ REP_thms ~~ isodefl_thms);
+        (map_consts ~~ dom_eqns ~~ DEFL_thms ~~ isodefl_thms);
     val (_, thy) = thy |>
       (Global_Theory.add_thms o map Thm.no_attributes)
         (map_ID_binds ~~ map_ID_thms);
@@ -639,9 +642,8 @@ fun gen_domain_isomorphism
     val (take_info, thy) =
         Domain_Take_Proofs.define_take_functions
           (dbinds ~~ iso_infos) thy;
-    val { take_consts, take_defs, chain_take_thms, take_0_thms,
-          take_Suc_thms, deflation_take_thms,
-          finite_consts, finite_defs } = take_info;
+    val { take_consts, chain_take_thms, take_0_thms, take_Suc_thms, ...} =
+        take_info;
 
     (* least-upper-bound lemma for take functions *)
     val lub_take_lemma =
