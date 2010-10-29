@@ -401,11 +401,9 @@ text {*
   \begin{rail}
     'primrec' target? fixes 'where' equations
     ;
+    ('fun' | 'function') target? functionopts? fixes \\ 'where' equations
+    ;
     equations: (thmdecl? prop + '|')
-    ;
-    ('fun' | 'function') target? functionopts? fixes 'where' clauses
-    ;
-    clauses: (thmdecl? prop ('(' 'otherwise' ')')? + '|')
     ;
     functionopts: '(' (('sequential' | 'domintros' | 'tailrec' | 'default' term) + ',') ')'
     ;
@@ -550,6 +548,71 @@ text {*
   \end{description}
 *}
 
+subsection {* Functions with explicit partiality *}
+
+text {*
+  \begin{matharray}{rcl}
+    @{command_def (HOL) "partial_function"} & : & @{text "local_theory \<rightarrow> local_theory"} \\
+    @{attribute_def (HOL) "partial_function_mono"} & : & @{text attribute} \\
+  \end{matharray}
+
+  \begin{rail}
+    'partial_function' target? '(' mode ')' fixes \\ 'where' thmdecl? prop
+  \end{rail}
+
+  \begin{description}
+
+  \item @{command (HOL) "partial_function"} defines recursive
+  functions based on fixpoints in complete partial orders. No
+  termination proof is required from the user or constructed
+  internally. Instead, the possibility of non-termination is modelled
+  explicitly in the result type, which contains an explicit bottom
+  element.
+
+  Pattern matching and mutual recursion are currently not supported.
+  Thus, the specification consists of a single function described by a
+  single recursive equation.
+
+  There are no fixed syntactic restrictions on the body of the
+  function, but the induced functional must be provably monotonic
+  wrt.\ the underlying order.  The monotonicitity proof is performed
+  internally, and the definition is rejected when it fails. The proof
+  can be influenced by declaring hints using the
+  @{attribute (HOL) partial_function_mono} attribute.
+
+  The mandatory @{text mode} argument specifies the mode of operation
+  of the command, which directly corresponds to a complete partial
+  order on the result type. By default, the following modes are
+  defined: 
+
+  \begin{description}
+  \item @{text option} defines functions that map into the @{type
+  option} type. Here, the value @{term None} is used to model a
+  non-terminating computation. Monotonicity requires that if @{term
+  None} is returned by a recursive call, then the overall result
+  must also be @{term None}. This is best achieved through the use of
+  the monadic operator @{const "Option.bind"}.
+  
+  \item @{text tailrec} defines functions with an arbitrary result
+  type and uses the slightly degenerated partial order where @{term
+  "undefined"} is the bottom element.  Now, monotonicity requires that
+  if @{term undefined} is returned by a recursive call, then the
+  overall result must also be @{term undefined}. In practice, this is
+  only satisfied when each recursive call is a tail call, whose result
+  is directly returned. Thus, this mode of operation allows the
+  definition of arbitrary tail-recursive functions.
+  \end{description}
+
+  Experienced users may define new modes by instantiating the locale
+  @{const "partial_function_definitions"} appropriately.
+
+  \item @{attribute (HOL) partial_function_mono} declares rules for
+  use in the internal monononicity proofs of partial function
+  definitions.
+
+  \end{description}
+
+*}
 
 subsection {* Old-style recursive function definitions (TFL) *}
 
@@ -887,6 +950,20 @@ text {*
       \item[no\_assms] specifies whether assumptions in
         structured proofs should be ignored.
 
+      \item[timeout] sets the time limit in seconds.
+
+      \item[default\_type] sets the type(s) generally used to instantiate
+        type variables.
+
+      \item[report] if set quickcheck reports how many tests fulfilled
+        the preconditions.
+
+      \item[quiet] if not set quickcheck informs about the current size
+        for assignment values.
+
+      \item[expect] can be used to check if the user's expectation was met
+        (no\_expectation, no\_counterexample, or counterexample)
+
     \end{description}
 
     These option can be given within square brackets.
@@ -996,6 +1073,7 @@ text {*
     @{command_def (HOL) "code_monad"} & : & @{text "theory \<rightarrow> theory"} \\
     @{command_def (HOL) "code_include"} & : & @{text "theory \<rightarrow> theory"} \\
     @{command_def (HOL) "code_modulename"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def (HOL) "code_reflect"} & : & @{text "theory \<rightarrow> theory"}
   \end{matharray}
 
   \begin{rail}
@@ -1068,6 +1146,10 @@ text {*
     'code\_modulename' target ( ( string string ) + )
     ;
 
+    'code\_reflect' string ( 'datatypes' ( string '=' ( string + '|' ) + 'and' ) ) ? \\
+      ( 'functions' ( string + ) ) ? ( 'file' string ) ?
+    ;
+
     syntax: string | ( 'infix' | 'infixl' | 'infixr' ) nat string
     ;
 
@@ -1076,8 +1158,9 @@ text {*
   \begin{description}
 
   \item @{command (HOL) "export_code"} generates code for a given list
-  of constants in the specified target language(s).  If no serialization
-  instruction is given, only abstract code is generated internally.
+  of constants in the specified target language(s).  If no
+  serialization instruction is given, only abstract code is generated
+  internally.
 
   Constants may be specified by giving them literally, referring to
   all executable contants within a certain theory by giving @{text
@@ -1089,20 +1172,20 @@ text {*
   after the @{keyword "module_name"} keyword; then \emph{all} code is
   placed in this module.
 
-  For \emph{SML}, \emph{OCaml} and \emph{Scala} the file specification refers to a
-  single file; for \emph{Haskell}, it refers to a whole directory,
-  where code is generated in multiple files reflecting the module
-  hierarchy.  Omitting the file specification denotes standard
+  For \emph{SML}, \emph{OCaml} and \emph{Scala} the file specification
+  refers to a single file; for \emph{Haskell}, it refers to a whole
+  directory, where code is generated in multiple files reflecting the
+  module hierarchy.  Omitting the file specification denotes standard
   output.
 
   Serializers take an optional list of arguments in parentheses.  For
   \emph{SML} and \emph{OCaml}, ``@{text no_signatures}`` omits
   explicit module signatures.
   
-  For \emph{Haskell} a module name prefix may be given using the ``@{text
-  "root:"}'' argument; ``@{text string_classes}'' adds a ``@{verbatim
-  "deriving (Read, Show)"}'' clause to each appropriate datatype
-  declaration.
+  For \emph{Haskell} a module name prefix may be given using the
+  ``@{text "root:"}'' argument; ``@{text string_classes}'' adds a
+  ``@{verbatim "deriving (Read, Show)"}'' clause to each appropriate
+  datatype declaration.
 
   \item @{attribute (HOL) code} explicitly selects (or with option
   ``@{text "del"}'' deselects) a code equation for code generation.
@@ -1112,8 +1195,8 @@ text {*
   code equations on abstract datatype representations respectively.
 
   \item @{command (HOL) "code_abort"} declares constants which are not
-  required to have a definition by means of code equations; if
-  needed these are implemented by program abort instead.
+  required to have a definition by means of code equations; if needed
+  these are implemented by program abort instead.
 
   \item @{command (HOL) "code_datatype"} specifies a constructor set
   for a logical type.
@@ -1121,17 +1204,16 @@ text {*
   \item @{command (HOL) "print_codesetup"} gives an overview on
   selected code equations and code generator datatypes.
 
-  \item @{attribute (HOL) code_inline} declares (or with
-  option ``@{text "del"}'' removes) inlining theorems which are
-  applied as rewrite rules to any code equation during
-  preprocessing.
+  \item @{attribute (HOL) code_inline} declares (or with option
+  ``@{text "del"}'' removes) inlining theorems which are applied as
+  rewrite rules to any code equation during preprocessing.
 
-  \item @{attribute (HOL) code_post} declares (or with
-  option ``@{text "del"}'' removes) theorems which are
-  applied as rewrite rules to any result of an evaluation.
+  \item @{attribute (HOL) code_post} declares (or with option ``@{text
+  "del"}'' removes) theorems which are applied as rewrite rules to any
+  result of an evaluation.
 
-  \item @{command (HOL) "print_codeproc"} prints the setup
-  of the code generator preprocessor.
+  \item @{command (HOL) "print_codeproc"} prints the setup of the code
+  generator preprocessor.
 
   \item @{command (HOL) "code_thms"} prints a list of theorems
   representing the corresponding program containing all given
@@ -1173,11 +1255,21 @@ text {*
   \item @{command (HOL) "code_modulename"} declares aliasings from one
   module name onto another.
 
+  \item @{command (HOL) "code_reflect"} without a ``@{text "file"}''
+  argument compiles code into the system runtime environment and
+  modifies the code generator setup that future invocations of system
+  runtime code generation referring to one of the ``@{text
+  "datatypes"}'' or ``@{text "functions"}'' entities use these precompiled
+  entities.  With a ``@{text "file"}'' argument, the corresponding code
+  is generated into that specified file without modifying the code
+  generator setup.
+
   \end{description}
 
-  The other framework generates code from both functional and relational
-  programs to SML.  See \cite{isabelle-HOL} for further information
-  (this actually covers the new-style theory format as well).
+  The other framework generates code from both functional and
+  relational programs to SML.  See \cite{isabelle-HOL} for further
+  information (this actually covers the new-style theory format as
+  well).
 
   \begin{matharray}{rcl}
     @{command_def (HOL) "code_module"} & : & @{text "theory \<rightarrow> theory"} \\

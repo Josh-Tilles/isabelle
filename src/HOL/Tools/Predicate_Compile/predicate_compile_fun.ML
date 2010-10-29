@@ -178,17 +178,6 @@ fun flatten thy lookup_pred t (names, prems) =
               |> maps (fn (res, (names, prems)) =>
                 flatten' (betapply (g, res)) (names, prems))
             end)
-        | Const (@{const_name prod_case}, _) => 
-            (let
-              val (_, g :: res :: args) = strip_comb t
-              val [res1, res2] = Name.variant_list names ["res1", "res2"]
-              val (T1, T2) = HOLogic.dest_prodT (fastype_of res)
-              val (resv1, resv2) = (Free (res1, T1), Free (res2, T2))
-            in
-              flatten' (betapplys (g, (resv1 :: resv2 :: args)))
-              (res1 :: res2 :: names,
-              HOLogic.mk_Trueprop (HOLogic.mk_eq (res, HOLogic.mk_prod (resv1, resv2))) :: prems)
-            end)
         | _ =>
         case find_split_thm thy (fst (strip_comb t)) of
           SOME raw_split_thm =>
@@ -196,10 +185,9 @@ fun flatten thy lookup_pred t (names, prems) =
             val (f, args) = strip_comb t
             val split_thm = prepare_split_thm (ProofContext.init_global thy) raw_split_thm
             val (assms, concl) = Logic.strip_horn (prop_of split_thm)
-            val (P, [split_t]) = strip_comb (HOLogic.dest_Trueprop concl) 
-            val subst = Pattern.match thy (split_t, t) (Vartab.empty, Vartab.empty)
-            val (_, split_args) = strip_comb split_t
-            val match = split_args ~~ args
+            val (P, [split_t]) = strip_comb (HOLogic.dest_Trueprop concl)
+            val t' = case_betapply thy t
+            val subst = Pattern.match thy (split_t, t') (Vartab.empty, Vartab.empty)
             fun flatten_of_assm assm =
               let
                 val (vTs, assm') = strip_all (Envir.beta_norm (Envir.subst_term subst assm))
@@ -324,7 +312,7 @@ fun define_predicates specs thy =
       fun functional_mode_of T =
         list_fun_mode (replicate (length (binder_types T)) Input @ [Output])
       val thy''' = fold
-        (fn (predname, Const (name, T)) => Predicate_Compile_Core.register_alternative_function
+        (fn (predname, Const (name, T)) => Core_Data.register_alternative_function
           predname (functional_mode_of T) name)
       (dst_prednames ~~ dst_funs) thy''
     in

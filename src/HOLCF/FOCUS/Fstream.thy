@@ -42,11 +42,7 @@ notation (xsymbols)
 
 
 lemma Def_maximal: "a = Def d \<Longrightarrow> a\<sqsubseteq>b \<Longrightarrow> b = Def d"
-apply (rule flat_eq [THEN iffD1, symmetric])
-apply (rule Def_not_UU)
-apply (drule antisym_less_inverse)
-apply (erule (1) conjunct2 [THEN trans_less])
-done
+by simp
 
 
 section "fscons"
@@ -95,7 +91,7 @@ apply (simp add: fscons_def2 Def_not_UU [THEN stream_prefix'])
 apply (safe)
 apply (erule_tac [!] contrapos_np)
 prefer 2 apply (fast elim: DefE)
-apply (rule Lift_cases)
+apply (rule lift.exhaust)
 apply (erule (1) notE)
 apply (safe)
 apply (drule Def_inject_less_eq [THEN iffD1])

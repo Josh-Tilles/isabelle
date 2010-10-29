@@ -6,12 +6,10 @@ Recursive function definition package for HOLCF.
 
 signature FIXREC =
 sig
-  val add_fixrec: bool -> (binding * typ option * mixfix) list
-    -> (Attrib.binding * term) list -> local_theory -> local_theory
-  val add_fixrec_cmd: bool -> (binding * string option * mixfix) list
-    -> (Attrib.binding * string) list -> local_theory -> local_theory
-  val add_fixpat: Thm.binding * term list -> theory -> theory
-  val add_fixpat_cmd: Attrib.binding * string list -> theory -> theory
+  val add_fixrec: (binding * typ option * mixfix) list
+    -> (bool * (Attrib.binding * term)) list -> local_theory -> local_theory
+  val add_fixrec_cmd: (binding * string option * mixfix) list
+    -> (bool * (Attrib.binding * string)) list -> local_theory -> local_theory
   val add_matchers: (string * string) list -> theory -> theory
   val fixrec_simp_tac: Proof.context -> int -> tactic
   val setup: theory -> theory
@@ -218,93 +216,76 @@ fun taken_names (t : term) : bstring list =
     taken (t, [])
   end;
 
-(* builds a monadic term for matching a constructor pattern *)
-fun pre_build match_name pat rhs vs taken =
-  case pat of
-    Const(@{const_name Rep_CFun},_)$f$(v as Free(n,T)) =>
-      pre_build match_name f rhs (v::vs) taken
-  | Const(@{const_name Rep_CFun},_)$f$x =>
-      let val (rhs', v, taken') = pre_build match_name x rhs [] taken;
-      in pre_build match_name f rhs' (v::vs) taken' end
-  | f$(v as Free(n,T)) =>
-      pre_build match_name f rhs (v::vs) taken
-  | f$x =>
-      let val (rhs', v, taken') = pre_build match_name x rhs [] taken;
-      in pre_build match_name f rhs' (v::vs) taken' end
-  | Const(c,T) =>
-      let
-        val n = Name.variant taken "v";
-        fun result_type (Type(@{type_name cfun},[_,T])) (x::xs) = result_type T xs
-          | result_type (Type (@{type_name "fun"},[_,T])) (x::xs) = result_type T xs
-          | result_type T _ = T;
-        val v = Free(n, result_type T vs);
-        val m = Const(match_name c, matcherT (T, fastype_of rhs));
-        val k = big_lambdas vs rhs;
-      in
-        (m`v`k, v, n::taken)
-      end
-  | Free(n,_) => fixrec_err ("expected constructor, found free variable " ^ quote n)
-  | _ => fixrec_err "pre_build: invalid pattern";
+(* builds a monadic term for matching a pattern *)
+(* returns (rhs, free variable, used varnames) *)
+fun compile_pat match_name pat rhs taken =
+  let
+    fun comp_pat p rhs taken =
+      if is_Free p then (rhs, p, taken)
+      else comp_con (fastype_of p) p rhs [] taken
+    (* compiles a monadic term for a constructor pattern *)
+    and comp_con T p rhs vs taken =
+      case p of
+        Const(@{const_name Rep_CFun},_) $ f $ x =>
+          let val (rhs', v, taken') = comp_pat x rhs taken
+          in comp_con T f rhs' (v::vs) taken' end
+      | f $ x =>
+          let val (rhs', v, taken') = comp_pat x rhs taken
+          in comp_con T f rhs' (v::vs) taken' end
+      | Const (c, cT) =>
+          let
+            val n = Name.variant taken "v"
+            val v = Free(n, T)
+            val m = Const(match_name c, matcherT (cT, fastype_of rhs))
+            val k = big_lambdas vs rhs
+          in
+            (m`v`k, v, n::taken)
+          end
+      | _ => raise TERM ("fixrec: invalid pattern ", [p])
+  in
+    comp_pat pat rhs taken
+  end;
 
 (* builds a monadic term for matching a function definition pattern *)
-(* returns (name, arity, matcher) *)
-fun building match_name pat rhs vs taken =
+(* returns (constant, (vars, matcher)) *)
+fun compile_lhs match_name pat rhs vs taken =
   case pat of
-    Const(@{const_name Rep_CFun}, _)$f$(v as Free(n,T)) =>
-      building match_name f rhs (v::vs) taken
-  | Const(@{const_name Rep_CFun}, _)$f$x =>
-      let val (rhs', v, taken') = pre_build match_name x rhs [] taken;
-      in building match_name f rhs' (v::vs) taken' end
-  | Free(_,_) => ((pat, length vs), big_lambdas vs rhs)
-  | Const(_,_) => ((pat, length vs), big_lambdas vs rhs)
-  | _ => fixrec_err ("function is not declared as constant in theory: "
+    Const(@{const_name Rep_CFun}, _) $ f $ x =>
+      let val (rhs', v, taken') = compile_pat match_name x rhs taken;
+      in compile_lhs match_name f rhs' (v::vs) taken' end
+  | Free(_,_) => (pat, (vs, rhs))
+  | Const(_,_) => (pat, (vs, rhs))
+  | _ => fixrec_err ("invalid function pattern: "
                     ^ ML_Syntax.print_term pat);
 
 fun strip_alls t =
   if Logic.is_all t then strip_alls (snd (Logic.dest_all t)) else t;
 
-fun match_eq match_name eq =
+fun compile_eq match_name eq =
   let
     val (lhs,rhs) = dest_eqs (Logic.strip_imp_concl (strip_alls eq));
   in
-    building match_name lhs (mk_succeed rhs) [] (taken_names eq)
-  end;
-
-(* returns the sum (using +++) of the terms in ms *)
-(* also applies "run" to the result! *)
-fun fatbar arity ms =
-  let
-    fun LAM_Ts 0 t = ([], Term.fastype_of t)
-      | LAM_Ts n (_ $ Abs(_,T,t)) =
-          let val (Ts, U) = LAM_Ts (n-1) t in (T::Ts, U) end
-      | LAM_Ts _ _ = fixrec_err "fatbar: internal error, not enough LAMs";
-    fun unLAM 0 t = t
-      | unLAM n (_$Abs(_,_,t)) = unLAM (n-1) t
-      | unLAM _ _ = fixrec_err "fatbar: internal error, not enough LAMs";
-    fun reLAM ([], U) t = t
-      | reLAM (T::Ts, U) t = reLAM (Ts, T ->> U) (cabs_const(T,U)$Abs("",T,t));
-    val msum = foldr1 mk_mplus (map (unLAM arity) ms);
-    val (Ts, U) = LAM_Ts arity (hd ms)
-  in
-    reLAM (rev Ts, dest_matchT U) (mk_run msum)
+    compile_lhs match_name lhs (mk_succeed rhs) [] (taken_names eq)
   end;
 
 (* this is the pattern-matching compiler function *)
-fun compile_pats match_name eqs =
+fun compile_eqs match_name eqs =
   let
-    val ((names, arities), mats) =
-      apfst ListPair.unzip (ListPair.unzip (map (match_eq match_name) eqs));
-    val cname =
-        case distinct (op =) names of
+    val (consts, matchers) =
+      ListPair.unzip (map (compile_eq match_name) eqs);
+    val const =
+        case distinct (op =) consts of
           [n] => n
         | _ => fixrec_err "all equations in block must define the same function";
-    val arity =
-        case distinct (op =) arities of
-          [a] => a
+    val vars =
+        case distinct (op = o pairself length) (map fst matchers) of
+          [vars] => vars
         | _ => fixrec_err "all equations in block must have the same arity";
-    val rhs = fatbar arity mats;
+    (* rename so all matchers use same free variables *)
+    fun rename (vs, t) = Term.subst_free (filter_out (op =) (vs ~~ vars)) t;
+    val rhs = big_lambdas vars (mk_run (foldr1 mk_mplus (map rename matchers)));
   in
-    mk_trp (cname === rhs)
+    mk_trp (const === rhs)
   end;
 
 (*************************************************************************)
@@ -354,11 +335,11 @@ local
 
 fun gen_fixrec
   prep_spec
-  (strict : bool)
-  raw_fixes
-  raw_spec
+  (raw_fixes : (binding * 'a option * mixfix) list)
+  (raw_spec' : (bool * (Attrib.binding * 'b)) list)
   (lthy : local_theory) =
   let
+    val (skips, raw_spec) = ListPair.unzip raw_spec';
     val (fixes : ((binding * typ) * mixfix) list,
          spec : (Attrib.binding * term) list) =
           fst (prep_spec raw_fixes raw_spec lthy);
@@ -371,7 +352,7 @@ fun gen_fixrec
     fun block_of_name n =
       map_filter
         (fn (m,eq) => if m = n then SOME eq else NONE)
-        (all_names ~~ spec);
+        (all_names ~~ (spec ~~ skips));
     val blocks = map block_of_name names;
 
     val matcher_tab = FixrecMatchData.get (ProofContext.theory_of lthy);
@@ -379,27 +360,25 @@ fun gen_fixrec
       case Symtab.lookup matcher_tab c of SOME m => m
         | NONE => fixrec_err ("unknown pattern constructor: " ^ c);
 
-    val matches = map (compile_pats match_name) (map (map snd) blocks);
+    val matches = map (compile_eqs match_name) (map (map (snd o fst)) blocks);
     val spec' = map (pair Attrib.empty_binding) matches;
     val (lthy, cnames, fixdef_thms, unfold_thms) =
       add_fixdefs fixes spec' lthy;
+
+    val blocks' = map (map fst o filter_out snd) blocks;
+    val simps : (Attrib.binding * thm) list list =
+      map (make_simps lthy) (unfold_thms ~~ blocks');
+    fun mk_bind n : Attrib.binding =
+     (Binding.qualify true n (Binding.name "simps"),
+       [Attrib.internal (K Simplifier.simp_add)]);
+    val simps1 : (Attrib.binding * thm list) list =
+      map (fn (n,xs) => (mk_bind n, map snd xs)) (names ~~ simps);
+    val simps2 : (Attrib.binding * thm list) list =
+      map (apsnd (fn thm => [thm])) (flat simps);
+    val (_, lthy) = lthy
+      |> fold_map Local_Theory.note (simps1 @ simps2);
   in
-    if strict then let (* only prove simp rules if strict = true *)
-      val simps : (Attrib.binding * thm) list list =
-        map (make_simps lthy) (unfold_thms ~~ blocks);
-      fun mk_bind n : Attrib.binding =
-       (Binding.qualify true n (Binding.name "simps"),
-         [Attrib.internal (K Simplifier.simp_add)]);
-      val simps1 : (Attrib.binding * thm list) list =
-        map (fn (n,xs) => (mk_bind n, map snd xs)) (names ~~ simps);
-      val simps2 : (Attrib.binding * thm list) list =
-        map (apsnd (fn thm => [thm])) (flat simps);
-      val (_, lthy) = lthy
-        |> fold_map Local_Theory.note (simps1 @ simps2);
-    in
-      lthy
-    end
-    else lthy
+    lthy
   end;
 
 in
@@ -409,47 +388,26 @@ val add_fixrec_cmd = gen_fixrec Specification.read_spec;
 
 end; (* local *)
 
-(*************************************************************************)
-(******************************** Fixpat *********************************)
-(*************************************************************************)
-
-fun fix_pat thy t = 
-  let
-    val T = fastype_of t;
-    val eq = mk_trp (HOLogic.eq_const T $ t $ Var (("x",0),T));
-    val cname = case chead_of t of Const(c,_) => c | _ =>
-              fixrec_err "function is not declared as constant in theory";
-    val unfold_thm = Global_Theory.get_thm thy (cname^".unfold");
-    val simp = Goal.prove_global thy [] [] eq
-          (fn _ => EVERY [stac unfold_thm 1, simp_tac (global_simpset_of thy) 1]);
-  in simp end;
-
-fun gen_add_fixpat prep_term prep_attrib ((name, srcs), strings) thy =
-  let
-    val _ = legacy_feature "Old 'fixpat' command -- use \"fixrec_simp\" method instead";
-    val atts = map (prep_attrib thy) srcs;
-    val ts = map (prep_term thy) strings;
-    val simps = map (fix_pat thy) ts;
-  in
-    (snd o Global_Theory.add_thmss [((name, simps), atts)]) thy
-  end;
-
-val add_fixpat = gen_add_fixpat Sign.cert_term (K I);
-val add_fixpat_cmd = gen_add_fixpat Syntax.read_term_global Attrib.attribute;
-
 
 (*************************************************************************)
 (******************************** Parsers ********************************)
 (*************************************************************************)
 
-val _ =
-  Outer_Syntax.local_theory "fixrec" "define recursive functions (HOLCF)" Keyword.thy_decl
-    ((Parse.opt_keyword "permissive" >> not) -- Parse.fixes -- Parse_Spec.where_alt_specs
-      >> (fn ((strict, fixes), specs) => add_fixrec_cmd strict fixes specs));
+val opt_thm_name' : (bool * Attrib.binding) parser =
+  Parse.$$$ "(" -- Parse.$$$ "unchecked" -- Parse.$$$ ")" >> K (true, Attrib.empty_binding)
+    || Parse_Spec.opt_thm_name ":" >> pair false;
+
+val spec' : (bool * (Attrib.binding * string)) parser =
+  opt_thm_name' -- Parse.prop >> (fn ((a, b), c) => (a, (b, c)));
+
+val alt_specs' : (bool * (Attrib.binding * string)) list parser =
+  let val unexpected = Scan.ahead (Parse.name || Parse.$$$ "[" || Parse.$$$ "(");
+  in Parse.enum1 "|" (spec' --| Scan.option (unexpected -- Parse.!!! (Parse.$$$ "|"))) end;
 
 val _ =
-  Outer_Syntax.command "fixpat" "define rewrites for fixrec functions" Keyword.thy_decl
-    (Parse_Spec.specs >> (Toplevel.theory o add_fixpat_cmd));
+  Outer_Syntax.local_theory "fixrec" "define recursive functions (HOLCF)" Keyword.thy_decl
+    (Parse.fixes -- (Parse.where_ |-- Parse.!!! alt_specs')
+      >> (fn (fixes, specs) => add_fixrec_cmd fixes specs));
 
 val setup =
   Method.setup @{binding fixrec_simp}

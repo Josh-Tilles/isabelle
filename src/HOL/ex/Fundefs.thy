@@ -5,7 +5,7 @@
 header {* Examples of function definitions *}
 
 theory Fundefs 
-imports Main
+imports Parity Monad_Syntax
 begin
 
 subsection {* Very basic *}
@@ -51,7 +51,7 @@ lemma nz_is_zero: -- {* A lemma we need to prove termination *}
   assumes trm: "nz_dom x"
   shows "nz x = 0"
 using trm
-by induct auto
+by induct (auto simp: nz.psimps)
 
 termination nz
   by (relation "less_than") (auto simp:nz_is_zero)
@@ -71,7 +71,7 @@ by pat_completeness auto
 lemma f91_estimate: 
   assumes trm: "f91_dom n"
   shows "n < f91 n + 11"
-using trm by induct auto
+using trm by induct (auto simp: f91.psimps)
 
 termination
 proof
@@ -207,6 +207,31 @@ end
 
 thm my_monoid.foldL.simps
 thm my_monoid.foldR_foldL
+
+
+subsection {* Partial Function Definitions *}
+
+text {* Partial functions in the option monad: *}
+
+partial_function (option)
+  collatz :: "nat \<Rightarrow> nat list option"
+where
+  "collatz n =
+  (if n \<le> 1 then Some [n]
+   else if even n 
+     then do { ns \<leftarrow> collatz (n div 2); Some (n # ns) }
+     else do { ns \<leftarrow> collatz (3 * n + 1);  Some (n # ns)})"
+
+declare collatz.simps[code]
+value "collatz 23"
+
+
+text {* Tail-recursive functions: *}
+
+partial_function (tailrec) fixpoint :: "('a \<Rightarrow> 'a) \<Rightarrow> 'a \<Rightarrow> 'a"
+where
+  "fixpoint f x = (if f x = x then x else fixpoint f (f x))"
+
 
 subsection {* Regression tests *}
 

@@ -70,7 +70,7 @@ begin
 subsection {* Upper bounds *}
 
 definition is_ub :: "'a set \<Rightarrow> 'a \<Rightarrow> bool" (infixl "<|" 55) where
-  "S <| x \<longleftrightarrow> (\<forall>y. y \<in> S \<longrightarrow> y \<sqsubseteq> x)"
+  "S <| x \<longleftrightarrow> (\<forall>y\<in>S. y \<sqsubseteq> x)"
 
 lemma is_ubI: "(\<And>x. x \<in> S \<Longrightarrow> x \<sqsubseteq> u) \<Longrightarrow> S <| u"
   by (simp add: is_ub_def)
@@ -138,6 +138,9 @@ lemma is_lub_lub: "\<lbrakk>S <<| x; S <| u\<rbrakk> \<Longrightarrow> x \<sqsub
 
 lemma is_lubI: "\<lbrakk>S <| x; \<And>u. S <| u \<Longrightarrow> x \<sqsubseteq> u\<rbrakk> \<Longrightarrow> S <<| x"
   unfolding is_lub_def by fast
+
+lemma is_lub_below_iff: "S <<| x \<Longrightarrow> x \<sqsubseteq> u \<longleftrightarrow> S <| u"
+  unfolding is_lub_def is_ub_def by (metis below_trans)
 
 text {* lubs are unique *}
 
@@ -340,87 +343,6 @@ text {* the maximal element in a chain is its lub *}
 
 lemma lub_chain_maxelem: "\<lbrakk>Y i = c; \<forall>i. Y i \<sqsubseteq> c\<rbrakk> \<Longrightarrow> lub (range Y) = c"
   by (blast dest: ub_rangeD intro: thelubI is_lubI ub_rangeI)
-
-subsection {* Directed sets *}
-
-definition directed :: "'a set \<Rightarrow> bool" where
-  "directed S \<longleftrightarrow> (\<exists>x. x \<in> S) \<and> (\<forall>x\<in>S. \<forall>y\<in>S. \<exists>z\<in>S. x \<sqsubseteq> z \<and> y \<sqsubseteq> z)"
-
-lemma directedI:
-  assumes 1: "\<exists>z. z \<in> S"
-  assumes 2: "\<And>x y. \<lbrakk>x \<in> S; y \<in> S\<rbrakk> \<Longrightarrow> \<exists>z\<in>S. x \<sqsubseteq> z \<and> y \<sqsubseteq> z"
-  shows "directed S"
-  unfolding directed_def using prems by fast
-
-lemma directedD1: "directed S \<Longrightarrow> \<exists>z. z \<in> S"
-  unfolding directed_def by fast
-
-lemma directedD2: "\<lbrakk>directed S; x \<in> S; y \<in> S\<rbrakk> \<Longrightarrow> \<exists>z\<in>S. x \<sqsubseteq> z \<and> y \<sqsubseteq> z"
-  unfolding directed_def by fast
-
-lemma directedE1:
-  assumes S: "directed S"
-  obtains z where "z \<in> S"
-  by (insert directedD1 [OF S], fast)
-
-lemma directedE2:
-  assumes S: "directed S"
-  assumes x: "x \<in> S" and y: "y \<in> S"
-  obtains z where "z \<in> S" "x \<sqsubseteq> z" "y \<sqsubseteq> z"
-  by (insert directedD2 [OF S x y], fast)
-
-lemma directed_finiteI:
-  assumes U: "\<And>U. \<lbrakk>finite U; U \<subseteq> S\<rbrakk> \<Longrightarrow> \<exists>z\<in>S. U <| z"
-  shows "directed S"
-proof (rule directedI)
-  have "finite {}" and "{} \<subseteq> S" by simp_all
-  hence "\<exists>z\<in>S. {} <| z" by (rule U)
-  thus "\<exists>z. z \<in> S" by simp
-next
-  fix x y
-  assume "x \<in> S" and "y \<in> S"
-  hence "finite {x, y}" and "{x, y} \<subseteq> S" by simp_all
-  hence "\<exists>z\<in>S. {x, y} <| z" by (rule U)
-  thus "\<exists>z\<in>S. x \<sqsubseteq> z \<and> y \<sqsubseteq> z" by simp
-qed
-
-lemma directed_finiteD:
-  assumes S: "directed S"
-  shows "\<lbrakk>finite U; U \<subseteq> S\<rbrakk> \<Longrightarrow> \<exists>z\<in>S. U <| z"
-proof (induct U set: finite)
-  case empty
-  from S have "\<exists>z. z \<in> S" by (rule directedD1)
-  thus "\<exists>z\<in>S. {} <| z" by simp
-next
-  case (insert x F)
-  from `insert x F \<subseteq> S`
-  have xS: "x \<in> S" and FS: "F \<subseteq> S" by simp_all
-  from FS have "\<exists>y\<in>S. F <| y" by fact
-  then obtain y where yS: "y \<in> S" and Fy: "F <| y" ..
-  obtain z where zS: "z \<in> S" and xz: "x \<sqsubseteq> z" and yz: "y \<sqsubseteq> z"
-    using S xS yS by (rule directedE2)
-  from Fy yz have "F <| z" by (rule is_ub_upward)
-  with xz have "insert x F <| z" by simp
-  with zS show "\<exists>z\<in>S. insert x F <| z" ..
-qed
-
-lemma not_directed_empty [simp]: "\<not> directed {}"
-  by (rule notI, drule directedD1, simp)
-
-lemma directed_singleton: "directed {x}"
-  by (rule directedI, auto)
-
-lemma directed_bin: "x \<sqsubseteq> y \<Longrightarrow> directed {x, y}"
-  by (rule directedI, auto)
-
-lemma directed_chain: "chain S \<Longrightarrow> directed (range S)"
-apply (rule directedI)
-apply (rule_tac x="S 0" in exI, simp)
-apply (clarify, rename_tac m n)
-apply (rule_tac x="S (max m n)" in bexI)
-apply (simp add: chain_mono)
-apply simp
-done
 
 text {* lemmata for improved admissibility introdution rule *}
 

@@ -14,6 +14,10 @@ declare le_bool_def_raw[code_pred_inline]
 lemma min_bool_eq [code_pred_inline]: "(min :: bool => bool => bool) == (op &)"
 by (rule eq_reflection) (auto simp add: fun_eq_iff min_def le_bool_def)
 
+lemma [code_pred_inline]: 
+  "((A::bool) ~= (B::bool)) = ((A & ~ B) | (B & ~ A))"
+by fast
+
 setup {* Predicate_Compile_Data.ignore_consts [@{const_name Let}] *}
 
 section {* Pairs *}
@@ -92,8 +96,8 @@ let
   val ioi = Fun (Input, Fun (Output, Fun (Input, Bool)))
   val oii = Fun (Output, Fun (Input, Fun (Input, Bool)))
   val ooi = Fun (Output, Fun (Output, Fun (Input, Bool)))
-  val plus_nat = Predicate_Compile_Core.functional_compilation @{const_name plus} iio
-  val minus_nat = Predicate_Compile_Core.functional_compilation @{const_name "minus"} iio
+  val plus_nat = Core_Data.functional_compilation @{const_name plus} iio
+  val minus_nat = Core_Data.functional_compilation @{const_name "minus"} iio
   fun subtract_nat compfuns (_ : typ) =
     let
       val T = Predicate_Compile_Aux.mk_predT compfuns @{typ nat}
@@ -124,21 +128,21 @@ let
             (single_const $ (@{term "op + :: nat => nat => nat"} $ Bound 1 $ Bound 0))))
     end
 in
-  Predicate_Compile_Core.force_modes_and_compilations @{const_name plus_eq_nat}
+  Core_Data.force_modes_and_compilations @{const_name plus_eq_nat}
     [(iio, (plus_nat, false)), (oii, (subtract_nat, false)), (ioi, (subtract_nat, false)),
      (ooi, (enumerate_addups_nat, false))]
   #> Predicate_Compile_Fun.add_function_predicate_translation
        (@{term "plus :: nat => nat => nat"}, @{term "plus_eq_nat"})
-  #> Predicate_Compile_Core.force_modes_and_compilations @{const_name minus_eq_nat}
+  #> Core_Data.force_modes_and_compilations @{const_name minus_eq_nat}
        [(iio, (minus_nat, false)), (oii, (enumerate_nats, false))]
   #> Predicate_Compile_Fun.add_function_predicate_translation
       (@{term "minus :: nat => nat => nat"}, @{term "minus_eq_nat"})
-  #> Predicate_Compile_Core.force_modes_and_functions @{const_name plus_eq_int}
+  #> Core_Data.force_modes_and_functions @{const_name plus_eq_int}
     [(iio, (@{const_name plus}, false)), (ioi, (@{const_name subtract}, false)),
      (oii, (@{const_name subtract}, false))]
   #> Predicate_Compile_Fun.add_function_predicate_translation
        (@{term "plus :: int => int => int"}, @{term "plus_eq_int"})
-  #> Predicate_Compile_Core.force_modes_and_functions @{const_name minus_eq_int}
+  #> Core_Data.force_modes_and_functions @{const_name minus_eq_int}
     [(iio, (@{const_name minus}, false)), (oii, (@{const_name plus}, false)),
      (ioi, (@{const_name minus}, false))]
   #> Predicate_Compile_Fun.add_function_predicate_translation

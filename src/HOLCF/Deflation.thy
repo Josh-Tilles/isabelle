@@ -19,7 +19,7 @@ locale deflation =
 begin
 
 lemma below_ID: "d \<sqsubseteq> ID"
-by (rule below_cfun_ext, simp add: below)
+by (rule cfun_belowI, simp add: below)
 
 text {* The set of fixed points is the same as the range. *}
 
@@ -36,7 +36,7 @@ text {*
 
 lemma belowI:
   assumes f: "\<And>x. d\<cdot>x = x \<Longrightarrow> f\<cdot>x = x" shows "d \<sqsubseteq> f"
-proof (rule below_cfun_ext)
+proof (rule cfun_belowI)
   fix x
   from below have "f\<cdot>(d\<cdot>x) \<sqsubseteq> f\<cdot>x" by (rule monofun_cfun_arg)
   also from idem have "f\<cdot>(d\<cdot>x) = d\<cdot>x" by (rule f)
@@ -151,6 +151,17 @@ proof (rule compactI2)
 qed
 
 end
+
+lemma finite_deflation_intro:
+  "deflation d \<Longrightarrow> finite {x. d\<cdot>x = x} \<Longrightarrow> finite_deflation d"
+by (intro finite_deflation.intro finite_deflation_axioms.intro)
+
+lemma finite_deflation_imp_deflation:
+  "finite_deflation d \<Longrightarrow> deflation d"
+unfolding finite_deflation_def by simp
+
+lemma finite_deflation_UU: "finite_deflation \<bottom>"
+by default simp_all
 
 
 subsection {* Continuous embedding-projection pairs *}
@@ -292,22 +303,19 @@ lemma finite_deflation_p_d_e:
 proof -
   interpret d: finite_deflation d by fact
   show ?thesis
-  proof (intro_locales)
+  proof (rule finite_deflation_intro)
     have "deflation d" ..
     thus "deflation (p oo d oo e)"
       using d by (rule deflation_p_d_e)
   next
-    show "finite_deflation_axioms (p oo d oo e)"
-    proof
-      have "finite ((\<lambda>x. d\<cdot>x) ` range (\<lambda>x. e\<cdot>x))"
-        by (rule d.finite_image)
-      hence "finite ((\<lambda>x. p\<cdot>x) ` (\<lambda>x. d\<cdot>x) ` range (\<lambda>x. e\<cdot>x))"
-        by (rule finite_imageI)
-      hence "finite (range (\<lambda>x. (p oo d oo e)\<cdot>x))"
-        by (simp add: image_image)
-      thus "finite {x. (p oo d oo e)\<cdot>x = x}"
-        by (rule finite_range_imp_finite_fixes)
-    qed
+    have "finite ((\<lambda>x. d\<cdot>x) ` range (\<lambda>x. e\<cdot>x))"
+      by (rule d.finite_image)
+    hence "finite ((\<lambda>x. p\<cdot>x) ` (\<lambda>x. d\<cdot>x) ` range (\<lambda>x. e\<cdot>x))"
+      by (rule finite_imageI)
+    hence "finite (range (\<lambda>x. (p oo d oo e)\<cdot>x))"
+      by (simp add: image_image)
+    thus "finite {x. (p oo d oo e)\<cdot>x = x}"
+      by (rule finite_range_imp_finite_fixes)
   qed
 qed
 
@@ -318,7 +326,7 @@ subsection {* Uniqueness of ep-pairs *}
 lemma ep_pair_unique_e_lemma:
   assumes 1: "ep_pair e1 p" and 2: "ep_pair e2 p"
   shows "e1 \<sqsubseteq> e2"
-proof (rule below_cfun_ext)
+proof (rule cfun_belowI)
   fix x
   have "e1\<cdot>(p\<cdot>(e2\<cdot>x)) \<sqsubseteq> e2\<cdot>x"
     by (rule ep_pair.e_p_below [OF 1])
@@ -333,7 +341,7 @@ by (fast intro: below_antisym elim: ep_pair_unique_e_lemma)
 lemma ep_pair_unique_p_lemma:
   assumes 1: "ep_pair e p1" and 2: "ep_pair e p2"
   shows "p1 \<sqsubseteq> p2"
-proof (rule below_cfun_ext)
+proof (rule cfun_belowI)
   fix x
   have "e\<cdot>(p1\<cdot>x) \<sqsubseteq> x"
     by (rule ep_pair.e_p_below [OF 1])
@@ -396,5 +404,94 @@ by (rule e_inverse [where x="\<bottom>", unfolded e_strict])
 lemmas stricts = e_strict p_strict
 
 end
+
+subsection {* Map operator for continuous functions *}
+
+lemma ep_pair_cfun_map:
+  assumes "ep_pair e1 p1" and "ep_pair e2 p2"
+  shows "ep_pair (cfun_map\<cdot>p1\<cdot>e2) (cfun_map\<cdot>e1\<cdot>p2)"
+proof
+  interpret e1p1: ep_pair e1 p1 by fact
+  interpret e2p2: ep_pair e2 p2 by fact
+  fix f show "cfun_map\<cdot>e1\<cdot>p2\<cdot>(cfun_map\<cdot>p1\<cdot>e2\<cdot>f) = f"
+    by (simp add: cfun_eq_iff)
+  fix g show "cfun_map\<cdot>p1\<cdot>e2\<cdot>(cfun_map\<cdot>e1\<cdot>p2\<cdot>g) \<sqsubseteq> g"
+    apply (rule cfun_belowI, simp)
+    apply (rule below_trans [OF e2p2.e_p_below])
+    apply (rule monofun_cfun_arg)
+    apply (rule e1p1.e_p_below)
+    done
+qed
+
+lemma deflation_cfun_map:
+  assumes "deflation d1" and "deflation d2"
+  shows "deflation (cfun_map\<cdot>d1\<cdot>d2)"
+proof
+  interpret d1: deflation d1 by fact
+  interpret d2: deflation d2 by fact
+  fix f
+  show "cfun_map\<cdot>d1\<cdot>d2\<cdot>(cfun_map\<cdot>d1\<cdot>d2\<cdot>f) = cfun_map\<cdot>d1\<cdot>d2\<cdot>f"
+    by (simp add: cfun_eq_iff d1.idem d2.idem)
+  show "cfun_map\<cdot>d1\<cdot>d2\<cdot>f \<sqsubseteq> f"
+    apply (rule cfun_belowI, simp)
+    apply (rule below_trans [OF d2.below])
+    apply (rule monofun_cfun_arg)
+    apply (rule d1.below)
+    done
+qed
+
+lemma finite_range_cfun_map:
+  assumes a: "finite (range (\<lambda>x. a\<cdot>x))"
+  assumes b: "finite (range (\<lambda>y. b\<cdot>y))"
+  shows "finite (range (\<lambda>f. cfun_map\<cdot>a\<cdot>b\<cdot>f))"  (is "finite (range ?h)")
+proof (rule finite_imageD)
+  let ?f = "\<lambda>g. range (\<lambda>x. (a\<cdot>x, g\<cdot>x))"
+  show "finite (?f ` range ?h)"
+  proof (rule finite_subset)
+    let ?B = "Pow (range (\<lambda>x. a\<cdot>x) \<times> range (\<lambda>y. b\<cdot>y))"
+    show "?f ` range ?h \<subseteq> ?B"
+      by clarsimp
+    show "finite ?B"
+      by (simp add: a b)
+  qed
+  show "inj_on ?f (range ?h)"
+  proof (rule inj_onI, rule cfun_eqI, clarsimp)
+    fix x f g
+    assume "range (\<lambda>x. (a\<cdot>x, b\<cdot>(f\<cdot>(a\<cdot>x)))) = range (\<lambda>x. (a\<cdot>x, b\<cdot>(g\<cdot>(a\<cdot>x))))"
+    hence "range (\<lambda>x. (a\<cdot>x, b\<cdot>(f\<cdot>(a\<cdot>x)))) \<subseteq> range (\<lambda>x. (a\<cdot>x, b\<cdot>(g\<cdot>(a\<cdot>x))))"
+      by (rule equalityD1)
+    hence "(a\<cdot>x, b\<cdot>(f\<cdot>(a\<cdot>x))) \<in> range (\<lambda>x. (a\<cdot>x, b\<cdot>(g\<cdot>(a\<cdot>x))))"
+      by (simp add: subset_eq)
+    then obtain y where "(a\<cdot>x, b\<cdot>(f\<cdot>(a\<cdot>x))) = (a\<cdot>y, b\<cdot>(g\<cdot>(a\<cdot>y)))"
+      by (rule rangeE)
+    thus "b\<cdot>(f\<cdot>(a\<cdot>x)) = b\<cdot>(g\<cdot>(a\<cdot>x))"
+      by clarsimp
+  qed
+qed
+
+lemma finite_deflation_cfun_map:
+  assumes "finite_deflation d1" and "finite_deflation d2"
+  shows "finite_deflation (cfun_map\<cdot>d1\<cdot>d2)"
+proof (rule finite_deflation_intro)
+  interpret d1: finite_deflation d1 by fact
+  interpret d2: finite_deflation d2 by fact
+  have "deflation d1" and "deflation d2" by fact+
+  thus "deflation (cfun_map\<cdot>d1\<cdot>d2)" by (rule deflation_cfun_map)
+  have "finite (range (\<lambda>f. cfun_map\<cdot>d1\<cdot>d2\<cdot>f))"
+    using d1.finite_range d2.finite_range
+    by (rule finite_range_cfun_map)
+  thus "finite {f. cfun_map\<cdot>d1\<cdot>d2\<cdot>f = f}"
+    by (rule finite_range_imp_finite_fixes)
+qed
+
+text {* Finite deflations are compact elements of the function space *}
+
+lemma finite_deflation_imp_compact: "finite_deflation d \<Longrightarrow> compact d"
+apply (frule finite_deflation_imp_deflation)
+apply (subgoal_tac "compact (cfun_map\<cdot>d\<cdot>d\<cdot>d)")
+apply (simp add: cfun_map_def deflation.idem eta_cfun)
+apply (rule finite_deflation.compact)
+apply (simp only: finite_deflation_cfun_map)
+done
 
 end

@@ -24,6 +24,7 @@ sig
       take_0_thms : thm list,
       take_Suc_thms : thm list,
       deflation_take_thms : thm list,
+      take_strict_thms : thm list,
       finite_consts : term list,
       finite_defs : thm list
     }
@@ -35,6 +36,7 @@ sig
       take_0_thms         : thm list,
       take_Suc_thms       : thm list,
       deflation_take_thms : thm list,
+      take_strict_thms    : thm list,
       finite_consts       : term list,
       finite_defs         : thm list,
       lub_take_thms       : thm list,
@@ -53,11 +55,11 @@ sig
   val map_of_typ :
     theory -> (typ * term) list -> typ -> term
 
-  val add_map_function :
-    (string * string * thm) -> theory -> theory
-
-  val get_map_tab : theory -> string Symtab.table
+  val add_map_function : (string * string * bool list) -> theory -> theory
+  val get_map_tab : theory -> (string * bool list) Symtab.table
+  val add_deflation_thm : thm -> theory -> theory
   val get_deflation_thms : theory -> thm list
+  val setup : theory -> theory
 end;
 
 structure Domain_Take_Proofs : DOMAIN_TAKE_PROOFS =
@@ -80,6 +82,7 @@ type take_info =
     take_0_thms : thm list,
     take_Suc_thms : thm list,
     deflation_take_thms : thm list,
+    take_strict_thms : thm list,
     finite_consts : term list,
     finite_defs : thm list
   };
@@ -92,6 +95,7 @@ type take_induct_info =
     take_0_thms         : thm list,
     take_Suc_thms       : thm list,
     deflation_take_thms : thm list,
+    take_strict_thms    : thm list,
     finite_consts       : term list,
     finite_defs         : thm list,
     lub_take_thms       : thm list,
@@ -116,27 +120,30 @@ val beta_tac = simp_tac beta_ss;
 structure MapData = Theory_Data
 (
   (* constant names like "foo_map" *)
-  type T = string Symtab.table;
+  (* list indicates which type arguments correspond to map arguments *)
+  (* alternatively, which type arguments allow indirect recursion *)
+  type T = (string * bool list) Symtab.table;
   val empty = Symtab.empty;
   val extend = I;
   fun merge data = Symtab.merge (K true) data;
 );
 
-structure DeflMapData = Theory_Data
+structure DeflMapData = Named_Thms
 (
-  (* theorems like "deflation a ==> deflation (foo_map$a)" *)
-  type T = thm list;
-  val empty = [];
-  val extend = I;
-  val merge = Thm.merge_thms;
+  val name = "domain_deflation"
+  val description = "theorems like deflation a ==> deflation (foo_map$a)"
 );
 
-fun add_map_function (tname, map_name, deflation_map_thm) =
-    MapData.map (Symtab.insert (K true) (tname, map_name))
-    #> DeflMapData.map (Thm.add_thm deflation_map_thm);
+fun add_map_function (tname, map_name, bs) =
+    MapData.map (Symtab.insert (K true) (tname, (map_name, bs)));
+
+fun add_deflation_thm thm =
+    Context.theory_map (DeflMapData.add_thm thm);
 
 val get_map_tab = MapData.get;
-val get_deflation_thms = DeflMapData.get;
+fun get_deflation_thms thy = DeflMapData.get (ProofContext.init_global thy);
+
+val setup = DeflMapData.setup;
 
 (******************************************************************************)
 (************************** building types and terms **************************)
@@ -183,10 +190,11 @@ fun map_of_typ (thy : theory) (sub : (typ * term) list) (T : typ) : term =
           SOME m => (m, true) | NONE => map_of' T
     and map_of' (T as (Type (c, Ts))) =
         (case Symtab.lookup map_tab c of
-          SOME map_name =>
+          SOME (map_name, ds) =>
           let
-            val map_type = map auto Ts -->> auto T;
-            val (ms, bs) = map_split map_of Ts;
+            val Ts' = map snd (filter fst (ds ~~ Ts));
+            val map_type = map auto Ts' -->> auto T;
+            val (ms, bs) = map_split map_of Ts';
           in
             if exists I bs
             then (list_ccomb (Const (map_name, map_type), ms), true)
@@ -229,9 +237,6 @@ fun define_take_functions
     val iso_infos = map snd spec;
     val dom_eqns = map (fn x => (#absT x, #repT x)) iso_infos;
     val rep_abs_consts = map (fn x => (#rep_const x, #abs_const x)) iso_infos;
-
-    (* get table of map functions *)
-    val map_tab = MapData.get thy;
 
     fun mk_projs []      t = []
       | mk_projs (x::[]) t = [(x, t)]
@@ -299,7 +304,7 @@ fun define_take_functions
         val tac = simp_tac (HOL_basic_ss addsimps rules) 1;
         val take_0_thm = Goal.prove_global thy [] [] goal (K tac);
       in
-        add_qualified_thm "take_0" (dbind, take_0_thm) thy
+        add_qualified_simp_thm "take_0" (dbind, take_0_thm) thy
       end;
     val (take_0_thms, thy) =
       fold_map prove_take_0 (take_consts ~~ dbinds ~~ dom_eqns) thy;
@@ -340,7 +345,7 @@ fun define_take_functions
         val deflation_rules =
           @{thms conjI deflation_ID}
           @ deflation_abs_rep_thms
-          @ DeflMapData.get thy;
+          @ get_deflation_thms thy;
       in
         Goal.prove_global thy [] [] goal (fn _ =>
          EVERY
@@ -369,7 +374,7 @@ fun define_take_functions
             Drule.zero_var_indexes
               (@{thm deflation_strict} OF [deflation_take]);
       in
-        add_qualified_thm "take_strict" (dbind, take_strict_thm) thy
+        add_qualified_simp_thm "take_strict" (dbind, take_strict_thm) thy
       end;
     val (take_strict_thms, thy) =
       fold_map prove_take_strict
@@ -429,6 +434,7 @@ fun define_take_functions
         take_0_thms = take_0_thms,
         take_Suc_thms = take_Suc_thms,
         deflation_take_thms = deflation_take_thms,
+        take_strict_thms = take_strict_thms,
         finite_consts = finite_consts,
         finite_defs = finite_defs
       };
@@ -593,6 +599,7 @@ fun add_lub_take_theorems
         take_0_thms         = #take_0_thms take_info,
         take_Suc_thms       = #take_Suc_thms take_info,
         deflation_take_thms = #deflation_take_thms take_info,
+        take_strict_thms    = #take_strict_thms take_info,
         finite_consts       = #finite_consts take_info,
         finite_defs         = #finite_defs take_info,
         lub_take_thms       = lub_take_thms,

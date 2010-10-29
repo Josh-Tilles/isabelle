@@ -35,7 +35,7 @@ sig
   val split_map_modeT : (mode -> typ -> typ option * typ option)
     -> mode -> typ list -> typ list * typ list
   val split_mode : mode -> term list -> term list * term list
-  val split_modeT' : mode -> typ list -> typ list * typ list
+  val split_modeT : mode -> typ list -> typ list * typ list
   val string_of_mode : mode -> string
   val ascii_string_of_mode : mode -> string
   (* premises *)
@@ -53,6 +53,7 @@ sig
   val is_constr : Proof.context -> string -> bool
   val focus_ex : term -> Name.context -> ((string * typ) list * term) * Name.context
   val strip_all : term -> (string * typ) list * term
+  val strip_intro_concl : thm -> term * term list
   (* introduction rule combinators *)
   val map_atoms : (term -> term) -> term -> term
   val fold_atoms : (term -> 'a -> 'a) -> term -> 'a -> 'a
@@ -90,8 +91,10 @@ sig
   (* Different compilations *)
   datatype compilation = Pred | Depth_Limited | Random | Depth_Limited_Random | DSeq | Annotated
     | Pos_Random_DSeq | Neg_Random_DSeq | New_Pos_Random_DSeq | New_Neg_Random_DSeq
+    | Pos_Generator_DSeq | Neg_Generator_DSeq
   val negative_compilation_of : compilation -> compilation
   val compilation_for_polarity : bool -> compilation -> compilation
+  val is_depth_limited_compilation : compilation -> bool 
   val string_of_compilation : compilation -> string
   val compilation_names : (string * compilation) list
   val non_random_compilations : compilation list
@@ -117,6 +120,7 @@ sig
     no_higher_order_predicate : string list,
     inductify : bool,
     detect_switches : bool,
+    smart_depth_limiting : bool,
     compilation : compilation
   };
   val expected_modes : options -> (string * mode list) option
@@ -138,18 +142,29 @@ sig
   val no_higher_order_predicate : options -> string list
   val is_inductify : options -> bool
   val detect_switches : options -> bool
+  val smart_depth_limiting : options -> bool
   val compilation : options -> compilation
   val default_options : options
   val bool_options : string list
   val print_step : options -> string -> unit
+  (* conversions *)
+  val imp_prems_conv : conv -> conv
   (* simple transformations *)
+  val split_conjuncts_in_assms : Proof.context -> thm -> thm
+  val dest_conjunct_prem : thm -> thm list
   val expand_tuples : theory -> thm -> thm
+  val case_betapply : theory -> term -> term
   val eta_contract_ho_arguments : theory -> thm -> thm
   val remove_equalities : theory -> thm -> thm
   val remove_pointless_clauses : thm -> thm list
   val peephole_optimisation : theory -> thm -> thm option
+  (* auxillary *)
+  val unify_consts : theory -> term list -> term list -> (term list * term list)
+  val mk_casesrule : Proof.context -> term -> thm list -> term
+  val preprocess_intro : theory -> thm -> thm
+  
   val define_quickcheck_predicate :
-    term -> theory -> (((string * typ) * (string * typ) list) * thm) * theory 
+    term -> theory -> (((string * typ) * (string * typ) list) * thm) * theory
 end;
 
 structure Predicate_Compile_Aux : PREDICATE_COMPILE_AUX =
@@ -378,24 +393,22 @@ fun fold_map_aterms_prodT comb f (Type (@{type_name Product_Type.prod}, [T1, T2]
 fun map_filter_prod f (Const (@{const_name Pair}, _) $ t1 $ t2) =
   comb_option HOLogic.mk_prod (map_filter_prod f t1, map_filter_prod f t2)
   | map_filter_prod f t = f t
-
-(* obviously, split_mode' and split_modeT' do not match? where does that cause problems? *)
   
-fun split_modeT' mode Ts =
+fun split_modeT mode Ts =
   let
-    fun split_arg_mode' (Fun _) T = ([], [])
-      | split_arg_mode' (Pair (m1, m2)) (Type (@{type_name Product_Type.prod}, [T1, T2])) =
+    fun split_arg_mode (Fun _) T = ([], [])
+      | split_arg_mode (Pair (m1, m2)) (Type (@{type_name Product_Type.prod}, [T1, T2])) =
         let
-          val (i1, o1) = split_arg_mode' m1 T1
-          val (i2, o2) = split_arg_mode' m2 T2
+          val (i1, o1) = split_arg_mode m1 T1
+          val (i2, o2) = split_arg_mode m2 T2
         in
           (i1 @ i2, o1 @ o2)
         end
-      | split_arg_mode' Input T = ([T], [])
-      | split_arg_mode' Output T = ([], [T])
-      | split_arg_mode' _ _ = raise Fail "split_modeT': mode and type do not match"
+      | split_arg_mode Input T = ([T], [])
+      | split_arg_mode Output T = ([], [T])
+      | split_arg_mode _ _ = raise Fail "split_modeT: mode and type do not match"
   in
-    (pairself flat o split_list) (map2 split_arg_mode' (strip_fun_mode mode) Ts)
+    (pairself flat o split_list) (map2 split_arg_mode (strip_fun_mode mode) Ts)
   end
 
 fun string_of_mode mode =
@@ -537,6 +550,8 @@ fun focus_ex t nctxt =
     val t'' = Term.subst_bounds (rev vs, t');
   in ((ps', t''), nctxt') end;
 
+val strip_intro_concl = (strip_comb o HOLogic.dest_Trueprop o Logic.strip_imp_concl o prop_of)
+  
 (* introduction rule combinators *)
 
 fun map_atoms f intro = 
@@ -628,17 +643,24 @@ fun equals_conv lhs_cv rhs_cv ct =
 (* Different compilations *)
 
 datatype compilation = Pred | Depth_Limited | Random | Depth_Limited_Random | DSeq | Annotated
-  | Pos_Random_DSeq | Neg_Random_DSeq | New_Pos_Random_DSeq | New_Neg_Random_DSeq
+  | Pos_Random_DSeq | Neg_Random_DSeq | New_Pos_Random_DSeq | New_Neg_Random_DSeq |
+    Pos_Generator_DSeq | Neg_Generator_DSeq
 
 fun negative_compilation_of Pos_Random_DSeq = Neg_Random_DSeq
   | negative_compilation_of Neg_Random_DSeq = Pos_Random_DSeq
   | negative_compilation_of New_Pos_Random_DSeq = New_Neg_Random_DSeq
   | negative_compilation_of New_Neg_Random_DSeq = New_Pos_Random_DSeq
+  | negative_compilation_of Pos_Generator_DSeq = Neg_Generator_DSeq
+  | negative_compilation_of Pos_Generator_DSeq = Pos_Generator_DSeq
   | negative_compilation_of c = c
   
 fun compilation_for_polarity false Pos_Random_DSeq = Neg_Random_DSeq
   | compilation_for_polarity false New_Pos_Random_DSeq = New_Neg_Random_DSeq
   | compilation_for_polarity _ c = c
+
+fun is_depth_limited_compilation c =
+  (c = New_Pos_Random_DSeq) orelse (c = New_Neg_Random_DSeq) orelse
+  (c = Pos_Generator_DSeq) orelse (c = Pos_Generator_DSeq)
 
 fun string_of_compilation c =
   case c of
@@ -652,14 +674,18 @@ fun string_of_compilation c =
   | Neg_Random_DSeq => "neg_random_dseq"
   | New_Pos_Random_DSeq => "new_pos_random dseq"
   | New_Neg_Random_DSeq => "new_neg_random_dseq"
+  | Pos_Generator_DSeq => "pos_generator_dseq"
+  | Neg_Generator_DSeq => "neg_generator_dseq"
 
 val compilation_names = [("pred", Pred),
   ("random", Random),
   ("depth_limited", Depth_Limited),
   ("depth_limited_random", Depth_Limited_Random),
   (*("annotated", Annotated),*)
-  ("dseq", DSeq), ("random_dseq", Pos_Random_DSeq),
-  ("new_random_dseq", New_Pos_Random_DSeq)]
+  ("dseq", DSeq),
+  ("random_dseq", Pos_Random_DSeq),
+  ("new_random_dseq", New_Pos_Random_DSeq),
+  ("generator_dseq", Pos_Generator_DSeq)]
 
 val non_random_compilations = [Pred, Depth_Limited, DSeq, Annotated]
 
@@ -725,6 +751,7 @@ datatype options = Options of {
   no_higher_order_predicate : string list,
   inductify : bool,
   detect_switches : bool,
+  smart_depth_limiting : bool,
   compilation : compilation
 };
 
@@ -755,6 +782,8 @@ fun compilation (Options opt) = #compilation opt
 
 fun detect_switches (Options opt) = #detect_switches opt
 
+fun smart_depth_limiting (Options opt) = #smart_depth_limiting opt
+
 val default_options = Options {
   expected_modes = NONE,
   proposed_modes = [],
@@ -775,12 +804,14 @@ val default_options = Options {
   no_higher_order_predicate = [],
   inductify = false,
   detect_switches = true,
+  smart_depth_limiting = false,
   compilation = Pred
 }
 
 val bool_options = ["show_steps", "show_intermediate_results", "show_proof_trace", "show_modes",
   "show_mode_inference", "show_compilation", "show_invalid_clauses", "skip_proof", "inductify",
-  "no_function_flattening", "detect_switches", "specialise", "no_topmost_reordering"]
+  "no_function_flattening", "detect_switches", "specialise", "no_topmost_reordering",
+  "smart_depth_limiting"]
 
 fun print_step options s =
   if show_steps options then tracing s else ()
@@ -789,35 +820,58 @@ fun print_step options s =
 
 (** tuple processing **)
 
+fun rewrite_args [] (pats, intro_t, ctxt) = (pats, intro_t, ctxt)
+  | rewrite_args (arg::args) (pats, intro_t, ctxt) = 
+    (case HOLogic.strip_tupleT (fastype_of arg) of
+      (Ts as _ :: _ :: _) =>
+      let
+        fun rewrite_arg' (Const (@{const_name Pair}, _) $ _ $ t2, Type (@{type_name Product_Type.prod}, [_, T2]))
+          (args, (pats, intro_t, ctxt)) = rewrite_arg' (t2, T2) (args, (pats, intro_t, ctxt))
+          | rewrite_arg' (t, Type (@{type_name Product_Type.prod}, [T1, T2])) (args, (pats, intro_t, ctxt)) =
+            let
+              val thy = ProofContext.theory_of ctxt
+              val ([x, y], ctxt') = Variable.variant_fixes ["x", "y"] ctxt
+              val pat = (t, HOLogic.mk_prod (Free (x, T1), Free (y, T2)))
+              val intro_t' = Pattern.rewrite_term thy [pat] [] intro_t
+              val args' = map (Pattern.rewrite_term thy [pat] []) args
+            in
+              rewrite_arg' (Free (y, T2), T2) (args', (pat::pats, intro_t', ctxt'))
+            end
+          | rewrite_arg' _ (args, (pats, intro_t, ctxt)) = (args, (pats, intro_t, ctxt))
+        val (args', (pats, intro_t', ctxt')) = rewrite_arg' (arg, fastype_of arg)
+          (args, (pats, intro_t, ctxt))
+      in
+        rewrite_args args' (pats, intro_t', ctxt')
+      end
+  | _ => rewrite_args args (pats, intro_t, ctxt))
+
+fun rewrite_prem atom =
+  let
+    val (_, args) = strip_comb atom
+  in rewrite_args args end
+
+fun split_conjuncts_in_assms ctxt th =
+  let
+    val ((_, [fixed_th]), ctxt') = Variable.import false [th] ctxt 
+    fun split_conjs i nprems th =
+      if i > nprems then th
+      else
+        case try Drule.RSN (@{thm conjI}, (i, th)) of
+          SOME th' => split_conjs i (nprems+1) th'
+        | NONE => split_conjs (i+1) nprems th
+  in
+    singleton (Variable.export ctxt' ctxt) (split_conjs 1 (Thm.nprems_of fixed_th) fixed_th)
+  end
+
+fun dest_conjunct_prem th =
+  case HOLogic.dest_Trueprop (prop_of th) of
+    (Const (@{const_name HOL.conj}, _) $ t $ t') =>
+      dest_conjunct_prem (th RS @{thm conjunct1})
+        @ dest_conjunct_prem (th RS @{thm conjunct2})
+    | _ => [th]
+
 fun expand_tuples thy intro =
   let
-    fun rewrite_args [] (pats, intro_t, ctxt) = (pats, intro_t, ctxt)
-      | rewrite_args (arg::args) (pats, intro_t, ctxt) = 
-      (case HOLogic.strip_tupleT (fastype_of arg) of
-        (Ts as _ :: _ :: _) =>
-        let
-          fun rewrite_arg' (Const (@{const_name Pair}, _) $ _ $ t2, Type (@{type_name Product_Type.prod}, [_, T2]))
-            (args, (pats, intro_t, ctxt)) = rewrite_arg' (t2, T2) (args, (pats, intro_t, ctxt))
-            | rewrite_arg' (t, Type (@{type_name Product_Type.prod}, [T1, T2])) (args, (pats, intro_t, ctxt)) =
-              let
-                val ([x, y], ctxt') = Variable.variant_fixes ["x", "y"] ctxt
-                val pat = (t, HOLogic.mk_prod (Free (x, T1), Free (y, T2)))
-                val intro_t' = Pattern.rewrite_term thy [pat] [] intro_t
-                val args' = map (Pattern.rewrite_term thy [pat] []) args
-              in
-                rewrite_arg' (Free (y, T2), T2) (args', (pat::pats, intro_t', ctxt'))
-              end
-            | rewrite_arg' _ (args, (pats, intro_t, ctxt)) = (args, (pats, intro_t, ctxt))
-          val (args', (pats, intro_t', ctxt')) = rewrite_arg' (arg, fastype_of arg)
-            (args, (pats, intro_t, ctxt))
-        in
-          rewrite_args args' (pats, intro_t', ctxt')
-        end
-      | _ => rewrite_args args (pats, intro_t, ctxt))
-    fun rewrite_prem atom =
-      let
-        val (_, args) = strip_comb atom
-      in rewrite_args args end
     val ctxt = ProofContext.init_global thy
     val (((T_insts, t_insts), [intro']), ctxt1) = Variable.import false [intro] ctxt
     val intro_t = prop_of intro'
@@ -835,13 +889,102 @@ fun expand_tuples thy intro =
       (HOL_basic_ss addsimps [@{thm fst_conv}, @{thm snd_conv}, @{thm Pair_eq}])
       intro'''
     (* splitting conjunctions introduced by Pair_eq*)
-    fun split_conj prem =
-      map HOLogic.mk_Trueprop (conjuncts (HOLogic.dest_Trueprop prem))
-    val intro''''' = map_term thy (maps_premises split_conj) intro''''
+    val intro''''' = split_conjuncts_in_assms ctxt intro''''
   in
     intro'''''
   end
 
+(** making case distributivity rules **)
+(*** this should be part of the datatype package ***)
+
+fun datatype_names_of_case_name thy case_name =
+  map (#1 o #2) (#descr (the (Datatype_Data.info_of_case thy case_name)))
+
+fun make_case_distribs new_type_names descr sorts thy =
+  let
+    val case_combs = Datatype_Prop.make_case_combs new_type_names descr sorts thy "f";
+    fun make comb =
+      let
+        val Type ("fun", [T, T']) = fastype_of comb;
+        val (Const (case_name, _), fs) = strip_comb comb
+        val used = Term.add_tfree_names comb []
+        val U = TFree (Name.variant used "'t", HOLogic.typeS)
+        val x = Free ("x", T)
+        val f = Free ("f", T' --> U)
+        fun apply_f f' =
+          let
+            val Ts = binder_types (fastype_of f')
+            val bs = map Bound ((length Ts - 1) downto 0)
+          in
+            fold (curry absdummy) (rev Ts) (f $ (list_comb (f', bs)))
+          end
+        val fs' = map apply_f fs
+        val case_c' = Const (case_name, (map fastype_of fs') @ [T] ---> U)
+      in
+        HOLogic.mk_eq (f $ (comb $ x), list_comb (case_c', fs') $ x)
+      end
+  in
+    map make case_combs
+  end
+
+fun case_rewrites thy Tcon =
+  let
+    val info = Datatype.the_info thy Tcon
+    val descr = #descr info
+    val sorts = #sorts info
+    val typ_names = the_default [Tcon] (#alt_names info)
+  in
+    map (Drule.export_without_context o Skip_Proof.make_thm thy o HOLogic.mk_Trueprop)
+      (make_case_distribs typ_names [descr] sorts thy)
+  end
+
+fun instantiated_case_rewrites thy Tcon =
+  let
+    val rew_ths = case_rewrites thy Tcon
+    val ctxt = ProofContext.init_global thy
+    fun instantiate th =
+    let
+      val f = (fst (strip_comb (fst (HOLogic.dest_eq (HOLogic.dest_Trueprop (prop_of th))))))
+      val Type ("fun", [uninst_T, uninst_T']) = fastype_of f
+      val ([tname, tname', uname, yname], ctxt') = Variable.add_fixes ["'t", "'t'", "'u", "y"] ctxt
+      val T = TFree (tname, HOLogic.typeS)
+      val T' = TFree (tname', HOLogic.typeS)
+      val U = TFree (uname, HOLogic.typeS)
+      val y = Free (yname, U)
+      val f' = absdummy (U --> T', Bound 0 $ y)
+      val th' = Thm.certify_instantiate
+        ([(dest_TVar uninst_T, U --> T'), (dest_TVar uninst_T', T')],
+         [((fst (dest_Var f), (U --> T') --> T'), f')]) th
+      val [th'] = Variable.export ctxt' ctxt [th']
+   in
+     th'
+   end
+ in
+   map instantiate rew_ths
+ end
+
+fun case_betapply thy t =
+  let
+    val case_name = fst (dest_Const (fst (strip_comb t)))
+    val Tcons = datatype_names_of_case_name thy case_name
+    val ths = maps (instantiated_case_rewrites thy) Tcons
+  in
+    MetaSimplifier.rewrite_term thy
+      (map (fn th => th RS @{thm eq_reflection}) ths) [] t
+  end
+
+(*** conversions ***)
+
+fun imp_prems_conv cv ct =
+  case Thm.term_of ct of
+    Const ("==>", _) $ _ $ _ => Conv.combination_conv (Conv.arg_conv cv) (imp_prems_conv cv) ct
+  | _ => Conv.all_conv ct
+
+fun all_params_conv cv ctxt ct =
+  if Logic.is_all (Thm.term_of ct)
+  then Conv.arg_conv (Conv.abs_conv (all_params_conv cv o #2) ctxt) ct
+  else cv ctxt ct;
+  
 (** eta contract higher-order arguments **)
 
 fun eta_contract_ho_arguments thy intro =
@@ -910,6 +1053,144 @@ fun peephole_optimisation thy intro =
     Option.map (Skip_Proof.make_thm thy)
       (process_False (process_True (prop_of (process intro))))
   end
+
+
+(* importing introduction rules *)
+
+fun import_intros inp_pred [] ctxt =
+  let
+    val ([outp_pred], ctxt') = Variable.import_terms true [inp_pred] ctxt
+    val T = fastype_of outp_pred
+    val paramTs = ho_argsT_of_typ (binder_types T)
+    val (param_names, ctxt'') = Variable.variant_fixes
+      (map (fn i => "p" ^ (string_of_int i)) (1 upto (length paramTs))) ctxt'
+    val params = map2 (curry Free) param_names paramTs
+  in
+    (((outp_pred, params), []), ctxt')
+  end
+  | import_intros inp_pred (th :: ths) ctxt =
+    let
+      val ((_, [th']), ctxt') = Variable.import true [th] ctxt
+      val thy = ProofContext.theory_of ctxt'
+      val (pred, args) = strip_intro_concl th'
+      val T = fastype_of pred
+      val ho_args = ho_args_of_typ T args
+      fun subst_of (pred', pred) =
+        let
+          val subst = Sign.typ_match thy (fastype_of pred', fastype_of pred) Vartab.empty
+            handle Type.TYPE_MATCH => error ("Type mismatch of predicate " ^ fst (dest_Const pred)
+            ^ " (trying to match " ^ Syntax.string_of_typ ctxt (fastype_of pred')
+            ^ " and " ^ Syntax.string_of_typ ctxt (fastype_of pred) ^ ")"
+            ^ " in " ^ Display.string_of_thm ctxt th)
+        in map (fn (indexname, (s, T)) => ((indexname, s), T)) (Vartab.dest subst) end
+      fun instantiate_typ th =
+        let
+          val (pred', _) = strip_intro_concl th
+          val _ = if not (fst (dest_Const pred) = fst (dest_Const pred')) then
+            raise Fail "Trying to instantiate another predicate" else ()
+        in Thm.certify_instantiate (subst_of (pred', pred), []) th end;
+      fun instantiate_ho_args th =
+        let
+          val (_, args') = (strip_comb o HOLogic.dest_Trueprop o Logic.strip_imp_concl o prop_of) th
+          val ho_args' = map dest_Var (ho_args_of_typ T args')
+        in Thm.certify_instantiate ([], ho_args' ~~ ho_args) th end
+      val outp_pred =
+        Term_Subst.instantiate (subst_of (inp_pred, pred), []) inp_pred
+      val ((_, ths'), ctxt1) =
+        Variable.import false (map (instantiate_typ #> instantiate_ho_args) ths) ctxt'
+    in
+      (((outp_pred, ho_args), th' :: ths'), ctxt1)
+    end
+  
+(* generation of case rules from user-given introduction rules *)
+
+fun mk_args2 (Type (@{type_name Product_Type.prod}, [T1, T2])) st =
+    let
+      val (t1, st') = mk_args2 T1 st
+      val (t2, st'') = mk_args2 T2 st'
+    in
+      (HOLogic.mk_prod (t1, t2), st'')
+    end
+  (*| mk_args2 (T as Type ("fun", _)) (params, ctxt) = 
+    let
+      val (S, U) = strip_type T
+    in
+      if U = HOLogic.boolT then
+        (hd params, (tl params, ctxt))
+      else
+        let
+          val ([x], ctxt') = Variable.variant_fixes ["x"] ctxt
+        in
+          (Free (x, T), (params, ctxt'))
+        end
+    end*)
+  | mk_args2 T (params, ctxt) =
+    let
+      val ([x], ctxt') = Variable.variant_fixes ["x"] ctxt
+    in
+      (Free (x, T), (params, ctxt'))
+    end
+
+fun mk_casesrule ctxt pred introrules =
+  let
+    (* TODO: can be simplified if parameters are not treated specially ? *)
+    val (((pred, params), intros_th), ctxt1) = import_intros pred introrules ctxt
+    (* TODO: distinct required ? -- test case with more than one parameter! *)
+    val params = distinct (op aconv) params
+    val intros = map prop_of intros_th
+    val ([propname], ctxt2) = Variable.variant_fixes ["thesis"] ctxt1
+    val prop = HOLogic.mk_Trueprop (Free (propname, HOLogic.boolT))
+    val argsT = binder_types (fastype_of pred)
+    (* TODO: can be simplified if parameters are not treated specially ? <-- see uncommented code! *)
+    val (argvs, _) = fold_map mk_args2 argsT (params, ctxt2)
+    fun mk_case intro =
+      let
+        val (_, args) = (strip_comb o HOLogic.dest_Trueprop o Logic.strip_imp_concl) intro
+        val prems = Logic.strip_imp_prems intro
+        val eqprems =
+          map2 (HOLogic.mk_Trueprop oo (curry HOLogic.mk_eq)) argvs args
+        val frees = map Free (fold Term.add_frees (args @ prems) [])
+      in fold Logic.all frees (Logic.list_implies (eqprems @ prems, prop)) end
+    val assm = HOLogic.mk_Trueprop (list_comb (pred, argvs))
+    val cases = map mk_case intros
+  in Logic.list_implies (assm :: cases, prop) end;
+  
+
+(* unifying constants to have the same type variables *)
+
+fun unify_consts thy cs intr_ts =
+  (let
+     val add_term_consts_2 = fold_aterms (fn Const c => insert (op =) c | _ => I);
+     fun varify (t, (i, ts)) =
+       let val t' = map_types (Logic.incr_tvar (i + 1)) (#2 (Type.varify_global [] t))
+       in (maxidx_of_term t', t'::ts) end;
+     val (i, cs') = List.foldr varify (~1, []) cs;
+     val (i', intr_ts') = List.foldr varify (i, []) intr_ts;
+     val rec_consts = fold add_term_consts_2 cs' [];
+     val intr_consts = fold add_term_consts_2 intr_ts' [];
+     fun unify (cname, cT) =
+       let val consts = map snd (filter (fn c => fst c = cname) intr_consts)
+       in fold (Sign.typ_unify thy) ((replicate (length consts) cT) ~~ consts) end;
+     val (env, _) = fold unify rec_consts (Vartab.empty, i');
+     val subst = map_types (Envir.norm_type env)
+   in (map subst cs', map subst intr_ts')
+   end) handle Type.TUNIFY =>
+     (warning "Occurrences of recursive constant have non-unifiable types"; (cs, intr_ts));
+
+(* preprocessing rules *)
+
+fun Trueprop_conv cv ct =
+  case Thm.term_of ct of
+    Const (@{const_name Trueprop}, _) $ _ => Conv.arg_conv cv ct  
+  | _ => raise Fail "Trueprop_conv"
+
+fun preprocess_equality thy rule =
+  Conv.fconv_rule
+    (imp_prems_conv
+      (Trueprop_conv (Conv.try_conv (Conv.rewr_conv (Thm.symmetric @{thm Predicate.eq_is_eq})))))
+    (Thm.transfer thy rule)
+
+fun preprocess_intro thy = expand_tuples thy #> preprocess_equality thy
 
 (* defining a quickcheck predicate *)
 

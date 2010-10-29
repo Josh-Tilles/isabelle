@@ -6,21 +6,15 @@
 header {* The type of continuous functions *}
 
 theory Cfun
-imports Pcpodef Ffun Product_Cpo
+imports Pcpodef Fun_Cpo Product_Cpo
 begin
 
 default_sort cpo
 
 subsection {* Definition of continuous function type *}
 
-lemma Ex_cont: "\<exists>f. cont f"
-by (rule exI, rule cont_const)
-
-lemma adm_cont: "adm cont"
-by (rule admI, rule cont_lub_fun)
-
 cpodef (CFun)  ('a, 'b) cfun (infixr "->" 0) = "{f::'a => 'b. cont f}"
-by (simp_all add: Ex_cont adm_cont)
+by (auto intro: cont_const adm_cont)
 
 type_notation (xsymbols)
   cfun  ("(_ \<rightarrow>/ _)" [1, 0] 0)
@@ -96,17 +90,10 @@ text {* Dummy patterns for continuous abstraction *}
 translations
   "\<Lambda> _. t" => "CONST Abs_CFun (\<lambda> _. t)"
 
-
 subsection {* Continuous function space is pointed *}
 
 lemma UU_CFun: "\<bottom> \<in> CFun"
 by (simp add: CFun_def inst_fun_pcpo)
-
-instance cfun :: (finite_po, finite_po) finite_po
-by (rule typedef_finite_po [OF type_definition_CFun])
-
-instance cfun :: (finite_po, chfin) chfin
-by (rule typedef_chfin [OF type_definition_CFun below_CFun_def])
 
 instance cfun :: (cpo, discrete_cpo) discrete_cpo
 by intro_classes (simp add: below_CFun_def Rep_CFun_inject)
@@ -177,19 +164,19 @@ by (rule Rep_CFun_inverse)
 
 text {* Extensionality for continuous functions *}
 
-lemma expand_cfun_eq: "(f = g) = (\<forall>x. f\<cdot>x = g\<cdot>x)"
+lemma cfun_eq_iff: "f = g \<longleftrightarrow> (\<forall>x. f\<cdot>x = g\<cdot>x)"
 by (simp add: Rep_CFun_inject [symmetric] fun_eq_iff)
 
-lemma ext_cfun: "(\<And>x. f\<cdot>x = g\<cdot>x) \<Longrightarrow> f = g"
-by (simp add: expand_cfun_eq)
+lemma cfun_eqI: "(\<And>x. f\<cdot>x = g\<cdot>x) \<Longrightarrow> f = g"
+by (simp add: cfun_eq_iff)
 
 text {* Extensionality wrt. ordering for continuous functions *}
 
-lemma expand_cfun_below: "f \<sqsubseteq> g = (\<forall>x. f\<cdot>x \<sqsubseteq> g\<cdot>x)" 
-by (simp add: below_CFun_def expand_fun_below)
+lemma cfun_below_iff: "f \<sqsubseteq> g \<longleftrightarrow> (\<forall>x. f\<cdot>x \<sqsubseteq> g\<cdot>x)" 
+by (simp add: below_CFun_def fun_below_iff)
 
-lemma below_cfun_ext: "(\<And>x. f\<cdot>x \<sqsubseteq> g\<cdot>x) \<Longrightarrow> f \<sqsubseteq> g"
-by (simp add: expand_cfun_below)
+lemma cfun_belowI: "(\<And>x. f\<cdot>x \<sqsubseteq> g\<cdot>x) \<Longrightarrow> f \<sqsubseteq> g"
+by (simp add: cfun_below_iff)
 
 text {* Congruence for continuous function application *}
 
@@ -234,7 +221,7 @@ by (rule cont_Rep_CFun1 [THEN contE])
 text {* monotonicity of application *}
 
 lemma monofun_cfun_fun: "f \<sqsubseteq> g \<Longrightarrow> f\<cdot>x \<sqsubseteq> g\<cdot>x"
-by (simp add: expand_cfun_below)
+by (simp add: cfun_below_iff)
 
 lemma monofun_cfun_arg: "x \<sqsubseteq> y \<Longrightarrow> f\<cdot>x \<sqsubseteq> f\<cdot>y"
 by (rule monofun_Rep_CFun2 [THEN monofunE])
@@ -259,7 +246,7 @@ by (simp add: chain_def monofun_cfun)
 
 lemma ch2ch_LAM [simp]:
   "\<lbrakk>\<And>x. chain (\<lambda>i. S i x); \<And>i. cont (\<lambda>x. S i x)\<rbrakk> \<Longrightarrow> chain (\<lambda>i. \<Lambda> x. S i x)"
-by (simp add: chain_def expand_cfun_below)
+by (simp add: chain_def cfun_below_iff)
 
 text {* contlub, cont properties of @{term Rep_CFun} in both arguments *}
 
@@ -294,29 +281,6 @@ apply (erule subst)
 apply (rule minimal [THEN monofun_cfun_arg])
 done
 
-text {* the lub of a chain of continous functions is monotone *}
-
-lemma lub_cfun_mono: "chain F \<Longrightarrow> monofun (\<lambda>x. \<Squnion>i. F i\<cdot>x)"
-apply (drule ch2ch_monofun [OF monofun_Rep_CFun])
-apply (simp add: thelub_fun [symmetric])
-apply (erule monofun_lub_fun)
-apply (simp add: monofun_Rep_CFun2)
-done
-
-text {* a lemma about the exchange of lubs for type @{typ "'a -> 'b"} *}
-
-lemma ex_lub_cfun:
-  "\<lbrakk>chain F; chain Y\<rbrakk> \<Longrightarrow> (\<Squnion>j. \<Squnion>i. F j\<cdot>(Y i)) = (\<Squnion>i. \<Squnion>j. F j\<cdot>(Y i))"
-by (simp add: diag_lub)
-
-text {* the lub of a chain of cont. functions is continuous *}
-
-lemma cont_lub_cfun: "chain F \<Longrightarrow> cont (\<lambda>x. \<Squnion>i. F i\<cdot>x)"
-apply (rule cont2cont_lub)
-apply (erule monofun_Rep_CFun [THEN ch2ch_monofun])
-apply (rule cont_Rep_CFun2)
-done
-
 text {* type @{typ "'a -> 'b"} is chain complete *}
 
 lemma lub_cfun: "chain F \<Longrightarrow> range F <<| (\<Lambda> x. \<Squnion>i. F i\<cdot>x)"
@@ -334,18 +298,30 @@ lemma cont2cont_Rep_CFun [simp, cont2cont]:
   assumes t: "cont (\<lambda>x. t x)"
   shows "cont (\<lambda>x. (f x)\<cdot>(t x))"
 proof -
-  have "cont (\<lambda>x. Rep_CFun (f x))"
-    using cont_Rep_CFun f by (rule cont2cont_app3)
-  thus "cont (\<lambda>x. (f x)\<cdot>(t x))"
-    using cont_Rep_CFun2 t by (rule cont2cont_app2)
+  have 1: "\<And>y. cont (\<lambda>x. (f x)\<cdot>y)"
+    using cont_Rep_CFun1 f by (rule cont_compose)
+  show "cont (\<lambda>x. (f x)\<cdot>(t x))"
+    using t cont_Rep_CFun2 1 by (rule cont_apply)
 qed
+
+text {*
+  Two specific lemmas for the combination of LCF and HOL terms.
+  These lemmas are needed in theories that use types like @{typ "'a \<rightarrow> 'b \<Rightarrow> 'c"}.
+*}
+
+lemma cont_Rep_CFun_app [simp]: "\<lbrakk>cont f; cont g\<rbrakk> \<Longrightarrow> cont (\<lambda>x. ((f x)\<cdot>(g x)) s)"
+by (rule cont2cont_Rep_CFun [THEN cont2cont_fun])
+
+lemma cont_Rep_CFun_app_app [simp]: "\<lbrakk>cont f; cont g\<rbrakk> \<Longrightarrow> cont (\<lambda>x. ((f x)\<cdot>(g x)) s t)"
+by (rule cont_Rep_CFun_app [THEN cont2cont_fun])
+
 
 text {* cont2mono Lemma for @{term "%x. LAM y. c1(x)(y)"} *}
 
 lemma cont2mono_LAM:
   "\<lbrakk>\<And>x. cont (\<lambda>y. f x y); \<And>y. monofun (\<lambda>x. f x y)\<rbrakk>
     \<Longrightarrow> monofun (\<lambda>x. \<Lambda> y. f x y)"
-  unfolding monofun_def expand_cfun_below by simp
+  unfolding monofun_def cfun_below_iff by simp
 
 text {* cont2cont Lemma for @{term "%x. LAM y. f x y"} *}
 
@@ -373,13 +349,7 @@ lemma cont2cont_LAM' [simp, cont2cont]:
   fixes f :: "'a::cpo \<Rightarrow> 'b::cpo \<Rightarrow> 'c::cpo"
   assumes f: "cont (\<lambda>p. f (fst p) (snd p))"
   shows "cont (\<lambda>x. \<Lambda> y. f x y)"
-proof (rule cont2cont_LAM)
-  fix x :: 'a show "cont (\<lambda>y. f x y)"
-    using f by (rule cont_fst_snd_D2)
-next
-  fix y :: 'b show "cont (\<lambda>x. f x y)"
-    using f by (rule cont_fst_snd_D1)
-qed
+using assms by (simp add: cont2cont_LAM prod_cont_iff)
 
 lemma cont2cont_LAM_discrete [simp, cont2cont]:
   "(\<And>y::'a::discrete_cpo. cont (\<lambda>x. f x y)) \<Longrightarrow> cont (\<lambda>x. \<Lambda> y. f x y)"
@@ -489,7 +459,6 @@ apply (erule minimal [THEN monofun_cfun_arg, THEN flat_eqI])
 apply (erule minimal [THEN monofun_cfun_arg, THEN flat_eqI])
 done
 
-
 subsection {* Identity and composition *}
 
 definition
@@ -517,7 +486,7 @@ lemma cfcomp_LAM: "cont g \<Longrightarrow> f oo (\<Lambda> x. g x) = (\<Lambda>
 by (simp add: cfcomp1)
 
 lemma cfcomp_strict [simp]: "\<bottom> oo f = \<bottom>"
-by (simp add: expand_cfun_eq)
+by (simp add: cfun_eq_iff)
 
 text {*
   Show that interpretation of (pcpo,@{text "_->_"}) is a category.
@@ -528,46 +497,62 @@ text {*
 *}
 
 lemma ID2 [simp]: "f oo ID = f"
-by (rule ext_cfun, simp)
+by (rule cfun_eqI, simp)
 
 lemma ID3 [simp]: "ID oo f = f"
-by (rule ext_cfun, simp)
+by (rule cfun_eqI, simp)
 
 lemma assoc_oo: "f oo (g oo h) = (f oo g) oo h"
-by (rule ext_cfun, simp)
+by (rule cfun_eqI, simp)
 
+subsection {* Map operator for continuous function space *}
+
+definition
+  cfun_map :: "('b \<rightarrow> 'a) \<rightarrow> ('c \<rightarrow> 'd) \<rightarrow> ('a \<rightarrow> 'c) \<rightarrow> ('b \<rightarrow> 'd)"
+where
+  "cfun_map = (\<Lambda> a b f x. b\<cdot>(f\<cdot>(a\<cdot>x)))"
+
+lemma cfun_map_beta [simp]: "cfun_map\<cdot>a\<cdot>b\<cdot>f\<cdot>x = b\<cdot>(f\<cdot>(a\<cdot>x))"
+unfolding cfun_map_def by simp
+
+lemma cfun_map_ID: "cfun_map\<cdot>ID\<cdot>ID = ID"
+unfolding cfun_eq_iff by simp
+
+lemma cfun_map_map:
+  "cfun_map\<cdot>f1\<cdot>g1\<cdot>(cfun_map\<cdot>f2\<cdot>g2\<cdot>p) =
+    cfun_map\<cdot>(\<Lambda> x. f2\<cdot>(f1\<cdot>x))\<cdot>(\<Lambda> x. g1\<cdot>(g2\<cdot>x))\<cdot>p"
+by (rule cfun_eqI) simp
 
 subsection {* Strictified functions *}
 
 default_sort pcpo
 
 definition
+  strict :: "'a \<rightarrow> 'b \<rightarrow> 'b" where
+  "strict = (\<Lambda> x. if x = \<bottom> then \<bottom> else ID)"
+
+lemma cont_strict: "cont (\<lambda>x. if x = \<bottom> then \<bottom> else y)"
+unfolding cont_def is_lub_def is_ub_def ball_simps
+by (simp add: lub_eq_bottom_iff)
+
+lemma strict_conv_if: "strict\<cdot>x = (if x = \<bottom> then \<bottom> else ID)"
+unfolding strict_def by (simp add: cont_strict)
+
+lemma strict1 [simp]: "strict\<cdot>\<bottom> = \<bottom>"
+by (simp add: strict_conv_if)
+
+lemma strict2 [simp]: "x \<noteq> \<bottom> \<Longrightarrow> strict\<cdot>x = ID"
+by (simp add: strict_conv_if)
+
+lemma strict3 [simp]: "strict\<cdot>x\<cdot>\<bottom> = \<bottom>"
+by (simp add: strict_conv_if)
+
+definition
   strictify  :: "('a \<rightarrow> 'b) \<rightarrow> 'a \<rightarrow> 'b" where
-  "strictify = (\<Lambda> f x. if x = \<bottom> then \<bottom> else f\<cdot>x)"
-
-text {* results about strictify *}
-
-lemma cont_strictify1: "cont (\<lambda>f. if x = \<bottom> then \<bottom> else f\<cdot>x)"
-by simp
-
-lemma monofun_strictify2: "monofun (\<lambda>x. if x = \<bottom> then \<bottom> else f\<cdot>x)"
-apply (rule monofunI)
-apply (auto simp add: monofun_cfun_arg)
-done
-
-lemma cont_strictify2: "cont (\<lambda>x. if x = \<bottom> then \<bottom> else f\<cdot>x)"
-apply (rule contI2)
-apply (rule monofun_strictify2)
-apply (case_tac "(\<Squnion>i. Y i) = \<bottom>", simp)
-apply (simp add: contlub_cfun_arg del: if_image_distrib)
-apply (drule chain_UU_I_inverse2, clarify, rename_tac j)
-apply (rule lub_mono2, rule_tac x=j in exI, simp_all)
-apply (auto dest!: chain_mono_less)
-done
+  "strictify = (\<Lambda> f x. strict\<cdot>x\<cdot>(f\<cdot>x))"
 
 lemma strictify_conv_if: "strictify\<cdot>f\<cdot>x = (if x = \<bottom> then \<bottom> else f\<cdot>x)"
-  unfolding strictify_def
-  by (simp add: cont_strictify1 cont_strictify2 cont2cont_LAM)
+unfolding strictify_def by simp
 
 lemma strictify1 [simp]: "strictify\<cdot>f\<cdot>\<bottom> = \<bottom>"
 by (simp add: strictify_conv_if)
@@ -591,10 +576,10 @@ lemma cont2cont_Let' [simp, cont2cont]:
 using f
 proof (rule cont2cont_Let)
   fix x show "cont (\<lambda>y. g x y)"
-    using g by (rule cont_fst_snd_D2)
+    using g by (simp add: prod_cont_iff)
 next
   fix y show "cont (\<lambda>x. g x y)"
-    using g by (rule cont_fst_snd_D1)
+    using g by (simp add: prod_cont_iff)
 qed
 
 text {* The simple version (suggested by Joachim Breitner) is needed if

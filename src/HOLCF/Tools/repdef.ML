@@ -7,7 +7,7 @@ Defining representable domains using algebraic deflations.
 signature REPDEF =
 sig
   type rep_info =
-    { emb_def: thm, prj_def: thm, approx_def: thm, REP: thm }
+    { emb_def: thm, prj_def: thm, defl_def: thm, DEFL: thm }
 
   val add_repdef: bool -> binding option -> binding * (string * sort) list * mixfix ->
     term -> (binding * binding) option -> theory ->
@@ -28,20 +28,19 @@ infix -->>;
 (** type definitions **)
 
 type rep_info =
-  { emb_def: thm, prj_def: thm, approx_def: thm, REP: thm };
+  { emb_def: thm, prj_def: thm, defl_def: thm, DEFL: thm };
 
 (* building types and terms *)
 
 val udomT = @{typ udom};
-fun alg_deflT T = Type (@{type_name alg_defl}, [T]);
+val deflT = @{typ defl};
 fun emb_const T = Const (@{const_name emb}, T ->> udomT);
 fun prj_const T = Const (@{const_name prj}, udomT ->> T);
-fun approx_const T = Const (@{const_name approx}, natT --> (T ->> T));
+fun defl_const T = Const (@{const_name defl}, Term.itselfT T --> deflT);
 
-fun cast_const T = Const (@{const_name cast}, alg_deflT T ->> T ->> T);
 fun mk_cast (t, x) =
   capply_const (udomT, udomT)
-  $ (capply_const (alg_deflT udomT, udomT ->> udomT) $ cast_const udomT $ t)
+  $ (capply_const (deflT, udomT ->> udomT) $ @{const cast} $ t)
   $ x;
 
 (* manipulating theorems *)
@@ -71,8 +70,8 @@ fun gen_add_repdef
     val tmp_ctxt = tmp_ctxt |> Variable.declare_constraints defl;
 
     val deflT = Term.fastype_of defl;
-    val _ = if deflT = @{typ "udom alg_defl"} then ()
-            else error ("Not type udom alg_defl: " ^ quote (Syntax.string_of_typ tmp_ctxt deflT));
+    val _ = if deflT = @{typ "defl"} then ()
+            else error ("Not type defl: " ^ quote (Syntax.string_of_typ tmp_ctxt deflT));
 
     (*lhs*)
     val lhs_tfrees = map (ProofContext.check_tfree tmp_ctxt) raw_args;
@@ -85,12 +84,11 @@ fun gen_add_repdef
       |> the_default (Binding.prefix_name "Rep_" name, Binding.prefix_name "Abs_" name);
 
     (*set*)
-    val in_defl = @{term "in_deflation :: udom => udom alg_defl => bool"};
-    val set = HOLogic.Collect_const udomT $ Abs ("x", udomT, in_defl $ Bound 0 $ defl);
+    val set = @{const defl_set} $ defl;
 
     (*pcpodef*)
-    val tac1 = rtac @{thm CollectI} 1 THEN rtac @{thm bottom_in_deflation} 1;
-    val tac2 = rtac @{thm adm_mem_Collect_in_deflation} 1;
+    val tac1 = rtac @{thm defl_set_bottom} 1;
+    val tac2 = rtac @{thm adm_defl_set} 1;
     val ((info, cpo_info, pcpo_info), thy) = thy
       |> Pcpodef.add_pcpodef def (SOME name) typ set (SOME morphs) (tac1, tac2);
 
@@ -100,52 +98,48 @@ fun gen_add_repdef
     val emb_eqn = Logic.mk_equals (emb_const newT, cabs_const (newT, udomT) $ Rep_const);
     val prj_eqn = Logic.mk_equals (prj_const newT, cabs_const (udomT, newT) $
       Abs ("x", udomT, Abs_const $ mk_cast (defl, Bound 0)));
-    val repdef_approx_const =
-      Const (@{const_name repdef_approx}, (newT --> udomT) --> (udomT --> newT)
-        --> alg_deflT udomT --> natT --> (newT ->> newT));
-    val approx_eqn = Logic.mk_equals (approx_const newT,
-      repdef_approx_const $ Rep_const $ Abs_const $ defl);
+    val defl_eqn = Logic.mk_equals (defl_const newT,
+      Abs ("x", Term.itselfT newT, defl));
     val name_def = Binding.suffix_name "_def" name;
     val emb_bind = (Binding.prefix_name "emb_" name_def, []);
     val prj_bind = (Binding.prefix_name "prj_" name_def, []);
-    val approx_bind = (Binding.prefix_name "approx_" name_def, []);
+    val defl_bind = (Binding.prefix_name "defl_" name_def, []);
 
     (*instantiate class rep*)
     val lthy = thy
-      |> Class.instantiation ([full_tname], lhs_tfrees, @{sort rep});
+      |> Class.instantiation ([full_tname], lhs_tfrees, @{sort bifinite});
     val ((_, (_, emb_ldef)), lthy) =
         Specification.definition (NONE, (emb_bind, emb_eqn)) lthy;
     val ((_, (_, prj_ldef)), lthy) =
         Specification.definition (NONE, (prj_bind, prj_eqn)) lthy;
-    val ((_, (_, approx_ldef)), lthy) =
-        Specification.definition (NONE, (approx_bind, approx_eqn)) lthy;
+    val ((_, (_, defl_ldef)), lthy) =
+        Specification.definition (NONE, (defl_bind, defl_eqn)) lthy;
     val ctxt_thy = ProofContext.init_global (ProofContext.theory_of lthy);
     val emb_def = singleton (ProofContext.export lthy ctxt_thy) emb_ldef;
     val prj_def = singleton (ProofContext.export lthy ctxt_thy) prj_ldef;
-    val approx_def = singleton (ProofContext.export lthy ctxt_thy) approx_ldef;
+    val defl_def = singleton (ProofContext.export lthy ctxt_thy) defl_ldef;
     val type_definition_thm =
       MetaSimplifier.rewrite_rule
         (the_list (#set_def (#2 info)))
         (#type_definition (#2 info));
     val typedef_thms =
-      [type_definition_thm, #below_def cpo_info, emb_def, prj_def, approx_def];
+      [type_definition_thm, #below_def cpo_info, emb_def, prj_def, defl_def];
     val thy = lthy
       |> Class.prove_instantiation_instance
           (K (Tactic.rtac (@{thm typedef_rep_class} OF typedef_thms) 1))
       |> Local_Theory.exit_global;
 
     (*other theorems*)
-    val typedef_thms' = map (Thm.transfer thy)
-      [type_definition_thm, #below_def cpo_info, emb_def, prj_def];
-    val (REP_thm, thy) = thy
+    val defl_thm' = Thm.transfer thy defl_def;
+    val (DEFL_thm, thy) = thy
       |> Sign.add_path (Binding.name_of name)
       |> Global_Theory.add_thm
-         ((Binding.prefix_name "REP_" name,
-          Drule.zero_var_indexes (@{thm typedef_REP} OF typedef_thms')), [])
+         ((Binding.prefix_name "DEFL_" name,
+          Drule.zero_var_indexes (@{thm typedef_DEFL} OF [defl_thm'])), [])
       ||> Sign.restore_naming thy;
 
     val rep_info =
-      { emb_def = emb_def, prj_def = prj_def, approx_def = approx_def, REP = REP_thm };
+      { emb_def = emb_def, prj_def = prj_def, defl_def = defl_def, DEFL = DEFL_thm };
   in
     ((info, cpo_info, pcpo_info, rep_info), thy)
   end

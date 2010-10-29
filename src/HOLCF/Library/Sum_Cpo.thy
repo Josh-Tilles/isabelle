@@ -5,7 +5,7 @@
 header {* The cpo of disjoint sums *}
 
 theory Sum_Cpo
-imports Bifinite
+imports HOLCF
 begin
 
 subsection {* Ordering on sum type *}
@@ -173,17 +173,7 @@ lemma cont2cont_sum_case' [simp, cont2cont]:
   assumes g: "cont (\<lambda>p. g (fst p) (snd p))"
   assumes h: "cont (\<lambda>x. h x)"
   shows "cont (\<lambda>x. case h x of Inl a \<Rightarrow> f x a | Inr b \<Rightarrow> g x b)"
-proof -
-  note f1 = f [THEN cont_fst_snd_D1]
-  note f2 = f [THEN cont_fst_snd_D2]
-  note g1 = g [THEN cont_fst_snd_D1]
-  note g2 = g [THEN cont_fst_snd_D2]
-  show ?thesis
-    apply (rule cont_apply [OF h])
-    apply (rule cont_sum_case2 [OF f2 g2])
-    apply (rule cont_sum_case1 [OF f1 g1])
-    done
-qed
+using assms by (simp add: cont2cont_sum_case prod_cont_iff)
 
 subsection {* Compactness and chain-finiteness *}
 
@@ -223,43 +213,7 @@ apply (erule compact_imp_max_in_chain)
 apply (case_tac "\<Squnion>i. Y i", simp_all)
 done
 
-instance sum :: (finite_po, finite_po) finite_po ..
-
 instance sum :: (discrete_cpo, discrete_cpo) discrete_cpo
 by intro_classes (simp add: below_sum_def split: sum.split)
-
-subsection {* Sum type is a bifinite domain *}
-
-instantiation sum :: (profinite, profinite) profinite
-begin
-
-definition
-  approx_sum_def: "approx =
-    (\<lambda>n. \<Lambda> x. case x of Inl a \<Rightarrow> Inl (approx n\<cdot>a) | Inr b \<Rightarrow> Inr (approx n\<cdot>b))"
-
-lemma approx_Inl [simp]: "approx n\<cdot>(Inl x) = Inl (approx n\<cdot>x)"
-  unfolding approx_sum_def by simp
-
-lemma approx_Inr [simp]: "approx n\<cdot>(Inr x) = Inr (approx n\<cdot>x)"
-  unfolding approx_sum_def by simp
-
-instance proof
-  fix i :: nat and x :: "'a + 'b"
-  show "chain (approx :: nat \<Rightarrow> 'a + 'b \<rightarrow> 'a + 'b)"
-    unfolding approx_sum_def
-    by (rule ch2ch_LAM, case_tac x, simp_all)
-  show "(\<Squnion>i. approx i\<cdot>x) = x"
-    by (induct x, simp_all add: lub_Inl lub_Inr)
-  show "approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    by (induct x, simp_all)
-  have "{x::'a + 'b. approx i\<cdot>x = x} \<subseteq>
-        {x::'a. approx i\<cdot>x = x} <+> {x::'b. approx i\<cdot>x = x}"
-    by (rule subsetI, case_tac x, simp_all add: InlI InrI)
-  thus "finite {x::'a + 'b. approx i\<cdot>x = x}"
-    by (rule finite_subset,
-        intro finite_Plus finite_fixes_approx)
-qed
-
-end
 
 end

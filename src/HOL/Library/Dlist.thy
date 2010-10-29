@@ -35,6 +35,10 @@ lemma list_of_dlist_Dlist [simp]:
   "list_of_dlist (Dlist xs) = remdups xs"
   by (simp add: Dlist_def Abs_dlist_inverse)
 
+lemma remdups_list_of_dlist [simp]:
+  "remdups (list_of_dlist dxs) = list_of_dlist dxs"
+  by simp
+
 lemma Dlist_list_of_dlist [simp, code abstype]:
   "Dlist (list_of_dlist dxs) = dxs"
   by (simp add: Dlist_def list_of_dlist_inverse distinct_remdups_id)
@@ -136,14 +140,14 @@ proof (cases dxs)
   case (Abs_dlist xs)
   then have "distinct xs" and dxs: "dxs = Dlist xs" by (simp_all add: Dlist_def distinct_remdups_id)
   from `distinct xs` have "P (Dlist xs)"
-  proof (induct xs rule: distinct_induct)
+  proof (induct xs)
     case Nil from empty show ?case by (simp add: empty_def)
   next
-    case (insert x xs)
+    case (Cons x xs)
     then have "\<not> member (Dlist xs) x" and "P (Dlist xs)"
       by (simp_all add: member_def List.member_def)
     with insrt have "P (insert x (Dlist xs))" .
-    with insert show ?case by (simp add: insert_def distinct_remdups_id)
+    with Cons show ?case by (simp add: insert_def distinct_remdups_id)
   qed
   with dxs show "P dxs" by simp
 qed

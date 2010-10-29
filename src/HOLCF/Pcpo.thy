@@ -33,6 +33,9 @@ lemma is_lub_thelub:
   "\<lbrakk>chain S; range S <| x\<rbrakk> \<Longrightarrow> (\<Squnion>i. S i) \<sqsubseteq> x"
   by (blast dest: cpo intro: lubI [THEN is_lub_lub])
 
+lemma lub_below_iff: "chain S \<Longrightarrow> (\<Squnion>i. S i) \<sqsubseteq> x \<longleftrightarrow> (\<forall>i. S i \<sqsubseteq> x)"
+  by (simp add: is_lub_below_iff [OF cpo_lubI] is_ub_def)
+
 lemma lub_range_mono:
   "\<lbrakk>range X \<subseteq> range Y; chain Y; chain X\<rbrakk>
     \<Longrightarrow> (\<Squnion>i. X i) \<sqsubseteq> (\<Squnion>i. Y i)"
@@ -220,18 +223,14 @@ by simp
 lemma UU_I: "x \<sqsubseteq> \<bottom> \<Longrightarrow> x = \<bottom>"
 by (subst eq_UU_iff)
 
+lemma lub_eq_bottom_iff: "chain Y \<Longrightarrow> (\<Squnion>i. Y i) = \<bottom> \<longleftrightarrow> (\<forall>i. Y i = \<bottom>)"
+by (simp only: eq_UU_iff lub_below_iff)
+
 lemma chain_UU_I: "\<lbrakk>chain Y; (\<Squnion>i. Y i) = \<bottom>\<rbrakk> \<Longrightarrow> \<forall>i. Y i = \<bottom>"
-apply (rule allI)
-apply (rule UU_I)
-apply (erule subst)
-apply (erule is_ub_thelub)
-done
+by (simp add: lub_eq_bottom_iff)
 
 lemma chain_UU_I_inverse: "\<forall>i::nat. Y i = \<bottom> \<Longrightarrow> (\<Squnion>i. Y i) = \<bottom>"
-apply (rule lub_chain_maxelem)
-apply (erule spec)
-apply simp
-done
+by simp
 
 lemma chain_UU_I_inverse2: "(\<Squnion>i. Y i) \<noteq> \<bottom> \<Longrightarrow> \<exists>i::nat. Y i \<noteq> \<bottom>"
   by (blast intro: chain_UU_I_inverse)
@@ -263,18 +262,6 @@ lemma chfin2finch: "chain Y \<Longrightarrow> finite_chain Y"
 
 end
 
-class finite_po = finite + po
-begin
-
-subclass chfin
-apply default
-apply (drule finite_range_imp_finch)
-apply (rule finite)
-apply (simp add: finite_chain_def)
-done
-
-end
-
 class flat = pcpo +
   assumes ax_flat: "x \<sqsubseteq> y \<Longrightarrow> x = \<bottom> \<or> x = y"
 begin
@@ -300,7 +287,7 @@ lemma flat_eq: "a \<noteq> \<bottom> \<Longrightarrow> a \<sqsubseteq> b = (a = 
 
 end
 
-text {* Discrete cpos *}
+subsection {* Discrete cpos *}
 
 class discrete_cpo = below +
   assumes discrete_cpo [simp]: "x \<sqsubseteq> y \<longleftrightarrow> x = y"
@@ -321,14 +308,14 @@ proof (intro exI ext)
   thus "S i = S 0" by (rule sym)
 qed
 
-subclass cpo
+subclass chfin
 proof
   fix S :: "nat \<Rightarrow> 'a"
   assume S: "chain S"
-  hence "\<exists>x. S = (\<lambda>i. x)"
-    by (rule discrete_chain_const)
-  thus "\<exists>x. range S <<| x"
-    by (fast intro: lub_const)
+  hence "\<exists>x. S = (\<lambda>i. x)" by (rule discrete_chain_const)
+  hence "max_in_chain 0 S"
+    unfolding max_in_chain_def by auto
+  thus "\<exists>i. max_in_chain i S" ..
 qed
 
 end

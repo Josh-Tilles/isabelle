@@ -1,21 +1,30 @@
-(*  Title:      HOL/Tools/Sledgehammer/clausifier.ML
+(*  Title:      HOL/Tools/Meson/meson_clausify.ML
     Author:     Jia Meng, Cambridge University Computer Laboratory and NICTA
     Author:     Jasmin Blanchette, TU Muenchen
 
-Transformation of axiom rules (elim/intro/etc) into CNF forms.
+Transformation of HOL theorems into CNF forms.
 *)
 
-signature CLAUSIFIER =
+signature MESON_CLAUSIFY =
 sig
+  val new_skolem_var_prefix : string
   val extensionalize_theorem : thm -> thm
   val introduce_combinators_in_cterm : cterm -> thm
   val introduce_combinators_in_theorem : thm -> thm
   val to_definitional_cnf_with_quantifiers : theory -> thm -> thm
-  val cnf_axiom : theory -> thm -> thm list
+  val cluster_of_zapped_var_name : string -> (int * (int * int)) * bool
+  val cnf_axiom :
+    Proof.context -> bool -> int -> thm -> (thm * term) option * thm list
 end;
 
-structure Clausifier : CLAUSIFIER =
+structure Meson_Clausify : MESON_CLAUSIFY =
 struct
+
+open Meson
+
+(* the extra "?" helps prevent clashes *)
+val new_skolem_var_prefix = "?SK"
+val new_nonskolem_var_prefix = "?V"
 
 (**** Transformation of Elimination Rules into First-Order Formulas****)
 
@@ -37,17 +46,16 @@ fun transform_elim_theorem th =
 
 (**** SKOLEMIZATION BY INFERENCE (lcp) ****)
 
-fun mk_skolem t =
+fun mk_old_skolem_term_wrapper t =
   let val T = fastype_of t in
-    Const (@{const_name skolem}, T --> T) $ t
+    Const (@{const_name Meson.skolem}, T --> T) $ t
   end
 
-fun beta_eta_under_lambdas (Abs (s, T, t')) =
-    Abs (s, T, beta_eta_under_lambdas t')
-  | beta_eta_under_lambdas t = Envir.beta_eta_contract t
+fun beta_eta_in_abs_body (Abs (s, T, t')) = Abs (s, T, beta_eta_in_abs_body t')
+  | beta_eta_in_abs_body t = Envir.beta_eta_contract t
 
 (*Traverse a theorem, accumulating Skolem function definitions.*)
-fun assume_skolem_funs th =
+fun old_skolem_defs th =
   let
     fun dec_sko (Const (@{const_name Ex}, _) $ (body as Abs (_, T, p))) rhss =
         (*Existential: declare a Skolem function, then insert into body and continue*)
@@ -56,16 +64,16 @@ fun assume_skolem_funs th =
           (* Forms a lambda-abstraction over the formal parameters *)
           val rhs =
             list_abs_free (map dest_Free args,
-                           HOLogic.choice_const T $ beta_eta_under_lambdas body)
-            |> mk_skolem
+                           HOLogic.choice_const T $ beta_eta_in_abs_body body)
+            |> mk_old_skolem_term_wrapper
           val comb = list_comb (rhs, args)
         in dec_sko (subst_bound (comb, p)) (rhs :: rhss) end
       | dec_sko (Const (@{const_name All},_) $ Abs (a, T, p)) rhss =
         (*Universal quant: insert a free variable into body and continue*)
         let val fname = Name.variant (OldTerm.add_term_names (p,[])) a
         in dec_sko (subst_bound (Free(fname,T), p)) rhss end
-      | dec_sko (@{const HOL.conj} $ p $ q) rhss = rhss |> dec_sko p |> dec_sko q
-      | dec_sko (@{const HOL.disj} $ p $ q) rhss = rhss |> dec_sko p |> dec_sko q
+      | dec_sko (@{const conj} $ p $ q) rhss = rhss |> dec_sko p |> dec_sko q
+      | dec_sko (@{const disj} $ p $ q) rhss = rhss |> dec_sko p |> dec_sko q
       | dec_sko (@{const Trueprop} $ p) rhss = dec_sko p rhss
       | dec_sko _ rhss = rhss
   in  dec_sko (prop_of th) []  end;
@@ -83,7 +91,7 @@ fun extensionalize_theorem th =
          $ _ $ Abs _) => extensionalize_theorem (th RS fun_cong_all)
   | _ => th
 
-fun is_quasi_lambda_free (Const (@{const_name skolem}, _) $ _) = true
+fun is_quasi_lambda_free (Const (@{const_name Meson.skolem}, _) $ _) = true
   | is_quasi_lambda_free (t1 $ t2) =
     is_quasi_lambda_free t1 andalso is_quasi_lambda_free t2
   | is_quasi_lambda_free (Abs _) = false
@@ -188,7 +196,7 @@ val skolem_def_raw = @{thms skolem_def_raw}
 (* Given the definition of a Skolem function, return a theorem to replace
    an existential formula by a use of that function.
    Example: "EX x. x : A & x ~: B ==> sko A B : A & sko A B ~: B"  [.] *)
-fun skolem_theorem_of_def thy rhs0 =
+fun old_skolem_theorem_from_def thy rhs0 =
   let
     val rhs = rhs0 |> Type.legacy_freeze_thaw |> #1 |> cterm_of thy
     val rhs' = rhs |> Thm.dest_comb |> snd
@@ -196,8 +204,9 @@ fun skolem_theorem_of_def thy rhs0 =
     val (hilbert, cabs) = ch |> Thm.dest_comb |>> term_of
     val T =
       case hilbert of
-        Const (@{const_name Eps}, Type (@{type_name fun}, [_, T])) => T
-      | _ => raise TERM ("skolem_theorem_of_def: expected \"Eps\"", [hilbert])
+        Const (_, Type (@{type_name fun}, [_, T])) => T
+      | _ => raise TERM ("old_skolem_theorem_from_def: expected \"Eps\"",
+                         [hilbert])
     val cex = cterm_of thy (HOLogic.exists_const T)
     val ex_tm = Thm.capply cTrueprop (Thm.capply cex cabs)
     val conc =
@@ -205,24 +214,14 @@ fun skolem_theorem_of_def thy rhs0 =
       |> Drule.beta_conv cabs |> Thm.capply cTrueprop
     fun tacf [prem] =
       rewrite_goals_tac skolem_def_raw
-      THEN rtac ((prem |> rewrite_rule skolem_def_raw) RS @{thm someI_ex}) 1
+      THEN rtac ((prem |> rewrite_rule skolem_def_raw)
+                 RS Global_Theory.get_thm thy "Hilbert_Choice.someI_ex") 1
   in
     Goal.prove_internal [ex_tm] conc tacf
     |> forall_intr_list frees
     |> Thm.forall_elim_vars 0  (*Introduce Vars, but don't discharge defs.*)
     |> Thm.varifyT_global
   end
-
-(* Converts an Isabelle theorem (intro, elim or simp format, even higher-order)
-   into NNF. *)
-fun to_nnf th ctxt0 =
-  let
-    val th1 = th |> transform_elim_theorem |> zero_var_indexes
-    val ((_, [th2]), ctxt) = Variable.import true [th1] ctxt0
-    val th3 = th2 |> Conv.fconv_rule Object_Logic.atomize
-                  |> extensionalize_theorem
-                  |> Meson.make_nnf ctxt
-  in (th3, ctxt) end
 
 fun to_definitional_cnf_with_quantifiers thy th =
   let
@@ -231,24 +230,138 @@ fun to_definitional_cnf_with_quantifiers thy th =
     val eqth = eqth RS @{thm TruepropI}
   in Thm.equal_elim eqth th end
 
-(* Convert a theorem to CNF, with Skolem functions as additional premises. *)
-fun cnf_axiom thy th =
-  let
-    val ctxt0 = Variable.global_thm_context th
-    val (nnf_th, ctxt) = to_nnf th ctxt0
-    fun aux th =
-      Meson.make_cnf (map (skolem_theorem_of_def thy) (assume_skolem_funs th))
-                     th ctxt
-    val (cnf_ths, ctxt) =
-      aux nnf_th
-      |> (fn ([], _) => aux (to_definitional_cnf_with_quantifiers thy nnf_th)
-           | p => p)
-  in
-    cnf_ths |> map introduce_combinators_in_theorem
-            |> Variable.export ctxt ctxt0
-            |> Meson.finish_cnf
-            |> map Thm.close_derivation
+fun zapped_var_name ((ax_no, cluster_no), skolem) index_no s =
+  (if skolem then new_skolem_var_prefix else new_nonskolem_var_prefix) ^
+  "_" ^ string_of_int ax_no ^ "_" ^ string_of_int cluster_no ^ "_" ^
+  string_of_int index_no ^ "_" ^ s
+
+fun cluster_of_zapped_var_name s =
+  let val get_int = the o Int.fromString o nth (space_explode "_" s) in
+    ((get_int 1, (get_int 2, get_int 3)),
+     String.isPrefix new_skolem_var_prefix s)
   end
-  handle THM _ => []
+
+fun zap (cluster as (cluster_no, cluster_skolem)) index_no pos ct =
+  ct
+  |> (case term_of ct of
+        Const (s, _) $ Abs (s', _, _) =>
+        if s = @{const_name all} orelse s = @{const_name All} orelse
+           s = @{const_name Ex} then
+          let
+            val skolem = (pos = (s = @{const_name Ex}))
+            val (cluster, index_no) =
+              if skolem = cluster_skolem then (cluster, index_no)
+              else ((cluster_no ||> cluster_skolem ? Integer.add 1, skolem), 0)
+          in
+            Thm.dest_comb #> snd
+            #> Thm.dest_abs (SOME (zapped_var_name cluster index_no s'))
+            #> snd #> zap cluster (index_no + 1) pos
+          end
+        else
+          Conv.all_conv
+      | Const (s, _) $ _ $ _ =>
+        if s = @{const_name "==>"} orelse s = @{const_name implies} then
+          Conv.combination_conv (Conv.arg_conv (zap cluster index_no (not pos)))
+                                (zap cluster index_no pos)
+        else if s = @{const_name conj} orelse s = @{const_name disj} then
+          Conv.combination_conv (Conv.arg_conv (zap cluster index_no pos))
+                                (zap cluster index_no pos)
+        else
+          Conv.all_conv
+      | Const (s, _) $ _ =>
+        if s = @{const_name Trueprop} then
+          Conv.arg_conv (zap cluster index_no pos)
+        else if s = @{const_name Not} then
+          Conv.arg_conv (zap cluster index_no (not pos))
+        else
+          Conv.all_conv
+      | _ => Conv.all_conv)
+
+fun ss_only ths = MetaSimplifier.clear_ss HOL_basic_ss addsimps ths
+
+val no_choice =
+  @{prop "ALL x. EX y. Q x y ==> EX f. ALL x. Q x (f x)"}
+  |> Logic.varify_global
+  |> Skip_Proof.make_thm @{theory}
+
+(* Converts an Isabelle theorem into NNF. *)
+fun nnf_axiom choice_ths new_skolemizer ax_no th ctxt =
+  let
+    val thy = ProofContext.theory_of ctxt
+    val th =
+      th |> transform_elim_theorem
+         |> zero_var_indexes
+         |> new_skolemizer ? forall_intr_vars
+    val (th, ctxt) = Variable.import true [th] ctxt |>> snd |>> the_single
+    val th = th |> Conv.fconv_rule Object_Logic.atomize
+                |> extensionalize_theorem
+                |> make_nnf ctxt
+  in
+    if new_skolemizer then
+      let
+        fun skolemize choice_ths =
+          skolemize_with_choice_theorems ctxt choice_ths
+          #> simplify (ss_only @{thms all_simps[symmetric]})
+        val pull_out =
+          simplify (ss_only @{thms all_simps[symmetric] ex_simps[symmetric]})
+        val (discharger_th, fully_skolemized_th) =
+          if null choice_ths then
+            th |> `I |>> pull_out ||> skolemize [no_choice]
+          else
+            th |> skolemize choice_ths |> `I
+        val t =
+          fully_skolemized_th |> cprop_of
+          |> zap ((ax_no, 0), true) 0 true |> Drule.export_without_context
+          |> cprop_of |> Thm.dest_equals |> snd |> term_of
+      in
+        if exists_subterm (fn Var ((s, _), _) =>
+                              String.isPrefix new_skolem_var_prefix s
+                            | _ => false) t then
+          let
+            val (ct, ctxt) =
+              Variable.import_terms true [t] ctxt
+              |>> the_single |>> cterm_of thy
+          in (SOME (discharger_th, ct), Thm.assume ct, ctxt) end
+       else
+         (NONE, th, ctxt)
+      end
+    else
+      (NONE, th, ctxt)
+  end
+
+(* Convert a theorem to CNF, with additional premises due to skolemization. *)
+fun cnf_axiom ctxt0 new_skolemizer ax_no th =
+  let
+    val thy = ProofContext.theory_of ctxt0
+    val choice_ths = choice_theorems thy
+    val (opt, nnf_th, ctxt) = nnf_axiom choice_ths new_skolemizer ax_no th ctxt0
+    fun clausify th =
+      make_cnf (if new_skolemizer orelse null choice_ths then
+                  []
+                else
+                  map (old_skolem_theorem_from_def thy)
+                      (old_skolem_defs th)) th ctxt
+    val (cnf_ths, ctxt) =
+      clausify nnf_th
+      |> (fn ([], _) =>
+             clausify (to_definitional_cnf_with_quantifiers thy nnf_th)
+           | p => p)
+    fun intr_imp ct th =
+      Thm.instantiate ([], map (pairself (cterm_of thy))
+                               [(Var (("i", 0), @{typ nat}),
+                                 HOLogic.mk_nat ax_no)])
+                      (zero_var_indexes @{thm skolem_COMBK_D})
+      RS Thm.implies_intr ct th
+  in
+    (opt |> Option.map (I #>> singleton (Variable.export ctxt ctxt0)
+                        ##> (term_of #> HOLogic.dest_Trueprop
+                             #> singleton (Variable.export_terms ctxt ctxt0))),
+     cnf_ths |> map (introduce_combinators_in_theorem
+                     #> (case opt of SOME (_, ct) => intr_imp ct | NONE => I))
+             |> Variable.export ctxt ctxt0
+             |> finish_cnf
+             |> map Thm.close_derivation)
+  end
+  handle THM _ => (NONE, [])
 
 end;

@@ -7,7 +7,6 @@ exception Interrupt;
 fun reraise exn = raise exn;
 
 use "ML-Systems/proper_int.ML";
-use "ML-Systems/unsynchronized.ML";
 use "ML-Systems/overloading_smlnj.ML";
 use "General/exn.ML";
 use "ML-Systems/single_assignment.ML";
@@ -159,6 +158,9 @@ fun uninterruptible f =
 end;
 
 
+use "ML-Systems/unsynchronized.ML";
+
+
 
 (** OS related **)
 
@@ -171,9 +173,6 @@ val pwd = OS.FileSys.getDir;
 (* system command execution *)
 
 val bash_output = (fn (output, rc) => (output, mk_int rc)) o bash_output;
-
-fun process_id pid =
-  Word.fmt StringCvt.DEC (Word.fromLargeWord (Posix.Process.pidToWord (Posix.ProcEnv.getpid ())));
 
 
 (* getenv *)

@@ -22,12 +22,6 @@ definition
   monofun :: "('a \<Rightarrow> 'b) \<Rightarrow> bool"  -- "monotonicity"  where
   "monofun f = (\<forall>x y. x \<sqsubseteq> y \<longrightarrow> f x \<sqsubseteq> f y)"
 
-(*
-definition
-  contlub :: "('a::cpo \<Rightarrow> 'b::cpo) \<Rightarrow> bool"  -- "first cont. def" where
-  "contlub f = (\<forall>Y. chain Y \<longrightarrow> f (\<Squnion>i. Y i) = (\<Squnion>i. f (Y i)))"
-*)
-
 definition
   cont :: "('a::cpo \<Rightarrow> 'b::cpo) \<Rightarrow> bool"
 where
@@ -176,6 +170,17 @@ lemma cont_compose:
   "\<lbrakk>cont c; cont (\<lambda>x. f x)\<rbrakk> \<Longrightarrow> cont (\<lambda>x. c (f x))"
 by (rule cont_apply [OF _ _ cont_const])
 
+text {* Least upper bounds preserve continuity *}
+
+lemma cont2cont_lub [simp]:
+  assumes chain: "\<And>x. chain (\<lambda>i. F i x)" and cont: "\<And>i. cont (\<lambda>x. F i x)"
+  shows "cont (\<lambda>x. \<Squnion>i. F i x)"
+apply (rule contI2)
+apply (simp add: monofunI cont2monofunE [OF cont] lub_mono chain)
+apply (simp add: cont2contlubE [OF cont])
+apply (simp add: diag_lub ch2ch_cont [OF cont] chain)
+done
+
 text {* if-then-else is continuous *}
 
 lemma cont_if [simp, cont2cont]:
@@ -184,7 +189,7 @@ by (induct b) simp_all
 
 subsection {* Finite chains and flat pcpos *}
 
-text {* monotone functions map finite chains to finite chains *}
+text {* Monotone functions map finite chains to finite chains. *}
 
 lemma monofun_finch2finch:
   "\<lbrakk>monofun f; finite_chain Y\<rbrakk> \<Longrightarrow> finite_chain (\<lambda>n. f (Y n))"
@@ -193,11 +198,13 @@ apply (simp add: ch2ch_monofun)
 apply (force simp add: max_in_chain_def)
 done
 
-text {* The same holds for continuous functions *}
+text {* The same holds for continuous functions. *}
 
 lemma cont_finch2finch:
   "\<lbrakk>cont f; finite_chain Y\<rbrakk> \<Longrightarrow> finite_chain (\<lambda>n. f (Y n))"
 by (rule cont2mono [THEN monofun_finch2finch])
+
+text {* All monotone functions with chain-finite domain are continuous. *}
 
 lemma chfindom_monofun2cont: "monofun f \<Longrightarrow> cont (f::'a::chfin \<Rightarrow> 'b::cpo)"
 apply (erule contI2)
@@ -208,7 +215,7 @@ apply (simp add: maxinch_is_thelub ch2ch_monofun)
 apply (force simp add: max_in_chain_def)
 done
 
-text {* some properties of flat *}
+text {* All strict functions with flat domain are continuous. *}
 
 lemma flatdom_strict2mono: "f \<bottom> = \<bottom> \<Longrightarrow> monofun (f::'a::flat \<Rightarrow> 'b::pcpo)"
 apply (rule monofunI)
@@ -219,7 +226,7 @@ done
 lemma flatdom_strict2cont: "f \<bottom> = \<bottom> \<Longrightarrow> cont (f::'a::flat \<Rightarrow> 'b::pcpo)"
 by (rule flatdom_strict2mono [THEN chfindom_monofun2cont])
 
-text {* functions with discrete domain *}
+text {* All functions with discrete domain are continuous. *}
 
 lemma cont_discrete_cpo [simp, cont2cont]: "cont (f::'a::discrete_cpo \<Rightarrow> 'b::cpo)"
 apply (rule contI)

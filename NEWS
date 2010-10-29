@@ -6,6 +6,8 @@ New in this Isabelle version
 
 *** General ***
 
+* Significantly improved Isabelle/Isar implementation manual.
+
 * Explicit treatment of UTF8 sequences as Isabelle symbols, such that
 a Unicode character is treated as a single symbol, not a sequence of
 non-ASCII bytes as before.  Since Isabelle/ML string literals may
@@ -68,18 +70,45 @@ feature is still required for historical reasons.
 * Discontinued ancient 'constdefs' command.  INCOMPATIBILITY, use
 'definition' instead.
 
-* Document antiquotations 'class' and 'type' for printing classes
+* Document antiquotations @{class} and @{type} for printing classes
 and type constructors.
 
 
 *** HOL ***
 
-* String.literal is a type, but not a datatype. INCOMPATIBILITY.
+* Quickcheck now has a configurable time limit which is set to 30 seconds
+by default. This can be changed by adding [timeout = n] to the quickcheck
+command. The time limit for auto quickcheck is still set independently,
+by default to 5 seconds.
+
+* New command 'partial_function' provides basic support for recursive
+function definitions over complete partial orders. Concrete instances
+are provided for i) the option type, ii) tail recursion on arbitrary
+types, and iii) the heap monad of Imperative_HOL. See
+HOL/ex/Fundefs.thy and HOL/Imperative_HOL/ex/Linked_Lists.thy for
+examples.
+
+* Predicates `distinct` and `sorted` now defined inductively, with nice
+induction rules.  INCOMPATIBILITY: former distinct.simps and sorted.simps
+now named distinct_simps and sorted_simps.
+
+* Constant `contents` renamed to `the_elem`, to free the generic name
+contents for other uses.  INCOMPATIBILITY.
+
+* Dropped old primrec package.  INCOMPATIBILITY.
+
+* Improved infrastructure for term evaluation using code generator
+techniques, in particular static evaluation conversions.
+
+* String.literal is a type, but not a datatype.  INCOMPATIBILITY.
  
 * Renamed lemmas:
   expand_fun_eq -> fun_eq_iff
   expand_set_eq -> set_eq_iff
   set_ext -> set_eqI
+ INCOMPATIBILITY.
+
+* Renamed lemma list: nat_number -> eval_nat_numeral
 
 * Renamed class eq and constant eq (for code generation) to class equal
 and constant equal, plus renaming of related facts and various tuning.
@@ -89,6 +118,8 @@ INCOMPATIBILITY.
 the code generator.
 
 * Dropped type classes mult_mono and mult_mono1.  INCOMPATIBILITY.
+
+* Removed output syntax "'a ~=> 'b" for "'a => 'b option". INCOMPATIBILITY.
 
 * Theory SetsAndFunctions has been split into Function_Algebras and Set_Algebras;
 canonical names for instance definitions for functions; various improvements.
@@ -232,6 +263,71 @@ similar to inductive_cases.
 generalization of surj, and "surj f" is now a abbreviation of "surj_on f UNIV".
 The theorems bij_def and surj_def are unchanged.
 
+* Function package: .psimps rules are no longer implicitly declared [simp].
+INCOMPATIBILITY.
+
+* Weaker versions of the "meson" and "metis" proof methods are now available in
+  "HOL-Plain", without dependency on "Hilbert_Choice". The proof methods become
+  more powerful after "Hilbert_Choice" is loaded in "HOL-Main".
+
+* MESON: Renamed lemmas:
+  meson_not_conjD ~> Meson.not_conjD
+  meson_not_disjD ~> Meson.not_disjD
+  meson_not_notD ~> Meson.not_notD
+  meson_not_allD ~> Meson.not_allD
+  meson_not_exD ~> Meson.not_exD
+  meson_imp_to_disjD ~> Meson.imp_to_disjD
+  meson_not_impD ~> Meson.not_impD
+  meson_iff_to_disjD ~> Meson.iff_to_disjD
+  meson_not_iffD ~> Meson.not_iffD
+  meson_not_refl_disj_D ~> Meson.not_refl_disj_D
+  meson_conj_exD1 ~> Meson.conj_exD1
+  meson_conj_exD2 ~> Meson.conj_exD2
+  meson_disj_exD ~> Meson.disj_exD
+  meson_disj_exD1 ~> Meson.disj_exD1
+  meson_disj_exD2 ~> Meson.disj_exD2
+  meson_disj_assoc ~> Meson.disj_assoc
+  meson_disj_comm ~> Meson.disj_comm
+  meson_disj_FalseD1 ~> Meson.disj_FalseD1
+  meson_disj_FalseD2 ~> Meson.disj_FalseD2
+INCOMPATIBILITY.
+
+* Auto Solve: Renamed "Auto Solve Direct". The tool is now available manually as
+  "solve_direct".
+
+* Sledgehammer:
+  - Renamed lemmas:
+    COMBI_def ~> Meson.COMBI_def
+    COMBK_def ~> Meson.COMBK_def
+    COMBB_def ~> Meson.COMBB_def
+    COMBC_def ~> Meson.COMBC_def
+    COMBS_def ~> Meson.COMBS_def
+    abs_I ~> Meson.abs_I
+    abs_K ~> Meson.abs_K
+    abs_B ~> Meson.abs_B
+    abs_C ~> Meson.abs_C
+    abs_S ~> Meson.abs_S
+    INCOMPATIBILITY.
+  - Renamed commands:
+    sledgehammer atp_info ~> sledgehammer running_provers
+    sledgehammer atp_kill ~> sledgehammer kill_provers
+    sledgehammer available_atps ~> sledgehammer available_provers
+    INCOMPATIBILITY.
+  - Renamed options:
+    sledgehammer [atps = ...] ~> sledgehammer [provers = ...]
+    sledgehammer [atp = ...] ~> sledgehammer [prover = ...]
+    INCOMPATIBILITY.
+
+* Changed SMT configuration options:
+  - Renamed:
+    z3_proofs ~> smt_oracle (with swapped semantics)
+    z3_trace_assms ~> smt_trace_used_facts
+    INCOMPATIBILITY.
+  - Added:
+    cvc3_options
+    yices_options
+    smt_datatypes
+
 *** FOL ***
 
 * All constant names are now qualified.  INCOMPATIBILITY.
@@ -243,6 +339,13 @@ The theorems bij_def and surj_def are unchanged.
 
 
 *** ML ***
+
+* Antiquotation @{assert} inlines a function bool -> unit that raises
+Fail if the argument is false.  Due to inlining the source position of
+failed assertions is included in the error output.
+
+* Renamed setmp_noncritical to Unsynchronized.setmp to emphasize its
+meaning.
 
 * Renamed structure PureThy to Pure_Thy and moved most of its
 operations to structure Global_Theory, to emphasize that this is

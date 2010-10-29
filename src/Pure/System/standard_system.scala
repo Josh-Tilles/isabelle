@@ -6,10 +6,12 @@ Standard system operations, with basic Cygwin/Posix compatibility.
 
 package isabelle
 
+import java.util.zip.{ZipEntry, ZipInputStream}
 import java.util.regex.Pattern
 import java.util.Locale
-import java.io.{BufferedWriter, OutputStreamWriter, FileOutputStream,
-  BufferedInputStream, FileInputStream, BufferedReader, InputStreamReader,
+import java.net.URL
+import java.io.{BufferedWriter, OutputStreamWriter, FileOutputStream, BufferedOutputStream,
+  BufferedInputStream, InputStream, FileInputStream, BufferedReader, InputStreamReader,
   File, FileFilter, IOException}
 
 import scala.io.{Source, Codec}
@@ -77,30 +79,32 @@ object Standard_System
 
   /* basic file operations */
 
-  def with_tmp_file[A](prefix: String)(body: File => A): A =
+  def slurp(reader: BufferedReader): String =
   {
-    val file = File.createTempFile(prefix, null)
-    try { body(file) } finally { file.delete }
+    val output = new StringBuilder(100)
+    var c = -1
+    while ({ c = reader.read; c != -1 }) output += c.toChar
+    reader.close
+    output.toString
   }
 
-  def read_file(file: File): String =
-  {
-    val buf = new StringBuilder(file.length.toInt)
-    val reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), charset))
-    var c = reader.read
-    while (c != -1) {
-      buf.append(c.toChar)
-      c = reader.read
-    }
-    reader.close
-    buf.toString
-  }
+  def slurp(stream: InputStream): String =
+    slurp(new BufferedReader(new InputStreamReader(stream, charset)))
+
+  def read_file(file: File): String = slurp(new FileInputStream(file))
 
   def write_file(file: File, text: CharSequence)
   {
     val writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(file), charset))
     try { writer.append(text) }
     finally { writer.close }
+  }
+
+  def with_tmp_file[A](prefix: String)(body: File => A): A =
+  {
+    val file = File.createTempFile(prefix, null)
+    file.deleteOnExit
+    try { body(file) } finally { file.delete }
   }
 
   // FIXME handle (potentially cyclic) directory graph
@@ -138,7 +142,7 @@ object Standard_System
   def process_output(proc: Process): (String, Int) =
   {
     proc.getOutputStream.close
-    val output = Source.fromInputStream(proc.getInputStream)(codec()).mkString  // FIXME
+    val output = slurp(proc.getInputStream)
     val rc =
       try { proc.waitFor }
       finally {
@@ -152,6 +156,95 @@ object Standard_System
 
   def raw_exec(cwd: File, env: Map[String, String], redirect: Boolean, args: String*)
     : (String, Int) = process_output(raw_execute(cwd, env, redirect, args: _*))
+
+
+  /* unpack zip archive -- platform file-system */
+
+  def unzip(url: URL, root: File)
+  {
+    import scala.collection.JavaConversions._
+
+    val buffer = new Array[Byte](4096)
+
+    val zip_stream = new ZipInputStream(new BufferedInputStream(url.openStream))
+    var entry: ZipEntry = null
+    try {
+      while ({ entry = zip_stream.getNextEntry; entry != null }) {
+        val file = new File(root, entry.getName.replace('/', File.separatorChar))
+        val dir = file.getParentFile
+        if (dir != null && !dir.isDirectory && !dir.mkdirs)
+          error("Failed to create directory: " + dir)
+
+        var len = 0
+        val out_stream = new BufferedOutputStream(new FileOutputStream(file))
+        try {
+          while ({ len = zip_stream.read(buffer); len != -1 })
+            out_stream.write(buffer, 0, len)
+        }
+        finally { out_stream.close }
+      }
+    }
+    finally { zip_stream.close }
+  }
+
+
+  /* unpack tar archive -- POSIX file-system */
+
+  def posix_untar(url: URL, root: File, gunzip: Boolean = false,
+    tar: String = "tar", gzip: String = "", progress: Int => Unit = _ => ()): String =
+  {
+    if (!root.isDirectory && !root.mkdirs)
+      error("Failed to create root directory: " + root)
+
+    val connection = url.openConnection
+
+    val length = connection.getContentLength.toLong
+    require(length >= 0L)
+
+    val stream = new BufferedInputStream(connection.getInputStream)
+    val progress_stream = new InputStream {
+      private val total = length max 1L
+      private var index = 0L
+      private var percentage = 0L
+      override def read(): Int =
+      {
+        val c = stream.read
+        if (c != -1) {
+          index += 100
+          val p = index / total
+          if (percentage != p) { percentage = p; progress(percentage.toInt) }
+        }
+        c
+      }
+      override def available(): Int = stream.available
+      override def close() { stream.close }
+    }
+
+    val cmdline =
+      List(tar, "-o", "-x", "-f-") :::
+        (if (!gunzip) Nil else if (gzip == "") List("-z") else List("-I", gzip))
+
+    val proc = raw_execute(root, null, false, cmdline:_*)
+    val stdout = Simple_Thread.future("tar_stdout") { slurp(proc.getInputStream) }
+    val stderr = Simple_Thread.future("tar_stderr") { slurp(proc.getErrorStream) }
+    val stdin = new BufferedOutputStream(proc.getOutputStream)
+
+    try {
+      var c = -1
+      val io_err =
+        try { while ({ c = progress_stream.read; c != -1 }) stdin.write(c); false }
+        catch { case e: IOException => true }
+      stdin.close
+
+      val rc = try { proc.waitFor } finally { Thread.interrupted }
+      if (io_err || rc != 0) error(stderr.join.trim) else stdout.join
+    }
+    finally {
+      progress_stream.close
+      stdin.close
+      proc.destroy
+    }
+  }
 }
 
 

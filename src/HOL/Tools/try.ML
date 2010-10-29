@@ -18,9 +18,7 @@ val auto = Unsynchronized.ref false
 
 val _ =
   ProofGeneralPgip.add_preference Preferences.category_tracing
-  (setmp_noncritical auto true (fn () =>
-    Preferences.bool_pref auto
-      "auto-try" "Try standard proof methods.") ());
+      (Preferences.bool_pref auto "auto-try" "Try standard proof methods.")
 
 val default_timeout = Time.fromSeconds 5
 
@@ -32,6 +30,7 @@ fun can_apply timeout_opt pre post tac st =
       SOME (x, _) => nprems_of (post x) < nprems_of goal
     | NONE => false
   end
+  handle TimeLimit.TimeOut => false
 
 fun do_generic timeout_opt command pre post apply st =
   let val timer = Timer.startRealTimer () in
@@ -44,38 +43,41 @@ fun do_generic timeout_opt command pre post apply st =
 fun named_method thy name =
   Method.method thy (Args.src ((name, []), Position.none))
 
-fun apply_named_method name ctxt =
-  let val thy = ProofContext.theory_of ctxt in
-    Method.apply (named_method thy name) ctxt []
-  end
-
-fun do_named_method name timeout_opt st =
-  do_generic timeout_opt name (#goal o Proof.goal) snd
-             (apply_named_method name (Proof.context_of st)) st
-
 fun apply_named_method_on_first_goal name ctxt =
   let val thy = ProofContext.theory_of ctxt in
     Proof.refine (Method.SelectGoals (1, Method.Basic (named_method thy name)))
   end
+  handle ERROR _ => K Seq.empty (* e.g., the method isn't available yet *)
 
-fun do_named_method (name, all_goals) timeout_opt st =
-  do_generic timeout_opt
-             (name ^ (if all_goals andalso
-                         nprems_of (#goal (Proof.goal st)) > 1 then
-                        "[1]"
-                      else
-                        "")) I (#goal o Proof.goal)
-             (apply_named_method_on_first_goal name (Proof.context_of st)) st
+fun do_named_method (name, (all_goals, run_if_auto)) auto timeout_opt st =
+  if not auto orelse run_if_auto then
+    do_generic timeout_opt
+               (name ^ (if all_goals andalso
+                           nprems_of (#goal (Proof.goal st)) > 1 then
+                          "[1]"
+                        else
+                          "")) I (#goal o Proof.goal)
+               (apply_named_method_on_first_goal name (Proof.context_of st)) st
+  else
+    NONE
 
+(* name * (all_goals, run_if_auto) *)
 val named_methods =
-  [("simp", false), ("auto", true), ("fast", false), ("fastsimp", false),
-   ("force", false), ("blast", false), ("arith", false)]
+  [("simp", (false, true)),
+   ("auto", (true, true)),
+   ("fast", (false, false)),
+   ("fastsimp", (false, false)),
+   ("force", (false, false)),
+   ("blast", (false, true)),
+   ("metis", (false, true)),
+   ("linarith", (false, true)),
+   ("presburger", (false, true))]
 val do_methods = map do_named_method named_methods
 
 fun time_string (s, ms) = s ^ ": " ^ string_of_int ms ^ " ms"
 
 fun do_try auto timeout_opt st =
-  case do_methods |> Par_List.map (fn f => f timeout_opt st)
+  case do_methods |> Par_List.map (fn f => f auto timeout_opt st)
                   |> map_filter I |> sort (int_ord o pairself snd) of
     [] => (if auto then () else writeln "No proof found."; (false, st))
   | xs as (s, _) :: _ =>
@@ -87,7 +89,7 @@ fun do_try auto timeout_opt st =
         Markup.markup Markup.sendback
             ((if nprems_of (#goal (Proof.goal st)) = 1 then "by" else "apply") ^
              " " ^ s) ^
-        ".\n(" ^ space_implode "; " (map time_string xs) ^ ")\n"
+        "\n(" ^ space_implode "; " (map time_string xs) ^ ").\n"
     in
       (true, st |> (if auto then
                       Proof.goal_message
@@ -95,7 +97,7 @@ fun do_try auto timeout_opt st =
                                     Pretty.markup Markup.hilite
                                                   [Pretty.str message]])
                     else
-                      tap (fn _ => priority message)))
+                      tap (fn _ => Output.urgent_message message)))
     end
 
 val invoke_try = fst oo do_try false

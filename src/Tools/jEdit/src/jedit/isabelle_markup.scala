@@ -21,10 +21,11 @@ object Isabelle_Markup
   val outdated_color = new Color(240, 240, 240)
   val unfinished_color = new Color(255, 228, 225)
 
+  val light_color = new Color(240, 240, 240)
   val regular_color = new Color(192, 192, 192)
-  val warning_color = new Color(255, 168, 0)
-  val error_color = new Color(255, 80, 80)
-  val bad_color = new Color(255, 204, 153, 100)
+  val warning_color = new Color(255, 140, 0)
+  val error_color = new Color(178, 34, 34)
+  val bad_color = new Color(255, 106, 106, 100)
 
   class Icon(val priority: Int, val icon: javax.swing.Icon)
   {
@@ -68,7 +69,7 @@ object Isabelle_Markup
   /* markup selectors */
 
   private val subexp_include =
-    Set(Markup.SORT, Markup.TYP, Markup.TERM, Markup.PROP, Markup.ML_TYPING)
+    Set(Markup.SORT, Markup.TYP, Markup.TERM, Markup.PROP, Markup.ML_TYPING, Markup.TOKEN_RANGE)
 
   val subexp: Markup_Tree.Select[(Text.Range, Color)] =
   {
@@ -83,20 +84,26 @@ object Isabelle_Markup
     case Text.Info(_, XML.Elem(Markup(Markup.ERROR, _), _)) => error_color
   }
 
+  val popup: Markup_Tree.Select[XML.Tree] =
+  {
+    case Text.Info(_, msg @ XML.Elem(Markup(markup, _), _))
+    if markup == Markup.WRITELN || markup == Markup.WARNING || markup == Markup.ERROR => msg
+  }
+
   val gutter_message: Markup_Tree.Select[Icon] =
   {
     case Text.Info(_, XML.Elem(Markup(Markup.WARNING, _), _)) => warning_icon
     case Text.Info(_, XML.Elem(Markup(Markup.ERROR, _), _)) => error_icon
   }
 
-  val background: Markup_Tree.Select[Color] =
+  val background1: Markup_Tree.Select[Color] =
   {
     case Text.Info(_, XML.Elem(Markup(Markup.BAD, _), _)) => bad_color
   }
 
-  val box: Markup_Tree.Select[Color] =
+  val background2: Markup_Tree.Select[Color] =
   {
-    case Text.Info(_, XML.Elem(Markup(Markup.TOKEN_RANGE, _), _)) => regular_color
+    case Text.Info(_, XML.Elem(Markup(Markup.TOKEN_RANGE, _), _)) => light_color
   }
 
   val tooltip: Markup_Tree.Select[String] =
@@ -107,6 +114,7 @@ object Isabelle_Markup
     case Text.Info(_, XML.Elem(Markup(Markup.TYP, _), _)) => "type"
     case Text.Info(_, XML.Elem(Markup(Markup.TERM, _), _)) => "term"
     case Text.Info(_, XML.Elem(Markup(Markup.PROP, _), _)) => "proposition"
+    case Text.Info(_, XML.Elem(Markup(Markup.TOKEN_RANGE, _), _)) => "inner syntax token"
   }
 
 

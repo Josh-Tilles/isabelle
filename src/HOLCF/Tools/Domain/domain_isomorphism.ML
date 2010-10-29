@@ -27,8 +27,11 @@ sig
   val domain_isomorphism_cmd :
     (string list * binding * mixfix * string * (binding * binding) option) list
       -> theory -> theory
+
   val add_type_constructor :
-    (string * term * string * thm  * thm * thm * thm) -> theory -> theory
+    (string * string * string * bool list) -> theory -> theory
+
+  val setup : theory -> theory
 end;
 
 structure Domain_Isomorphism : DOMAIN_ISOMORPHISM =
@@ -36,11 +39,14 @@ struct
 
 val beta_rules =
   @{thms beta_cfun cont_id cont_const cont2cont_Rep_CFun cont2cont_LAM'} @
-  @{thms cont2cont_fst cont2cont_snd cont2cont_Pair cont2cont_split'};
+  @{thms cont2cont_fst cont2cont_snd cont2cont_Pair cont2cont_prod_case'};
 
 val beta_ss = HOL_basic_ss addsimps (simp_thms @ beta_rules);
 
 val beta_tac = simp_tac beta_ss;
+
+fun is_cpo thy T = Sign.of_sort thy (T, @{sort cpo});
+fun is_bifinite thy T = Sign.of_sort thy (T, @{sort bifinite});
 
 (******************************************************************************)
 (******************************** theory data *********************************)
@@ -48,51 +54,40 @@ val beta_tac = simp_tac beta_ss;
 
 structure DeflData = Theory_Data
 (
-  (* terms like "foo_defl" *)
-  type T = term Symtab.table;
+  (* constant names like "foo_defl" *)
+  (* list indicates which type arguments correspond to deflation parameters *)
+  (* alternatively, which type arguments allow indirect recursion *)
+  type T = (string * bool list) Symtab.table;
   val empty = Symtab.empty;
   val extend = I;
   fun merge data = Symtab.merge (K true) data;
 );
 
-structure RepData = Theory_Data
+structure RepData = Named_Thms
 (
-  (* theorems like "REP('a foo) = foo_defl$REP('a)" *)
-  type T = thm list;
-  val empty = [];
-  val extend = I;
-  val merge = Thm.merge_thms;
+  val name = "domain_defl_simps"
+  val description = "theorems like DEFL('a t) = t_defl$DEFL('a)"
+)
+
+structure MapIdData = Named_Thms
+(
+  val name = "domain_map_ID"
+  val description = "theorems like foo_map$ID = ID"
 );
 
-structure MapIdData = Theory_Data
+structure IsodeflData = Named_Thms
 (
-  (* theorems like "foo_map$ID = ID" *)
-  type T = thm list;
-  val empty = [];
-  val extend = I;
-  val merge = Thm.merge_thms;
-);
-
-structure IsodeflData = Theory_Data
-(
-  (* theorems like "isodefl d t ==> isodefl (foo_map$d) (foo_defl$t)" *)
-  type T = thm list;
-  val empty = [];
-  val extend = I;
-  val merge = Thm.merge_thms;
+  val name = "domain_isodefl"
+  val description = "theorems like isodefl d t ==> isodefl (foo_map$d) (foo_defl$t)"
 );
 
 fun add_type_constructor
-  (tname, defl_const, map_name, REP_thm,
-   isodefl_thm, map_ID_thm, defl_map_thm) =
-    DeflData.map (Symtab.insert (K true) (tname, defl_const))
-    #> Domain_Take_Proofs.add_map_function (tname, map_name, defl_map_thm)
-    #> RepData.map (Thm.add_thm REP_thm)
-    #> IsodeflData.map (Thm.add_thm isodefl_thm)
-    #> MapIdData.map (Thm.add_thm map_ID_thm);
+  (tname, defl_name, map_name, flags) =
+    DeflData.map (Symtab.insert (K true) (tname, (defl_name, flags)))
+    #> Domain_Take_Proofs.add_map_function (tname, map_name, flags)
 
-
-(* val get_map_tab = MapData.get; *)
+val setup =
+    RepData.setup #> MapIdData.setup #> IsodeflData.setup
 
 
 (******************************************************************************)
@@ -102,18 +97,17 @@ fun add_type_constructor
 open HOLCF_Library;
 
 infixr 6 ->>;
-infix -->>;
+infixr -->>;
 
-val deflT = @{typ "udom alg_defl"};
+val udomT = @{typ udom};
+val deflT = @{typ "defl"};
 
-fun mapT (T as Type (_, Ts)) =
-    (map (fn T => T ->> T) Ts) -->> (T ->> T)
-  | mapT T = T ->> T;
+fun mk_DEFL T =
+  Const (@{const_name defl}, Term.itselfT T --> deflT) $ Logic.mk_type T;
 
-fun mk_Rep_of T =
-  Const (@{const_name Rep_of}, Term.itselfT T --> deflT) $ Logic.mk_type T;
-
-fun coerce_const T = Const (@{const_name coerce}, T);
+fun emb_const T = Const (@{const_name emb}, T ->> udomT);
+fun prj_const T = Const (@{const_name prj}, udomT ->> T);
+fun coerce_const (T, U) = mk_cfcomp (prj_const U, emb_const T);
 
 fun isodefl_const T =
   Const (@{const_name isodefl}, (T ->> T) --> deflT --> HOLogic.boolT);
@@ -163,6 +157,8 @@ fun add_fixdefs
         case lhs of
           Const (@{const_name Rep_CFun}, _) $ f $ (x as Free _) =>
             mk_eqn (f, big_lambda x rhs)
+        | f $ Const (@{const_name TYPE}, T) =>
+            mk_eqn (f, Abs ("t", T, rhs))
         | Const _ => Logic.mk_equals (lhs, rhs)
         | _ => raise TERM ("lhs not of correct form", [lhs, rhs]);
     val eqns = map mk_eqn projs;
@@ -212,19 +208,32 @@ fun add_fixdefs
 (****************** deflation combinators and map functions *******************)
 (******************************************************************************)
 
+fun mk_defl_type (flags : bool list) (Ts : typ list) =
+    map (Term.itselfT o snd) (filter_out fst (flags ~~ Ts)) --->
+    map (K deflT) (filter I flags) -->> deflT;
+
 fun defl_of_typ
-    (tab : term Symtab.table)
+    (thy : theory)
+    (tab : (string * bool list) Symtab.table)
     (T : typ) : term =
   let
     fun is_closed_typ (Type (_, Ts)) = forall is_closed_typ Ts
+      | is_closed_typ (TFree (n, s)) = not (Sign.subsort thy (s, @{sort bifinite}))
       | is_closed_typ _ = false;
     fun defl_of (TFree (a, _)) = Free (Library.unprefix "'" a, deflT)
       | defl_of (TVar _) = error ("defl_of_typ: TVar")
       | defl_of (T as Type (c, Ts)) =
         case Symtab.lookup tab c of
-          SOME t => list_ccomb (t, map defl_of Ts)
+          SOME (s, flags) =>
+            let
+              val defl_const = Const (s, mk_defl_type flags Ts);
+              val type_args = map (Logic.mk_type o snd) (filter_out fst (flags ~~ Ts));
+              val defl_args = map (defl_of o snd) (filter fst (flags ~~ Ts));
+            in
+              list_ccomb (list_comb (defl_const, type_args), defl_args)
+            end
         | NONE => if is_closed_typ T
-                  then mk_Rep_of T
+                  then mk_DEFL T
                   else error ("defl_of_typ: type variable under unsupported type constructor " ^ c);
   in defl_of T end;
 
@@ -266,6 +275,10 @@ fun define_map_functions
     val dom_eqns = map (fn x => (#absT x, #repT x)) iso_infos;
     val rep_abs_consts = map (fn x => (#rep_const x, #abs_const x)) iso_infos;
 
+    fun mapT (T as Type (_, Ts)) =
+        (map (fn T => T ->> T) (filter (is_cpo thy) Ts)) -->> (T ->> T)
+      | mapT T = T ->> T;
+
     (* declare map functions *)
     fun declare_map_const (tbind, (lhsT, rhsT)) thy =
       let
@@ -282,7 +295,7 @@ fun define_map_functions
       fun unprime a = Library.unprefix "'" a;
       fun mapvar T = Free (unprime (fst (dest_TFree T)), T ->> T);
       fun map_lhs (map_const, lhsT) =
-          (lhsT, list_ccomb (map_const, map mapvar (snd (dest_Type lhsT))));
+          (lhsT, list_ccomb (map_const, map mapvar (filter (is_cpo thy) (snd (dest_Type lhsT)))));
       val tab1 = map map_lhs (map_consts ~~ map fst dom_eqns);
       val Ts = (snd o dest_Type o fst o hd) dom_eqns;
       val tab = (Ts ~~ map mapvar Ts) @ tab1;
@@ -312,9 +325,9 @@ fun define_map_functions
         fun mk_goal (map_const, (lhsT, rhsT)) =
           let
             val (_, Ts) = dest_Type lhsT;
-            val map_term = list_ccomb (map_const, map mk_f Ts);
+            val map_term = list_ccomb (map_const, map mk_f (filter (is_cpo thy) Ts));
           in mk_deflation map_term end;
-        val assms = (map mk_assm o snd o dest_Type o fst o hd) dom_eqns;
+        val assms = (map mk_assm o filter (is_cpo thy) o snd o dest_Type o fst o hd) dom_eqns;
         val goals = map mk_goal (map_consts ~~ dom_eqns);
         val goal = mk_trp (foldr1 HOLogic.mk_conj goals);
         val start_thms =
@@ -354,14 +367,19 @@ fun define_map_functions
 
     (* register map functions in theory data *)
     local
-      fun register_map ((dname, map_name), defl_thm) =
-          Domain_Take_Proofs.add_map_function (dname, map_name, defl_thm);
+      fun register_map ((dname, map_name), args) =
+          Domain_Take_Proofs.add_map_function (dname, map_name, args);
       val dnames = map (fst o dest_Type o fst) dom_eqns;
       val map_names = map (fst o dest_Const) map_consts;
+      fun args (T, _) = case T of Type (_, Ts) => map (is_cpo thy) Ts | _ => [];
+      val argss = map args dom_eqns;
     in
       val thy =
-          fold register_map (dnames ~~ map_names ~~ deflation_map_thms) thy;
+          fold register_map (dnames ~~ map_names ~~ argss) thy;
     end;
+
+    (* register deflation theorems *)
+    val thy = fold Domain_Take_Proofs.add_deflation_thm deflation_map_thms thy;
 
     val result =
       {
@@ -440,25 +458,35 @@ fun gen_domain_isomorphism
     val dbinds = map (fn (_, dbind, _, _, _) => dbind) doms;
     val morphs = map (fn (_, _, _, _, morphs) => morphs) doms;
 
+    (* determine deflation combinator arguments *)
+    fun defl_flags (vs, tbind, mx, rhs, morphs) =
+      let fun argT v = TFree (v, the (AList.lookup (op =) sorts v));
+      in map (is_bifinite thy o argT) vs end;
+    val defl_flagss = map defl_flags doms;
+
     (* declare deflation combinator constants *)
     fun declare_defl_const (vs, tbind, mx, rhs, morphs) thy =
       let
-        val defl_type = map (K deflT) vs -->> deflT;
+        fun argT v = TFree (v, the (AList.lookup (op =) sorts v));
+        val Ts = map argT vs;
+        val flags = map (is_bifinite thy) Ts;
+        val defl_type = mk_defl_type flags Ts;
         val defl_bind = Binding.suffix_name "_defl" tbind;
       in
         Sign.declare_const ((defl_bind, defl_type), NoSyn) thy
       end;
     val (defl_consts, thy) = fold_map declare_defl_const doms thy;
+    val defl_names = map (fst o dest_Const) defl_consts;
 
     (* defining equations for type combinators *)
+    val dnames = map (fst o dest_Type o fst) dom_eqns;
     val defl_tab1 = DeflData.get thy;
-    val defl_tab2 =
-      Symtab.make (map (fst o dest_Type o fst) dom_eqns ~~ defl_consts);
+    val defl_tab2 = Symtab.make (dnames ~~ (defl_names ~~ defl_flagss));
     val defl_tab' = Symtab.merge (K true) (defl_tab1, defl_tab2);
     val thy = DeflData.put defl_tab' thy;
     fun mk_defl_spec (lhsT, rhsT) =
-      mk_eqs (defl_of_typ defl_tab' lhsT,
-              defl_of_typ defl_tab' rhsT);
+      mk_eqs (defl_of_typ thy defl_tab' lhsT,
+              defl_of_typ thy defl_tab' rhsT);
     val defl_specs = map mk_defl_spec dom_eqns;
 
     (* register recursive definition of deflation combinators *)
@@ -469,35 +497,37 @@ fun gen_domain_isomorphism
     (* define types using deflation combinators *)
     fun make_repdef ((vs, tbind, mx, _, _), defl_const) thy =
       let
-        fun tfree a = TFree (a, the (AList.lookup (op =) sorts a))
-        val reps = map (mk_Rep_of o tfree) vs;
-        val defl = list_ccomb (defl_const, reps);
-        val ((_, _, _, {REP, ...}), thy) =
+        fun tfree a = TFree (a, the (AList.lookup (op =) sorts a));
+        val Ts = map tfree vs;
+        val type_args = map Logic.mk_type (filter_out (is_bifinite thy) Ts);
+        val defl_args = map mk_DEFL (filter (is_bifinite thy) Ts);
+        val defl = list_ccomb (list_comb (defl_const, type_args), defl_args);
+        val ((_, _, _, {DEFL, ...}), thy) =
           Repdef.add_repdef false NONE (tbind, map (rpair dummyS) vs, mx) defl NONE thy;
       in
-        (REP, thy)
+        (DEFL, thy)
       end;
-    val (REP_thms, thy) = fold_map make_repdef (doms ~~ defl_consts) thy;
-    val thy = RepData.map (fold Thm.add_thm REP_thms) thy;
+    val (DEFL_thms, thy) = fold_map make_repdef (doms ~~ defl_consts) thy;
+    val thy = fold (Context.theory_map o RepData.add_thm) DEFL_thms thy;
 
-    (* prove REP equations *)
-    fun mk_REP_eq_thm (lhsT, rhsT) =
+    (* prove DEFL equations *)
+    fun mk_DEFL_eq_thm (lhsT, rhsT) =
       let
-        val goal = mk_eqs (mk_Rep_of lhsT, mk_Rep_of rhsT);
-        val REP_simps = RepData.get thy;
+        val goal = mk_eqs (mk_DEFL lhsT, mk_DEFL rhsT);
+        val DEFL_simps = RepData.get (ProofContext.init_global thy);
         val tac =
-          rewrite_goals_tac (map mk_meta_eq REP_simps)
+          rewrite_goals_tac (map mk_meta_eq DEFL_simps)
           THEN resolve_tac defl_unfold_thms 1;
       in
         Goal.prove_global thy [] [] goal (K tac)
       end;
-    val REP_eq_thms = map mk_REP_eq_thm dom_eqns;
+    val DEFL_eq_thms = map mk_DEFL_eq_thm dom_eqns;
 
-    (* register REP equations *)
-    val REP_eq_binds = map (Binding.prefix_name "REP_eq_") dbinds;
+    (* register DEFL equations *)
+    val DEFL_eq_binds = map (Binding.prefix_name "DEFL_eq_") dbinds;
     val (_, thy) = thy |>
       (Global_Theory.add_thms o map Thm.no_attributes)
-        (REP_eq_binds ~~ REP_eq_thms);
+        (DEFL_eq_binds ~~ DEFL_eq_thms);
 
     (* define rep/abs functions *)
     fun mk_rep_abs ((tbind, morphs), (lhsT, rhsT)) thy =
@@ -505,9 +535,9 @@ fun gen_domain_isomorphism
         val rep_bind = Binding.suffix_name "_rep" tbind;
         val abs_bind = Binding.suffix_name "_abs" tbind;
         val ((rep_const, rep_def), thy) =
-            define_const (rep_bind, coerce_const (lhsT ->> rhsT)) thy;
+            define_const (rep_bind, coerce_const (lhsT, rhsT)) thy;
         val ((abs_const, abs_def), thy) =
-            define_const (abs_bind, coerce_const (rhsT ->> lhsT)) thy;
+            define_const (abs_bind, coerce_const (rhsT, lhsT)) thy;
       in
         (((rep_const, abs_const), (rep_def, abs_def)), thy)
       end;
@@ -516,10 +546,10 @@ fun gen_domain_isomorphism
       |>> ListPair.unzip;
 
     (* prove isomorphism and isodefl rules *)
-    fun mk_iso_thms ((tbind, REP_eq), (rep_def, abs_def)) thy =
+    fun mk_iso_thms ((tbind, DEFL_eq), (rep_def, abs_def)) thy =
       let
         fun make thm =
-            Drule.zero_var_indexes (thm OF [REP_eq, abs_def, rep_def]);
+            Drule.zero_var_indexes (thm OF [DEFL_eq, abs_def, rep_def]);
         val rep_iso_thm = make @{thm domain_rep_iso};
         val abs_iso_thm = make @{thm domain_abs_iso};
         val isodefl_thm = make @{thm isodefl_abs_rep};
@@ -532,7 +562,7 @@ fun gen_domain_isomorphism
       end;
     val ((iso_thms, isodefl_abs_rep_thms), thy) =
       thy
-      |> fold_map mk_iso_thms (dbinds ~~ REP_eq_thms ~~ rep_abs_defs)
+      |> fold_map mk_iso_thms (dbinds ~~ DEFL_eq_thms ~~ rep_abs_defs)
       |>> ListPair.unzip;
 
     (* collect info about rep/abs *)
@@ -567,10 +597,12 @@ fun gen_domain_isomorphism
         fun mk_goal ((map_const, defl_const), (T, rhsT)) =
           let
             val (_, Ts) = dest_Type T;
-            val map_term = list_ccomb (map_const, map mk_f Ts);
-            val defl_term = list_ccomb (defl_const, map mk_d Ts);
+            val map_term = list_ccomb (map_const, map mk_f (filter (is_cpo thy) Ts));
+            val type_args = map Logic.mk_type (filter_out (is_bifinite thy) Ts);
+            val defl_args = map mk_d (filter (is_bifinite thy) Ts);
+            val defl_term = list_ccomb (list_comb (defl_const, type_args), defl_args);
           in isodefl_const T $ map_term $ defl_term end;
-        val assms = (map mk_assm o snd o dest_Type o fst o hd) dom_eqns;
+        val assms = (map mk_assm o filter (is_cpo thy) o snd o dest_Type o fst o hd) dom_eqns;
         val goals = map mk_goal (map_consts ~~ defl_consts ~~ dom_eqns);
         val goal = mk_trp (foldr1 HOLogic.mk_conj goals);
         val start_thms =
@@ -579,11 +611,12 @@ fun gen_domain_isomorphism
           @{thms adm_conj adm_isodefl cont2cont_fst cont2cont_snd cont_id};
         val bottom_rules =
           @{thms fst_strict snd_strict isodefl_bottom simp_thms};
-        val REP_simps = map (fn th => th RS sym) (RepData.get thy);
+        val lthy = ProofContext.init_global thy;
+        val DEFL_simps = map (fn th => th RS sym) (RepData.get lthy);
         val isodefl_rules =
-          @{thms conjI isodefl_ID_REP}
+          @{thms conjI isodefl_ID_DEFL}
           @ isodefl_abs_rep_thms
-          @ IsodeflData.get thy;
+          @ IsodeflData.get (ProofContext.init_global thy);
       in
         Goal.prove_global thy [] assms goal (fn {prems, ...} =>
          EVERY
@@ -595,7 +628,7 @@ fun gen_domain_isomorphism
            simp_tac (HOL_basic_ss addsimps bottom_rules) 1,
            simp_tac beta_ss 1,
            simp_tac (HOL_basic_ss addsimps @{thms fst_conv snd_conv}) 1,
-           simp_tac (HOL_basic_ss addsimps REP_simps) 1,
+           simp_tac (HOL_basic_ss addsimps DEFL_simps) 1,
            REPEAT (etac @{thm conjE} 1),
            REPEAT (resolve_tac (isodefl_rules @ prems) 1 ORELSE atac 1)])
       end;
@@ -609,52 +642,54 @@ fun gen_domain_isomorphism
     val (isodefl_thms, thy) = thy |>
       (Global_Theory.add_thms o map (Thm.no_attributes o apsnd Drule.zero_var_indexes))
         (conjuncts isodefl_binds isodefl_thm);
-    val thy = IsodeflData.map (fold Thm.add_thm isodefl_thms) thy;
+    val thy = fold (Context.theory_map o IsodeflData.add_thm) isodefl_thms thy;
 
     (* prove map_ID theorems *)
     fun prove_map_ID_thm
-        (((map_const, (lhsT, _)), REP_thm), isodefl_thm) =
+        (((map_const, (lhsT, _)), DEFL_thm), isodefl_thm) =
       let
         val Ts = snd (dest_Type lhsT);
-        val lhs = list_ccomb (map_const, map mk_ID Ts);
+        fun is_cpo T = Sign.of_sort thy (T, @{sort cpo});
+        val lhs = list_ccomb (map_const, map mk_ID (filter is_cpo Ts));
         val goal = mk_eqs (lhs, mk_ID lhsT);
         val tac = EVERY
-          [rtac @{thm isodefl_REP_imp_ID} 1,
-           stac REP_thm 1,
+          [rtac @{thm isodefl_DEFL_imp_ID} 1,
+           stac DEFL_thm 1,
            rtac isodefl_thm 1,
-           REPEAT (rtac @{thm isodefl_ID_REP} 1)];
+           REPEAT (rtac @{thm isodefl_ID_DEFL} 1)];
       in
         Goal.prove_global thy [] [] goal (K tac)
       end;
     val map_ID_binds = map (Binding.suffix_name "_map_ID") dbinds;
     val map_ID_thms =
       map prove_map_ID_thm
-        (map_consts ~~ dom_eqns ~~ REP_thms ~~ isodefl_thms);
+        (map_consts ~~ dom_eqns ~~ DEFL_thms ~~ isodefl_thms);
     val (_, thy) = thy |>
       (Global_Theory.add_thms o map Thm.no_attributes)
         (map_ID_binds ~~ map_ID_thms);
-    val thy = MapIdData.map (fold Thm.add_thm map_ID_thms) thy;
+    val thy = fold (Context.theory_map o MapIdData.add_thm) map_ID_thms thy;
 
     (* definitions and proofs related to take functions *)
     val (take_info, thy) =
         Domain_Take_Proofs.define_take_functions
           (dbinds ~~ iso_infos) thy;
-    val { take_consts, take_defs, chain_take_thms, take_0_thms,
-          take_Suc_thms, deflation_take_thms,
-          finite_consts, finite_defs } = take_info;
+    val { take_consts, chain_take_thms, take_0_thms, take_Suc_thms, ...} =
+        take_info;
 
     (* least-upper-bound lemma for take functions *)
     val lub_take_lemma =
       let
         val lhs = mk_tuple (map mk_lub take_consts);
+        fun is_cpo T = Sign.of_sort thy (T, @{sort cpo});
         fun mk_map_ID (map_const, (lhsT, rhsT)) =
-          list_ccomb (map_const, map mk_ID (snd (dest_Type lhsT)));
+          list_ccomb (map_const, map mk_ID (filter is_cpo (snd (dest_Type lhsT))));
         val rhs = mk_tuple (map mk_map_ID (map_consts ~~ dom_eqns));
         val goal = mk_trp (mk_eq (lhs, rhs));
+        val map_ID_thms = MapIdData.get (ProofContext.init_global thy);
         val start_rules =
             @{thms thelub_Pair [symmetric] ch2ch_Pair} @ chain_take_thms
             @ @{thms pair_collapse split_def}
-            @ map_apply_thms @ MapIdData.get thy;
+            @ map_apply_thms @ map_ID_thms;
         val rules0 =
             @{thms iterate_0 Pair_strict} @ take_0_thms;
         val rules1 =

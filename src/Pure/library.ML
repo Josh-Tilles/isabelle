@@ -56,7 +56,6 @@ sig
   val andf: ('a -> bool) * ('a -> bool) -> 'a -> bool
   val exists: ('a -> bool) -> 'a list -> bool
   val forall: ('a -> bool) -> 'a list -> bool
-  val setmp_noncritical: 'a Unsynchronized.ref -> 'a -> ('b -> 'c) -> 'b -> 'c
   val setmp_CRITICAL: 'a Unsynchronized.ref -> 'a -> ('b -> 'c) -> 'b -> 'c
   val setmp_thread_data: 'a Universal.tag -> 'a -> 'a -> ('b -> 'c) -> 'b -> 'c
 
@@ -84,7 +83,7 @@ sig
   val take: int -> 'a list -> 'a list
   val drop: int -> 'a list -> 'a list
   val chop: int -> 'a list -> 'a list * 'a list
-  val dropwhile: ('a -> bool) -> 'a list -> 'a list
+  val chop_while: ('a -> bool) -> 'a list -> 'a list * 'a list
   val nth: 'a list -> int -> 'a
   val nth_map: int -> ('a -> 'a) -> 'a list -> 'a list
   val nth_drop: int -> 'a list -> 'a list
@@ -306,18 +305,8 @@ val forall = List.all;
 
 (* flags *)
 
-(*temporarily set flag during execution*)
-fun setmp_noncritical flag value f x =
-  uninterruptible (fn restore_attributes => fn () =>
-    let
-      val orig_value = ! flag;
-      val _ = flag := value;
-      val result = Exn.capture (restore_attributes f) x;
-      val _ = flag := orig_value;
-    in Exn.release result end) ();
-
 fun setmp_CRITICAL flag value f x =
-  NAMED_CRITICAL "setmp" (fn () => setmp_noncritical flag value f x);
+  NAMED_CRITICAL "setmp" (fn () => Unsynchronized.setmp flag value f x);
 
 fun setmp_thread_data tag orig_data data f x =
   uninterruptible (fn restore_attributes => fn () =>
@@ -432,8 +421,9 @@ fun chop (0: int) xs = ([], xs)
   | chop _ [] = ([], [])
   | chop n (x :: xs) = chop (n - 1) xs |>> cons x;
 
-fun dropwhile P [] = []
-  | dropwhile P (ys as x::xs) = if P x then dropwhile P xs else ys;
+fun chop_while P [] = ([], [])
+  | chop_while P (ys as x :: xs) =
+      if P x then chop_while P xs |>> cons x else ([], ys);
 
 (*return nth element of a list, where 0 designates the first element;
   raise Subscript if list too short*)

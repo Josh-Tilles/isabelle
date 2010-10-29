@@ -542,7 +542,7 @@ fun assert_abs_eqn thy some_tyco thm =
     val (rep, lhs) = dest_comb full_lhs
       handle TERM _ => bad "Not an abstract equation";
     val (rep_const, ty) = dest_Const rep;
-    val (tyco, sorts) = ((apsnd o map) (snd o dest_TVar) o dest_Type o domain_type) ty
+    val (tyco, Ts) = (dest_Type o domain_type) ty
       handle TERM _ => bad "Not an abstract equation"
            | TYPE _ => bad "Not an abstract equation";
     val _ = case some_tyco of SOME tyco' => if tyco = tyco' then ()
@@ -553,8 +553,8 @@ fun assert_abs_eqn thy some_tyco thm =
       else bad ("Projection mismatch: " ^ quote rep_const ^ " vs. " ^ quote rep');
     val _ = check_eqn thy { allow_nonlinear = false,
       allow_consts = false, allow_pats = false } thm (lhs, rhs);
-    val _ = if forall (Sign.subsort thy) (sorts ~~ map snd  vs') then ()
-      else error ("Sort constraints on type arguments are weaker than in abstype certificate.")
+    val _ = if forall (Sign.of_sort thy) (Ts ~~ map snd vs') then ()
+      else error ("Type arguments do not satisfy sort constraints of abstype certificate.");
   in (thm, tyco) end;
 
 fun assert_eqn thy = error_thm (gen_assert_eqn thy true);
@@ -1049,12 +1049,17 @@ fun gen_add_eqn default (raw_thm, proper) thy =
     val c = const_eqn thy thm;
     fun update_subsume thy (thm, proper) eqns = 
       let
-        val args_of = snd o strip_comb o map_types Type.strip_sorts
-          o fst o Logic.dest_equals o Thm.plain_prop_of;
+        val args_of = snd o chop_while is_Var o rev o snd o strip_comb
+          o map_types Type.strip_sorts o fst o Logic.dest_equals o Thm.plain_prop_of;
         val args = args_of thm;
         val incr_idx = Logic.incr_indexes ([], Thm.maxidx_of thm + 1);
-        fun matches_args args' = length args <= length args' andalso
-          Pattern.matchess thy (args, (map incr_idx o take (length args)) args');
+        fun matches_args args' =
+          let
+            val k = length args' - length args
+          in if k >= 0
+            then Pattern.matchess thy (args, (map incr_idx o drop k) args')
+            else false
+          end;
         fun drop (thm', proper') = if (proper orelse not proper')
           andalso matches_args (args_of thm') then 
             (warning ("Code generator: dropping subsumed code equation\n" ^
@@ -1066,7 +1071,8 @@ fun gen_add_eqn default (raw_thm, proper) thy =
     fun add_eqn' true (Default (eqns, _)) =
           Default (natural_order (Theory.check_thy thy) ((thm, proper) :: eqns))
           (*this restores the natural order and drops syntactic redundancies*)
-      | add_eqn' _ (Eqns eqns) = Eqns (update_subsume thy (thm, proper) eqns)
+      | add_eqn' true fun_spec = fun_spec
+      | add_eqn' false (Eqns eqns) = Eqns (update_subsume thy (thm, proper) eqns)
       | add_eqn' false _ = Eqns [(thm, proper)];
   in change_fun_spec false c (add_eqn' default) thy end;
 

@@ -9,14 +9,14 @@ imports HOLCF
 begin
 
 text {*
-  The definitional domain package only works with representable domains,
-  i.e. types in class @{text rep}.
+  The definitional domain package only works with bifinite domains,
+  i.e. types in class @{text bifinite}.
 *}
 
-default_sort rep
+default_sort bifinite
 
 text {*
-  Provided that @{text rep} is the default sort, the @{text new_domain}
+  Provided that @{text bifinite} is the default sort, the @{text new_domain}
   package should work with any type definition supported by the old
   domain package.
 *}

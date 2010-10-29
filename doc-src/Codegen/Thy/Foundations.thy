@@ -161,7 +161,9 @@ text {*
   is determined syntactically.  The resulting code:
 *}
 
-text %quote {*@{code_stmts dequeue (consts) dequeue (Haskell)}*}
+text %quotetypewriter {*
+  @{code_stmts dequeue (consts) dequeue (Haskell)}
+*}
 
 text {*
   \noindent You may note that the equality test @{term "xs = []"} has
@@ -170,7 +172,7 @@ text {*
 
   This possibility to select arbitrary code equations is the key
   technique for program and datatype refinement (see
-  \secref{sec:refinement}.
+  \secref{sec:refinement}).
 
   Due to the preprocessor, there is the distinction of raw code
   equations (before preprocessing) and code equations (after
@@ -215,7 +217,9 @@ text {*
   equality check, as can be seen in the corresponding @{text SML} code:
 *}
 
-text %quote {*@{code_stmts collect_duplicates (SML)}*}
+text %quotetypewriter {*
+  @{code_stmts collect_duplicates (SML)}
+*}
 
 text {*
   \noindent Obviously, polymorphic equality is implemented the Haskell
@@ -251,7 +255,9 @@ text {*
   for the pattern @{term "AQueue [] []"}:
 *}
 
-text %quote {*@{code_stmts strict_dequeue (consts) strict_dequeue (Haskell)}*}
+text %quotetypewriter {*
+  @{code_stmts strict_dequeue (consts) strict_dequeue (Haskell)}
+*}
 
 text {*
   \noindent In some cases it is desirable to have this
@@ -290,7 +296,9 @@ text {*
   exception at the appropriate position:
 *}
 
-text %quote {*@{code_stmts strict_dequeue' (consts) empty_queue strict_dequeue' (Haskell)}*}
+text %quotetypewriter {*
+  @{code_stmts strict_dequeue' (consts) empty_queue strict_dequeue' (Haskell)}
+*}
 
 text {*
   \noindent This feature however is rarely needed in practice.  Note

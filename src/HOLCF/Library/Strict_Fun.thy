@@ -1,4 +1,4 @@
-(*  Title:      HOLCF/ex/Strict_Fun.thy
+(*  Title:      HOLCF/Library/Strict_Fun.thy
     Author:     Brian Huffman
 *)
 
@@ -37,13 +37,13 @@ lemma sfun_rep_strict2 [simp]: "sfun_rep\<cdot>f\<cdot>\<bottom> = \<bottom>"
   unfolding sfun_rep_beta by (rule Rep_sfun [simplified])
 
 lemma strictify_cancel: "f\<cdot>\<bottom> = \<bottom> \<Longrightarrow> strictify\<cdot>f = f"
-  by (simp add: expand_cfun_eq strictify_conv_if)
+  by (simp add: cfun_eq_iff strictify_conv_if)
 
 lemma sfun_abs_sfun_rep: "sfun_abs\<cdot>(sfun_rep\<cdot>f) = f"
   unfolding sfun_abs_def sfun_rep_def
   apply (simp add: cont_Abs_sfun cont_Rep_sfun)
   apply (simp add: Rep_sfun_inject [symmetric] Abs_sfun_inverse)
-  apply (simp add: expand_cfun_eq strictify_conv_if)
+  apply (simp add: cfun_eq_iff strictify_conv_if)
   apply (simp add: Rep_sfun [simplified])
   done
 
@@ -56,7 +56,7 @@ lemma sfun_rep_sfun_abs [simp]: "sfun_rep\<cdot>(sfun_abs\<cdot>f) = strictify\<
 lemma ep_pair_sfun: "ep_pair sfun_rep sfun_abs"
 apply default
 apply (rule sfun_abs_sfun_rep)
-apply (simp add: expand_cfun_below strictify_conv_if)
+apply (simp add: cfun_below_iff strictify_conv_if)
 done
 
 interpretation sfun: ep_pair sfun_rep sfun_abs
@@ -69,16 +69,16 @@ definition
 where
   "sfun_map = (\<Lambda> a b. sfun_abs oo cfun_map\<cdot>a\<cdot>b oo sfun_rep)"
 
-lemma sfun_map_ID: "sfun_map\<cdot>ID\<cdot>ID = ID"
+lemma sfun_map_ID [domain_map_ID]: "sfun_map\<cdot>ID\<cdot>ID = ID"
   unfolding sfun_map_def
-  by (simp add: cfun_map_ID expand_cfun_eq)
+  by (simp add: cfun_map_ID cfun_eq_iff)
 
 lemma sfun_map_map:
   assumes "f2\<cdot>\<bottom> = \<bottom>" and "g2\<cdot>\<bottom> = \<bottom>" shows
   "sfun_map\<cdot>f1\<cdot>g1\<cdot>(sfun_map\<cdot>f2\<cdot>g2\<cdot>p) =
     sfun_map\<cdot>(\<Lambda> x. f2\<cdot>(f1\<cdot>x))\<cdot>(\<Lambda> x. g1\<cdot>(g2\<cdot>x))\<cdot>p"
 unfolding sfun_map_def
-by (simp add: expand_cfun_eq strictify_cancel assms cfun_map_map)
+by (simp add: cfun_eq_iff strictify_cancel assms cfun_map_map)
 
 lemma ep_pair_sfun_map:
   assumes 1: "ep_pair e1 p1"
@@ -103,7 +103,7 @@ proof
     done
 qed
 
-lemma deflation_sfun_map:
+lemma deflation_sfun_map [domain_deflation]:
   assumes 1: "deflation d1"
   assumes 2: "deflation d2"
   shows "deflation (sfun_map\<cdot>d1\<cdot>d2)"
@@ -143,85 +143,66 @@ proof (intro finite_deflation.intro finite_deflation_axioms.intro)
          deflation_strict `deflation d1` `deflation d2`)
 qed
 
-subsection {* Strict function space is bifinite *}
+subsection {* Strict function space is a bifinite domain *}
+
+definition
+  sfun_approx :: "nat \<Rightarrow> (udom \<rightarrow>! udom) \<rightarrow> (udom \<rightarrow>! udom)"
+where
+  "sfun_approx = (\<lambda>i. sfun_map\<cdot>(udom_approx i)\<cdot>(udom_approx i))"
+
+lemma sfun_approx: "approx_chain sfun_approx"
+proof (rule approx_chain.intro)
+  show "chain (\<lambda>i. sfun_approx i)"
+    unfolding sfun_approx_def by simp
+  show "(\<Squnion>i. sfun_approx i) = ID"
+    unfolding sfun_approx_def
+    by (simp add: lub_distribs sfun_map_ID)
+  show "\<And>i. finite_deflation (sfun_approx i)"
+    unfolding sfun_approx_def
+    by (intro finite_deflation_sfun_map finite_deflation_udom_approx)
+qed
+
+definition sfun_defl :: "defl \<rightarrow> defl \<rightarrow> defl"
+where "sfun_defl = defl_fun2 sfun_approx sfun_map"
+
+lemma cast_sfun_defl:
+  "cast\<cdot>(sfun_defl\<cdot>A\<cdot>B) =
+    udom_emb sfun_approx oo sfun_map\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj sfun_approx"
+unfolding sfun_defl_def
+apply (rule cast_defl_fun2 [OF sfun_approx])
+apply (erule (1) finite_deflation_sfun_map)
+done
 
 instantiation sfun :: (bifinite, bifinite) bifinite
 begin
 
 definition
-  "approx = (\<lambda>i. sfun_map\<cdot>(approx i)\<cdot>(approx i))"
+  "emb = udom_emb sfun_approx oo sfun_map\<cdot>prj\<cdot>emb"
+
+definition
+  "prj = sfun_map\<cdot>emb\<cdot>prj oo udom_prj sfun_approx"
+
+definition
+  "defl (t::('a \<rightarrow>! 'b) itself) = sfun_defl\<cdot>DEFL('a)\<cdot>DEFL('b)"
 
 instance proof
-  show "chain (approx :: nat \<Rightarrow> ('a \<rightarrow>! 'b) \<rightarrow> ('a \<rightarrow>! 'b))"
-    unfolding approx_sfun_def by simp
+  show "ep_pair emb (prj :: udom \<rightarrow> 'a \<rightarrow>! 'b)"
+    unfolding emb_sfun_def prj_sfun_def
+    using ep_pair_udom [OF sfun_approx]
+    by (intro ep_pair_comp ep_pair_sfun_map ep_pair_emb_prj)
 next
-  fix x :: "'a \<rightarrow>! 'b"
-  show "(\<Squnion>i. approx i\<cdot>x) = x"
-    unfolding approx_sfun_def
-    by (simp add: lub_distribs sfun_map_ID [unfolded ID_def])
-next
-  fix i :: nat and x :: "'a \<rightarrow>! 'b"
-  show "approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    unfolding approx_sfun_def
-    by (intro deflation.idem deflation_sfun_map deflation_approx)
-next
-  fix i :: nat
-  show "finite {x::'a \<rightarrow>! 'b. approx i\<cdot>x = x}"
-    unfolding approx_sfun_def
-    by (intro finite_deflation.finite_fixes
-              finite_deflation_sfun_map
-              finite_deflation_approx)
+  show "cast\<cdot>DEFL('a \<rightarrow>! 'b) = emb oo (prj :: udom \<rightarrow> 'a \<rightarrow>! 'b)"
+    unfolding emb_sfun_def prj_sfun_def defl_sfun_def cast_sfun_defl
+    by (simp add: cast_DEFL oo_def cfun_eq_iff sfun_map_map)
 qed
 
 end
 
-subsection {* Strict function space is representable *}
+lemma DEFL_sfun [domain_defl_simps]:
+  "DEFL('a::bifinite \<rightarrow>! 'b::bifinite) = sfun_defl\<cdot>DEFL('a)\<cdot>DEFL('b)"
+by (rule defl_sfun_def)
 
-instantiation sfun :: (rep, rep) rep
-begin
-
-definition
-  "emb = udom_emb oo sfun_map\<cdot>prj\<cdot>emb"
-
-definition
-  "prj = sfun_map\<cdot>emb\<cdot>prj oo udom_prj"
-
-instance
-apply (default, unfold emb_sfun_def prj_sfun_def)
-apply (rule ep_pair_comp)
-apply (rule ep_pair_sfun_map)
-apply (rule ep_pair_emb_prj)
-apply (rule ep_pair_emb_prj)
-apply (rule ep_pair_udom)
-done
-
-end
-
-text {*
-  A deflation constructor lets us configure the domain package to work
-  with the strict function space type constructor.
-*}
-
-definition
-  sfun_defl :: "TypeRep \<rightarrow> TypeRep \<rightarrow> TypeRep"
-where
-  "sfun_defl = TypeRep_fun2 sfun_map"
-
-lemma cast_sfun_defl:
-  "cast\<cdot>(sfun_defl\<cdot>A\<cdot>B) = udom_emb oo sfun_map\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
-unfolding sfun_defl_def
-apply (rule cast_TypeRep_fun2)
-apply (erule (1) finite_deflation_sfun_map)
-done
-
-lemma REP_sfun: "REP('a::rep \<rightarrow>! 'b::rep) = sfun_defl\<cdot>REP('a)\<cdot>REP('b)"
-apply (rule cast_eq_imp_eq, rule ext_cfun)
-apply (simp add: cast_REP cast_sfun_defl)
-apply (simp only: prj_sfun_def emb_sfun_def)
-apply (simp add: sfun_map_def cfun_map_def strictify_cancel)
-done
-
-lemma isodefl_sfun:
+lemma isodefl_sfun [domain_isodefl]:
   "isodefl d1 t1 \<Longrightarrow> isodefl d2 t2 \<Longrightarrow>
     isodefl (sfun_map\<cdot>d1\<cdot>d2) (sfun_defl\<cdot>t1\<cdot>t2)"
 apply (rule isodeflI)
@@ -232,8 +213,7 @@ done
 
 setup {*
   Domain_Isomorphism.add_type_constructor
-    (@{type_name "sfun"}, @{term sfun_defl}, @{const_name sfun_map}, @{thm REP_sfun},
-       @{thm isodefl_sfun}, @{thm sfun_map_ID}, @{thm deflation_sfun_map})
+    (@{type_name "sfun"}, @{const_name sfun_defl}, @{const_name sfun_map}, [true, true])
 *}
 
 end

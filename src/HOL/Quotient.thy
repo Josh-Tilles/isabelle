@@ -5,7 +5,7 @@
 header {* Definition of Quotient Types *}
 
 theory Quotient
-imports Plain Sledgehammer
+imports Plain Hilbert_Choice
 uses
   ("Tools/Quotient/quotient_info.ML")
   ("Tools/Quotient/quotient_typ.ML")
@@ -87,6 +87,32 @@ lemma part_equivp_typedef:
   apply assumption
   apply (rule refl)
   done
+
+lemma part_equivp_refl_symp_transp:
+  shows "part_equivp E \<longleftrightarrow> ((\<exists>x. E x x) \<and> symp E \<and> transp E)"
+proof
+  assume "part_equivp E"
+  then show "(\<exists>x. E x x) \<and> symp E \<and> transp E"
+  unfolding part_equivp_def symp_def transp_def
+  by metis
+next
+  assume a: "(\<exists>x. E x x) \<and> symp E \<and> transp E"
+  then have b: "(\<forall>x y. E x y \<longrightarrow> E y x)" and c: "(\<forall>x y z. E x y \<and> E y z \<longrightarrow> E x z)"
+    unfolding symp_def transp_def by (metis, metis)
+  have "(\<forall>x y. E x y = (E x x \<and> E y y \<and> E x = E y))"
+  proof (intro allI iffI conjI)
+    fix x y
+    assume d: "E x y"
+    then show "E x x" using b c by metis
+    show "E y y" using b c d by metis
+    show "E x = E y" unfolding fun_eq_iff using b c d by metis
+  next
+    fix x y
+    assume "E x x \<and> E y y \<and> E x = E y"
+    then show "E x y" using b c by metis
+  qed
+  then show "part_equivp E" unfolding part_equivp_def using a by metis
+qed
 
 text {* Composition of Relations *}
 
@@ -319,12 +345,12 @@ lemma bex_reg_eqv:
 lemma ball_reg_right:
   assumes a: "\<And>x. R x \<Longrightarrow> P x \<longrightarrow> Q x"
   shows "All P \<longrightarrow> Ball R Q"
-  using a by (metis COMBC_def Collect_def Collect_mem_eq)
+  using a by (metis Collect_def Collect_mem_eq)
 
 lemma bex_reg_left:
   assumes a: "\<And>x. R x \<Longrightarrow> Q x \<longrightarrow> P x"
   shows "Bex R Q \<longrightarrow> Ex P"
-  using a by (metis COMBC_def Collect_def Collect_mem_eq)
+  using a by (metis Collect_def Collect_mem_eq)
 
 lemma ball_reg_left:
   assumes a: "equivp R"
@@ -381,13 +407,13 @@ lemma ball_reg:
   assumes a: "!x :: 'a. (R x --> P x --> Q x)"
   and     b: "Ball R P"
   shows "Ball R Q"
-  using a b by (metis COMBC_def Collect_def Collect_mem_eq)
+  using a b by (metis Collect_def Collect_mem_eq)
 
 lemma bex_reg:
   assumes a: "!x :: 'a. (R x --> P x --> Q x)"
   and     b: "Bex R P"
   shows "Bex R Q"
-  using a b by (metis COMBC_def Collect_def Collect_mem_eq)
+  using a b by (metis Collect_def Collect_mem_eq)
 
 
 lemma ball_all_comm:
@@ -661,6 +687,17 @@ lemma mem_prs:
   shows "(Rep1 ---> (Abs1 ---> Rep2) ---> Abs2) op \<in> = op \<in>"
   by (simp add: fun_eq_iff mem_def Quotient_abs_rep[OF a1] Quotient_abs_rep[OF a2])
 
+lemma id_rsp:
+  shows "(R ===> R) id id"
+  by simp
+
+lemma id_prs:
+  assumes a: "Quotient R Abs Rep"
+  shows "(Rep ---> Abs) id = id"
+  unfolding fun_eq_iff
+  by (simp add: Quotient_abs_rep[OF a])
+
+
 locale quot_type =
   fixes R :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
   and   Abs :: "('a \<Rightarrow> bool) \<Rightarrow> 'b"
@@ -731,8 +768,8 @@ use "Tools/Quotient/quotient_info.ML"
 declare [[map "fun" = (fun_map, fun_rel)]]
 
 lemmas [quot_thm] = fun_quotient
-lemmas [quot_respect] = quot_rel_rsp if_rsp o_rsp let_rsp mem_rsp
-lemmas [quot_preserve] = if_prs o_prs let_prs mem_prs
+lemmas [quot_respect] = quot_rel_rsp if_rsp o_rsp let_rsp mem_rsp id_rsp
+lemmas [quot_preserve] = if_prs o_prs let_prs mem_prs id_prs
 lemmas [quot_equiv] = identity_equivp
 
 

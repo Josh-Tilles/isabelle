@@ -175,7 +175,9 @@ code_type %invisible bool
 code_const %invisible True and False and "op \<and>" and Not
   (SML and and and)
 (*>*)
-text %quote {*@{code_stmts in_interval (SML)}*}
+text %quotetypewriter {*
+  @{code_stmts in_interval (SML)}
+*}
 
 text {*
   \noindent Though this is correct code, it is a little bit
@@ -204,7 +206,9 @@ text {*
   placeholder for the type constructor's (the constant's) arguments.
 *}
 
-text %quote {*@{code_stmts in_interval (SML)}*}
+text %quotetypewriter {*
+  @{code_stmts in_interval (SML)}
+*}
 
 text {*
   \noindent This still is not perfect: the parentheses around the
@@ -217,7 +221,9 @@ text {*
 code_const %quotett "op \<and>"
   (SML infixl 1 "andalso")
 
-text %quote {*@{code_stmts in_interval (SML)}*}
+text %quotetypewriter {*
+  @{code_stmts in_interval (SML)}
+*}
 
 text {*
   \noindent The attentive reader may ask how we assert that no
@@ -260,7 +266,7 @@ text {*
   to introduce inconsistencies -- or, in other words: custom
   serialisations are completely axiomatic.
 
-  A further noteworthy details is that any special character in a
+  A further noteworthy detail is that any special character in a
   custom serialisation may be quoted using ``@{verbatim "'"}''; thus,
   in ``@{verbatim "fn '_ => _"}'' the first ``@{verbatim "_"}'' is a
   proper underscore while the second ``@{verbatim "_"}'' is a
@@ -274,13 +280,13 @@ text {*
   For convenience, the default @{text HOL} setup for @{text Haskell}
   maps the @{class equal} class to its counterpart in @{text Haskell},
   giving custom serialisations for the class @{class equal} (by command
-  @{command_def code_class}) and its operation @{const HOL.equal}
+  @{command_def code_class}) and its operation @{const [source] HOL.equal}
 *}
 
 code_class %quotett equal
   (Haskell "Eq")
 
-code_const %quotett "op ="
+code_const %quotett "HOL.equal"
   (Haskell infixl 4 "==")
 
 text {*

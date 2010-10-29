@@ -21,6 +21,13 @@ object Session
   case object Perspective
   case object Assignment
   case class Commands_Changed(set: Set[Command])
+
+  sealed abstract class Phase
+  case object Inactive extends Phase
+  case object Startup extends Phase  // transient
+  case object Failed extends Phase
+  case object Ready extends Phase
+  case object Shutdown extends Phase  // transient
 }
 
 
@@ -40,9 +47,9 @@ class Session(system: Isabelle_System)
 
   /* pervasive event buses */
 
+  val phase_changed = new Event_Bus[Session.Phase]
   val global_settings = new Event_Bus[Session.Global_Settings.type]
-  val raw_protocol = new Event_Bus[Isabelle_Process.Result]
-  val raw_output = new Event_Bus[Isabelle_Process.Result]
+  val raw_messages = new Event_Bus[Isabelle_Process.Result]
   val commands_changed = new Event_Bus[Session.Commands_Changed]
   val perspective = new Event_Bus[Session.Perspective.type]
   val assignments = new Event_Bus[Session.Assignment.type]
@@ -63,7 +70,8 @@ class Session(system: Isabelle_System)
 
   private case object Stop
 
-  private val command_change_buffer = Simple_Thread.actor("command_change_buffer", daemon = true)
+  private val (_, command_change_buffer) =
+    Simple_Thread.actor("command_change_buffer", daemon = true)
   //{{{
   {
     import scala.compat.Platform.currentTime
@@ -98,7 +106,7 @@ class Session(system: Isabelle_System)
       receiveWithin(flush_timeout) {
         case command: Command => changed += command; invoke()
         case TIMEOUT => flush()
-        case Stop => finished = true
+        case Stop => finished = true; reply(())
         case bad => System.err.println("command_change_buffer: ignoring bad message " + bad)
       }
     }
@@ -112,13 +120,25 @@ class Session(system: Isabelle_System)
   @volatile private var syntax = new Outer_Syntax(system.symbols)
   def current_syntax(): Outer_Syntax = syntax
 
+  @volatile private var reverse_syslog = List[XML.Elem]()
+  def syslog(): String = reverse_syslog.reverse.map(msg => XML.content(msg).mkString).mkString("\n")
+
+  @volatile private var _phase: Session.Phase = Session.Inactive
+  def phase = _phase
+  private def phase_=(new_phase: Session.Phase)
+  {
+    _phase = new_phase
+    phase_changed.event(new_phase)
+  }
+
   private val global_state = new Volatile(Document.State.init)
   def current_state(): Document.State = global_state.peek()
 
+  private case object Interrupt_Prover
   private case class Edit_Version(edits: List[Document.Node_Text_Edit])
-  private case class Started(timeout: Int, args: List[String])
+  private case class Start(timeout: Int, args: List[String])
 
-  private val session_actor = Simple_Thread.actor("session_actor", daemon = true)
+  private val (_, session_actor) = Simple_Thread.actor("session_actor", daemon = true)
   {
     var prover: Isabelle_Process with Isar_Document = null
 
@@ -129,7 +149,7 @@ class Session(system: Isabelle_System)
     //{{{
     {
       val previous = change.previous.get_finished
-      val (node_edits, current) = change.result.get_finished
+      val (node_edits, version) = change.result.get_finished
 
       var former_assignment = global_state.peek().the_assignment(previous).get_finished
       for {
@@ -160,8 +180,8 @@ class Session(system: Isabelle_System)
               }
             (name -> Some(ids))
         }
-      global_state.change(_.define_version(current, former_assignment))
-      prover.edit_version(previous.id, current.id, id_edits)
+      global_state.change(_.define_version(version, former_assignment))
+      prover.edit_version(previous.id, version.id, id_edits)
     }
     //}}}
 
@@ -176,7 +196,7 @@ class Session(system: Isabelle_System)
     def handle_result(result: Isabelle_Process.Result)
     //{{{
     {
-      raw_protocol.event(result)
+      raw_messages.event(result)
 
       result.properties match {
         case Position.Id(state_id) =>
@@ -186,7 +206,14 @@ class Session(system: Isabelle_System)
           }
           catch { case _: Document.State.Fail => bad_result(result) }
         case _ =>
-          if (result.is_status) {
+          if (result.is_syslog) {
+            reverse_syslog ::= result.message
+            if (result.is_ready) phase = Session.Ready
+            else if (result.is_exit && phase == Session.Startup) phase = Session.Failed
+            else if (result.is_exit) phase = Session.Inactive
+          }
+          else if (result.is_stdout) { }
+          else if (result.is_status) {
             result.body match {
               case List(Isar_Document.Assign(id, edits)) =>
                 try {
@@ -197,95 +224,54 @@ class Session(system: Isabelle_System)
                 catch { case _: Document.State.Fail => bad_result(result) }
               case List(Keyword.Command_Decl(name, kind)) => syntax += (name, kind)
               case List(Keyword.Keyword_Decl(name)) => syntax += name
-              case _ => if (!result.is_ready) bad_result(result)
+              case _ => bad_result(result)
             }
           }
-          else if (result.is_exit) prover = null  // FIXME ??
-          else if (result.is_stdout) raw_output.event(result)
-          else if (!result.is_system) bad_result(result)  // FIXME syslog for system messages (!?)
+          else bad_result(result)
         }
     }
     //}}}
 
 
-    /* prover startup */
-
-    def startup_error(): String =
-    {
-      val buf = new StringBuilder
-      while (
-        receiveWithin(0) {
-          case result: Isabelle_Process.Result =>
-            if (result.is_stdout) {
-              for (text <- XML.content(result.message))
-                buf.append(text)
-            }
-            true
-          case TIMEOUT => false
-        }) {}
-      buf.toString
-    }
-
-    def prover_startup(timeout: Int): Option[String] =
-    {
-      receiveWithin(timeout) {
-        case result: Isabelle_Process.Result if result.is_init =>
-          while (receive {
-            case result: Isabelle_Process.Result =>
-              handle_result(result); !result.is_ready
-            }) {}
-          None
-
-        case result: Isabelle_Process.Result if result.is_exit =>
-          Some(startup_error())
-
-        case TIMEOUT =>  // FIXME clarify
-          prover.kill; Some(startup_error())
-      }
-    }
-
-
-    /* main loop */  // FIXME proper shutdown
+    /* main loop */
 
     var finished = false
     while (!finished) {
       receive {
-        case Edit_Version(edits) =>
-          val previous = global_state.peek().history.tip.current
+        case Interrupt_Prover =>
+          if (prover != null) prover.interrupt
+
+        case Edit_Version(edits) if prover != null =>
+          val previous = global_state.peek().history.tip.version
           val result = Future.fork { Thy_Syntax.text_edits(Session.this, previous.join, edits) }
           val change = global_state.change_yield(_.extend_history(previous, edits, result))
 
           val this_actor = self
-          change.current.map(_ => {
+          change.version.map(_ => {
             assignments.await { global_state.peek().is_assigned(previous.get_finished) }
             this_actor ! change })
 
           reply(())
 
-        case change: Document.Change if prover != null =>
-          handle_change(change)
+        case change: Document.Change if prover != null => handle_change(change)
 
-        case result: Isabelle_Process.Result =>
-          handle_result(result)
+        case result: Isabelle_Process.Result => handle_result(result)
 
-        case Started(timeout, args) =>
-          if (prover == null) {
+        case Start(timeout, args) if prover == null =>
+          if (phase == Session.Inactive || phase == Session.Failed) {
+            phase = Session.Startup
             prover = new Isabelle_Process(system, timeout, self, args:_*) with Isar_Document
-            val origin = sender
-            val opt_err = prover_startup(timeout)
-            if (opt_err.isDefined) prover = null
-            origin ! opt_err
-          }
-          else reply(None)
-
-        case Stop => // FIXME synchronous!?
-          if (prover != null) {
-            global_state.change(_ => Document.State.init)
-            prover.kill
-            prover = null
           }
 
-        case TIMEOUT =>  // FIXME clarify
+        case Stop =>
+          if (phase == Session.Ready) {
+            global_state.change(_ => Document.State.init)  // FIXME event bus!?
+            phase = Session.Shutdown
+            prover.terminate
+            phase = Session.Inactive
+          }
+          finished = true
+          reply(())
 
         case bad if prover != null =>
           System.err.println("session_actor: ignoring bad message " + bad)
@@ -297,10 +283,11 @@ class Session(system: Isabelle_System)
 
   /** main methods **/
 
-  def started(timeout: Int, args: List[String]): Option[String] =
-    (session_actor !? Started(timeout, args)).asInstanceOf[Option[String]]
+  def start(timeout: Int, args: List[String]) { session_actor ! Start(timeout, args) }
 
-  def stop() { command_change_buffer ! Stop; session_actor ! Stop }
+  def stop() { command_change_buffer !? Stop; session_actor !? Stop }
+
+  def interrupt() { session_actor ! Interrupt_Prover }
 
   def edit_version(edits: List[Document.Node_Text_Edit]) { session_actor !? Edit_Version(edits) }
 

@@ -70,9 +70,9 @@ text {*
   Evaluation is carried out in a target language \emph{Eval} which
   inherits from \emph{SML} but for convenience uses parts of the
   Isabelle runtime environment.  The soundness of computation carried
-  out there crucially on the correctness of the code generator; this
-  is one of the reasons why you should not use adaptation (see
-  \secref{sec:adaptation}) frivolously.
+  out there depends crucially on the correctness of the code
+  generator setup; this is one of the reasons why you should not use
+  adaptation (see \secref{sec:adaptation}) frivolously.
 *}
 
 
@@ -139,13 +139,13 @@ text {*
       function.  As sketched in \secref{sec:partiality}, this can be
       interpreted as partiality.
      
-    \item Evaluation raise any other kind of exception.
+    \item Evaluation raises any other kind of exception.
      
   \end{itemize}
 
   \noindent For conversions, the first case yields the equation @{term
   "t = t'"}, the second defaults to reflexivity @{term "t = t"}.
-  Exceptions of the third kind are propagted to the user.
+  Exceptions of the third kind are propagated to the user.
 
   By default return values of plain evaluation are optional, yielding
   @{text "SOME t'"} in the first case, @{text "NONE"} and in the
@@ -162,44 +162,46 @@ text {*
 
 subsection {* Schematic overview *}
 
-(*FIXME rotatebox?*)
-
 text {*
+  \newcommand{\ttsize}{\fontsize{5.8pt}{8pt}\selectfont}
+  \fontsize{9pt}{12pt}\selectfont
   \begin{tabular}{ll||c|c|c}
     & & @{text simp} & @{text nbe} & @{text code} \tabularnewline \hline \hline
-    dynamic & interactive evaluation 
+    \multirow{5}{1ex}{\rotatebox{90}{dynamic}}
+      & interactive evaluation 
       & @{command value} @{text "[simp]"} & @{command value} @{text "[nbe]"} & @{command value} @{text "[code]"}
       \tabularnewline
-    & plain evaluation & & & @{ML "Code_Evaluation.dynamic_value"} \tabularnewline \hline
+    & plain evaluation & & & \ttsize@{ML "Code_Evaluation.dynamic_value"} \tabularnewline \cline{2-5}
     & evaluation method & @{method code_simp} & @{method normalization} & @{method eval} \tabularnewline
-    & property conversion & & & @{ML "Code_Runtime.dynamic_holds_conv"} \tabularnewline \hline
-    & conversion & @{ML "Code_Simp.dynamic_eval_conv"} & @{ML "Nbe.dynamic_eval_conv"}
-      & @{ML "Code_Evaluation.dynamic_eval_conv"} \tabularnewline \hline \hline
-    static & plain evaluation & & & @{ML "Code_Evaluation.static_value"} \tabularnewline \hline
+    & property conversion & & & \ttsize@{ML "Code_Runtime.dynamic_holds_conv"} \tabularnewline \cline{2-5}
+    & conversion & \ttsize@{ML "Code_Simp.dynamic_eval_conv"} & \ttsize@{ML "Nbe.dynamic_eval_conv"}
+      & \ttsize@{ML "Code_Evaluation.dynamic_eval_conv"} \tabularnewline \hline \hline
+    \multirow{3}{1ex}{\rotatebox{90}{static}}
+      & plain evaluation & & & \ttsize@{ML "Code_Evaluation.static_value"} \tabularnewline \cline{2-5}
     & property conversion & &
-      & @{ML "Code_Runtime.static_holds_conv"} \tabularnewline \hline
-    & conversion & @{ML "Code_Simp.static_eval_conv"}
-      & @{ML "Nbe.static_eval_conv"}
-      & @{ML "Code_Evaluation.static_eval_conv"}
+      & \ttsize@{ML "Code_Runtime.static_holds_conv"} \tabularnewline \cline{2-5}
+    & conversion & \ttsize@{ML "Code_Simp.static_eval_conv"}
+      & \ttsize@{ML "Nbe.static_eval_conv"}
+      & \ttsize@{ML "Code_Evaluation.static_eval_conv"}
   \end{tabular}
 *}
 
 
 subsection {* Intimate connection between logic and system runtime *}
 
-text {* FIXME *}
+text {*
+  The toolbox of static evaluation conversions forms a reasonable base
+  to interweave generated code and system tools.  However in some
+  situations more direct interaction is desirable.
+*}
 
 
-subsubsection {* Static embedding of generated code into system runtime -- the code antiquotation *}
+subsubsection {* Static embedding of generated code into system runtime -- the @{text code} antiquotation *}
 
 text {*
-  FIXME
-
-  In scenarios involving techniques like reflection it is quite common
-  that code generated from a theory forms the basis for implementing a
-  proof procedure in @{text SML}.  To facilitate interfacing of
-  generated code with system code, the code generator provides a
-  @{text code} antiquotation:
+  The @{text code} antiquotation allows to include constants from
+  generated code directly into ML system code, as in the following toy
+  example:
 *}
 
 datatype %quote form = T | F | And form form | Or form form (*<*)
@@ -214,23 +216,66 @@ datatype %quote form = T | F | And form form | Or form form (*<*)
 *}
 
 text {*
-  \noindent @{text code} takes as argument the name of a constant;  after the
-  whole @{text SML} is read, the necessary code is generated transparently
-  and the corresponding constant names are inserted.  This technique also
-  allows to use pattern matching on constructors stemming from compiled
-  @{text "datatypes"}.
+  \noindent @{text code} takes as argument the name of a constant;
+  after the whole ML is read, the necessary code is generated
+  transparently and the corresponding constant names are inserted.
+  This technique also allows to use pattern matching on constructors
+  stemming from compiled datatypes.  Note that the @{text code}
+  antiquotation may not refer to constants which carry adaptations;
+  here you have to refer to the corresponding adapted code directly.
 
-  For a less simplistic example, theory @{text Ferrack} is
-  a good reference.
+  For a less simplistic example, theory @{text Approximation} in
+  the @{text Decision_Procs} session is a good reference.
 *}
 
 
 subsubsection {* Static embedding of generated code into system runtime -- @{text code_reflect} *}
 
-text {* FIXME @{command_def code_reflect} *}
+text {*
+  The @{text code} antiquoation is lightweight, but the generated code
+  is only accessible while the ML section is processed.  Sometimes this
+  is not appropriate, especially if the generated code contains datatype
+  declarations which are shared with other parts of the system.  In these
+  cases, @{command_def code_reflect} can be used:
+*}
+
+code_reflect %quote Sum_Type
+  datatypes sum = Inl | Inr
+  functions "Sum_Type.Projl" "Sum_Type.Projr"
+
+text {*
+  \noindent @{command_def code_reflect} takes a structure name and
+  references to datatypes and functions; for these code is compiled
+  into the named ML structure and the \emph{Eval} target is modified
+  in a way that future code generation will reference these
+  precompiled versions of the given datatypes and functions.  This
+  also allows to refer to the referenced datatypes and functions from
+  arbitrary ML code as well.
+
+  A typical example for @{command code_reflect} can be found in the
+  @{theory Predicate} theory.
+*}
+
 
 subsubsection {* Separate compilation -- @{text code_reflect} *}
 
-text {* FIXME *}
+text {*
+  For technical reasons it is sometimes necessary to separate
+  generation and compilation of code which is supposed to be used in
+  the system runtime.  For this @{command code_reflect} with an
+  optional @{text "file"} argument can be used:
+*}
+
+code_reflect %quote Rat
+  datatypes rat = Frct
+  functions Fract
+    "(plus :: rat \<Rightarrow> rat \<Rightarrow> rat)" "(minus :: rat \<Rightarrow> rat \<Rightarrow> rat)"
+    "(times :: rat \<Rightarrow> rat \<Rightarrow> rat)" "(divide :: rat \<Rightarrow> rat \<Rightarrow> rat)"
+  file "examples/rat.ML"
+
+text {*
+  \noindent This merely generates the referenced code to the given
+  file which can be included into the system runtime later on.
+*}
 
 end

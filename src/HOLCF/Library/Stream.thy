@@ -96,13 +96,13 @@ by (drule ax_flat,simp)
 
 
 (* ----------------------------------------------------------------------- *)
-(* theorems about stream_when                                              *)
+(* theorems about stream_case                                              *)
 (* ----------------------------------------------------------------------- *)
 
-section "stream_when"
+section "stream_case"
 
 
-lemma stream_when_strictf: "stream_when$UU$s=UU"
+lemma stream_case_strictf: "stream_case$UU$s=UU"
 by (cases s, auto)
 
 
@@ -265,7 +265,7 @@ lemma stream_coind_lemma2: "!s1 s2. R s1 s2 --> ft$s1 = ft$s2 &  R (rt$s1) (rt$s
  apply (simp add: stream.bisim_def,clarsimp)
  apply (drule spec, drule spec, drule (1) mp)
  apply (case_tac "x", simp)
- apply (case_tac "x'", simp)
+ apply (case_tac "y", simp)
 by auto
 
 
@@ -508,7 +508,7 @@ lemma sfilter_unfold:
 by (insert sfilter_def [where 'a='a, THEN eq_reflection, THEN fix_eq2], auto)
 
 lemma strict_sfilter: "sfilter\<cdot>\<bottom> = \<bottom>"
-apply (rule ext_cfun)
+apply (rule cfun_eqI)
 apply (subst sfilter_unfold, auto)
 apply (case_tac "x=UU", auto)
 by (drule stream_exhaust_eq [THEN iffD1], auto)

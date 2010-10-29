@@ -115,22 +115,21 @@ text {*
   because it only applies when the first pattern fails.
 *}
 
-fixrec (permissive)
+fixrec
   lzip2 :: "'a llist \<rightarrow> 'b llist \<rightarrow> ('a \<times> 'b) llist"
 where
-  "lzip2\<cdot>(lCons\<cdot>x\<cdot>xs)\<cdot>(lCons\<cdot>y\<cdot>ys) = lCons\<cdot>(x, y)\<cdot>(lzip\<cdot>xs\<cdot>ys)"
-| "lzip2\<cdot>xs\<cdot>ys = lNil"
+  "lzip2\<cdot>(lCons\<cdot>x\<cdot>xs)\<cdot>(lCons\<cdot>y\<cdot>ys) = lCons\<cdot>(x, y)\<cdot>(lzip2\<cdot>xs\<cdot>ys)"
+| (unchecked) "lzip2\<cdot>xs\<cdot>ys = lNil"
 
 text {*
   Usually fixrec tries to prove all equations as theorems.
-  The "permissive" option overrides this behavior, so fixrec
-  does not produce any simp rules.
+  The "unchecked" option overrides this behavior, so fixrec
+  does not attempt to prove that particular equation.
 *}
 
 text {* Simp rules can be generated later using @{text fixrec_simp}. *}
 
 lemma lzip2_simps [simp]:
-  "lzip2\<cdot>(lCons\<cdot>x\<cdot>xs)\<cdot>(lCons\<cdot>y\<cdot>ys) = lCons\<cdot>(x, y)\<cdot>(lzip\<cdot>xs\<cdot>ys)"
   "lzip2\<cdot>(lCons\<cdot>x\<cdot>xs)\<cdot>lNil = lNil"
   "lzip2\<cdot>lNil\<cdot>(lCons\<cdot>y\<cdot>ys) = lNil"
   "lzip2\<cdot>lNil\<cdot>lNil = lNil"
@@ -209,8 +208,8 @@ lemma repeat_simps [simp]:
   "repeat\<cdot>x = lCons\<cdot>y\<cdot>ys \<longleftrightarrow> x = y \<and> repeat\<cdot>x = ys"
 by (subst repeat.simps, simp)+
 
-lemma llist_when_repeat [simp]:
-  "llist_when\<cdot>z\<cdot>f\<cdot>(repeat\<cdot>x) = f\<cdot>x\<cdot>(repeat\<cdot>x)"
+lemma llist_case_repeat [simp]:
+  "llist_case\<cdot>z\<cdot>f\<cdot>(repeat\<cdot>x) = f\<cdot>x\<cdot>(repeat\<cdot>x)"
 by (subst repeat.simps, simp)
 
 text {*

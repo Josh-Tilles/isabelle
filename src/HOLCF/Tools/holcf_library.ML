@@ -8,7 +8,7 @@ structure HOLCF_Library =
 struct
 
 infixr 6 ->>;
-infix -->>;
+infixr -->>;
 infix 9 `;
 
 (*** Operations from Isabelle/HOL ***)
@@ -24,8 +24,10 @@ val mk_snd = HOLogic.mk_snd;
 val mk_not = HOLogic.mk_not;
 val mk_conj = HOLogic.mk_conj;
 val mk_disj = HOLogic.mk_disj;
+val mk_imp = HOLogic.mk_imp;
 
 fun mk_ex (x, t) = HOLogic.exists_const (fastype_of x) $ Term.lambda x t;
+fun mk_all (x, t) = HOLogic.all_const (fastype_of x) $ Term.lambda x t;
 
 
 (*** Basic HOLCF concepts ***)
@@ -38,6 +40,9 @@ fun mk_below (t, u) = below_const (fastype_of t) $ t $ u;
 fun mk_undef t = mk_eq (t, mk_bottom (fastype_of t));
 
 fun mk_defined t = mk_not (mk_undef t);
+
+fun mk_adm t =
+  Const (@{const_name adm}, fastype_of t --> boolT) $ t;
 
 fun mk_compact t =
   Const (@{const_name compact}, fastype_of t --> boolT) $ t;
@@ -169,8 +174,8 @@ fun from_up T = fup_const (T, T) ` mk_ID T;
 
 val oneT = @{typ "one"};
 
-fun one_when_const T = Const (@{const_name one_when}, T ->> oneT ->> T);
-fun mk_one_when t = one_when_const (fastype_of t) ` t;
+fun one_case_const T = Const (@{const_name one_case}, T ->> oneT ->> T);
+fun mk_one_case t = one_case_const (fastype_of t) ` t;
 
 
 (*** Strict product type ***)

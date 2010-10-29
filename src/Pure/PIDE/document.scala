@@ -136,8 +136,8 @@ object Document
     val edits: List[Node_Text_Edit],
     val result: Future[(List[Edit[Command]], Version)])
   {
-    val current: Future[Version] = result.map(_._2)
-    def is_finished: Boolean = previous.is_finished && current.is_finished
+    val version: Future[Version] = result.map(_._2)
+    def is_finished: Boolean = previous.is_finished && version.is_finished
   }
 
 
@@ -279,7 +279,7 @@ object Document
     def snapshot(name: String, pending_edits: List[Text.Edit]): Snapshot =
     {
       val found_stable = history.undo_list.find(change =>
-        change.is_finished && is_assigned(change.current.get_finished))
+        change.is_finished && is_assigned(change.version.get_finished))
       require(found_stable.isDefined)
       val stable = found_stable.get
       val latest = history.undo_list.head
@@ -291,7 +291,7 @@ object Document
 
       new Snapshot
       {
-        val version = stable.current.get_finished
+        val version = stable.version.get_finished
         val node = version.nodes(name)
         val is_outdated = !(pending_edits.isEmpty && latest == stable)
 
@@ -305,10 +305,18 @@ object Document
         def revert(offset: Text.Offset) = (offset /: reverse_edits)((i, edit) => edit.revert(i))
 
         def convert(range: Text.Range): Text.Range =
-          if (edits.isEmpty) range else range.map(convert(_))
+          try { if (edits.isEmpty) range else range.map(convert(_)) }
+          catch { // FIXME tmp
+            case e: IllegalArgumentException =>
+              System.err.println((true, range, edits)); throw(e)
+          }
 
         def revert(range: Text.Range): Text.Range =
-          if (edits.isEmpty) range else range.map(revert(_))
+          try { if (edits.isEmpty) range else range.map(revert(_)) }
+          catch { // FIXME tmp
+            case e: IllegalArgumentException =>
+              System.err.println((false, range, reverse_edits)); throw(e)
+          }
 
         def select_markup[A](range: Text.Range)(result: Markup_Tree.Select[A])
           : Stream[Text.Info[Option[A]]] =

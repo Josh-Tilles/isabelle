@@ -7,6 +7,9 @@ Runtime services building on code generation into implementation language SML.
 signature CODE_RUNTIME =
 sig
   val target: string
+  val value: Proof.context ->
+    (Proof.context -> unit -> 'a) * ((unit -> 'a) -> Proof.context -> Proof.context) * string ->
+    string * string -> 'a
   type 'a cookie = (Proof.context -> unit -> 'a) * ((unit -> 'a) -> Proof.context -> Proof.context) * string
   val dynamic_value: 'a cookie -> theory -> string option
     -> ((term -> term) -> 'a -> 'a) -> term -> string list -> 'a option
@@ -26,6 +29,8 @@ sig
     -> theory -> theory
   datatype truth = Holds
   val put_truth: (unit -> truth) -> Proof.context -> Proof.context
+  val trace: bool Unsynchronized.ref
+  val polyml_as_definition: (binding * typ) list -> Path.T list -> theory -> theory
 end;
 
 structure Code_Runtime : CODE_RUNTIME =
@@ -55,10 +60,31 @@ val _ = Context.>> (Context.map_theory
   #> fold (Code_Target.add_reserved target) ["oo", "ooo", "oooo", "upto", "downto", "orf", "andf"]));
        (*avoid further pervasive infix names*)
 
+val trace = Unsynchronized.ref false;
+
+fun exec verbose code =
+  (if ! trace then tracing code else ();
+  ML_Context.exec (fn () => Secure.use_text ML_Env.local_context (0, "generated code") false code));
+
+fun value ctxt (get, put, put_ml) (prelude, value) =
+  let
+    val code = (prelude
+      ^ "\nval _ = Context.set_thread_data (SOME (Context.map_proof (" ^ put_ml
+      ^ " (fn () => " ^ value ^ ")) (ML_Context.the_generic_context ())))");
+    val ctxt' = ctxt
+      |> put (fn () => error ("Bad evaluation for " ^ quote put_ml))
+      |> Context.proof_map (exec false code);
+  in get ctxt' () end;
+
 
 (* evaluation into target language values *)
 
 type 'a cookie = (Proof.context -> unit -> 'a) * ((unit -> 'a) -> Proof.context -> Proof.context) * string;
+
+fun reject_vars thy t =
+  let
+    val ctxt = ProofContext.init_global thy;
+  in ((Sign.no_frees ctxt o Sign.no_vars ctxt o map_types (K dummyT)) t; t) end;
 
 fun obtain_serializer thy some_target = Code_Target.produce_code_for thy
   (the_default target some_target) NONE "Code" [];
@@ -79,7 +105,7 @@ fun base_evaluator cookie serializer (naming : Code_Thingol.naming) thy program 
     val (program_code, [SOME value_name']) = serializer naming program' [value_name];
     val value_code = space_implode " "
       (value_name' :: "()" :: map (enclose "(" ")") args);
-  in Exn.capture (ML_Context.value ctxt cookie) (program_code, value_code) end;
+  in Exn.capture (value ctxt cookie) (program_code, value_code) end;
 
 fun partiality_as_none e = SOME (Exn.release e)
   handle General.Match => NONE
@@ -88,6 +114,7 @@ fun partiality_as_none e = SOME (Exn.release e)
 
 fun dynamic_value_exn cookie thy some_target postproc t args =
   let
+    val _ = reject_vars thy t;
     fun evaluator naming program ((_, vs_ty), t) deps =
       base_evaluator cookie (obtain_serializer thy some_target) naming thy program (vs_ty, t) deps args;
   in Code_Thingol.dynamic_eval_value thy (Exn.map_result o postproc) evaluator t end;
@@ -103,7 +130,7 @@ fun static_value_exn cookie thy some_target postproc consts =
     val serializer = obtain_serializer thy some_target;
     fun evaluator naming program thy ((_, vs_ty), t) deps =
       base_evaluator cookie serializer naming thy program (vs_ty, t) deps [];
-  in Code_Thingol.static_eval_value thy (Exn.map_result o postproc) consts evaluator end;
+  in Code_Thingol.static_eval_value thy (Exn.map_result o postproc) consts evaluator o reject_vars thy end;
 
 fun static_value_strict cookie thy some_target postproc consts t =
   Exn.release (static_value_exn cookie thy some_target postproc consts t);
@@ -114,12 +141,15 @@ fun static_value cookie thy some_target postproc consts t =
 
 (* evaluation for truth or nothing *)
 
-structure Truth_Result = Proof_Data (
+structure Truth_Result = Proof_Data
+(
   type T = unit -> truth
   fun init _ () = error "Truth_Result"
 );
 val put_truth = Truth_Result.put;
 val truth_cookie = (Truth_Result.get, put_truth, Long_Name.append this "put_truth");
+
+val reject_vars = fn thy => tap (reject_vars thy o Thm.term_of);
 
 fun check_holds serializer naming thy program vs_t deps ct =
   let
@@ -143,7 +173,8 @@ fun check_holds_oracle serializer naming thy program ((_, vs_ty), t) deps ct =
   raw_check_holds_oracle (serializer, naming, thy, program, (vs_ty, t), deps, ct);
 
 val dynamic_holds_conv = Conv.tap_thy (fn thy => Code_Thingol.dynamic_eval_conv thy
-  (fn naming => check_holds_oracle (obtain_serializer thy NONE) naming thy));
+  (fn naming => check_holds_oracle (obtain_serializer thy NONE) naming thy)
+  o reject_vars thy);
 
 fun static_holds_conv thy consts =
   let
@@ -151,6 +182,7 @@ fun static_holds_conv thy consts =
   in
     Code_Thingol.static_eval_conv thy consts
       (fn naming => fn program => fn thy => check_holds_oracle serializer naming thy program)
+    o reject_vars thy
   end;
 
 
@@ -265,20 +297,19 @@ fun add_eval_constr (const, const') thy =
 fun add_eval_const (const, const') = Code_Target.add_const_syntax target
   const (SOME (Code_Printer.simple_const_syntax (0, (K o K o K) const')));
 
-fun process_reflection (code_body, (tyco_map, (constr_map, const_map))) module_name NONE thy =
+fun process_reflection (code, (tyco_map, (constr_map, const_map))) module_name NONE thy =
       thy
       |> Code_Target.add_reserved target module_name
-      |> Context.theory_map
-        (ML_Context.exec (fn () => ML_Context.eval_text true Position.none code_body))
+      |> Context.theory_map (exec true code)
       |> fold (add_eval_tyco o apsnd Code_Printer.str) tyco_map
       |> fold (add_eval_constr o apsnd Code_Printer.str) constr_map
       |> fold (add_eval_const o apsnd Code_Printer.str) const_map
-  | process_reflection (code_body, _) _ (SOME file_name) thy =
+  | process_reflection (code, _) _ (SOME file_name) thy =
       let
         val preamble =
           "(* Generated from " ^ Path.implode (Thy_Header.thy_path (Context.theory_name thy))
           ^ "; DO NOT EDIT! *)";
-        val _ = File.write (Path.explode file_name) (preamble ^ "\n\n" ^ code_body);
+        val _ = File.write (Path.explode file_name) (preamble ^ "\n\n" ^ code);
       in
         thy
       end;
@@ -330,5 +361,97 @@ val _ =
     (code_reflect_cmd raw_datatypes raw_functions module_name some_file)));
 
 end; (*local*)
+
+
+(** using external SML files as substitute for proper definitions -- only for polyml!  **)
+
+local
+
+structure Loaded_Values = Theory_Data
+(
+  type T = string list
+  val empty = []
+  fun merge data : T = Library.merge (op =) data
+  val extend = I
+);
+
+fun notify_val (string, value) = 
+  let
+    val _ = #enterVal ML_Env.name_space (string, value);
+    val _ = Context.>> ((Context.map_theory o Loaded_Values.map) (insert (op =) string));
+  in () end;
+
+fun abort _ = error "Only value bindings allowed.";
+
+val notifying_context : use_context =
+ {tune_source = #tune_source ML_Env.local_context,
+  name_space =
+   {lookupVal    = #lookupVal ML_Env.name_space,
+    lookupType   = #lookupType ML_Env.name_space,
+    lookupFix    = #lookupFix ML_Env.name_space,
+    lookupStruct = #lookupStruct ML_Env.name_space,
+    lookupSig    = #lookupSig ML_Env.name_space,
+    lookupFunct  = #lookupFunct ML_Env.name_space,
+    enterVal     = notify_val,
+    enterType    = abort,
+    enterFix     = abort,
+    enterStruct  = abort,
+    enterSig     = abort,
+    enterFunct   = abort,
+    allVal       = #allVal ML_Env.name_space,
+    allType      = #allType ML_Env.name_space,
+    allFix       = #allFix ML_Env.name_space,
+    allStruct    = #allStruct ML_Env.name_space,
+    allSig       = #allSig ML_Env.name_space,
+    allFunct     = #allFunct ML_Env.name_space},
+  str_of_pos = #str_of_pos ML_Env.local_context,
+  print = #print ML_Env.local_context,
+  error = #error ML_Env.local_context};
+
+in
+
+fun use_file filepath thy =
+  let
+    val thy' = Loaded_Values.put [] thy;
+    val _ = Context.set_thread_data ((SOME o Context.Theory) thy');
+    val _ = Secure.use_text notifying_context
+      (0, Path.implode filepath) false (File.read filepath);
+    val thy'' = (Context.the_theory o the) (Context.thread_data ());
+    val names = Loaded_Values.get thy'';
+    val thy''' = Thy_Load.provide_file filepath thy'';
+  in (names, thy''') end;
+
+end;
+
+fun add_definiendum (ml_name, (b, T)) thy =
+  thy
+  |> Code_Target.add_reserved target ml_name
+  |> Specification.axiomatization [(b, SOME T, NoSyn)] []
+  |-> (fn ([Const (const, _)], _) =>
+     Code_Target.add_const_syntax target const
+       (SOME (Code_Printer.simple_const_syntax (0, (K o K o K o Code_Printer.str) ml_name)))
+  #> tap (fn thy => Code_Target.produce_code thy [const] target NONE "Code" []));
+
+fun process_file filepath (definienda, thy) =
+  let
+    val (ml_names, thy') = use_file filepath thy;
+    val superfluous = subtract (fn ((name1, _), name2) => name1 = name2) definienda ml_names;
+    val _ = if null superfluous then ()
+      else error ("Value binding(s) " ^ commas_quote superfluous
+        ^ " found in external file " ^ quote (Path.implode filepath)
+        ^ " not present among the given contants binding(s).");
+    val these_definienda = AList.make (the o AList.lookup (op =) definienda) ml_names;
+    val thy'' = fold add_definiendum these_definienda thy';
+    val definienda' = fold (AList.delete (op =)) ml_names definienda;
+  in (definienda', thy'') end;
+
+fun polyml_as_definition bTs filepaths thy =
+  let
+    val definienda = map (fn bT => ((Binding.name_of o fst) bT, bT)) bTs;
+    val (remaining, thy') = fold process_file filepaths (definienda, thy);
+    val _ = if null remaining then ()
+      else error ("Constant binding(s) " ^ commas_quote (map fst remaining)
+        ^ " not present in external file(s).");
+  in thy' end;
 
 end; (*struct*)

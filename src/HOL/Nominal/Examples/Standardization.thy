@@ -213,7 +213,7 @@ lemma lem:
     prefer 2
     apply (erule allE, erule impE, rule refl, erule spec)
    apply simp
-   apply (metis add_strict_increasing le_add1 length_pos_if_in_set listsum listsum_map_remove1 nat_add_commute)
+   apply (metis add_strict_increasing le_add1 length_pos_if_in_set listsum_foldl listsum_map_remove1 nat_add_commute)
   apply clarify
   apply (subgoal_tac "\<exists>y::name. y \<sharp> (x, u, z)")
    prefer 2
@@ -654,7 +654,6 @@ lemma listsp_eqvt [eqvt]:
   shows "listsp ((pi::name prm) \<bullet> p) (pi \<bullet> xs)" using xs
   apply induct
   apply simp
-  apply (rule listsp.intros)
   apply simp
   apply (rule listsp.intros)
   apply (drule_tac pi=pi in perm_boolI)

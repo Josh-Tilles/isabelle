@@ -6,6 +6,7 @@ setup {* Context.theory_map (Quickcheck.add_generator ("prolog", Code_Prolog.qui
 
 setup {* Code_Prolog.map_code_options (K 
   {ensure_groundness = true,
+   limit_globally = NONE,
    limited_types = [(@{typ nat}, 2), (@{typ "nat list"}, 4)],
    limited_predicates = [(["appendP"], 4), (["revP"], 4)],
    replacing =
@@ -15,7 +16,7 @@ setup {* Code_Prolog.map_code_options (K
    manual_reorder = []}) *}
 
 lemma "(xs :: nat list) = ys @ ys --> rev xs = xs"
-quickcheck[generator = code, iterations = 200000, expect = counterexample]
+quickcheck[generator = code, iterations = 10000]
 quickcheck[generator = predicate_compile_wo_ff, iterations = 1, expect = counterexample]
 quickcheck[generator = prolog, expect = counterexample]
 oops

@@ -28,8 +28,6 @@ sig
   val check_code: theory -> string list
     -> ((string * bool) * Token.T list) list -> unit
 
-  val shell_command: string (*theory name*) -> string (*export_code expr*) -> unit
-
   type serializer
   type literals = Code_Printer.literals
   val add_target: string * { serializer: serializer, literals: literals,
@@ -56,6 +54,8 @@ sig
   val add_const_syntax: string -> string -> const_syntax option -> theory -> theory
   val add_reserved: string -> string -> theory -> theory
   val add_include: string -> string * (string * string list) option -> theory -> theory
+
+  val codegen_tool: string (*theory name*) -> string (*export_code expr*) -> unit
 end;
 
 structure Code_Target : CODE_TARGET =
@@ -73,9 +73,14 @@ type const_syntax = Code_Printer.const_syntax;
 datatype destination = Export of Path.T option | Produce | Present of string list;
 type serialization = int -> destination -> (string * (string -> string option)) option;
 
-fun serialization output _ content width (Export some_path) = (output width some_path content; NONE)
-  | serialization _ string content width Produce = SOME (string [] width content)
-  | serialization _ string content width (Present stmt_names) = SOME (string stmt_names width content);
+fun serialization output _ content width (Export some_path) =
+      (output width some_path content; NONE)
+  | serialization _ string content width Produce =
+      string [] width content |> SOME
+  | serialization _ string content width (Present stmt_names) =
+     string stmt_names width content
+     |> apfst (Pretty.output (SOME width) o Pretty.str)
+     |> SOME;
 
 fun export some_path f = (f (Export some_path); ());
 fun produce f = the (f Produce);
@@ -239,12 +244,10 @@ fun the_fundamental thy =
 
 fun the_literals thy = #literals o the_fundamental thy;
 
-local
-
-fun activate_target thy target =
+fun collapse_hierarchy thy =
   let
-    val ((targets, abortable), default_width) = Targets.get thy;
-    fun collapse_hierarchy target =
+    val ((targets, _), _) = Targets.get thy;
+    fun collapse target = 
       let
         val data = case Symtab.lookup targets target
          of SOME data => data
@@ -252,10 +255,17 @@ fun activate_target thy target =
       in case the_description data
        of Fundamental _ => (K I, data)
         | Extension (super, modify) => let
-            val (modify', data') = collapse_hierarchy super
+            val (modify', data') = collapse super
           in (fn naming => modify' naming #> modify naming, merge_target false target (data', data)) end
       end;
-    val (modify, data) = collapse_hierarchy target;
+  in collapse end;
+
+local
+
+fun activate_target thy target =
+  let
+    val ((targets, abortable), default_width) = Targets.get thy;
+    val (modify, data) = collapse_hierarchy thy target;
   in (default_width, abortable, data, modify) end;
 
 fun activate_syntax lookup_name src_tab = Symtab.empty
@@ -475,7 +485,6 @@ val _ = Thy_Output.antiquotation "code_stmts"
       present_code thy (mk_cs thy)
         (fn naming => maps (fn f => f thy naming) mk_stmtss)
         target some_width "Example" []
-      |> Latex.output_typewriter
     end);
 
 end;
@@ -533,12 +542,16 @@ fun gen_add_const_syntax prep_const =
       then error ("Too many arguments in syntax for constant " ^ quote c)
       else syn);
 
-fun add_reserved target =
+fun add_reserved target sym thy =
   let
-    fun add sym syms = if member (op =) syms sym
+    val (_, data) = collapse_hierarchy thy target;
+    val _ = if member (op =) (the_reserved data) sym
       then error ("Reserved symbol " ^ quote sym ^ " already declared")
-      else insert (op =) sym syms
-  in map_reserved target o add end;
+      else ();
+  in
+    thy
+    |> map_reserved target (insert (op =) sym)
+  end;
 
 fun gen_add_include read_const target args thy =
   let
@@ -683,13 +696,19 @@ val _ =
   Outer_Syntax.command "export_code" "generate executable code for constants"
     Keyword.diag (Parse.!!! code_exprP >> (fn f => Toplevel.keep (f o Toplevel.theory_of)));
 
-fun shell_command thyname cmd = Toplevel.program (fn _ =>
-  (use_thy thyname; case Scan.read Token.stopper (Parse.!!! code_exprP)
-    ((filter Token.is_proper o Outer_Syntax.scan Position.none) cmd)
-   of SOME f => (writeln "Now generating code..."; f (Thy_Info.get_theory thyname))
-    | NONE => error ("Bad directive " ^ quote cmd)))
-  handle Runtime.TOPLEVEL_ERROR => OS.Process.exit OS.Process.failure;
-
 end; (*local*)
+
+
+(** external entrance point -- for codegen tool **)
+
+fun codegen_tool thyname cmd_expr =
+  let
+    val thy = Thy_Info.get_theory thyname;
+    val parse = Scan.read Token.stopper (Parse.!!! code_exprP) o
+      (filter Token.is_proper o Outer_Syntax.scan Position.none);
+  in case parse cmd_expr
+   of SOME f => (writeln "Now generating code..."; f thy)
+    | NONE => error ("Bad directive " ^ quote cmd_expr)
+  end;
 
 end; (*struct*)

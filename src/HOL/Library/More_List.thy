@@ -16,7 +16,6 @@ declare (in linorder) Min_fin_set_fold [code_unfold del]
 declare (in linorder) Max_fin_set_fold [code_unfold del]
 declare (in complete_lattice) Inf_set_fold [code_unfold del]
 declare (in complete_lattice) Sup_set_fold [code_unfold del]
-declare rev_foldl_cons [code del]
 
 text {* Fold combinator with canonical argument order *}
 
@@ -46,10 +45,18 @@ lemma fold_id:
   shows "fold f xs = id"
   using assms by (induct xs) simp_all
 
-lemma fold_apply:
+lemma fold_commute:
   assumes "\<And>x. x \<in> set xs \<Longrightarrow> h \<circ> g x = f x \<circ> h"
   shows "h \<circ> fold g xs = fold f xs \<circ> h"
   using assms by (induct xs) (simp_all add: fun_eq_iff)
+
+lemma fold_commute_apply:
+  assumes "\<And>x. x \<in> set xs \<Longrightarrow> h \<circ> g x = f x \<circ> h"
+  shows "h (fold g xs s) = fold f xs (h s)"
+proof -
+  from assms have "h \<circ> fold g xs = fold f xs \<circ> h" by (rule fold_commute)
+  then show ?thesis by (simp add: fun_eq_iff)
+qed
 
 lemma fold_invariant: 
   assumes "\<And>x. x \<in> set xs \<Longrightarrow> Q x" and "P s"
@@ -74,7 +81,7 @@ lemma fold_map [code_unfold]:
 lemma fold_rev:
   assumes "\<And>x y. x \<in> set xs \<Longrightarrow> y \<in> set xs \<Longrightarrow> f y \<circ> f x = f x \<circ> f y"
   shows "fold f (rev xs) = fold f xs"
-  using assms by (induct xs) (simp_all del: o_apply add: fold_apply)
+  using assms by (induct xs) (simp_all del: o_apply add: fold_commute)
 
 lemma foldr_fold:
   assumes "\<And>x y. x \<in> set xs \<Longrightarrow> y \<in> set xs \<Longrightarrow> f y \<circ> f x = f x \<circ> f y"
@@ -101,11 +108,11 @@ lemma fold_plus_listsum_rev:
   "fold plus xs = plus (listsum (rev xs))"
   by (induct xs) (simp_all add: add.assoc)
 
-lemma listsum_conv_foldr [code]:
-  "listsum xs = foldr plus xs 0"
-  by (fact listsum_foldr)
+lemma (in monoid_add) listsum_conv_fold [code]:
+  "listsum xs = fold (\<lambda>x y. y + x) xs 0"
+  by (auto simp add: listsum_foldl foldl_fold fun_eq_iff)
 
-lemma sort_key_conv_fold:
+lemma (in linorder) sort_key_conv_fold:
   assumes "inj_on f (set xs)"
   shows "sort_key f xs = fold (insort_key f) xs []"
 proof -
@@ -115,13 +122,14 @@ proof -
     fix x y
     assume "x \<in> set xs" "y \<in> set xs"
     with assms have *: "f y = f x \<Longrightarrow> y = x" by (auto dest: inj_onD)
+    have **: "x = y \<longleftrightarrow> y = x" by auto
     show "(insort_key f y \<circ> insort_key f x) zs = (insort_key f x \<circ> insort_key f y) zs"
-      by (induct zs) (auto dest: *)
+      by (induct zs) (auto intro: * simp add: **)
   qed
   then show ?thesis by (simp add: sort_key_def foldr_fold_rev)
 qed
 
-lemma sort_conv_fold:
+lemma (in linorder) sort_conv_fold:
   "sort xs = fold insort xs []"
   by (rule sort_key_conv_fold) simp
 

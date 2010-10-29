@@ -5,248 +5,118 @@
 header {* Representable Types *}
 
 theory Representable
-imports Algebraic Universal Ssum Sprod One Fixrec Domain_Aux
+imports Algebraic Bifinite Universal Ssum One Fixrec Domain_Aux
 uses
   ("Tools/repdef.ML")
   ("Tools/Domain/domain_isomorphism.ML")
 begin
 
-subsection {* Class of representable types *}
-
-text "Overloaded embedding and projection functions between
-      a representable type and the universal domain."
-
-class rep = bifinite +
-  fixes emb :: "'a::pcpo \<rightarrow> udom"
-  fixes prj :: "udom \<rightarrow> 'a::pcpo"
-  assumes ep_pair_emb_prj: "ep_pair emb prj"
-
-interpretation rep:
-  pcpo_ep_pair
-    "emb :: 'a::rep \<rightarrow> udom"
-    "prj :: udom \<rightarrow> 'a::rep"
-  unfolding pcpo_ep_pair_def
-  by (rule ep_pair_emb_prj)
-
-lemmas emb_inverse = rep.e_inverse
-lemmas emb_prj_below = rep.e_p_below
-lemmas emb_eq_iff = rep.e_eq_iff
-lemmas emb_strict = rep.e_strict
-lemmas prj_strict = rep.p_strict
-
-
-subsection {* Making \emph{rep} the default class *}
-
-text {*
-  From now on, free type variables are assumed to be in class
-  @{term rep}, unless specified otherwise.
-*}
-
-default_sort rep
+default_sort bifinite
 
 subsection {* Representations of types *}
 
-text "A TypeRep is an algebraic deflation over the universe of values."
+lemma emb_prj: "emb\<cdot>((prj\<cdot>x)::'a) = cast\<cdot>DEFL('a)\<cdot>x"
+by (simp add: cast_DEFL)
 
-types TypeRep = "udom alg_defl"
-translations (type) "TypeRep" \<leftharpoondown> (type) "udom alg_defl"
-
-definition
-  Rep_of :: "'a::rep itself \<Rightarrow> TypeRep"
-where
-  "Rep_of TYPE('a::rep) =
-    (\<Squnion>i. alg_defl_principal (Abs_fin_defl
-      (emb oo (approx i :: 'a \<rightarrow> 'a) oo prj)))"
-
-syntax "_REP" :: "type \<Rightarrow> TypeRep"  ("(1REP/(1'(_')))")
-translations "REP('t)" \<rightleftharpoons> "CONST Rep_of TYPE('t)"
-
-lemma cast_REP:
-  "cast\<cdot>REP('a::rep) = (emb::'a \<rightarrow> udom) oo (prj::udom \<rightarrow> 'a)"
-proof -
-  let ?a = "\<lambda>i. emb oo approx i oo (prj::udom \<rightarrow> 'a)"
-  have a: "\<And>i. finite_deflation (?a i)"
-    apply (rule rep.finite_deflation_e_d_p)
-    apply (rule finite_deflation_approx)
-    done
-  show ?thesis
-    unfolding Rep_of_def
-    apply (subst contlub_cfun_arg)
-    apply (rule chainI)
-    apply (rule alg_defl.principal_mono)
-    apply (rule Abs_fin_defl_mono [OF a a])
-    apply (rule chainE, simp)
-    apply (subst cast_alg_defl_principal)
-    apply (simp add: Abs_fin_defl_inverse a)
-    apply (simp add: expand_cfun_eq lub_distribs)
-    done
-qed
-
-lemma emb_prj: "emb\<cdot>((prj\<cdot>x)::'a::rep) = cast\<cdot>REP('a)\<cdot>x"
-by (simp add: cast_REP)
-
-lemma in_REP_iff:
-  "x ::: REP('a::rep) \<longleftrightarrow> emb\<cdot>((prj\<cdot>x)::'a) = x"
-by (simp add: in_deflation_def cast_REP)
-
-lemma prj_inverse:
-  "x ::: REP('a::rep) \<Longrightarrow> emb\<cdot>((prj\<cdot>x)::'a) = x"
-by (simp only: in_REP_iff)
-
-lemma emb_in_REP [simp]:
-  "emb\<cdot>(x::'a::rep) ::: REP('a)"
-by (simp add: in_REP_iff)
-
-subsection {* Coerce operator *}
-
-definition coerce :: "'a \<rightarrow> 'b"
-where "coerce = prj oo emb"
-
-lemma beta_coerce: "coerce\<cdot>x = prj\<cdot>(emb\<cdot>x)"
-by (simp add: coerce_def)
-
-lemma prj_emb: "prj\<cdot>(emb\<cdot>x) = coerce\<cdot>x"
-by (simp add: coerce_def)
-
-lemma coerce_strict [simp]: "coerce\<cdot>\<bottom> = \<bottom>"
-by (simp add: coerce_def)
-
-lemma coerce_eq_ID [simp]: "(coerce :: 'a \<rightarrow> 'a) = ID"
-by (rule ext_cfun, simp add: beta_coerce)
-
-lemma emb_coerce:
-  "REP('a) \<sqsubseteq> REP('b)
-   \<Longrightarrow> emb\<cdot>((coerce::'a \<rightarrow> 'b)\<cdot>x) = emb\<cdot>x"
- apply (simp add: beta_coerce)
- apply (rule prj_inverse)
- apply (erule subdeflationD)
- apply (rule emb_in_REP)
+lemma emb_prj_emb:
+  fixes x :: "'a"
+  assumes "DEFL('a) \<sqsubseteq> DEFL('b)"
+  shows "emb\<cdot>(prj\<cdot>(emb\<cdot>x) :: 'b) = emb\<cdot>x"
+unfolding emb_prj
+apply (rule cast.belowD)
+apply (rule monofun_cfun_arg [OF assms])
+apply (simp add: cast_DEFL)
 done
 
-lemma coerce_prj:
-  "REP('a) \<sqsubseteq> REP('b)
-   \<Longrightarrow> (coerce::'b \<rightarrow> 'a)\<cdot>(prj\<cdot>x) = prj\<cdot>x"
- apply (simp add: coerce_def)
+lemma prj_emb_prj:
+  assumes "DEFL('a) \<sqsubseteq> DEFL('b)"
+  shows "prj\<cdot>(emb\<cdot>(prj\<cdot>x :: 'b)) = (prj\<cdot>x :: 'a)"
  apply (rule emb_eq_iff [THEN iffD1])
  apply (simp only: emb_prj)
  apply (rule deflation_below_comp1)
    apply (rule deflation_cast)
   apply (rule deflation_cast)
- apply (erule monofun_cfun_arg)
-done
-
-lemma coerce_coerce [simp]:
-  "REP('a) \<sqsubseteq> REP('b)
-   \<Longrightarrow> coerce\<cdot>((coerce::'a \<rightarrow> 'b)\<cdot>x) = coerce\<cdot>x"
-by (simp add: beta_coerce prj_inverse subdeflationD)
-
-lemma coerce_inverse:
-  "emb\<cdot>(x::'a) ::: REP('b) \<Longrightarrow> coerce\<cdot>(coerce\<cdot>x :: 'b) = x"
-by (simp only: beta_coerce prj_inverse emb_inverse)
-
-lemma coerce_type:
-  "REP('a) \<sqsubseteq> REP('b)
-   \<Longrightarrow> emb\<cdot>((coerce::'a \<rightarrow> 'b)\<cdot>x) ::: REP('a)"
-by (simp add: beta_coerce prj_inverse subdeflationD)
-
-lemma ep_pair_coerce:
-  "REP('a) \<sqsubseteq> REP('b)
-   \<Longrightarrow> ep_pair (coerce::'a \<rightarrow> 'b) (coerce::'b \<rightarrow> 'a)"
- apply (rule ep_pair.intro)
-  apply simp
- apply (simp only: beta_coerce)
- apply (rule below_trans)
-  apply (rule monofun_cfun_arg)
-  apply (rule emb_prj_below)
- apply simp
+ apply (rule monofun_cfun_arg [OF assms])
 done
 
 text {* Isomorphism lemmas used internally by the domain package: *}
 
 lemma domain_abs_iso:
   fixes abs and rep
-  assumes REP: "REP('b) = REP('a)"
-  assumes abs_def: "abs \<equiv> (coerce :: 'a \<rightarrow> 'b)"
-  assumes rep_def: "rep \<equiv> (coerce :: 'b \<rightarrow> 'a)"
+  assumes DEFL: "DEFL('b) = DEFL('a)"
+  assumes abs_def: "(abs :: 'a \<rightarrow> 'b) \<equiv> prj oo emb"
+  assumes rep_def: "(rep :: 'b \<rightarrow> 'a) \<equiv> prj oo emb"
   shows "rep\<cdot>(abs\<cdot>x) = x"
-unfolding abs_def rep_def by (simp add: REP)
+unfolding abs_def rep_def
+by (simp add: emb_prj_emb DEFL)
 
 lemma domain_rep_iso:
   fixes abs and rep
-  assumes REP: "REP('b) = REP('a)"
-  assumes abs_def: "abs \<equiv> (coerce :: 'a \<rightarrow> 'b)"
-  assumes rep_def: "rep \<equiv> (coerce :: 'b \<rightarrow> 'a)"
+  assumes DEFL: "DEFL('b) = DEFL('a)"
+  assumes abs_def: "(abs :: 'a \<rightarrow> 'b) \<equiv> prj oo emb"
+  assumes rep_def: "(rep :: 'b \<rightarrow> 'a) \<equiv> prj oo emb"
   shows "abs\<cdot>(rep\<cdot>x) = x"
-unfolding abs_def rep_def by (simp add: REP [symmetric])
+unfolding abs_def rep_def
+by (simp add: emb_prj_emb DEFL)
 
+subsection {* Deflations as sets *}
+
+definition defl_set :: "defl \<Rightarrow> udom set"
+where "defl_set A = {x. cast\<cdot>A\<cdot>x = x}"
+
+lemma adm_defl_set: "adm (\<lambda>x. x \<in> defl_set A)"
+unfolding defl_set_def by simp
+
+lemma defl_set_bottom: "\<bottom> \<in> defl_set A"
+unfolding defl_set_def by simp
+
+lemma defl_set_cast [simp]: "cast\<cdot>A\<cdot>x \<in> defl_set A"
+unfolding defl_set_def by simp
+
+lemma defl_set_subset_iff: "defl_set A \<subseteq> defl_set B \<longleftrightarrow> A \<sqsubseteq> B"
+apply (simp add: defl_set_def subset_eq cast_below_cast [symmetric])
+apply (auto simp add: cast.belowI cast.belowD)
+done
 
 subsection {* Proving a subtype is representable *}
 
 text {*
-  Temporarily relax type constraints for @{term "approx"},
-  @{term emb}, and @{term prj}.
+  Temporarily relax type constraints for @{term emb} and @{term prj}.
 *}
 
-setup {* Sign.add_const_constraint
-  (@{const_name "approx"}, SOME @{typ "nat \<Rightarrow> 'a::cpo \<rightarrow> 'a"}) *}
-
-setup {* Sign.add_const_constraint
-  (@{const_name emb}, SOME @{typ "'a::pcpo \<rightarrow> udom"}) *}
-
-setup {* Sign.add_const_constraint
-  (@{const_name prj}, SOME @{typ "udom \<rightarrow> 'a::pcpo"}) *}
-
-definition
-  repdef_approx ::
-    "('a::pcpo \<Rightarrow> udom) \<Rightarrow> (udom \<Rightarrow> 'a) \<Rightarrow> udom alg_defl \<Rightarrow> nat \<Rightarrow> 'a \<rightarrow> 'a"
-where
-  "repdef_approx Rep Abs t = (\<lambda>i. \<Lambda> x. Abs (cast\<cdot>(approx i\<cdot>t)\<cdot>(Rep x)))"
+setup {*
+  fold Sign.add_const_constraint
+  [ (@{const_name defl}, SOME @{typ "'a::pcpo itself \<Rightarrow> defl"})
+  , (@{const_name emb}, SOME @{typ "'a::pcpo \<rightarrow> udom"})
+  , (@{const_name prj}, SOME @{typ "udom \<rightarrow> 'a::pcpo"}) ]
+*}
 
 lemma typedef_rep_class:
   fixes Rep :: "'a::pcpo \<Rightarrow> udom"
   fixes Abs :: "udom \<Rightarrow> 'a::pcpo"
-  fixes t :: TypeRep
-  assumes type: "type_definition Rep Abs {x. x ::: t}"
+  fixes t :: defl
+  assumes type: "type_definition Rep Abs (defl_set t)"
   assumes below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
   assumes emb: "emb \<equiv> (\<Lambda> x. Rep x)"
   assumes prj: "prj \<equiv> (\<Lambda> x. Abs (cast\<cdot>t\<cdot>x))"
-  assumes approx: "(approx :: nat \<Rightarrow> 'a \<rightarrow> 'a) \<equiv> repdef_approx Rep Abs t"
-  shows "OFCLASS('a, rep_class)"
+  assumes defl: "defl \<equiv> (\<lambda> a::'a itself. t)"
+  shows "OFCLASS('a, bifinite_class)"
 proof
-  have adm: "adm (\<lambda>x. x \<in> {x. x ::: t})"
-    by (simp add: adm_in_deflation)
   have emb_beta: "\<And>x. emb\<cdot>x = Rep x"
     unfolding emb
     apply (rule beta_cfun)
-    apply (rule typedef_cont_Rep [OF type below adm])
+    apply (rule typedef_cont_Rep [OF type below adm_defl_set])
     done
   have prj_beta: "\<And>y. prj\<cdot>y = Abs (cast\<cdot>t\<cdot>y)"
     unfolding prj
     apply (rule beta_cfun)
-    apply (rule typedef_cont_Abs [OF type below adm])
+    apply (rule typedef_cont_Abs [OF type below adm_defl_set])
     apply simp_all
     done
-  have cast_cast_approx:
-    "\<And>i x. cast\<cdot>t\<cdot>(cast\<cdot>(approx i\<cdot>t)\<cdot>x) = cast\<cdot>(approx i\<cdot>t)\<cdot>x"
-    apply (rule cast_fixed)
-    apply (rule subdeflationD)
-    apply (rule approx.below)
-    apply (rule cast_in_deflation)
-    done
-  have approx':
-    "approx = (\<lambda>i. \<Lambda>(x::'a). prj\<cdot>(cast\<cdot>(approx i\<cdot>t)\<cdot>(emb\<cdot>x)))"
-    unfolding approx repdef_approx_def
-    apply (subst cast_cast_approx [symmetric])
-    apply (simp add: prj_beta [symmetric] emb_beta [symmetric])
-    done
-  have emb_in_deflation: "\<And>x::'a. emb\<cdot>x ::: t"
-    using type_definition.Rep [OF type]
-    by (simp add: emb_beta)
   have prj_emb: "\<And>x::'a. prj\<cdot>(emb\<cdot>x) = x"
-    unfolding prj_beta
-    apply (simp add: cast_fixed [OF emb_in_deflation])
-    apply (simp add: emb_beta type_definition.Rep_inverse [OF type])
-    done
+    using type_definition.Rep [OF type]
+    unfolding prj_beta emb_beta defl_set_def
+    by (simp add: type_definition.Rep_inverse [OF type])
   have emb_prj: "\<And>y. emb\<cdot>(prj\<cdot>y :: 'a) = cast\<cdot>t\<cdot>y"
     unfolding prj_beta emb_beta
     by (simp add: type_definition.Abs_inverse [OF type])
@@ -255,395 +125,48 @@ proof
     apply (simp add: prj_emb)
     apply (simp add: emb_prj cast.below)
     done
-  show "chain (approx :: nat \<Rightarrow> 'a \<rightarrow> 'a)"
-    unfolding approx' by simp
-  show "\<And>x::'a. (\<Squnion>i. approx i\<cdot>x) = x"
-    unfolding approx'
-    apply (simp add: lub_distribs)
-    apply (subst cast_fixed [OF emb_in_deflation])
-    apply (rule prj_emb)
-    done
-  show "\<And>(i::nat) (x::'a). approx i\<cdot>(approx i\<cdot>x) = approx i\<cdot>x"
-    unfolding approx'
-    apply simp
-    apply (simp add: emb_prj)
-    apply (simp add: cast_cast_approx)
-    done
-  show "\<And>i::nat. finite {x::'a. approx i\<cdot>x = x}"
-    apply (rule_tac B="(\<lambda>x. prj\<cdot>x) ` {x. cast\<cdot>(approx i\<cdot>t)\<cdot>x = x}"
-           in finite_subset)
-    apply (clarsimp simp add: approx')
-    apply (drule_tac f="\<lambda>x. emb\<cdot>x" in arg_cong)
-    apply (rule image_eqI)
-    apply (rule prj_emb [symmetric])
-    apply (simp add: emb_prj)
-    apply (simp add: cast_cast_approx)
-    apply (rule finite_imageI)
-    apply (simp add: cast_approx_fixed_iff)
-    apply (simp add: Collect_conj_eq)
-    apply (simp add: finite_fixes_approx)
-    done
+  show "cast\<cdot>DEFL('a) = emb oo (prj :: udom \<rightarrow> 'a)"
+    by (rule cfun_eqI, simp add: defl emb_prj)
 qed
 
-text {* Restore original typing constraints *}
+lemma typedef_DEFL:
+  assumes "defl \<equiv> (\<lambda>a::'a::pcpo itself. t)"
+  shows "DEFL('a::pcpo) = t"
+unfolding assms ..
 
-setup {* Sign.add_const_constraint
-  (@{const_name "approx"}, SOME @{typ "nat \<Rightarrow> 'a::profinite \<rightarrow> 'a"}) *}
+text {* Restore original typing constraints. *}
 
-setup {* Sign.add_const_constraint
-  (@{const_name emb}, SOME @{typ "'a::rep \<rightarrow> udom"}) *}
-
-setup {* Sign.add_const_constraint
-  (@{const_name prj}, SOME @{typ "udom \<rightarrow> 'a::rep"}) *}
-
-lemma typedef_REP:
-  fixes Rep :: "'a::rep \<Rightarrow> udom"
-  fixes Abs :: "udom \<Rightarrow> 'a::rep"
-  fixes t :: TypeRep
-  assumes type: "type_definition Rep Abs {x. x ::: t}"
-  assumes below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
-  assumes emb: "emb \<equiv> (\<Lambda> x. Rep x)"
-  assumes prj: "prj \<equiv> (\<Lambda> x. Abs (cast\<cdot>t\<cdot>x))"
-  shows "REP('a) = t"
-proof -
-  have adm: "adm (\<lambda>x. x \<in> {x. x ::: t})"
-    by (simp add: adm_in_deflation)
-  have emb_beta: "\<And>x. emb\<cdot>x = Rep x"
-    unfolding emb
-    apply (rule beta_cfun)
-    apply (rule typedef_cont_Rep [OF type below adm])
-    done
-  have prj_beta: "\<And>y. prj\<cdot>y = Abs (cast\<cdot>t\<cdot>y)"
-    unfolding prj
-    apply (rule beta_cfun)
-    apply (rule typedef_cont_Abs [OF type below adm])
-    apply simp_all
-    done
-  have emb_in_deflation: "\<And>x::'a. emb\<cdot>x ::: t"
-    using type_definition.Rep [OF type]
-    by (simp add: emb_beta)
-  have prj_emb: "\<And>x::'a. prj\<cdot>(emb\<cdot>x) = x"
-    unfolding prj_beta
-    apply (simp add: cast_fixed [OF emb_in_deflation])
-    apply (simp add: emb_beta type_definition.Rep_inverse [OF type])
-    done
-  have emb_prj: "\<And>y. emb\<cdot>(prj\<cdot>y :: 'a) = cast\<cdot>t\<cdot>y"
-    unfolding prj_beta emb_beta
-    by (simp add: type_definition.Abs_inverse [OF type])
-  show "REP('a) = t"
-    apply (rule cast_eq_imp_eq, rule ext_cfun)
-    apply (simp add: cast_REP emb_prj)
-    done
-qed
-
-lemma adm_mem_Collect_in_deflation: "adm (\<lambda>x. x \<in> {x. x ::: A})"
-unfolding mem_Collect_eq by (rule adm_in_deflation)
+setup {*
+  fold Sign.add_const_constraint
+  [ (@{const_name defl}, SOME @{typ "'a::bifinite itself \<Rightarrow> defl"})
+  , (@{const_name emb}, SOME @{typ "'a::bifinite \<rightarrow> udom"})
+  , (@{const_name prj}, SOME @{typ "udom \<rightarrow> 'a::bifinite"}) ]
+*}
 
 use "Tools/repdef.ML"
-
-
-subsection {* Instances of class \emph{rep} *}
-
-subsubsection {* Universal Domain *}
-
-text "The Universal Domain itself is trivially representable."
-
-instantiation udom :: rep
-begin
-
-definition emb_udom_def [simp]: "emb = (ID :: udom \<rightarrow> udom)"
-definition prj_udom_def [simp]: "prj = (ID :: udom \<rightarrow> udom)"
-
-instance
- apply (intro_classes)
- apply (simp_all add: ep_pair.intro)
-done
-
-end
-
-subsubsection {* Lifted types *}
-
-instantiation lift :: (countable) rep
-begin
-
-definition emb_lift_def:
-  "emb = udom_emb oo (FLIFT x. Def (to_nat x))"
-
-definition prj_lift_def:
-  "prj = (FLIFT n. if (\<exists>x::'a::countable. n = to_nat x)
-                    then Def (THE x::'a. n = to_nat x) else \<bottom>) oo udom_prj"
-
-instance
- apply (intro_classes, unfold emb_lift_def prj_lift_def)
- apply (rule ep_pair_comp [OF _ ep_pair_udom])
- apply (rule ep_pair.intro)
-  apply (case_tac x, simp, simp)
- apply (case_tac y, simp, clarsimp)
-done
-
-end
-
-subsubsection {* Representable type constructors *}
-
-text "Functions between representable types are representable."
-
-instantiation cfun :: (rep, rep) rep
-begin
-
-definition emb_cfun_def: "emb = udom_emb oo cfun_map\<cdot>prj\<cdot>emb"
-definition prj_cfun_def: "prj = cfun_map\<cdot>emb\<cdot>prj oo udom_prj"
-
-instance
- apply (intro_classes, unfold emb_cfun_def prj_cfun_def)
- apply (intro ep_pair_comp ep_pair_cfun_map ep_pair_emb_prj ep_pair_udom)
-done
-
-end
-
-text "Strict products of representable types are representable."
-
-instantiation sprod :: (rep, rep) rep
-begin
-
-definition emb_sprod_def: "emb = udom_emb oo sprod_map\<cdot>emb\<cdot>emb"
-definition prj_sprod_def: "prj = sprod_map\<cdot>prj\<cdot>prj oo udom_prj"
-
-instance
- apply (intro_classes, unfold emb_sprod_def prj_sprod_def)
- apply (intro ep_pair_comp ep_pair_sprod_map ep_pair_emb_prj ep_pair_udom)
-done
-
-end
-
-text "Strict sums of representable types are representable."
-
-instantiation ssum :: (rep, rep) rep
-begin
-
-definition emb_ssum_def: "emb = udom_emb oo ssum_map\<cdot>emb\<cdot>emb"
-definition prj_ssum_def: "prj = ssum_map\<cdot>prj\<cdot>prj oo udom_prj"
-
-instance
- apply (intro_classes, unfold emb_ssum_def prj_ssum_def)
- apply (intro ep_pair_comp ep_pair_ssum_map ep_pair_emb_prj ep_pair_udom)
-done
-
-end
-
-text "Up of a representable type is representable."
-
-instantiation "u" :: (rep) rep
-begin
-
-definition emb_u_def: "emb = udom_emb oo u_map\<cdot>emb"
-definition prj_u_def: "prj = u_map\<cdot>prj oo udom_prj"
-
-instance
- apply (intro_classes, unfold emb_u_def prj_u_def)
- apply (intro ep_pair_comp ep_pair_u_map ep_pair_emb_prj ep_pair_udom)
-done
-
-end
-
-text "Cartesian products of representable types are representable."
-
-instantiation prod :: (rep, rep) rep
-begin
-
-definition emb_cprod_def: "emb = udom_emb oo cprod_map\<cdot>emb\<cdot>emb"
-definition prj_cprod_def: "prj = cprod_map\<cdot>prj\<cdot>prj oo udom_prj"
-
-instance
- apply (intro_classes, unfold emb_cprod_def prj_cprod_def)
- apply (intro ep_pair_comp ep_pair_cprod_map ep_pair_emb_prj ep_pair_udom)
-done
-
-end
-
-subsection {* Type combinators *}
-
-definition
-  TypeRep_fun1 ::
-    "((udom \<rightarrow> udom) \<rightarrow> ('a \<rightarrow> 'a))
-      \<Rightarrow> (TypeRep \<rightarrow> TypeRep)"
-where
-  "TypeRep_fun1 f =
-    alg_defl.basis_fun (\<lambda>a.
-      alg_defl_principal (
-        Abs_fin_defl (udom_emb oo f\<cdot>(Rep_fin_defl a) oo udom_prj)))"
-
-definition
-  TypeRep_fun2 ::
-    "((udom \<rightarrow> udom) \<rightarrow> (udom \<rightarrow> udom) \<rightarrow> ('a \<rightarrow> 'a))
-      \<Rightarrow> (TypeRep \<rightarrow> TypeRep \<rightarrow> TypeRep)"
-where
-  "TypeRep_fun2 f =
-    alg_defl.basis_fun (\<lambda>a.
-      alg_defl.basis_fun (\<lambda>b.
-        alg_defl_principal (
-          Abs_fin_defl (udom_emb oo
-            f\<cdot>(Rep_fin_defl a)\<cdot>(Rep_fin_defl b) oo udom_prj))))"
-
-definition "cfun_defl = TypeRep_fun2 cfun_map"
-definition "ssum_defl = TypeRep_fun2 ssum_map"
-definition "sprod_defl = TypeRep_fun2 sprod_map"
-definition "cprod_defl = TypeRep_fun2 cprod_map"
-definition "u_defl = TypeRep_fun1 u_map"
-
-lemma Rep_fin_defl_mono: "a \<sqsubseteq> b \<Longrightarrow> Rep_fin_defl a \<sqsubseteq> Rep_fin_defl b"
-unfolding below_fin_defl_def .
-
-lemma cast_TypeRep_fun1:
-  assumes f: "\<And>a. finite_deflation a \<Longrightarrow> finite_deflation (f\<cdot>a)"
-  shows "cast\<cdot>(TypeRep_fun1 f\<cdot>A) = udom_emb oo f\<cdot>(cast\<cdot>A) oo udom_prj"
-proof -
-  have 1: "\<And>a. finite_deflation (udom_emb oo f\<cdot>(Rep_fin_defl a) oo udom_prj)"
-    apply (rule ep_pair.finite_deflation_e_d_p [OF ep_pair_udom])
-    apply (rule f, rule finite_deflation_Rep_fin_defl)
-    done
-  show ?thesis
-    by (induct A rule: alg_defl.principal_induct, simp)
-       (simp only: TypeRep_fun1_def
-                   alg_defl.basis_fun_principal
-                   alg_defl.basis_fun_mono
-                   alg_defl.principal_mono
-                   Abs_fin_defl_mono [OF 1 1]
-                   monofun_cfun below_refl
-                   Rep_fin_defl_mono
-                   cast_alg_defl_principal
-                   Abs_fin_defl_inverse [unfolded mem_Collect_eq, OF 1])
-qed
-
-lemma cast_TypeRep_fun2:
-  assumes f: "\<And>a b. finite_deflation a \<Longrightarrow> finite_deflation b \<Longrightarrow>
-                finite_deflation (f\<cdot>a\<cdot>b)"
-  shows "cast\<cdot>(TypeRep_fun2 f\<cdot>A\<cdot>B) =
-    udom_emb oo f\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
-proof -
-  have 1: "\<And>a b. finite_deflation
-           (udom_emb oo f\<cdot>(Rep_fin_defl a)\<cdot>(Rep_fin_defl b) oo udom_prj)"
-    apply (rule ep_pair.finite_deflation_e_d_p [OF ep_pair_udom])
-    apply (rule f, (rule finite_deflation_Rep_fin_defl)+)
-    done
-  show ?thesis
-    by (induct A B rule: alg_defl.principal_induct2, simp, simp)
-       (simp only: TypeRep_fun2_def
-                   alg_defl.basis_fun_principal
-                   alg_defl.basis_fun_mono
-                   alg_defl.principal_mono
-                   Abs_fin_defl_mono [OF 1 1]
-                   monofun_cfun below_refl
-                   Rep_fin_defl_mono
-                   cast_alg_defl_principal
-                   Abs_fin_defl_inverse [unfolded mem_Collect_eq, OF 1])
-qed
-
-lemma cast_cfun_defl:
-  "cast\<cdot>(cfun_defl\<cdot>A\<cdot>B) = udom_emb oo cfun_map\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
-unfolding cfun_defl_def
-apply (rule cast_TypeRep_fun2)
-apply (erule (1) finite_deflation_cfun_map)
-done
-
-lemma cast_ssum_defl:
-  "cast\<cdot>(ssum_defl\<cdot>A\<cdot>B) = udom_emb oo ssum_map\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
-unfolding ssum_defl_def
-apply (rule cast_TypeRep_fun2)
-apply (erule (1) finite_deflation_ssum_map)
-done
-
-lemma cast_sprod_defl:
-  "cast\<cdot>(sprod_defl\<cdot>A\<cdot>B) = udom_emb oo sprod_map\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
-unfolding sprod_defl_def
-apply (rule cast_TypeRep_fun2)
-apply (erule (1) finite_deflation_sprod_map)
-done
-
-lemma cast_cprod_defl:
-  "cast\<cdot>(cprod_defl\<cdot>A\<cdot>B) = udom_emb oo cprod_map\<cdot>(cast\<cdot>A)\<cdot>(cast\<cdot>B) oo udom_prj"
-unfolding cprod_defl_def
-apply (rule cast_TypeRep_fun2)
-apply (erule (1) finite_deflation_cprod_map)
-done
-
-lemma cast_u_defl:
-  "cast\<cdot>(u_defl\<cdot>A) = udom_emb oo u_map\<cdot>(cast\<cdot>A) oo udom_prj"
-unfolding u_defl_def
-apply (rule cast_TypeRep_fun1)
-apply (erule finite_deflation_u_map)
-done
-
-text {* REP of type constructor = type combinator *}
-
-lemma REP_cfun: "REP('a \<rightarrow> 'b) = cfun_defl\<cdot>REP('a)\<cdot>REP('b)"
-apply (rule cast_eq_imp_eq, rule ext_cfun)
-apply (simp add: cast_REP cast_cfun_defl)
-apply (simp add: cfun_map_def)
-apply (simp only: prj_cfun_def emb_cfun_def)
-apply (simp add: expand_cfun_eq ep_pair.e_eq_iff [OF ep_pair_udom])
-done
-
-lemma REP_ssum: "REP('a \<oplus> 'b) = ssum_defl\<cdot>REP('a)\<cdot>REP('b)"
-apply (rule cast_eq_imp_eq, rule ext_cfun)
-apply (simp add: cast_REP cast_ssum_defl)
-apply (simp add: prj_ssum_def)
-apply (simp add: emb_ssum_def)
-apply (simp add: ssum_map_map cfcomp1)
-done
-
-lemma REP_sprod: "REP('a \<otimes> 'b) = sprod_defl\<cdot>REP('a)\<cdot>REP('b)"
-apply (rule cast_eq_imp_eq, rule ext_cfun)
-apply (simp add: cast_REP cast_sprod_defl)
-apply (simp add: prj_sprod_def)
-apply (simp add: emb_sprod_def)
-apply (simp add: sprod_map_map cfcomp1)
-done
-
-lemma REP_cprod: "REP('a \<times> 'b) = cprod_defl\<cdot>REP('a)\<cdot>REP('b)"
-apply (rule cast_eq_imp_eq, rule ext_cfun)
-apply (simp add: cast_REP cast_cprod_defl)
-apply (simp add: prj_cprod_def)
-apply (simp add: emb_cprod_def)
-apply (simp add: cprod_map_map cfcomp1)
-done
-
-lemma REP_up: "REP('a u) = u_defl\<cdot>REP('a)"
-apply (rule cast_eq_imp_eq, rule ext_cfun)
-apply (simp add: cast_REP cast_u_defl)
-apply (simp add: prj_u_def)
-apply (simp add: emb_u_def)
-apply (simp add: u_map_map cfcomp1)
-done
-
-lemmas REP_simps =
-  REP_cfun
-  REP_ssum
-  REP_sprod
-  REP_cprod
-  REP_up
 
 subsection {* Isomorphic deflations *}
 
 definition
-  isodefl :: "('a::rep \<rightarrow> 'a) \<Rightarrow> udom alg_defl \<Rightarrow> bool"
+  isodefl :: "('a \<rightarrow> 'a) \<Rightarrow> defl \<Rightarrow> bool"
 where
   "isodefl d t \<longleftrightarrow> cast\<cdot>t = emb oo d oo prj"
 
 lemma isodeflI: "(\<And>x. cast\<cdot>t\<cdot>x = emb\<cdot>(d\<cdot>(prj\<cdot>x))) \<Longrightarrow> isodefl d t"
-unfolding isodefl_def by (simp add: ext_cfun)
+unfolding isodefl_def by (simp add: cfun_eqI)
 
 lemma cast_isodefl: "isodefl d t \<Longrightarrow> cast\<cdot>t = (\<Lambda> x. emb\<cdot>(d\<cdot>(prj\<cdot>x)))"
-unfolding isodefl_def by (simp add: ext_cfun)
+unfolding isodefl_def by (simp add: cfun_eqI)
 
 lemma isodefl_strict: "isodefl d t \<Longrightarrow> d\<cdot>\<bottom> = \<bottom>"
 unfolding isodefl_def
 by (drule cfun_fun_cong [where x="\<bottom>"], simp)
 
 lemma isodefl_imp_deflation:
-  fixes d :: "'a::rep \<rightarrow> 'a"
+  fixes d :: "'a \<rightarrow> 'a"
   assumes "isodefl d t" shows "deflation d"
 proof
-  note prems [unfolded isodefl_def, simp]
+  note assms [unfolded isodefl_def, simp]
   fix x :: 'a
   show "d\<cdot>(d\<cdot>x) = d\<cdot>x"
     using cast.idem [of t "emb\<cdot>x"] by simp
@@ -651,20 +174,20 @@ proof
     using cast.below [of t "emb\<cdot>x"] by simp
 qed
 
-lemma isodefl_ID_REP: "isodefl (ID :: 'a \<rightarrow> 'a) REP('a)"
-unfolding isodefl_def by (simp add: cast_REP)
+lemma isodefl_ID_DEFL: "isodefl (ID :: 'a \<rightarrow> 'a) DEFL('a)"
+unfolding isodefl_def by (simp add: cast_DEFL)
 
-lemma isodefl_REP_imp_ID: "isodefl (d :: 'a \<rightarrow> 'a) REP('a) \<Longrightarrow> d = ID"
+lemma isodefl_DEFL_imp_ID: "isodefl (d :: 'a \<rightarrow> 'a) DEFL('a) \<Longrightarrow> d = ID"
 unfolding isodefl_def
-apply (simp add: cast_REP)
-apply (simp add: expand_cfun_eq)
+apply (simp add: cast_DEFL)
+apply (simp add: cfun_eq_iff)
 apply (rule allI)
 apply (drule_tac x="emb\<cdot>x" in spec)
 apply simp
 done
 
 lemma isodefl_bottom: "isodefl \<bottom> \<bottom>"
-unfolding isodefl_def by (simp add: expand_cfun_eq)
+unfolding isodefl_def by (simp add: cfun_eq_iff)
 
 lemma adm_isodefl:
   "cont f \<Longrightarrow> cont g \<Longrightarrow> adm (\<lambda>x. isodefl (f x) (g x))"
@@ -684,25 +207,17 @@ unfolding fix_def2
 apply (rule isodefl_lub, simp, simp)
 apply (induct_tac i)
 apply (simp add: isodefl_bottom)
-apply (simp add: prems)
-done
-
-lemma isodefl_coerce:
-  fixes d :: "'a \<rightarrow> 'a"
-  assumes REP: "REP('b) = REP('a)"
-  shows "isodefl d t \<Longrightarrow> isodefl (coerce oo d oo coerce :: 'b \<rightarrow> 'b) t"
-unfolding isodefl_def
-apply (simp add: expand_cfun_eq)
-apply (simp add: emb_coerce coerce_prj REP)
+apply (simp add: assms)
 done
 
 lemma isodefl_abs_rep:
   fixes abs and rep and d
-  assumes REP: "REP('b) = REP('a)"
-  assumes abs_def: "abs \<equiv> (coerce :: 'a \<rightarrow> 'b)"
-  assumes rep_def: "rep \<equiv> (coerce :: 'b \<rightarrow> 'a)"
+  assumes DEFL: "DEFL('b) = DEFL('a)"
+  assumes abs_def: "(abs :: 'a \<rightarrow> 'b) \<equiv> prj oo emb"
+  assumes rep_def: "(rep :: 'b \<rightarrow> 'a) \<equiv> prj oo emb"
   shows "isodefl d t \<Longrightarrow> isodefl (abs oo d oo rep) t"
-unfolding abs_def rep_def using REP by (rule isodefl_coerce)
+unfolding isodefl_def
+by (simp add: cfun_eq_iff assms prj_emb_prj emb_prj_emb)
 
 lemma isodefl_cfun:
   "isodefl d1 t1 \<Longrightarrow> isodefl d2 t2 \<Longrightarrow>
@@ -733,10 +248,10 @@ done
 
 lemma isodefl_cprod:
   "isodefl d1 t1 \<Longrightarrow> isodefl d2 t2 \<Longrightarrow>
-    isodefl (cprod_map\<cdot>d1\<cdot>d2) (cprod_defl\<cdot>t1\<cdot>t2)"
+    isodefl (cprod_map\<cdot>d1\<cdot>d2) (prod_defl\<cdot>t1\<cdot>t2)"
 apply (rule isodeflI)
-apply (simp add: cast_cprod_defl cast_isodefl)
-apply (simp add: emb_cprod_def prj_cprod_def)
+apply (simp add: cast_prod_defl cast_isodefl)
+apply (simp add: emb_prod_def prj_prod_def)
 apply (simp add: cprod_map_map cfcomp1)
 done
 
@@ -752,22 +267,28 @@ subsection {* Constructing Domain Isomorphisms *}
 
 use "Tools/Domain/domain_isomorphism.ML"
 
+setup Domain_Isomorphism.setup
+
+lemmas [domain_defl_simps] =
+  DEFL_cfun DEFL_ssum DEFL_sprod DEFL_prod DEFL_u
+
+lemmas [domain_map_ID] =
+  cfun_map_ID ssum_map_ID sprod_map_ID cprod_map_ID u_map_ID
+
+lemmas [domain_isodefl] =
+  isodefl_cfun isodefl_ssum isodefl_sprod isodefl_cprod isodefl_u
+
+lemmas [domain_deflation] =
+  deflation_cfun_map deflation_ssum_map deflation_sprod_map
+  deflation_cprod_map deflation_u_map
+
 setup {*
   fold Domain_Isomorphism.add_type_constructor
-    [(@{type_name cfun}, @{term cfun_defl}, @{const_name cfun_map}, @{thm REP_cfun},
-        @{thm isodefl_cfun}, @{thm cfun_map_ID}, @{thm deflation_cfun_map}),
-
-     (@{type_name ssum}, @{term ssum_defl}, @{const_name ssum_map}, @{thm REP_ssum},
-        @{thm isodefl_ssum}, @{thm ssum_map_ID}, @{thm deflation_ssum_map}),
-
-     (@{type_name sprod}, @{term sprod_defl}, @{const_name sprod_map}, @{thm REP_sprod},
-        @{thm isodefl_sprod}, @{thm sprod_map_ID}, @{thm deflation_sprod_map}),
-
-     (@{type_name prod}, @{term cprod_defl}, @{const_name cprod_map}, @{thm REP_cprod},
-        @{thm isodefl_cprod}, @{thm cprod_map_ID}, @{thm deflation_cprod_map}),
-
-     (@{type_name "u"}, @{term u_defl}, @{const_name u_map}, @{thm REP_up},
-        @{thm isodefl_u}, @{thm u_map_ID}, @{thm deflation_u_map})]
+    [(@{type_name cfun}, @{const_name cfun_defl}, @{const_name cfun_map}, [true, true]),
+     (@{type_name ssum}, @{const_name ssum_defl}, @{const_name ssum_map}, [true, true]),
+     (@{type_name sprod}, @{const_name sprod_defl}, @{const_name sprod_map}, [true, true]),
+     (@{type_name prod}, @{const_name prod_defl}, @{const_name cprod_map}, [true, true]),
+     (@{type_name "u"}, @{const_name u_defl}, @{const_name u_map}, [true])]
 *}
 
 end

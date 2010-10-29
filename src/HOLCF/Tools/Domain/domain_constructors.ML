@@ -7,26 +7,30 @@ and proves related theorems.
 
 signature DOMAIN_CONSTRUCTORS =
 sig
+  type constr_info =
+    {
+      iso_info : Domain_Take_Proofs.iso_info,
+      con_specs : (term * (bool * typ) list) list,
+      con_betas : thm list,
+      nchotomy : thm,
+      exhaust : thm,
+      compacts : thm list,
+      con_rews : thm list,
+      inverts : thm list,
+      injects : thm list,
+      dist_les : thm list,
+      dist_eqs : thm list,
+      cases : thm list,
+      sel_rews : thm list,
+      dis_rews : thm list,
+      match_rews : thm list
+    }
   val add_domain_constructors :
       binding
       -> (binding * (bool * binding option * typ) list * mixfix) list
       -> Domain_Take_Proofs.iso_info
       -> theory
-      -> { con_consts : term list,
-           con_betas : thm list,
-           nchotomy : thm,
-           exhaust : thm,
-           compacts : thm list,
-           con_rews : thm list,
-           inverts : thm list,
-           injects : thm list,
-           dist_les : thm list,
-           dist_eqs : thm list,
-           cases : thm list,
-           sel_rews : thm list,
-           dis_rews : thm list,
-           match_rews : thm list
-         } * theory;
+      -> constr_info * theory;
 end;
 
 
@@ -38,6 +42,25 @@ open HOLCF_Library;
 infixr 6 ->>;
 infix -->>;
 infix 9 `;
+
+type constr_info =
+  {
+    iso_info : Domain_Take_Proofs.iso_info,
+    con_specs : (term * (bool * typ) list) list,
+    con_betas : thm list,
+    nchotomy : thm,
+    exhaust : thm,
+    compacts : thm list,
+    con_rews : thm list,
+    inverts : thm list,
+    injects : thm list,
+    dist_les : thm list,
+    dist_eqs : thm list,
+    cases : thm list,
+    sel_rews : thm list,
+    dis_rews : thm list,
+    match_rews : thm list
+  }
 
 (************************** miscellaneous functions ***************************)
 
@@ -379,7 +402,7 @@ fun add_case_combinator
     val abs_inverse = iso_locale RS @{thm iso.abs_iso};
 
     (* calculate function arguments of case combinator *)
-    val tns = map (fst o dest_TFree) (snd (dest_Type lhsT));
+    val tns = map fst (Term.add_tfreesT lhsT []);
     val resultT = TFree (Name.variant tns "'t", @{sort pcpo});
     fun fTs T = map (fn (_, args) => map snd args -->> T) spec;
     val fns = Datatype_Prop.indexify_names (map (K "f") spec);
@@ -388,10 +411,10 @@ fun add_case_combinator
 
     (* definition of case combinator *)
     local
-      val case_bind = Binding.suffix_name "_when" dbind;
+      val case_bind = Binding.suffix_name "_case" dbind;
       fun lambda_arg (lazy, v) t =
           (if lazy then mk_fup else I) (big_lambda v t);
-      fun lambda_args []      t = mk_one_when t
+      fun lambda_args []      t = mk_one_case t
         | lambda_args (x::[]) t = lambda_arg x t
         | lambda_args (x::xs) t = mk_ssplit (lambda_arg x (lambda_args xs t));
       fun one_con f (_, args) =
@@ -467,7 +490,7 @@ fun add_case_combinator
       let
         val defs = case_beta :: map mk_meta_eq [rep_strict, @{thm cfcomp2}];
         val goal = mk_trp (mk_strict case_app);
-        val rules = @{thms sscase1 ssplit1 strictify1 one_when1};
+        val rules = @{thms sscase1 ssplit1 strictify1 one_case1};
         val tacs = [resolve_tac rules 1];
       in prove thy defs goal (K tacs) end;
         
@@ -484,7 +507,7 @@ fun add_case_combinator
           val defs = case_beta :: con_betas;
           val rules1 = @{thms strictify2 sscase2 sscase3 ssplit2 fup2 ID1};
           val rules2 = @{thms con_defined_iff_rules};
-          val rules3 = @{thms cfcomp2 one_when2};
+          val rules3 = @{thms cfcomp2 one_case2};
           val rules = abs_inverse :: rules1 @ rules2 @ rules3;
           val tacs = [asm_simp_tac (beta_ss addsimps rules) 1];
         in prove thy defs goal (K tacs) end;
@@ -747,7 +770,7 @@ fun add_match_combinators
     (* get a fresh type variable for the result type *)
     val resultT : typ =
       let
-        val ts : string list = map (fst o dest_TFree) (snd (dest_Type lhsT));
+        val ts : string list = map fst (Term.add_tfreesT lhsT []);
         val t : string = Name.variant ts "'t";
       in TFree (t, @{sort pcpo}) end;
 
@@ -833,6 +856,9 @@ fun add_domain_constructors
     (thy : theory) =
   let
     val dname = Binding.name_of dbind;
+    val _ = writeln ("Proving isomorphism properties of domain "^dname^" ...");
+
+    val bindings = map #1 spec;
 
     (* retrieve facts about rep/abs *)
     val lhsT = #absT iso_info;
@@ -844,6 +870,7 @@ fun add_domain_constructors
     val abs_strict = iso_locale RS @{thm iso.abs_strict};
     val rep_defined_iff = iso_locale RS @{thm iso.rep_defined_iff};
     val abs_defined_iff = iso_locale RS @{thm iso.abs_defined_iff};
+    val iso_rews = [abs_iso_thm, rep_iso_thm, abs_strict, rep_strict];
 
     (* qualify constants and theorems with domain name *)
     val thy = Sign.add_path dname thy;
@@ -857,18 +884,22 @@ fun add_domain_constructors
       in
         add_constructors con_spec abs_const iso_locale thy
       end;
-    val {con_consts, con_betas, exhaust, ...} = con_result;
+    val {con_consts, con_betas, nchotomy, exhaust, compacts, con_rews,
+          inverts, injects, dist_les, dist_eqs} = con_result;
 
-    (* define case combinator *)
-    val ((case_const : typ -> term, cases : thm list), thy) =
+    (* prepare constructor spec *)
+    val con_specs : (term * (bool * typ) list) list =
       let
         fun prep_arg (lazy, sel, T) = (lazy, T);
         fun prep_con c (b, args, mx) = (c, map prep_arg args);
-        val case_spec = map2 prep_con con_consts spec;
       in
-        add_case_combinator case_spec lhsT dbind
-          con_betas exhaust iso_locale rep_const thy
+        map2 prep_con con_consts spec
       end;
+
+    (* define case combinator *)
+    val ((case_const : typ -> term, cases : thm list), thy) =
+        add_case_combinator con_specs lhsT dbind
+          con_betas exhaust iso_locale rep_const thy
 
     (* define and prove theorems for selector functions *)
     val (sel_thms : thm list, thy : theory) =
@@ -882,46 +913,61 @@ fun add_domain_constructors
 
     (* define and prove theorems for discriminator functions *)
     val (dis_thms : thm list, thy : theory) =
-      let
-        val bindings = map #1 spec;
-        fun prep_arg (lazy, sel, T) = (lazy, T);
-        fun prep_con c (b, args, mx) = (c, map prep_arg args);
-        val dis_spec = map2 prep_con con_consts spec;
-      in
-        add_discriminators bindings dis_spec lhsT
-          exhaust case_const cases thy
-      end
+        add_discriminators bindings con_specs lhsT
+          exhaust case_const cases thy;
 
     (* define and prove theorems for match combinators *)
     val (match_thms : thm list, thy : theory) =
-      let
-        val bindings = map #1 spec;
-        fun prep_arg (lazy, sel, T) = (lazy, T);
-        fun prep_con c (b, args, mx) = (c, map prep_arg args);
-        val mat_spec = map2 prep_con con_consts spec;
-      in
-        add_match_combinators bindings mat_spec lhsT
-          exhaust case_const cases thy
-      end
+        add_match_combinators bindings con_specs lhsT
+          exhaust case_const cases thy;
 
     (* restore original signature path *)
     val thy = Sign.parent_path thy;
 
+    (* bind theorem names in global theory *)
+    val (_, thy) =
+      let
+        fun qualified name = Binding.qualified true name dbind;
+        val names = "bottom" :: map (fn (b,_,_) => Binding.name_of b) spec;
+        val dname = fst (dest_Type lhsT);
+        val simp = Simplifier.simp_add;
+        val case_names = Rule_Cases.case_names names;
+        val cases_type = Induct.cases_type dname;
+      in
+        Global_Theory.add_thmss [
+          ((qualified "iso_rews"  , iso_rews    ), [simp]),
+          ((qualified "nchotomy"  , [nchotomy]  ), []),
+          ((qualified "exhaust"   , [exhaust]   ), [case_names, cases_type]),
+          ((qualified "case_rews" , cases       ), [simp]),
+          ((qualified "compacts"  , compacts    ), [simp]),
+          ((qualified "con_rews"  , con_rews    ), [simp]),
+          ((qualified "sel_rews"  , sel_thms    ), [simp]),
+          ((qualified "dis_rews"  , dis_thms    ), [simp]),
+          ((qualified "dist_les"  , dist_les    ), [simp]),
+          ((qualified "dist_eqs"  , dist_eqs    ), [simp]),
+          ((qualified "inverts"   , inverts     ), [simp]),
+          ((qualified "injects"   , injects     ), [simp]),
+          ((qualified "match_rews", match_thms  ), [simp])] thy
+      end;
+
     val result =
-      { con_consts = con_consts,
+      {
+        iso_info = iso_info,
+        con_specs = con_specs,
         con_betas = con_betas,
-        nchotomy = #nchotomy con_result,
+        nchotomy = nchotomy,
         exhaust = exhaust,
-        compacts = #compacts con_result,
-        con_rews = #con_rews con_result,
-        inverts = #inverts con_result,
-        injects = #injects con_result,
-        dist_les = #dist_les con_result,
-        dist_eqs = #dist_eqs con_result,
+        compacts = compacts,
+        con_rews = con_rews,
+        inverts = inverts,
+        injects = injects,
+        dist_les = dist_les,
+        dist_eqs = dist_eqs,
         cases = cases,
         sel_rews = sel_thms,
         dis_rews = dis_thms,
-        match_rews = match_thms };
+        match_rews = match_thms
+      };
   in
     (result, thy)
   end;

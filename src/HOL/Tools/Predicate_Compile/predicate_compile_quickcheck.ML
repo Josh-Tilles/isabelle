@@ -16,6 +16,8 @@ sig
   val put_lseq_result :
     (unit -> int -> int -> int * int -> int -> term list Lazy_Sequence.lazy_sequence) ->
       Proof.context -> Proof.context;
+  val put_new_dseq_result : (unit -> int -> term list Lazy_Sequence.lazy_sequence) ->
+    Proof.context -> Proof.context
 
   val tracing : bool Unsynchronized.ref;
   val quiet : bool Unsynchronized.ref;
@@ -51,6 +53,12 @@ structure Lseq_Result = Proof_Data (
 );
 val put_lseq_result = Lseq_Result.put;
 
+structure New_Dseq_Result = Proof_Data (
+  type T = unit -> int -> term list Lazy_Sequence.lazy_sequence
+  fun init _ () = error "New_Dseq_Random_Result"
+);
+val put_new_dseq_result = New_Dseq_Result.put;
+
 val tracing = Unsynchronized.ref false;
 
 val quiet = Unsynchronized.ref true;
@@ -85,6 +93,7 @@ val options = Options {
   function_flattening = true,
   fail_safe_function_flattening = false,
   no_higher_order_predicate = [],
+  smart_depth_limiting = true,
   no_topmost_reordering = false
 }
 
@@ -108,6 +117,7 @@ val debug_options = Options {
   function_flattening = true,
   fail_safe_function_flattening = false,
   no_higher_order_predicate = [],
+  smart_depth_limiting = true,
   no_topmost_reordering = true
 }
 
@@ -119,14 +129,14 @@ fun set_function_flattening b
     show_invalid_clauses = s_ic, skip_proof = s_p,
     compilation = c, inductify = i, specialise = sp, detect_switches = ds, function_flattening = f_f, 
     fail_safe_function_flattening = fs_ff, no_higher_order_predicate = no_ho,
-    no_topmost_reordering = re}) =
+    smart_depth_limiting = sm_dl, no_topmost_reordering = re}) =
   (Options { expected_modes = e_m, proposed_modes = p_m, proposed_names = p_n, show_steps = s_s,
     show_intermediate_results = s_ir, show_proof_trace = s_pt, show_modes = s_m,
     show_mode_inference = s_mi, show_compilation = s_c, show_caught_failures = s_cf,
     show_invalid_clauses = s_ic, skip_proof = s_p,
     compilation = c, inductify = i, specialise = sp, detect_switches = ds, function_flattening = b,
     fail_safe_function_flattening = fs_ff, no_higher_order_predicate = no_ho,
-    no_topmost_reordering = re})
+    smart_depth_limiting = sm_dl, no_topmost_reordering = re})
 
 fun set_fail_safe_function_flattening b
   (Options { expected_modes = e_m, proposed_modes = p_m, proposed_names = p_n, show_steps = s_s,
@@ -135,14 +145,14 @@ fun set_fail_safe_function_flattening b
     show_invalid_clauses = s_ic, skip_proof = s_p,
     compilation = c, inductify = i, specialise = sp, detect_switches = ds, function_flattening = f_f, 
     fail_safe_function_flattening = fs_ff, no_higher_order_predicate = no_ho,
-    no_topmost_reordering = re}) =
+    smart_depth_limiting = sm_dl, no_topmost_reordering = re}) =
   (Options { expected_modes = e_m, proposed_modes = p_m, proposed_names = p_n, show_steps = s_s,
     show_intermediate_results = s_ir, show_proof_trace = s_pt, show_modes = s_m,
     show_mode_inference = s_mi, show_compilation = s_c, show_caught_failures = s_cf,
     show_invalid_clauses = s_ic, skip_proof = s_p,
     compilation = c, inductify = i, specialise = sp, detect_switches = ds, function_flattening = f_f,
     fail_safe_function_flattening = b, no_higher_order_predicate = no_ho,
-    no_topmost_reordering = re})
+    smart_depth_limiting = sm_dl, no_topmost_reordering = re})
 
 fun set_no_higher_order_predicate ss
   (Options { expected_modes = e_m, proposed_modes = p_m, proposed_names = p_n, show_steps = s_s,
@@ -151,13 +161,14 @@ fun set_no_higher_order_predicate ss
     show_invalid_clauses = s_ic, skip_proof = s_p,
     compilation = c, inductify = i, specialise = sp, detect_switches = ds, function_flattening = f_f, 
     fail_safe_function_flattening = fs_ff, no_higher_order_predicate = no_ho,
-    no_topmost_reordering = re}) =
+    smart_depth_limiting = sm_dl, no_topmost_reordering = re}) =
   (Options { expected_modes = e_m, proposed_modes = p_m, proposed_names = p_n, show_steps = s_s,
     show_intermediate_results = s_ir, show_proof_trace = s_pt, show_modes = s_m,
     show_mode_inference = s_mi, show_compilation = s_c, show_caught_failures = s_cf,
     show_invalid_clauses = s_ic, skip_proof = s_p,
     compilation = c, inductify = i, specialise = sp, detect_switches = ds, function_flattening = f_f,
-    fail_safe_function_flattening = fs_ff, no_higher_order_predicate = ss, no_topmost_reordering = re})
+    fail_safe_function_flattening = fs_ff, no_higher_order_predicate = ss,
+    smart_depth_limiting = sm_dl, no_topmost_reordering = re})
 
 
 fun get_options () = 
@@ -173,19 +184,22 @@ val mk_randompredT = Predicate_Compile_Aux.mk_predT RandomPredCompFuns.compfuns
 val mk_return = Predicate_Compile_Aux.mk_single RandomPredCompFuns.compfuns
 val mk_bind = Predicate_Compile_Aux.mk_bind RandomPredCompFuns.compfuns
 
-val mk_new_randompredT = Predicate_Compile_Aux.mk_predT New_Pos_Random_Sequence_CompFuns.compfuns
-val mk_new_return = Predicate_Compile_Aux.mk_single New_Pos_Random_Sequence_CompFuns.compfuns
-val mk_new_bind = Predicate_Compile_Aux.mk_bind New_Pos_Random_Sequence_CompFuns.compfuns
+val mk_new_randompredT =
+  Predicate_Compile_Aux.mk_predT New_Pos_Random_Sequence_CompFuns.depth_unlimited_compfuns
+val mk_new_return =
+  Predicate_Compile_Aux.mk_single New_Pos_Random_Sequence_CompFuns.depth_unlimited_compfuns
+val mk_new_bind =
+  Predicate_Compile_Aux.mk_bind New_Pos_Random_Sequence_CompFuns.depth_unlimited_compfuns
 
-fun mk_split_lambda [] t = Abs ("u", HOLogic.unitT, t)
-  | mk_split_lambda [x] t = lambda x t
-  | mk_split_lambda xs t =
-  let
-    fun mk_split_lambda' (x::y::[]) t = HOLogic.mk_split (lambda x (lambda y t))
-      | mk_split_lambda' (x::xs) t = HOLogic.mk_split (lambda x (mk_split_lambda' xs t))
-  in
-    mk_split_lambda' xs t
-  end;
+val mk_new_dseqT =
+  Predicate_Compile_Aux.mk_predT New_Pos_DSequence_CompFuns.depth_unlimited_compfuns
+val mk_gen_return =
+  Predicate_Compile_Aux.mk_single New_Pos_DSequence_CompFuns.depth_unlimited_compfuns
+val mk_gen_bind =
+  Predicate_Compile_Aux.mk_bind New_Pos_DSequence_CompFuns.depth_unlimited_compfuns
+  
+
+val mk_split_lambda = HOLogic.tupled_lambda o HOLogic.mk_tuple
 
 fun cpu_time description f =
   let
@@ -209,23 +223,25 @@ fun compile_term compilation options ctxt t =
               Predicate_Compile_Core.add_random_dseq_equations options [full_constname] thy3
           | New_Pos_Random_DSeq =>
               Predicate_Compile_Core.add_new_random_dseq_equations options [full_constname] thy3
+          | Pos_Generator_DSeq =>
+              Predicate_Compile_Core.add_generator_dseq_equations options [full_constname] thy3
           (*| Depth_Limited_Random =>
               Predicate_Compile_Core.add_depth_limited_random_equations options [full_constname] thy3*))
     (*val _ = Predicate_Compile_Core.print_all_modes compilation thy4*)
     val _ = Output.tracing ("Preprocessing time: " ^ string_of_int (snd preproc_time))
     val _ = Output.tracing ("Core compilation time: " ^ string_of_int (snd core_comp_time))
     val ctxt4 = ProofContext.init_global thy4
-    val modes = Predicate_Compile_Core.modes_of compilation ctxt4 full_constname
+    val modes = Core_Data.modes_of compilation ctxt4 full_constname
     val output_mode = fold_rev (curry Fun) (map (K Output) (binder_types constT)) Bool
     val prog =
       if member eq_mode modes output_mode then
         let
-          val name = Predicate_Compile_Core.function_name_of compilation ctxt4
-            full_constname output_mode
+          val name = Core_Data.function_name_of compilation ctxt4 full_constname output_mode
           val T = 
             case compilation of
               Pos_Random_DSeq => mk_randompredT (HOLogic.mk_tupleT (map snd vs'))
             | New_Pos_Random_DSeq => mk_new_randompredT (HOLogic.mk_tupleT (map snd vs'))
+            | Pos_Generator_DSeq => mk_new_dseqT (HOLogic.mk_tupleT (map snd vs'))
             | Depth_Limited_Random =>
               [@{typ code_numeral}, @{typ code_numeral}, @{typ code_numeral},
               @{typ "code_numeral * code_numeral"}] ---> mk_predT (HOLogic.mk_tupleT (map snd vs'))
@@ -240,6 +256,9 @@ fun compile_term compilation options ctxt t =
             (map2 HOLogic.mk_term_of (map snd vs') (map Free vs')))))
         | New_Pos_Random_DSeq => mk_new_bind (prog,
             mk_split_lambda (map Free vs') (mk_new_return (HOLogic.mk_list @{typ term}
+            (map2 HOLogic.mk_term_of (map snd vs') (map Free vs')))))
+        | Pos_Generator_DSeq => mk_gen_bind (prog,
+            mk_split_lambda (map Free vs') (mk_gen_return (HOLogic.mk_list @{typ term}
             (map2 HOLogic.mk_term_of (map snd vs') (map Free vs')))))
         | Depth_Limited_Random => fold_rev (curry absdummy)
             [@{typ code_numeral}, @{typ code_numeral}, @{typ code_numeral},
@@ -277,7 +296,18 @@ fun compile_term compilation options ctxt t =
                  val seed = Random_Engine.next_seed ()
                in compiled_term nrandom size seed depth end))
           end
-      | Depth_Limited_Random =>
+      | Pos_Generator_DSeq =>
+          let
+            val compiled_term =
+              Code_Runtime.dynamic_value_strict
+                (New_Dseq_Result.get, put_new_dseq_result, "Predicate_Compile_Quickcheck.put_new_dseq_result")
+                thy4 (SOME target)
+                (fn proc => fn g => fn depth => g depth |> (Lazy_Sequence.mapa o map) proc)
+                qc_term []
+          in
+            fn size => fn nrandom => fn depth => Option.map fst (Lazy_Sequence.yield (compiled_term depth))
+          end
+       | Depth_Limited_Random =>
           let
             val compiled_term = Code_Runtime.dynamic_value_strict
               (Pred_Result.get, put_pred_result, "Predicate_Compile_Quickcheck.put_pred_result")
@@ -297,7 +327,7 @@ fun try_upto quiet f i =
     fun try' j =
       if j <= i then
         let
-          val _ = if quiet then () else priority ("Executing depth " ^ string_of_int j)
+          val _ = if quiet then () else Output.urgent_message ("Executing depth " ^ string_of_int j)
         in
           case f j handle Match => (if quiet then ()
              else warning "Exception Match raised during quickcheck"; NONE)

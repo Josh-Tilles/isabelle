@@ -70,7 +70,9 @@ export_code %quote empty dequeue enqueue in SML
 
 text {* \noindent resulting in the following code: *}
 
-text %quote {*@{code_stmts empty enqueue dequeue (SML)}*}
+text %quotetypewriter {*
+  @{code_stmts empty enqueue dequeue (SML)}
+*}
 
 text {*
   \noindent The @{command_def export_code} command takes a
@@ -91,7 +93,9 @@ text {*
   \noindent This is the corresponding code:
 *}
 
-text %quote {*@{code_stmts empty enqueue dequeue (Haskell)}*}
+text %quotetypewriter {*
+  @{code_stmts empty enqueue dequeue (Haskell)}
+*}
 
 text {*
   \noindent For more details about @{command export_code} see
@@ -164,7 +168,9 @@ text {*
   native classes:
 *}
 
-text %quote {*@{code_stmts bexp (Haskell)}*}
+text %quotetypewriter {*
+  @{code_stmts bexp (Haskell)}
+*}
 
 text {*
   \noindent This is a convenient place to show how explicit dictionary
@@ -172,7 +178,9 @@ text {*
   @{text SML}:
 *}
 
-text %quote {*@{code_stmts bexp (SML)}*}
+text %quotetypewriter {*
+  @{code_stmts bexp (SML)}
+*}
 
 text {*
   \noindent Note the parameters with trailing underscore (@{verbatim

@@ -1,4 +1,4 @@
-(*  Title:      HOL/Tools/Sledgehammer/sledgehammer_translate.ML
+(*  Title:      HOL/Tools/Sledgehammer/sledgehammer_atp_translate.ML
     Author:     Fabian Immler, TU Muenchen
     Author:     Makarius
     Author:     Jasmin Blanchette, TU Muenchen
@@ -6,44 +6,40 @@
 Translation of HOL to FOL for Sledgehammer.
 *)
 
-signature SLEDGEHAMMER_TRANSLATE =
+signature SLEDGEHAMMER_ATP_TRANSLATE =
 sig
   type 'a problem = 'a ATP_Problem.problem
-  type fol_formula
+  type translated_formula
 
-  val axiom_prefix : string
+  val fact_prefix : string
   val conjecture_prefix : string
-  val helper_prefix : string
-  val class_rel_clause_prefix : string
-  val arity_clause_prefix : string
-  val tfrees_name : string
-  val prepare_axiom :
+  val translate_fact :
     Proof.context -> (string * 'a) * thm
-    -> term * ((string * 'a) * fol_formula) option
-  val prepare_problem :
+    -> term * ((string * 'a) * translated_formula) option
+  val prepare_atp_problem :
     Proof.context -> bool -> bool -> bool -> bool -> term list -> term
-    -> (term * ((string * 'a) * fol_formula) option) list
+    -> (term * ((string * 'a) * translated_formula) option) list
     -> string problem * string Symtab.table * int * (string * 'a) list vector
 end;
 
-structure Sledgehammer_Translate : SLEDGEHAMMER_TRANSLATE =
+structure Sledgehammer_ATP_Translate : SLEDGEHAMMER_ATP_TRANSLATE =
 struct
 
 open ATP_Problem
 open Metis_Translate
 open Sledgehammer_Util
 
-val axiom_prefix = "ax_"
+val fact_prefix = "fact_"
 val conjecture_prefix = "conj_"
 val helper_prefix = "help_"
 val class_rel_clause_prefix = "clrel_";
 val arity_clause_prefix = "arity_"
-val tfrees_name = "tfrees"
+val tfree_prefix = "tfree_"
 
 (* Freshness almost guaranteed! *)
 val sledgehammer_weak_prefix = "Sledgehammer:"
 
-type fol_formula =
+type translated_formula =
   {name: string,
    kind: kind,
    combformula: (name, combterm) formula,
@@ -94,7 +90,7 @@ fun reveal_bounds Ts =
                     (0 upto length Ts - 1 ~~ Ts))
 
 (* Removes the lambdas from an equation of the form "t = (%x. u)".
-   (Cf. "extensionalize_theorem" in "Clausifier".) *)
+   (Cf. "extensionalize_theorem" in "Meson_Clausify".) *)
 fun extensionalize_term t =
   let
     fun aux j (@{const Trueprop} $ t') = @{const Trueprop} $ aux j t'
@@ -141,7 +137,7 @@ fun introduce_combinators_in_term ctxt kind t =
                    t |> conceal_bounds Ts
                      |> Envir.eta_contract
                      |> cterm_of thy
-                     |> Clausifier.introduce_combinators_in_cterm
+                     |> Meson_Clausify.introduce_combinators_in_cterm
                      |> prop_of |> Logic.dest_equals |> snd
                      |> reveal_bounds Ts
         val (t, ctxt') = Variable.import_terms true [t] ctxt |>> the_single
@@ -178,7 +174,7 @@ val atomize_term =
       | aux _ = raise Fail "aux"
   in perhaps (try aux) end
 
-(* making axiom and conjecture formulas *)
+(* making fact and conjecture formulas *)
 fun make_formula ctxt presimp name kind t =
   let
     val thy = ProofContext.theory_of ctxt
@@ -198,7 +194,7 @@ fun make_formula ctxt presimp name kind t =
      ctypes_sorts = ctypes_sorts}
   end
 
-fun make_axiom ctxt presimp ((name, loc), th) =
+fun make_fact ctxt presimp ((name, loc), th) =
   case make_formula ctxt presimp name Axiom (prop_of th) of
     {combformula = AAtom (CombConst (("c_True", _), _, _)), ...} => NONE
   | formula => SOME ((name, loc), formula)
@@ -218,27 +214,28 @@ fun count_combterm (CombConst ((s, _), _, _)) =
 fun count_combformula (AQuant (_, _, phi)) = count_combformula phi
   | count_combformula (AConn (_, phis)) = fold count_combformula phis
   | count_combformula (AAtom tm) = count_combterm tm
-fun count_fol_formula ({combformula, ...} : fol_formula) =
+fun count_translated_formula ({combformula, ...} : translated_formula) =
   count_combformula combformula
 
 val optional_helpers =
-  [(["c_COMBI"], @{thms COMBI_def}),
-   (["c_COMBK"], @{thms COMBK_def}),
-   (["c_COMBB"], @{thms COMBB_def}),
-   (["c_COMBC"], @{thms COMBC_def}),
-   (["c_COMBS"], @{thms COMBS_def})]
+  [(["c_COMBI"], @{thms Meson.COMBI_def}),
+   (["c_COMBK"], @{thms Meson.COMBK_def}),
+   (["c_COMBB"], @{thms Meson.COMBB_def}),
+   (["c_COMBC"], @{thms Meson.COMBC_def}),
+   (["c_COMBS"], @{thms Meson.COMBS_def})]
 val optional_typed_helpers =
   [(["c_True", "c_False", "c_If"], @{thms True_or_False}),
    (["c_If"], @{thms if_True if_False})]
-val mandatory_helpers = @{thms fequal_def}
+val mandatory_helpers = @{thms Metis.fequal_def}
 
 val init_counters =
   [optional_helpers, optional_typed_helpers] |> maps (maps fst)
   |> sort_distinct string_ord |> map (rpair 0) |> Symtab.make
 
-fun get_helper_facts ctxt is_FO full_types conjectures axioms =
+fun get_helper_facts ctxt is_FO full_types conjectures facts =
   let
-    val ct = fold (fold count_fol_formula) [conjectures, axioms] init_counters
+    val ct =
+      fold (fold count_translated_formula) [conjectures, facts] init_counters
     fun is_needed c = the (Symtab.lookup ct c) > 0
     fun baptize th = ((Thm.get_name_hint th, false), th)
   in
@@ -247,32 +244,32 @@ fun get_helper_facts ctxt is_FO full_types conjectures axioms =
      |> maps (fn (ss, ths) =>
                  if exists is_needed ss then map baptize ths else [])) @
     (if is_FO then [] else map baptize mandatory_helpers)
-    |> map_filter (Option.map snd o make_axiom ctxt false)
+    |> map_filter (Option.map snd o make_fact ctxt false)
   end
 
-fun prepare_axiom ctxt (ax as (_, th)) = (prop_of th, make_axiom ctxt true ax)
+fun translate_fact ctxt (ax as (_, th)) = (prop_of th, make_fact ctxt true ax)
 
-fun prepare_formulas ctxt full_types hyp_ts concl_t axioms =
+fun translate_formulas ctxt full_types hyp_ts concl_t facts =
   let
     val thy = ProofContext.theory_of ctxt
-    val (axiom_ts, prepared_axioms) = ListPair.unzip axioms
-    (* Remove existing axioms from the conjecture, as this can dramatically
+    val (fact_ts, translated_facts) = ListPair.unzip facts
+    (* Remove existing facts from the conjecture, as this can dramatically
        boost an ATP's performance (for some reason). *)
-    val hyp_ts = hyp_ts |> filter_out (member (op aconv) axiom_ts)
+    val hyp_ts = hyp_ts |> filter_out (member (op aconv) fact_ts)
     val goal_t = Logic.list_implies (hyp_ts, concl_t)
     val is_FO = Meson.is_fol_term thy goal_t
     val subs = tfree_classes_of_terms [goal_t]
-    val supers = tvar_classes_of_terms axiom_ts
-    val tycons = type_consts_of_terms thy (goal_t :: axiom_ts)
-    (* TFrees in the conjecture; TVars in the axioms *)
+    val supers = tvar_classes_of_terms fact_ts
+    val tycons = type_consts_of_terms thy (goal_t :: fact_ts)
+    (* TFrees in the conjecture; TVars in the facts *)
     val conjectures = make_conjecture ctxt (hyp_ts @ [concl_t])
-    val (axiom_names, axioms) = ListPair.unzip (map_filter I prepared_axioms)
-    val helper_facts = get_helper_facts ctxt is_FO full_types conjectures axioms
+    val (fact_names, facts) = ListPair.unzip (map_filter I translated_facts)
+    val helper_facts = get_helper_facts ctxt is_FO full_types conjectures facts
     val (supers', arity_clauses) = make_arity_clauses thy tycons supers
     val class_rel_clauses = make_class_rel_clauses thy subs supers'
   in
-    (axiom_names |> map single |> Vector.fromList,
-     (conjectures, axioms, helper_facts, class_rel_clauses, arity_clauses))
+    (fact_names |> map single |> Vector.fromList,
+     (conjectures, facts, helper_facts, class_rel_clauses, arity_clauses))
   end
 
 fun wrap_type ty t = ATerm ((type_wrapper_name, type_wrapper_name), [ty, t])
@@ -300,7 +297,7 @@ fun fo_term_for_combterm full_types =
             let val ty_args = if full_types then [] else ty_args in
               if s = "equal" then
                 if top_level andalso length args = 2 then (name, [])
-                else (("c_fequal", @{const_name fequal}), ty_args)
+                else (("c_fequal", @{const_name Metis.fequal}), ty_args)
               else if top_level then
                 case s of
                   "c_False" => (("$false", s'), [])
@@ -325,14 +322,14 @@ fun formula_for_combformula full_types =
       | aux (AAtom tm) = AAtom (fo_term_for_combterm full_types tm)
   in aux end
 
-fun formula_for_axiom full_types
-                      ({combformula, ctypes_sorts, ...} : fol_formula) =
+fun formula_for_fact full_types
+                     ({combformula, ctypes_sorts, ...} : translated_formula) =
   mk_ahorn (map (formula_for_fo_literal o fo_literal_for_type_literal)
                 (type_literals_for_types ctypes_sorts))
            (formula_for_combformula full_types combformula)
 
 fun problem_line_for_fact prefix full_types (formula as {name, kind, ...}) =
-  Fof (prefix ^ ascii_of name, kind, formula_for_axiom full_types formula)
+  Fof (prefix ^ ascii_of name, kind, formula_for_fact full_types formula)
 
 fun problem_line_for_class_rel_clause (ClassRelClause {name, subclass,
                                                        superclass, ...}) =
@@ -356,20 +353,21 @@ fun problem_line_for_arity_clause (ArityClause {name, conclLit, premLits,
                      (fo_literal_for_arity_literal conclLit)))
 
 fun problem_line_for_conjecture full_types
-                                ({name, kind, combformula, ...} : fol_formula) =
+        ({name, kind, combformula, ...} : translated_formula) =
   Fof (conjecture_prefix ^ name, kind,
        formula_for_combformula full_types combformula)
 
-fun free_type_literals_for_conjecture ({ctypes_sorts, ...} : fol_formula) =
+fun free_type_literals_for_conjecture
+        ({ctypes_sorts, ...} : translated_formula) =
   map fo_literal_for_type_literal (type_literals_for_types ctypes_sorts)
 
-fun problem_line_for_free_type lit =
-  Fof (tfrees_name, Hypothesis, formula_for_fo_literal lit)
+fun problem_line_for_free_type j lit =
+  Fof (tfree_prefix ^ string_of_int j, Hypothesis, formula_for_fo_literal lit)
 fun problem_lines_for_free_types conjectures =
   let
     val litss = map free_type_literals_for_conjecture conjectures
     val lits = fold (union (op =)) litss []
-  in map problem_line_for_free_type lits end
+  in map2 problem_line_for_free_type (0 upto length lits - 1) lits end
 
 (** "hBOOL" and "hAPP" **)
 
@@ -498,14 +496,14 @@ fun repair_problem thy explicit_forall full_types explicit_apply problem =
   repair_problem_with_const_table thy explicit_forall full_types
       (const_table_for_problem explicit_apply problem) problem
 
-fun prepare_problem ctxt readable_names explicit_forall full_types
-                    explicit_apply hyp_ts concl_t axioms =
+fun prepare_atp_problem ctxt readable_names explicit_forall full_types
+                        explicit_apply hyp_ts concl_t facts =
   let
     val thy = ProofContext.theory_of ctxt
-    val (axiom_names, (conjectures, axioms, helper_facts, class_rel_clauses,
-                       arity_clauses)) =
-      prepare_formulas ctxt full_types hyp_ts concl_t axioms
-    val axiom_lines = map (problem_line_for_fact axiom_prefix full_types) axioms
+    val (fact_names, (conjectures, facts, helper_facts, class_rel_clauses,
+                      arity_clauses)) =
+      translate_formulas ctxt full_types hyp_ts concl_t facts
+    val fact_lines = map (problem_line_for_fact fact_prefix full_types) facts
     val helper_lines =
       map (problem_line_for_fact helper_prefix full_types) helper_facts
     val conjecture_lines =
@@ -517,7 +515,7 @@ fun prepare_problem ctxt readable_names explicit_forall full_types
     (* Reordering these might or might not confuse the proof reconstruction
        code or the SPASS Flotter hack. *)
     val problem =
-      [("Relevant facts", axiom_lines),
+      [("Relevant facts", fact_lines),
        ("Class relationships", class_rel_lines),
        ("Arity declarations", arity_lines),
        ("Helper facts", helper_lines),
@@ -526,12 +524,12 @@ fun prepare_problem ctxt readable_names explicit_forall full_types
       |> repair_problem thy explicit_forall full_types explicit_apply
     val (problem, pool) = nice_atp_problem readable_names problem
     val conjecture_offset =
-      length axiom_lines + length class_rel_lines + length arity_lines
+      length fact_lines + length class_rel_lines + length arity_lines
       + length helper_lines
   in
     (problem,
      case pool of SOME the_pool => snd the_pool | NONE => Symtab.empty,
-     conjecture_offset, axiom_names)
+     conjecture_offset, fact_names)
   end
 
 end;
