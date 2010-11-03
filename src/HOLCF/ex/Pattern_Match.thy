@@ -8,6 +8,8 @@ theory Pattern_Match
 imports HOLCF
 begin
 
+default_sort pcpo
+
 text {* FIXME: Find a proper way to un-hide constants. *}
 
 abbreviation fail :: "'a match"
@@ -115,9 +117,9 @@ translations
 
 parse_translation {*
 (* rewrite (_pat x) => (succeed) *)
-(* rewrite (_variable x t) => (Abs_CFun (%x. t)) *)
+(* rewrite (_variable x t) => (Abs_cfun (%x. t)) *)
  [(@{syntax_const "_pat"}, fn _ => Syntax.const @{const_syntax Fixrec.succeed}),
-  mk_binder_tr (@{syntax_const "_variable"}, @{const_syntax Abs_CFun})];
+  mk_binder_tr (@{syntax_const "_variable"}, @{const_syntax Abs_cfun})];
 *}
 
 text {* Printing Case expressions *}
@@ -127,14 +129,14 @@ syntax
 
 print_translation {*
   let
-    fun dest_LAM (Const (@{const_syntax Rep_CFun},_) $ Const (@{const_syntax unit_when},_) $ t) =
+    fun dest_LAM (Const (@{const_syntax Rep_cfun},_) $ Const (@{const_syntax unit_when},_) $ t) =
           (Syntax.const @{syntax_const "_noargs"}, t)
-    |   dest_LAM (Const (@{const_syntax Rep_CFun},_) $ Const (@{const_syntax csplit},_) $ t) =
+    |   dest_LAM (Const (@{const_syntax Rep_cfun},_) $ Const (@{const_syntax csplit},_) $ t) =
           let
             val (v1, t1) = dest_LAM t;
             val (v2, t2) = dest_LAM t1;
           in (Syntax.const @{syntax_const "_args"} $ v1 $ v2, t2) end
-    |   dest_LAM (Const (@{const_syntax Abs_CFun},_) $ t) =
+    |   dest_LAM (Const (@{const_syntax Abs_cfun},_) $ t) =
           let
             val abs =
               case t of Abs abs => abs
@@ -149,7 +151,7 @@ print_translation {*
               (Syntax.const @{syntax_const "_match"} $ p $ v) $ t
           end;
 
-  in [(@{const_syntax Rep_CFun}, Case1_tr')] end;
+  in [(@{const_syntax Rep_cfun}, Case1_tr')] end;
 *}
 
 translations
@@ -184,11 +186,11 @@ definition
 
 definition
   TT_pat :: "(tr, unit) pat" where
-  "TT_pat = (\<Lambda> b. If b then succeed\<cdot>() else fail fi)"
+  "TT_pat = (\<Lambda> b. If b then succeed\<cdot>() else fail)"
 
 definition
   FF_pat :: "(tr, unit) pat" where
-  "FF_pat = (\<Lambda> b. If b then fail else succeed\<cdot>() fi)"
+  "FF_pat = (\<Lambda> b. If b then fail else succeed\<cdot>())"
 
 definition
   ONE_pat :: "(one, unit) pat" where
@@ -363,7 +365,7 @@ infixr 6 ->>;
 infix 9 ` ;
 
 val beta_rules =
-  @{thms beta_cfun cont_id cont_const cont2cont_Rep_CFun cont2cont_LAM'} @
+  @{thms beta_cfun cont_id cont_const cont2cont_APP cont2cont_LAM'} @
   @{thms cont2cont_fst cont2cont_snd cont2cont_Pair};
 
 val beta_ss = HOL_basic_ss addsimps (simp_thms @ beta_rules);
@@ -485,7 +487,7 @@ fun add_pattern_combinators
       open Syntax
       fun syntax c = Syntax.mark_const (fst (dest_Const c));
       fun app s (l, r) = Syntax.mk_appl (Constant s) [l, r];
-      val capp = app @{const_syntax Rep_CFun};
+      val capp = app @{const_syntax Rep_cfun};
       val capps = Library.foldl capp
 
       fun app_var x = Syntax.mk_appl (Constant "_variable") [x, Variable "rhs"];

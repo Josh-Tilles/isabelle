@@ -233,10 +233,10 @@ by (rule UU_I, rule upper_plus_below1)
 lemma upper_plus_strict2 [simp]: "xs +\<sharp> \<bottom> = \<bottom>"
 by (rule UU_I, rule upper_plus_below2)
 
-lemma upper_unit_strict_iff [simp]: "{x}\<sharp> = \<bottom> \<longleftrightarrow> x = \<bottom>"
+lemma upper_unit_bottom_iff [simp]: "{x}\<sharp> = \<bottom> \<longleftrightarrow> x = \<bottom>"
 unfolding upper_unit_strict [symmetric] by (rule upper_unit_eq_iff)
 
-lemma upper_plus_strict_iff [simp]:
+lemma upper_plus_bottom_iff [simp]:
   "xs +\<sharp> ys = \<bottom> \<longleftrightarrow> xs = \<bottom> \<or> ys = \<bottom>"
 apply (rule iffI)
 apply (erule rev_mp)
@@ -252,7 +252,7 @@ by (auto dest!: compact_basis.compact_imp_principal)
 lemma compact_upper_unit_iff [simp]: "compact {x}\<sharp> \<longleftrightarrow> compact x"
 apply (safe elim!: compact_upper_unit)
 apply (simp only: compact_def upper_unit_below_iff [symmetric])
-apply (erule adm_subst [OF cont_Rep_CFun2])
+apply (erule adm_subst [OF cont_Rep_cfun2])
 done
 
 lemma compact_upper_plus [simp]:

@@ -38,7 +38,7 @@ structure Domain_Isomorphism : DOMAIN_ISOMORPHISM =
 struct
 
 val beta_rules =
-  @{thms beta_cfun cont_id cont_const cont2cont_Rep_CFun cont2cont_LAM'} @
+  @{thms beta_cfun cont_id cont_const cont2cont_APP cont2cont_LAM'} @
   @{thms cont2cont_fst cont2cont_snd cont2cont_Pair cont2cont_prod_case'};
 
 val beta_ss = HOL_basic_ss addsimps (simp_thms @ beta_rules);
@@ -155,7 +155,7 @@ fun add_fixdefs
     (* convert parameters to lambda abstractions *)
     fun mk_eqn (lhs, rhs) =
         case lhs of
-          Const (@{const_name Rep_CFun}, _) $ f $ (x as Free _) =>
+          Const (@{const_name Rep_cfun}, _) $ f $ (x as Free _) =>
             mk_eqn (f, big_lambda x rhs)
         | f $ Const (@{const_name TYPE}, T) =>
             mk_eqn (f, Abs ("t", T, rhs))
