@@ -256,7 +256,7 @@ lemma convex_unit_strict [simp]: "{\<bottom>}\<natural> = \<bottom>"
 using convex_unit_Rep_compact_basis [of compact_bot]
 by (simp add: inst_convex_pd_pcpo)
 
-lemma convex_unit_strict_iff [simp]: "{x}\<natural> = \<bottom> \<longleftrightarrow> x = \<bottom>"
+lemma convex_unit_bottom_iff [simp]: "{x}\<natural> = \<bottom> \<longleftrightarrow> x = \<bottom>"
 unfolding convex_unit_strict [symmetric] by (rule convex_unit_eq_iff)
 
 lemma compact_convex_unit: "compact x \<Longrightarrow> compact {x}\<natural>"
@@ -265,7 +265,7 @@ by (auto dest!: compact_basis.compact_imp_principal)
 lemma compact_convex_unit_iff [simp]: "compact {x}\<natural> \<longleftrightarrow> compact x"
 apply (safe elim!: compact_convex_unit)
 apply (simp only: compact_def convex_unit_below_iff [symmetric])
-apply (erule adm_subst [OF cont_Rep_CFun2])
+apply (erule adm_subst [OF cont_Rep_cfun2])
 done
 
 lemma compact_convex_plus [simp]:

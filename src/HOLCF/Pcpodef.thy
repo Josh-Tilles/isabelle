@@ -152,13 +152,9 @@ theorem typedef_cont_Abs:
     and below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
     and adm: "adm (\<lambda>x. x \<in> A)" (* not used *)
     and f_in_A: "\<And>x. f x \<in> A"
-    and cont_f: "cont f"
-  shows "cont (\<lambda>x. Abs (f x))"
- apply (rule contI)
- apply (rule typedef_is_lubI [OF below])
- apply (simp only: type_definition.Abs_inverse [OF type f_in_A])
- apply (erule cont_f [THEN contE])
-done
+  shows "cont f \<Longrightarrow> cont (\<lambda>x. Abs (f x))"
+unfolding cont_def is_lub_def is_ub_def ball_simps below
+by (simp add: type_definition.Abs_inverse [OF type f_in_A])
 
 subsection {* Proving subtype elements are compact *}
 
@@ -235,7 +231,7 @@ theorem typedef_Rep_strict:
  apply (rule type_definition.Abs_inverse [OF type UU_in_A])
 done
 
-theorem typedef_Abs_strict_iff:
+theorem typedef_Abs_bottom_iff:
   assumes type: "type_definition Rep Abs A"
     and below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
     and UU_in_A: "\<bottom> \<in> A"
@@ -244,7 +240,7 @@ theorem typedef_Abs_strict_iff:
  apply (simp add: type_definition.Abs_inject [OF type] UU_in_A)
 done
 
-theorem typedef_Rep_strict_iff:
+theorem typedef_Rep_bottom_iff:
   assumes type: "type_definition Rep Abs A"
     and below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
     and UU_in_A: "\<bottom> \<in> A"
@@ -258,14 +254,14 @@ theorem typedef_Abs_defined:
     and below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
     and UU_in_A: "\<bottom> \<in> A"
   shows "\<lbrakk>x \<noteq> \<bottom>; x \<in> A\<rbrakk> \<Longrightarrow> Abs x \<noteq> \<bottom>"
-by (simp add: typedef_Abs_strict_iff [OF type below UU_in_A])
+by (simp add: typedef_Abs_bottom_iff [OF type below UU_in_A])
 
 theorem typedef_Rep_defined:
   assumes type: "type_definition Rep Abs A"
     and below: "op \<sqsubseteq> \<equiv> \<lambda>x y. Rep x \<sqsubseteq> Rep y"
     and UU_in_A: "\<bottom> \<in> A"
   shows "x \<noteq> \<bottom> \<Longrightarrow> Rep x \<noteq> \<bottom>"
-by (simp add: typedef_Rep_strict_iff [OF type below UU_in_A])
+by (simp add: typedef_Rep_bottom_iff [OF type below UU_in_A])
 
 subsection {* Proving a subtype is flat *}
 

@@ -8,7 +8,9 @@ theory Stream
 imports HOLCF Nat_Infinity
 begin
 
-domain 'a stream = scons (ft::'a) (lazy rt::"'a stream") (infixr "&&" 65)
+default_sort pcpo
+
+domain (unsafe) 'a stream = scons (ft::'a) (lazy rt::"'a stream") (infixr "&&" 65)
 
 definition
   smap :: "('a \<rightarrow> 'b) \<rightarrow> 'a stream \<rightarrow> 'b stream" where
@@ -17,7 +19,7 @@ definition
 definition
   sfilter :: "('a \<rightarrow> tr) \<rightarrow> 'a stream \<rightarrow> 'a stream" where
   "sfilter = fix\<cdot>(\<Lambda> h p s. case s of x && xs \<Rightarrow>
-                                     If p\<cdot>x then x && h\<cdot>p\<cdot>xs else h\<cdot>p\<cdot>xs fi)"
+                                     If p\<cdot>x then x && h\<cdot>p\<cdot>xs else h\<cdot>p\<cdot>xs)"
 
 definition
   slen :: "'a stream \<Rightarrow> inat"  ("#_" [1000] 1000) where
@@ -504,7 +506,7 @@ section "sfilter"
 
 lemma sfilter_unfold:
  "sfilter = (\<Lambda> p s. case s of x && xs \<Rightarrow>
-  If p\<cdot>x then x && sfilter\<cdot>p\<cdot>xs else sfilter\<cdot>p\<cdot>xs fi)"
+  If p\<cdot>x then x && sfilter\<cdot>p\<cdot>xs else sfilter\<cdot>p\<cdot>xs)"
 by (insert sfilter_def [where 'a='a, THEN eq_reflection, THEN fix_eq2], auto)
 
 lemma strict_sfilter: "sfilter\<cdot>\<bottom> = \<bottom>"
@@ -518,7 +520,7 @@ by (subst sfilter_unfold, force)
 
 lemma sfilter_scons [simp]:
   "x ~= \<bottom> ==> sfilter\<cdot>f\<cdot>(x && xs) =
-                           If f\<cdot>x then x && sfilter\<cdot>f\<cdot>xs else sfilter\<cdot>f\<cdot>xs fi"
+                           If f\<cdot>x then x && sfilter\<cdot>f\<cdot>xs else sfilter\<cdot>f\<cdot>xs"
 by (subst sfilter_unfold, force)
 
 
@@ -921,7 +923,7 @@ apply (simp add: chain_def,auto)
 by (rule monofun_cfun_arg,simp)
 
 lemma contlub_scons_lemma: "chain S ==> (LUB i. a && S i) = a && (LUB i. S i)"
-by (rule cont2contlubE [OF cont_Rep_CFun2, symmetric])
+by (rule cont2contlubE [OF cont_Rep_cfun2, symmetric])
 
 lemma finite_lub_sconc: "chain Y ==> (stream_finite x) ==>
                         (LUB i. x ooo Y i) = (x ooo (LUB i. Y i))"

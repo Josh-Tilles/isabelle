@@ -95,6 +95,11 @@ definition
   flift1 :: "('a \<Rightarrow> 'b::pcpo) \<Rightarrow> ('a lift \<rightarrow> 'b)"  (binder "FLIFT " 10)  where
   "flift1 = (\<lambda>f. (\<Lambda> x. lift_case \<bottom> f x))"
 
+translations
+  "\<Lambda>(XCONST Def x). t" => "CONST flift1 (\<lambda>x. t)"
+  "\<Lambda>(CONST Def x). FLIFT y. t" <= "FLIFT x y. t"
+  "\<Lambda>(CONST Def x). t" <= "FLIFT x. t"
+
 definition
   flift2 :: "('a \<Rightarrow> 'b) \<Rightarrow> ('a lift \<rightarrow> 'b lift)" where
   "flift2 f = (FLIFT x. Def (f x))"
@@ -114,7 +119,7 @@ by (simp add: flift2_def)
 lemma flift2_defined [simp]: "x \<noteq> \<bottom> \<Longrightarrow> (flift2 f)\<cdot>x \<noteq> \<bottom>"
 by (erule lift_definedE, simp)
 
-lemma flift2_defined_iff [simp]: "(flift2 f\<cdot>x = \<bottom>) = (x = \<bottom>)"
+lemma flift2_bottom_iff [simp]: "(flift2 f\<cdot>x = \<bottom>) = (x = \<bottom>)"
 by (cases x, simp_all)
 
 lemma FLIFT_mono:
