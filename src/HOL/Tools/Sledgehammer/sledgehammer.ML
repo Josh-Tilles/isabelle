@@ -104,7 +104,7 @@ fun is_prover_installed ctxt name =
     else is_atp_installed thy name
   end
 
-val smt_default_max_relevant = 300 (* FUDGE (FIXME) *)
+val smt_default_max_relevant = 200 (* FUDGE *)
 val auto_max_relevant_divisor = 2 (* FUDGE *)
 
 fun default_max_relevant_for_prover thy name =
@@ -258,8 +258,8 @@ fun translated_fact ctxt (Untranslated p) = translate_fact ctxt p
 fun fact_name (Untranslated ((name, _), _)) = SOME name
   | fact_name (Translated (_, p)) = Option.map (fst o fst) p
 
-fun int_option_add (SOME m) (SOME n) = SOME (m + n)
-  | int_option_add _ _ = NONE
+fun int_opt_add (SOME m) (SOME n) = SOME (m + n)
+  | int_opt_add _ _ = NONE
 
 (* Important messages are important but not so important that users want to see
    them each time. *)
@@ -358,8 +358,8 @@ fun run_atp auto atp_name
                  ? (fn (_, msecs0, _, SOME _) =>
                        run true (Time.- (timeout, Timer.checkRealTimer timer))
                        |> (fn (output, msecs, tstplike_proof, outcome) =>
-                              (output, int_option_add msecs0 msecs,
-                               tstplike_proof, outcome))
+                              (output, int_opt_add msecs0 msecs, tstplike_proof,
+                               outcome))
                      | result => result)
           in ((pool, conjecture_shape, fact_names), result) end
         else
@@ -409,19 +409,68 @@ fun run_atp auto atp_name
      run_time_in_msecs = msecs}
   end
 
-fun failure_from_smt_failure (SMT_Solver.Counterexample _) = Unprovable
-  | failure_from_smt_failure SMT_Solver.Time_Out = TimedOut
-  | failure_from_smt_failure SMT_Solver.Out_Of_Memory = OutOfResources
+fun failure_from_smt_failure (SMT_Failure.Counterexample _) = Unprovable
+  | failure_from_smt_failure SMT_Failure.Time_Out = TimedOut
+  | failure_from_smt_failure SMT_Failure.Out_Of_Memory = OutOfResources
   | failure_from_smt_failure _ = UnknownError
 
-fun run_smt_solver auto remote ({timeout, ...} : params) minimize_command
+val smt_max_iter = 5
+val smt_iter_fact_divisor = 2
+val smt_iter_min_msecs = 5000
+val smt_iter_timeout_divisor = 2
+val smt_monomorph_limit = 4
+
+fun smt_filter_loop iter outcome0 msecs_so_far remote timeout state facts i =
+  let
+    val timer = Timer.startRealTimer ()
+    val ms = timeout |> Time.toMilliseconds
+    val iter_timeout =
+      if iter < smt_max_iter then
+        Int.min (ms, Int.max (smt_iter_min_msecs,
+                              ms div smt_iter_timeout_divisor))
+        |> Time.fromMilliseconds
+      else
+        timeout
+    val {outcome, used_facts, run_time_in_msecs} =
+      TimeLimit.timeLimit iter_timeout
+          (SMT_Solver.smt_filter remote iter_timeout state facts) i
+      handle TimeLimit.TimeOut =>
+             {outcome = SOME SMT_Failure.Time_Out, used_facts = [],
+              run_time_in_msecs = NONE}
+    val outcome0 = if is_none outcome0 then SOME outcome else outcome0
+    val msecs_so_far = int_opt_add run_time_in_msecs msecs_so_far
+    val too_many_facts_perhaps =
+      case outcome of
+        NONE => false
+      | SOME (SMT_Failure.Counterexample _) => false
+      | SOME SMT_Failure.Time_Out => iter_timeout <> timeout
+      | SOME SMT_Failure.Out_Of_Memory => true
+      | SOME _ => true
+    val timeout = Time.- (timeout, Timer.checkRealTimer timer)
+  in
+    if too_many_facts_perhaps andalso iter < smt_max_iter andalso
+       not (null facts) andalso timeout > Time.zeroTime then
+      let val facts = take (length facts div smt_iter_fact_divisor) facts in
+        smt_filter_loop (iter + 1) outcome0 msecs_so_far remote timeout state
+                        facts i
+      end
+    else
+      {outcome = if is_none outcome then NONE else the outcome0,
+       used_facts = used_facts, run_time_in_msecs = msecs_so_far}
+  end
+
+fun run_smt_solver auto remote ({debug, timeout, ...} : params) minimize_command
                    ({state, subgoal, subgoal_count, facts, ...}
                     : prover_problem) =
   let
+    val repair_context =
+      Config.put SMT_Config.verbose debug
+      #> Config.put SMT_Config.monomorph_limit smt_monomorph_limit
+    val state = state |> Proof.map_context repair_context
     val ctxt = Proof.context_of state
     val {outcome, used_facts, run_time_in_msecs} =
-      SMT_Solver.smt_filter remote timeout state
-                            (map_filter (try dest_Untranslated) facts) subgoal
+      smt_filter_loop 1 NONE (SOME 0) remote timeout state
+                      (map_filter (try dest_Untranslated) facts) subgoal
     val message =
       case outcome of
         NONE =>
@@ -429,10 +478,10 @@ fun run_smt_solver auto remote ({timeout, ...} : params) minimize_command
                          (apply_on_subgoal subgoal subgoal_count ^
                           command_call smtN (map fst used_facts)) ^
         minimize_line minimize_command (map fst used_facts)
-      | SOME SMT_Solver.Time_Out => "Timed out."
-      | SOME (SMT_Solver.Counterexample _) => "The SMT problem is unprovable."
+      | SOME SMT_Failure.Time_Out => "Timed out."
+      | SOME (SMT_Failure.Counterexample _) => "The SMT problem is unprovable."
       | SOME failure =>
-        SMT_Solver.string_of_failure ctxt "The SMT solver" failure
+        SMT_Failure.string_of_failure ctxt failure
     val outcome = outcome |> Option.map failure_from_smt_failure (* FIXME *)
   in
     {outcome = outcome, used_facts = used_facts,
