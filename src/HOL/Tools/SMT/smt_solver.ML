@@ -138,7 +138,7 @@ fun run_solver ctxt cmd args input =
     val _ = C.trace_msg ctxt (pretty "Result:") ls
 
     val _ = null ls andalso return_code <> 0 andalso
-      raise SMT_Failure.SMT (SMT_Failure.Solver_Crashed return_code)
+      raise SMT_Failure.SMT (SMT_Failure.Abnormal_Termination return_code)
   in ls end
 
 end
@@ -308,7 +308,7 @@ fun smt_filter run_remote time_limit st xrules i =
     val ctxt =
       Proof.context_of st
       |> Config.put C.oracle false
-      |> Config.put C.timeout (Real.fromInt (Time.toSeconds time_limit))
+      |> Config.put C.timeout (Time.toReal time_limit)
       |> Config.put C.drop_bad_facts true
       |> Config.put C.filter_only_facts true
     val ({context=ctxt', prems, concl, ...}, _) = Subgoal.focus ctxt i goal
