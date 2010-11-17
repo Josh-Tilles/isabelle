@@ -289,7 +289,8 @@ apply (simp only: convex_unit_Rep_compact_basis [symmetric]
 apply (erule insert [OF unit])
 done
 
-lemma convex_pd_induct:
+lemma convex_pd_induct
+  [case_names adm convex_unit convex_plus, induct type: convex_pd]:
   assumes P: "adm P"
   assumes unit: "\<And>x. P {x}\<natural>"
   assumes plus: "\<And>xs ys. \<lbrakk>P xs; P ys\<rbrakk> \<Longrightarrow> P (xs +\<natural> ys)"
@@ -372,6 +373,9 @@ unfolding convex_map_def by simp
 
 lemma convex_map_plus [simp]:
   "convex_map\<cdot>f\<cdot>(xs +\<natural> ys) = convex_map\<cdot>f\<cdot>xs +\<natural> convex_map\<cdot>f\<cdot>ys"
+unfolding convex_map_def by simp
+
+lemma convex_map_bottom [simp]: "convex_map\<cdot>f\<cdot>\<bottom> = {f\<cdot>\<bottom>}\<natural>"
 unfolding convex_map_def by simp
 
 lemma convex_map_ident: "convex_map\<cdot>(\<Lambda> x. x)\<cdot>xs = xs"
@@ -514,6 +518,9 @@ unfolding convex_join_def by simp
 
 lemma convex_join_plus [simp]:
   "convex_join\<cdot>(xss +\<natural> yss) = convex_join\<cdot>xss +\<natural> convex_join\<cdot>yss"
+unfolding convex_join_def by simp
+
+lemma convex_join_bottom [simp]: "convex_join\<cdot>\<bottom> = \<bottom>"
 unfolding convex_join_def by simp
 
 lemma convex_join_map_unit:

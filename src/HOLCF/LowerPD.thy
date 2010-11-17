@@ -281,7 +281,8 @@ apply (simp only: lower_unit_Rep_compact_basis [symmetric]
 apply (erule insert [OF unit])
 done
 
-lemma lower_pd_induct:
+lemma lower_pd_induct
+  [case_names adm lower_unit lower_plus, induct type: lower_pd]:
   assumes P: "adm P"
   assumes unit: "\<And>x. P {x}\<flat>"
   assumes plus: "\<And>xs ys. \<lbrakk>P xs; P ys\<rbrakk> \<Longrightarrow> P (xs +\<flat> ys)"
@@ -365,6 +366,9 @@ unfolding lower_map_def by simp
 
 lemma lower_map_plus [simp]:
   "lower_map\<cdot>f\<cdot>(xs +\<flat> ys) = lower_map\<cdot>f\<cdot>xs +\<flat> lower_map\<cdot>f\<cdot>ys"
+unfolding lower_map_def by simp
+
+lemma lower_map_bottom [simp]: "lower_map\<cdot>f\<cdot>\<bottom> = {f\<cdot>\<bottom>}\<flat>"
 unfolding lower_map_def by simp
 
 lemma lower_map_ident: "lower_map\<cdot>(\<Lambda> x. x)\<cdot>xs = xs"
@@ -505,6 +509,9 @@ unfolding lower_join_def by simp
 
 lemma lower_join_plus [simp]:
   "lower_join\<cdot>(xss +\<flat> yss) = lower_join\<cdot>xss +\<flat> lower_join\<cdot>yss"
+unfolding lower_join_def by simp
+
+lemma lower_join_bottom [simp]: "lower_join\<cdot>\<bottom> = \<bottom>"
 unfolding lower_join_def by simp
 
 lemma lower_join_map_unit:
