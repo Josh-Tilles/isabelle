@@ -13,13 +13,14 @@ uses "Tools/Sledgehammer/async_manager.ML"
      "Tools/Sledgehammer/sledgehammer_filter.ML"
      "Tools/Sledgehammer/sledgehammer_atp_translate.ML"
      "Tools/Sledgehammer/sledgehammer_atp_reconstruct.ML"
-     "Tools/Sledgehammer/sledgehammer.ML"
+     "Tools/Sledgehammer/sledgehammer_provers.ML"
      "Tools/Sledgehammer/sledgehammer_minimize.ML"
+     "Tools/Sledgehammer/sledgehammer_run.ML"
      "Tools/Sledgehammer/sledgehammer_isar.ML"
 begin
 
 setup {*
-  Sledgehammer.setup
+  Sledgehammer_Provers.setup
   #> Sledgehammer_Isar.setup
 *}
 
