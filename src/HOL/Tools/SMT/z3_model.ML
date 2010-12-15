@@ -194,6 +194,16 @@ fun partition_eqs f =
       | NONE => (xs, t :: ts))
   in (fn ts => fold part ts ([], [])) end
 
+fun first_eq pred =
+  let
+    fun part _ [] = NONE
+      | part us (t :: ts) =
+          (case try HOLogic.dest_eq t of
+            SOME lr =>
+              if pred lr then SOME (lr, fold cons us ts) else part (t :: us) ts
+          | NONE => part (t :: us) ts)
+  in (fn ts => part [] ts) end
+
 fun replace_vars tab =
   let
     fun replace (v as Var _) = the_default v (AList.lookup (op aconv) tab v)
@@ -235,19 +245,17 @@ fun unfold_funapp (eqs, defs) =
 
 fun unfold_eqs (eqs, defs) =
   let
-    val is_ground = not o Term.exists_subterm (fn Var _ => true | _ => false)
-    fun add_rewr l (r as Var _) = if is_ground l then SOME (r, l) else NONE
-      | add_rewr _ _ = NONE
+    val is_ground = not o Term.exists_subterm Term.is_Var
 
     fun is_trivial (Const (@{const_name HOL.eq}, _) $ t $ u) = t aconv u
       | is_trivial _ = false
 
-    fun replace rs = replace_vars rs #> filter_out is_trivial
+    fun replace r = replace_vars [r] #> filter_out is_trivial
 
     fun unfold (es, ds) =
-      (case partition_eqs add_rewr es of
-        ([], _) => (es, ds)
-      | (rs, es') => unfold (pairself (replace rs) (es', ds)))
+      (case first_eq (fn (l, Var _) => is_ground l | _ => false) es of
+        SOME ((l, r), es') => unfold (pairself (replace (r, l)) (es', ds))
+      | NONE => (es, ds))
 
   in unfold (eqs, defs) end
 
@@ -282,6 +290,17 @@ fun frees_for_vars ctxt (eqs, defs) =
 
 val is_free_constraint = Term.exists_subterm (fn Free _ => true | _ => false)
 
+fun is_free_def (Const (@{const_name HOL.eq}, _) $ Free _ $ _) = true
+  | is_free_def _ = false
+
+fun defined tp =
+  try (pairself (fst o HOLogic.dest_eq)) tp
+  |> the_default false o Option.map (op aconv)
+
+fun add_free_defs free_cs defs =
+  let val (free_defs, defs') = List.partition is_free_def defs
+  in (free_cs @ filter_out (member defined free_cs) free_defs, defs') end
+
 fun is_const_def (Const (@{const_name HOL.eq}, _) $ Const _ $ _) = true
   | is_const_def _ = false
 
@@ -294,6 +313,7 @@ fun parse_counterex ctxt ({terms, ...} : SMT_Translate.recon) ls =
   |> unfold_eqs
   |>> map swap_free
   |>> filter is_free_constraint
+  |-> add_free_defs
   |> frees_for_vars ctxt
   ||> filter is_const_def
 

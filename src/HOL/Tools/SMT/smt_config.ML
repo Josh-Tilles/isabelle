@@ -6,28 +6,27 @@ Configuration options and diagnostic tools for SMT.
 
 signature SMT_CONFIG =
 sig
-  (*class*)
-  type class = string list
-  val basicC: class
-
   (*solver*)
-  val add_solver: string * class -> Context.generic -> Context.generic
+  val add_solver: string * SMT_Utils.class -> Context.generic ->
+    Context.generic
   val set_solver_options: string * string -> Context.generic -> Context.generic
   val select_solver: string -> Context.generic -> Context.generic
   val solver_of: Proof.context -> string
-  val solver_class_of: Proof.context -> class
+  val solver_class_of: Proof.context -> SMT_Utils.class
   val solver_options_of: Proof.context -> string list
 
   (*options*)
   val oracle: bool Config.T
   val datatypes: bool Config.T
   val timeout: real Config.T
+  val random_seed: int Config.T
   val fixed: bool Config.T
   val verbose: bool Config.T
   val traceN: string
   val trace: bool Config.T
   val trace_used_facts: bool Config.T
   val monomorph_limit: int Config.T
+  val infer_triggers: bool Config.T
   val drop_bad_facts: bool Config.T
   val filter_only_facts: bool Config.T
   val debug_files: string Config.T
@@ -51,18 +50,11 @@ end
 structure SMT_Config: SMT_CONFIG =
 struct
 
-(* class *)
-
-type class = string list
-
-val basicC = []
-
-
 (* solver *)
 
 structure Solvers = Generic_Data
 (
-  type T = (class * string list) Symtab.table * string option
+  type T = (SMT_Utils.class * string list) Symtab.table * string option
   val empty = (Symtab.empty, NONE)
   val extend = I
   fun merge ((ss1, s), (ss2, _)) = (Symtab.merge (K true) (ss1, ss2), s)
@@ -124,6 +116,9 @@ val (datatypes, setup_datatypes) = Attrib.config_bool datatypesN (K false)
 val timeoutN = "smt_timeout"
 val (timeout, setup_timeout) = Attrib.config_real timeoutN (K 30.0)
 
+val random_seedN = "smt_random_seed"
+val (random_seed, setup_random_seed) = Attrib.config_int random_seedN (K 1)
+
 val fixedN = "smt_fixed"
 val (fixed, setup_fixed) = Attrib.config_bool fixedN (K false)
 
@@ -141,6 +136,10 @@ val monomorph_limitN = "smt_monomorph_limit"
 val (monomorph_limit, setup_monomorph_limit) =
   Attrib.config_int monomorph_limitN (K 10)
 
+val infer_triggersN = "smt_infer_triggers"
+val (infer_triggers, setup_infer_triggers) =
+  Attrib.config_bool infer_triggersN (K false)
+
 val drop_bad_factsN = "smt_drop_bad_facts"
 val (drop_bad_facts, setup_drop_bad_facts) =
   Attrib.config_bool drop_bad_factsN (K false)
@@ -157,10 +156,12 @@ val setup_options =
   setup_oracle #>
   setup_datatypes #>
   setup_timeout #>
+  setup_random_seed #>
   setup_fixed #>
   setup_trace #>
   setup_verbose #>
   setup_monomorph_limit #>
+  setup_infer_triggers #>
   setup_drop_bad_facts #>
   setup_filter_only_facts #>
   setup_trace_used_facts #>

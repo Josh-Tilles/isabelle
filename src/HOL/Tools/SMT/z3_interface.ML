@@ -6,8 +6,7 @@ Interface to Z3 based on a relaxed version of SMT-LIB.
 
 signature Z3_INTERFACE =
 sig
-  val smtlib_z3C: SMT_Config.class
-  val interface: SMT_Solver.interface
+  val smtlib_z3C: SMT_Utils.class
   val setup: theory -> theory
 
   datatype sym = Sym of string * sym list
@@ -36,36 +35,36 @@ val smtlib_z3C = SMTLIB_Interface.smtlibC @ ["z3"]
 (* interface *)
 
 local
-  val {translate, extra_norm, ...} = SMTLIB_Interface.interface
-  val {prefixes, is_fol, header, serialize, ...} = translate
+  fun translate_config ctxt =
+    let
+      val {prefixes, header, is_fol, serialize, ...} =
+        SMTLIB_Interface.translate_config ctxt
+    in
+      {prefixes=prefixes, header=header, is_fol=is_fol, serialize=serialize,
+        has_datatypes=true}
+    end
 
   fun is_int_div_mod @{const div (int)} = true
     | is_int_div_mod @{const mod (int)} = true
     | is_int_div_mod _ = false
 
-  fun add_div_mod irules =
-    if exists (Term.exists_subterm is_int_div_mod o Thm.prop_of o snd) irules
-    then [(~1, @{thm div_by_z3div}), (~1, @{thm mod_by_z3mod})] @ irules
-    else irules
+  val have_int_div_mod =
+    exists (Term.exists_subterm is_int_div_mod o Thm.prop_of)
 
-  fun extra_norm' has_datatypes = extra_norm has_datatypes o add_div_mod
+  fun add_div_mod _ (thms, extra_thms) =
+    if have_int_div_mod thms orelse have_int_div_mod extra_thms then
+      (thms, @{thm div_by_z3div} :: @{thm mod_by_z3mod} :: extra_thms)
+    else (thms, extra_thms)
 
   val setup_builtins =
     B.add_builtin_fun' smtlib_z3C (@{const z3div}, "div") #>
     B.add_builtin_fun' smtlib_z3C (@{const z3mod}, "mod")
 in
 
-val interface = {
-  class = smtlib_z3C,
-  extra_norm = extra_norm',
-  translate = {
-    prefixes = prefixes,
-    is_fol = is_fol,
-    header = header,
-    has_datatypes = true,
-    serialize = serialize}}
-
-val setup = Context.theory_map setup_builtins
+val setup = Context.theory_map (
+  setup_builtins #>
+  SMT_Normalize.add_extra_norm (smtlib_z3C, add_div_mod) #>
+  SMT_Translate.add_config (smtlib_z3C, translate_config))
 
 end
 
@@ -152,11 +151,8 @@ fun mk_distinct [] = mk_true
   | mk_distinct (cts as (ct :: _)) =
       Thm.capply (U.instT' ct distinct) (mk_list (Thm.ctyp_of_term ct) cts)
 
-val access = U.mk_const_pat @{theory} @{const_name fun_app}
-  (Thm.dest_ctyp o U.destT1)
-fun mk_access array index =
-  let val cTs = Thm.dest_ctyp (Thm.ctyp_of_term array)
-  in Thm.mk_binop (U.instTs cTs access) array index end
+val access = U.mk_const_pat @{theory} @{const_name fun_app} U.destT1
+fun mk_access array = Thm.capply (U.instT' array access) array
 
 val update = U.mk_const_pat @{theory} @{const_name fun_upd}
   (Thm.dest_ctyp o U.destT1)
@@ -187,7 +183,7 @@ fun mk_builtin_fun ctxt sym cts =
   | (Sym ("ite", _), [ct1, ct2, ct3]) => SOME (mk_if ct1 ct2 ct3)
   | (Sym ("=", _), [ct, cu]) => SOME (mk_eq ct cu)
   | (Sym ("distinct", _), _) => SOME (mk_distinct cts)
-  | (Sym ("select", _), [ca, ck]) => SOME (mk_access ca ck)
+  | (Sym ("select", _), [ca, ck]) => SOME (Thm.capply (mk_access ca) ck)
   | (Sym ("store", _), [ca, ck, cv]) => SOME (mk_update ca ck cv)
   | _ =>
     (case (sym, try (#T o Thm.rep_cterm o hd) cts, cts) of

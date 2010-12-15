@@ -35,8 +35,10 @@ fun cvc3 () = {
   name = "cvc3",
   env_var = "CVC3_SOLVER",
   is_remote = true,
-  options = K ["-lang", "smtlib", "-output-lang", "presentation"],
-  interface = SMTLIB_Interface.interface,
+  options = (fn ctxt => [
+    "-seed", string_of_int (Config.get ctxt SMT_Config.random_seed),
+    "-lang", "smtlib", "-output-lang", "presentation"]),
+  class = SMTLIB_Interface.smtlibC,
   outcome =
     on_first_line (outcome_of "Unsatisfiable." "Satisfiable." "Unknown."),
   cex_parser = NONE,
@@ -50,8 +52,10 @@ fun yices () = {
   name = "yices",
   env_var = "YICES_SOLVER",
   is_remote = false,
-  options = K ["--smtlib"],
-  interface = SMTLIB_Interface.interface,
+  options = (fn ctxt => [
+    "--rand-seed", string_of_int (Config.get ctxt SMT_Config.random_seed),
+    "--smtlib"]),
+  class = SMTLIB_Interface.smtlibC,
   outcome = on_first_line (outcome_of "unsat" "sat" "unknown"),
   cex_parser = NONE,
   reconstruct = NONE,
@@ -61,7 +65,8 @@ fun yices () = {
 (* Z3 *)
 
 fun z3_options ctxt =
-  ["MODEL=true", "PRE_SIMPLIFY_EXPR=false", "CONTEXT_SIMPLIFIER=false", "-smt"]
+  ["-rs:" ^ string_of_int (Config.get ctxt SMT_Config.random_seed),
+    "MODEL=true", "-smt"]
   |> not (Config.get ctxt SMT_Config.oracle) ?
        append ["DISPLAY_PROOF=true","PROOF_MODE=2"]
 
@@ -84,7 +89,7 @@ fun z3 () = {
   env_var = "Z3_SOLVER",
   is_remote = true,
   options = z3_options,
-  interface = Z3_Interface.interface,
+  class = Z3_Interface.smtlib_z3C,
   outcome = z3_on_last_line,
   cex_parser = SOME Z3_Model.parse_counterex,
   reconstruct = SOME Z3_Proof_Reconstruction.reconstruct,
