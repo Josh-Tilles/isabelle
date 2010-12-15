@@ -121,7 +121,9 @@ subsection {* Type definition *}
 
 typedef (open) 'a convex_pd =
   "{S::'a pd_basis set. convex_le.ideal S}"
-by (fast intro: convex_le.ideal_principal)
+by (rule convex_le.ex_ideal)
+
+type_notation (xsymbols) convex_pd ("('(_')\<natural>)")
 
 instantiation convex_pd :: ("domain") below
 begin
@@ -342,6 +344,13 @@ definition
   convex_bind :: "'a convex_pd \<rightarrow> ('a \<rightarrow> 'b convex_pd) \<rightarrow> 'b convex_pd" where
   "convex_bind = convex_pd.basis_fun convex_bind_basis"
 
+syntax
+  "_convex_bind" :: "[logic, logic, logic] \<Rightarrow> logic"
+    ("(3\<Union>\<natural>_\<in>_./ _)" [0, 0, 10] 10)
+
+translations
+  "\<Union>\<natural>x\<in>xs. e" == "CONST convex_bind\<cdot>xs\<cdot>(\<Lambda> x. e)"
+
 lemma convex_bind_principal [simp]:
   "convex_bind\<cdot>(convex_principal t) = convex_bind_basis t"
 unfolding convex_bind_def
@@ -392,6 +401,14 @@ by (simp add: cfun_eq_iff ID_def convex_map_ident)
 lemma convex_map_map:
   "convex_map\<cdot>f\<cdot>(convex_map\<cdot>g\<cdot>xs) = convex_map\<cdot>(\<Lambda> x. f\<cdot>(g\<cdot>x))\<cdot>xs"
 by (induct xs rule: convex_pd_induct, simp_all)
+
+lemma convex_bind_map:
+  "convex_bind\<cdot>(convex_map\<cdot>f\<cdot>xs)\<cdot>g = convex_bind\<cdot>xs\<cdot>(\<Lambda> x. g\<cdot>(f\<cdot>x))"
+by (simp add: convex_map_def convex_bind_bind)
+
+lemma convex_map_bind:
+  "convex_map\<cdot>f\<cdot>(convex_bind\<cdot>xs\<cdot>g) = convex_bind\<cdot>xs\<cdot>(\<Lambda> x. convex_map\<cdot>f\<cdot>(g\<cdot>x))"
+by (simp add: convex_map_def convex_bind_bind)
 
 lemma ep_pair_convex_map: "ep_pair e p \<Longrightarrow> ep_pair (convex_map\<cdot>e) (convex_map\<cdot>p)"
 apply default

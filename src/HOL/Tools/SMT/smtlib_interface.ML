@@ -6,212 +6,68 @@ Interface to SMT solvers based on the SMT-LIB format.
 
 signature SMTLIB_INTERFACE =
 sig
-  type builtins = {
-    builtin_typ: typ -> string option,
-    builtin_num: typ -> int -> string option,
-    builtin_func: string * typ -> term list -> (string * term list) option,
-    builtin_pred: string * typ -> term list -> (string * term list) option,
-    is_builtin_pred: string -> typ -> bool }
-  val add_builtins: builtins -> Context.generic -> Context.generic
-  val add_logic: (term list -> string option) -> Context.generic ->
+  val smtlibC: SMT_Utils.class
+  val add_logic: int * (term list -> string option) -> Context.generic ->
     Context.generic
-  val extra_norm: SMT_Normalize.extra_norm
-  val interface: SMT_Solver.interface
+  val translate_config: Proof.context -> SMT_Translate.config
+  val setup: theory -> theory
 end
 
 structure SMTLIB_Interface: SMTLIB_INTERFACE =
 struct
 
+structure B = SMT_Builtin
 structure N = SMT_Normalize
 structure T = SMT_Translate
 
+val smtlibC = ["smtlib"]
 
 
-(** facts about uninterpreted constants **)
+(* builtins *)
 
-infix 2 ??
-fun (ex ?? f) irules = irules |> exists (ex o Thm.prop_of o snd) irules ? f
+local
+  fun int_num _ i = SOME (string_of_int i)
 
+  fun distinct _ (Type (_, [Type (_, [T]), _])) [t] =
+        (case try HOLogic.dest_list t of
+          SOME (ts as _ :: _) =>
+            let
+              fun mkT U = replicate (length ts) U ---> @{typ bool}
+              val U = mkT T and U' = mkT (TVar (("'a", 0), @{sort type}))
+            in SOME ((("distinct", length ts), U), ts, U') end
+        | _ => NONE)
+    | distinct _ _ _ = NONE
+in
 
-(* pairs *)
+val setup_builtins =
+  B.add_builtin_typ smtlibC (@{typ int}, K (SOME "Int"), int_num) #>
+  fold (B.add_builtin_fun' smtlibC) [
+    (@{const True}, "true"),
+    (@{const False}, "false"),
+    (@{const Not}, "not"),
+    (@{const HOL.conj}, "and"),
+    (@{const HOL.disj}, "or"),
+    (@{const HOL.implies}, "implies"),
+    (@{const HOL.eq (bool)}, "iff"),
+    (@{const HOL.eq ('a)}, "="),
+    (@{const If (bool)}, "if_then_else"),
+    (@{const If ('a)}, "ite"),
+    (@{const less (int)}, "<"),
+    (@{const less_eq (int)}, "<="),
+    (@{const uminus (int)}, "~"),
+    (@{const plus (int)}, "+"),
+    (@{const minus (int)}, "-"),
+    (@{const times (int)}, "*") ] #>
+  B.add_builtin_fun smtlibC (Term.dest_Const @{const distinct ('a)}, distinct)
 
-val pair_rules = [@{thm fst_conv}, @{thm snd_conv}, @{thm pair_collapse}]
-
-val pair_type = (fn Type (@{type_name Product_Type.prod}, _) => true | _ => false)
-val exists_pair_type = Term.exists_type (Term.exists_subtype pair_type)
-
-val add_pair_rules = exists_pair_type ?? append (map (pair ~1) pair_rules)
-
-
-(* function update *)
-
-val fun_upd_rules = [@{thm fun_upd_same}, @{thm fun_upd_apply}]
-
-val is_fun_upd = (fn Const (@{const_name fun_upd}, _) => true | _ => false)
-val exists_fun_upd = Term.exists_subterm is_fun_upd
-
-val add_fun_upd_rules = exists_fun_upd ?? append (map (pair ~1) fun_upd_rules)
-
-
-(* abs/min/max *)
-
-val exists_abs_min_max = Term.exists_subterm (fn
-    Const (@{const_name abs}, _) => true
-  | Const (@{const_name min}, _) => true
-  | Const (@{const_name max}, _) => true
-  | _ => false)
-
-val unfold_abs_conv = Conv.rewr_conv (mk_meta_eq @{thm abs_if})
-val unfold_min_conv = Conv.rewr_conv (mk_meta_eq @{thm min_def})
-val unfold_max_conv = Conv.rewr_conv (mk_meta_eq @{thm max_def})
-
-fun expand_conv cv = N.eta_expand_conv (K cv)
-fun expand2_conv cv = N.eta_expand_conv (N.eta_expand_conv (K cv))
-
-fun unfold_def_conv ctxt ct =
-  (case Thm.term_of ct of
-    Const (@{const_name abs}, _) $ _ => unfold_abs_conv
-  | Const (@{const_name abs}, _) => expand_conv unfold_abs_conv ctxt
-  | Const (@{const_name min}, _) $ _ $ _ => unfold_min_conv
-  | Const (@{const_name min}, _) $ _ => expand_conv unfold_min_conv ctxt
-  | Const (@{const_name min}, _) => expand2_conv unfold_min_conv ctxt
-  | Const (@{const_name max}, _) $ _ $ _ => unfold_max_conv
-  | Const (@{const_name max}, _) $ _ => expand_conv unfold_max_conv ctxt
-  | Const (@{const_name max}, _) => expand2_conv unfold_max_conv ctxt
-  | _ => Conv.all_conv) ct
-
-fun unfold_abs_min_max_defs ctxt thm =
-  if exists_abs_min_max (Thm.prop_of thm)
-  then Conv.fconv_rule (Conv.top_conv unfold_def_conv ctxt) thm
-  else thm
+end
 
 
-(* include additional facts *)
+(* serialization *)
 
-fun extra_norm has_datatypes irules ctxt =
-  irules
-  |> not has_datatypes ? add_pair_rules
-  |> add_fun_upd_rules
-  |> map (apsnd (unfold_abs_min_max_defs ctxt))
-  |> rpair ctxt
+(** header **)
 
-
-
-(** builtins **)
-
-(* additional builtins *)
-
-type builtins = {
-  builtin_typ: typ -> string option,
-  builtin_num: typ -> int -> string option,
-  builtin_func: string * typ -> term list -> (string * term list) option,
-  builtin_pred: string * typ -> term list -> (string * term list) option,
-  is_builtin_pred: string -> typ -> bool }
-
-fun chained _ [] = NONE
-  | chained f (b :: bs) = (case f b of SOME y => SOME y | NONE => chained f bs)
-
-fun chained' _ [] = false
-  | chained' f (b :: bs) = f b orelse chained' f bs
-
-fun chained_builtin_typ bs T =
-  chained (fn {builtin_typ, ...} : builtins => builtin_typ T) bs
-
-fun chained_builtin_num bs T i =
-  chained (fn {builtin_num, ...} : builtins => builtin_num T i) bs
-
-fun chained_builtin_func bs c ts =
-  chained (fn {builtin_func, ...} : builtins => builtin_func c ts) bs
-
-fun chained_builtin_pred bs c ts =
-  chained (fn {builtin_pred, ...} : builtins => builtin_pred c ts) bs
-
-fun chained_is_builtin_pred bs n T =
-  chained' (fn {is_builtin_pred, ...} : builtins => is_builtin_pred n T) bs
-
-fun fst_int_ord ((s1, _), (s2, _)) = int_ord (s1, s2)
-
-structure Builtins = Generic_Data
-(
-  type T = (int * builtins) list
-  val empty = []
-  val extend = I
-  fun merge (bs1, bs2) = Ord_List.union fst_int_ord bs2 bs1
-)
-
-fun add_builtins bs = Builtins.map (Ord_List.insert fst_int_ord (serial (), bs))
-
-fun get_builtins ctxt = map snd (Builtins.get (Context.Proof ctxt))
-
-
-(* basic builtins combined with additional builtins *)
-
-fun builtin_typ _ @{typ int} = SOME "Int"
-  | builtin_typ ctxt T = chained_builtin_typ (get_builtins ctxt) T
-
-fun builtin_num _ @{typ int} i = SOME (string_of_int i)
-  | builtin_num ctxt T i = chained_builtin_num (get_builtins ctxt) T i
-
-fun if_int_type T n =
-  (case try Term.domain_type T of
-    SOME @{typ int} => SOME n
-  | _ => NONE)
-
-fun conn @{const_name True} = SOME "true"
-  | conn @{const_name False} = SOME "false"
-  | conn @{const_name Not} = SOME "not"
-  | conn @{const_name HOL.conj} = SOME "and"
-  | conn @{const_name HOL.disj} = SOME "or"
-  | conn @{const_name HOL.implies} = SOME "implies"
-  | conn @{const_name HOL.eq} = SOME "iff"
-  | conn @{const_name If} = SOME "if_then_else"
-  | conn _ = NONE
-
-fun distinct_pred (@{const_name distinct}, _) [t] =
-      try HOLogic.dest_list t |> Option.map (pair "distinct")
-  | distinct_pred _ _ = NONE
-
-fun pred @{const_name HOL.eq} _ = SOME "="
-  | pred @{const_name term_eq} _ = SOME "="
-  | pred @{const_name less} T = if_int_type T "<"
-  | pred @{const_name less_eq} T = if_int_type T "<="
-  | pred _ _ = NONE
-
-fun func @{const_name If} _ = SOME "ite"
-  | func @{const_name uminus} T = if_int_type T "~"
-  | func @{const_name plus} T = if_int_type T "+"
-  | func @{const_name minus} T = if_int_type T "-"
-  | func @{const_name times} T = if_int_type T "*"
-  | func _ _ = NONE
-
-val is_propT = (fn @{typ prop} => true | _ => false)
-fun is_connT T = Term.strip_type T |> (fn (Us, U) => forall is_propT (U :: Us))
-fun is_predT T = is_propT (Term.body_type T)
-
-fun is_builtin_conn (n, T) = is_connT T andalso is_some (conn n)
-fun is_builtin_pred ctxt (n, T) = is_predT T andalso
-  (is_some (pred n T) orelse chained_is_builtin_pred (get_builtins ctxt) n T)
-
-fun builtin_fun ctxt (c as (n, T)) ts =
-  let
-    val builtin_func' = chained_builtin_func (get_builtins ctxt)
-    fun builtin_pred' c t =
-      (case distinct_pred c ts of
-        SOME b => SOME b
-      | NONE => chained_builtin_pred (get_builtins ctxt) c ts)
-  in
-    if is_connT T then conn n |> Option.map (rpair ts)
-    else if is_predT T then
-      (case pred n T of SOME c' => SOME (c', ts) | NONE => builtin_pred' c ts)
-    else 
-      (case func n T of SOME c' => SOME (c', ts) | NONE => builtin_func' c ts)
-  end
-
-
-
-(** serialization **)
-
-(* header *)
+fun fst_int_ord ((i1, _), (i2, _)) = int_ord (i1, i2)
 
 structure Logics = Generic_Data
 (
@@ -221,16 +77,16 @@ structure Logics = Generic_Data
   fun merge (bs1, bs2) = Ord_List.union fst_int_ord bs2 bs1
 )
 
-fun add_logic l = Logics.map (Ord_List.insert fst_int_ord (serial (), l))
+fun add_logic pf = Logics.map (Ord_List.insert fst_int_ord pf)
 
 fun choose_logic ctxt ts =
   let
     fun choose [] = "AUFLIA"
-      | choose ((_, l) :: ls) = (case l ts of SOME s => s | NONE => choose ls)
-  in [":logic " ^ choose (rev (Logics.get (Context.Proof ctxt)))] end
+      | choose ((_, f) :: fs) = (case f ts of SOME s => s | NONE => choose fs)
+  in [":logic " ^ choose (Logics.get (Context.Proof ctxt))] end
 
 
-(* serialization *)
+(** serialization **)
 
 val add = Buffer.add
 fun sep f = add " " #> f
@@ -290,25 +146,19 @@ fun serialize comments {header, sorts, dtyps, funcs} ts =
   |> Buffer.content
 
 
+(* interface *)
 
-(** interfaces **)
+fun translate_config ctxt = {
+  prefixes = {
+    sort_prefix = "S",
+    func_prefix = "f"},
+  header = choose_logic ctxt,
+  is_fol = true,
+  has_datatypes = false,
+  serialize = serialize}
 
-val interface = {
-  extra_norm = extra_norm,
-  translate = {
-    prefixes = {
-      sort_prefix = "S",
-      func_prefix = "f"},
-    header = choose_logic,
-    strict = SOME {
-      is_builtin_conn = is_builtin_conn,
-      is_builtin_pred = is_builtin_pred,
-      is_builtin_distinct = true},
-    builtins = {
-      builtin_typ = builtin_typ,
-      builtin_num = builtin_num,
-      builtin_fun = builtin_fun,
-      has_datatypes = false},
-    serialize = serialize}}
+val setup = Context.theory_map (
+  setup_builtins #>
+  T.add_config (smtlibC, translate_config))
 
 end

@@ -10,7 +10,8 @@ sig
   datatype locality = General | Intro | Elim | Simp | Local | Assum | Chained
 
   type relevance_fudge =
-    {worse_irrel_freq : real,
+    {allow_ext : bool,
+     worse_irrel_freq : real,
      higher_order_irrel_weight : real,
      abs_rel_weight : real,
      abs_irrel_weight : real,
@@ -38,8 +39,9 @@ sig
     Proof.context -> unit Symtab.table -> thm list
     -> Facts.ref * Attrib.src list -> ((string * locality) * thm) list
   val relevant_facts :
-    Proof.context -> bool -> real * real -> int -> (string * typ -> bool)
-    -> relevance_fudge -> relevance_override -> thm list -> term list -> term
+    Proof.context -> bool -> real * real -> int
+    -> (string * typ -> term list -> bool) -> relevance_fudge
+    -> relevance_override -> thm list -> term list -> term
     -> ((string * locality) * thm) list
 end;
 
@@ -58,7 +60,8 @@ val respect_no_atp = true
 datatype locality = General | Intro | Elim | Simp | Local | Assum | Chained
 
 type relevance_fudge =
-  {worse_irrel_freq : real,
+  {allow_ext : bool,
+   worse_irrel_freq : real,
    higher_order_irrel_weight : real,
    abs_rel_weight : real,
    abs_irrel_weight : real,
@@ -182,19 +185,16 @@ and ptype thy const x ts =
 and pconst thy const (s, T) ts = (s, ptype thy const (s, T) ts)
 and rich_ptype thy const (s, T) ts =
   PType (order_of_type T, ptype thy const (s, T) ts)
-and rich_pconst thy const x ts = (x, rich_ptype thy const x ts)
+and rich_pconst thy const (s, T) ts = (s, rich_ptype thy const (s, T) ts)
 
 fun string_for_hyper_pconst (s, ps) =
   s ^ "{" ^ commas (map string_for_ptype ps) ^ "}"
 
 (* Add a pconstant to the table, but a [] entry means a standard
    connective, which we ignore.*)
-fun add_pconst_to_table is_built_in_const also_skolem ((s, T), p) =
-  if is_built_in_const (s, T) orelse
-     (not also_skolem andalso String.isPrefix skolem_prefix s) then
-    I
-  else
-    Symtab.map_default (s, [p]) (insert (op =) p)
+fun add_pconst_to_table also_skolem (s, p) =
+  if (not also_skolem andalso String.isPrefix skolem_prefix s) then I
+  else Symtab.map_default (s, [p]) (insert (op =) p)
 
 fun is_formula_type T = (T = HOLogic.boolT orelse T = propT)
 
@@ -205,8 +205,8 @@ fun pconsts_in_terms thy is_built_in_const also_skolems pos ts =
        each quantifiers that must necessarily be skolemized by the ATP, we
        introduce a fresh constant to simulate the effect of Skolemization. *)
     fun do_const const x ts =
-      add_pconst_to_table is_built_in_const also_skolems
-                          (rich_pconst thy const x ts)
+      (not (is_built_in_const x ts)
+       ? add_pconst_to_table also_skolems (rich_pconst thy const x ts))
       #> fold do_term ts
     and do_term t =
       case strip_comb t of
@@ -214,15 +214,14 @@ fun pconsts_in_terms thy is_built_in_const also_skolems pos ts =
       | (Free x, ts) => do_const false x ts
       | (Abs (_, T, t'), ts) =>
         (null ts
-         ? add_pconst_to_table (K false) true
-                          ((abs_name, dummyT), PType (order_of_type T + 1, [])))
+         ? add_pconst_to_table true (abs_name, PType (order_of_type T + 1, [])))
         #> fold do_term (t' :: ts)
       | (_, ts) => fold do_term ts
     fun do_quantifier will_surely_be_skolemized abs_T body_t =
       do_formula pos body_t
       #> (if also_skolems andalso will_surely_be_skolemized then
-            add_pconst_to_table (K false) true
-               ((gensym skolem_prefix, dummyT), PType (order_of_type abs_T, []))
+            add_pconst_to_table true
+                (gensym skolem_prefix, PType (order_of_type abs_T, []))
           else
             I)
     and do_term_or_formula T =
@@ -236,6 +235,8 @@ fun pconsts_in_terms thy is_built_in_const also_skolems pos ts =
       | Const (@{const_name "=="}, Type (_, [T, _])) $ t1 $ t2 =>
         fold (do_term_or_formula T) [t1, t2]
       | @{const Trueprop} $ t1 => do_formula pos t1
+      | @{const False} => I
+      | @{const True} => I
       | @{const Not} $ t1 => do_formula (flip pos) t1
       | Const (@{const_name All}, _) $ Abs (_, T, t') =>
         do_quantifier (pos = SOME false) T t'
@@ -434,6 +435,26 @@ fun if_empty_replace_with_locality thy is_built_in_const facts loc tab =
   else
     tab
 
+fun add_arities is_built_in_const th =
+  let
+    fun aux _ _ NONE = NONE
+      | aux t args (SOME tab) =
+        case t of
+          t1 $ t2 => SOME tab |> aux t1 (t2 :: args) |> aux t2 []
+        | Const (x as (s, _)) =>
+          (if is_built_in_const x args then
+             SOME tab
+           else case Symtab.lookup tab s of
+             NONE => SOME (Symtab.update (s, length args) tab)
+           | SOME n => if n = length args then SOME tab else NONE)
+        | _ => SOME tab
+  in aux (prop_of th) [] end
+
+fun needs_ext is_built_in_const facts =
+  fold (add_arities is_built_in_const o snd) facts (SOME Symtab.empty)
+  |> is_none
+
+
 fun relevance_filter ctxt threshold0 decay max_relevant is_built_in_const
         (fudge as {threshold_divisor, ridiculous_threshold, ...})
         ({add, del, ...} : relevance_override) facts goal_ts =
@@ -463,8 +484,7 @@ fun relevance_filter ctxt threshold0 decay max_relevant is_built_in_const
                 take_most_relevant max_relevant remaining_max fudge candidates
               val rel_const_tab' =
                 rel_const_tab
-                |> fold (add_pconst_to_table (K false) false)
-                        (maps (map (apfst (rpair dummyT)) o snd o fst) accepts)
+                |> fold (add_pconst_to_table false) (maps (snd o fst) accepts)
               fun is_dirty (c, _) =
                 Symtab.lookup rel_const_tab' c <> Symtab.lookup rel_const_tab c
               val (hopeful_rejects, hopeless_rejects) =
@@ -518,8 +538,8 @@ fun relevance_filter ctxt threshold0 decay max_relevant is_built_in_const
                       |> map string_for_hyper_pconst));
           relevant [] [] hopeful
         end
-    fun add_add_ths accepts =
-      (facts |> filter ((member Thm.eq_thm add_ths
+    fun add_facts ths accepts =
+      (facts |> filter ((member Thm.eq_thm ths
                          andf (not o member (Thm.eq_thm o apsnd snd) accepts))
                         o snd))
       @ accepts
@@ -527,9 +547,12 @@ fun relevance_filter ctxt threshold0 decay max_relevant is_built_in_const
   in
     facts |> map_filter (pair_consts_fact thy is_built_in_const fudge)
           |> iter 0 max_relevant threshold0 goal_const_tab []
-          |> not (null add_ths) ? add_add_ths
-          |> tap (fn res => trace_msg (fn () =>
-                               "Total relevant: " ^ Int.toString (length res)))
+          |> not (null add_ths) ? add_facts add_ths
+          |> (fn accepts =>
+                 accepts |> needs_ext is_built_in_const accepts
+                            ? add_facts @{thms ext})
+          |> tap (fn accepts => trace_msg (fn () =>
+                      "Total relevant: " ^ Int.toString (length accepts)))
   end
 
 
@@ -665,19 +688,19 @@ val dangerous_types = [@{type_name unit}, @{type_name bool}, @{type_name prop}];
 (* Facts containing variables of type "unit" or "bool" or of the form
    "ALL x. x = A | x = B | x = C" are likely to lead to unsound proofs if types
    are omitted. *)
-fun is_dangerous_term full_types t =
-  not full_types andalso
+fun is_dangerous_term no_dangerous_types t =
+  not no_dangerous_types andalso
   let val t = transform_elim_term t in
     has_bound_or_var_of_type dangerous_types t orelse
     is_exhaustive_finite t
   end
 
-fun is_theorem_bad_for_atps full_types thm =
+fun is_theorem_bad_for_atps no_dangerous_types thm =
   let val t = prop_of thm in
     is_formula_too_complex t orelse exists_type type_has_top_sort t orelse
-    is_dangerous_term full_types t orelse exists_sledgehammer_const t orelse
-    exists_low_level_class_const t orelse is_metastrange_theorem thm orelse
-    is_that_fact thm
+    is_dangerous_term no_dangerous_types t orelse
+    exists_sledgehammer_const t orelse exists_low_level_class_const t orelse
+    is_metastrange_theorem thm orelse is_that_fact thm
   end
 
 fun clasimpset_rules_of ctxt =
@@ -708,7 +731,7 @@ fun close_form t =
           (Term.add_vars t [] |> sort_wrt (fst o fst))
   |> fst
 
-fun all_facts ctxt reserved full_types
+fun all_facts ctxt reserved no_dangerous_types
               ({intro_bonus, elim_bonus, simp_bonus, ...} : relevance_fudge)
               add_ths chained_ths =
   let
@@ -758,7 +781,7 @@ fun all_facts ctxt reserved full_types
             pair 1
             #> fold (fn th => fn (j, rest) =>
                  (j + 1,
-                  if is_theorem_bad_for_atps full_types th andalso
+                  if is_theorem_bad_for_atps no_dangerous_types th andalso
                      not (member Thm.eq_thm add_ths th) then
                     rest
                   else
@@ -803,9 +826,9 @@ fun rearrange_facts ctxt respect_no_atp =
 (* ATP invocation methods setup                                *)
 (***************************************************************)
 
-fun relevant_facts ctxt full_types (threshold0, threshold1) max_relevant
-                   is_built_in_const fudge (override as {add, only, ...})
-                   chained_ths hyp_ts concl_t =
+fun relevant_facts ctxt no_dangerous_types (threshold0, threshold1)
+                   max_relevant is_built_in_const fudge
+                   (override as {add, only, ...}) chained_ths hyp_ts concl_t =
   let
     val decay = Math.pow ((1.0 - threshold1) / (1.0 - threshold0),
                           1.0 / Real.fromInt (max_relevant + 1))
@@ -816,7 +839,7 @@ fun relevant_facts ctxt full_types (threshold0, threshold1) max_relevant
          maps (map (fn ((name, loc), th) => ((K name, loc), (true, th)))
                o fact_from_ref ctxt reserved chained_ths) add
        else
-         all_facts ctxt reserved full_types fudge add_ths chained_ths)
+         all_facts ctxt reserved no_dangerous_types fudge add_ths chained_ths)
       |> rearrange_facts ctxt (respect_no_atp andalso not only)
       |> uniquify
   in

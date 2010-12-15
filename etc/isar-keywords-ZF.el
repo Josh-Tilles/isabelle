@@ -61,7 +61,6 @@
     "done"
     "enable_pr"
     "end"
-    "example_proof"
     "exit"
     "extract"
     "extract_type"
@@ -107,6 +106,7 @@
     "nonterminals"
     "notation"
     "note"
+    "notepad"
     "obtain"
     "oops"
     "oracle"
@@ -383,6 +383,7 @@
     "no_type_notation"
     "nonterminals"
     "notation"
+    "notepad"
     "oracle"
     "overloading"
     "parse_ast_translation"
@@ -413,7 +414,6 @@
 
 (defconst isar-keywords-theory-goal
   '("corollary"
-    "example_proof"
     "instance"
     "interpretation"
     "lemma"

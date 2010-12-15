@@ -70,6 +70,8 @@ sig
   val read_term_pattern: Proof.context -> string -> term
   val read_term_schematic: Proof.context -> string -> term
   val read_term_abbrev: Proof.context -> string -> term
+  val show_abbrevs_raw: Config.raw
+  val show_abbrevs: bool Config.T
   val expand_abbrevs: Proof.context -> term -> term
   val cert_term: Proof.context -> term -> term
   val cert_prop: Proof.context -> term -> term
@@ -554,6 +556,8 @@ fun expand_abbrevs ctxt = certify_consts ctxt #> expand_binds ctxt;
 
 end;
 
+val show_abbrevs_raw = Config.declare "show_abbrevs" (fn _ => Config.Bool true);
+val show_abbrevs = Config.bool show_abbrevs_raw;
 
 fun contract_abbrevs ctxt t =
   let
@@ -563,7 +567,7 @@ fun contract_abbrevs ctxt t =
     val retrieve = Consts.retrieve_abbrevs consts (print_mode_value () @ [""]);
     fun match_abbrev u = Option.map #1 (get_first (Pattern.match_rew thy u) (retrieve u));
   in
-    if abbrev orelse print_mode_active "no_abbrevs" orelse not (can Term.type_of t) then t
+    if abbrev orelse not (Config.get ctxt show_abbrevs) orelse not (can Term.type_of t) then t
     else Pattern.rewrite_term_top thy [] [match_abbrev] t
   end;
 
@@ -760,11 +764,19 @@ fun parse_term T ctxt text =
       if T' = propT then (Markup.prop, "proposition") else (Markup.term, "term");
     val (syms, pos) = Syntax.parse_token ctxt markup text;
 
+    val default_root = Config.get ctxt Syntax.default_root;
+    val root =
+      (case T' of
+        Type (c, _) =>
+          if c <> "prop" andalso Type.is_logtype (tsig_of ctxt) c
+          then default_root else c
+      | _ => default_root);
+
     fun check t = (Syntax.check_term ctxt (Type.constraint T' t); NONE)
       handle ERROR msg => SOME msg;
     val t =
       Syntax.standard_parse_term check get_sort map_const map_free
-        ctxt (Type.is_logtype (tsig_of ctxt)) (syn_of ctxt) T' (syms, pos)
+        ctxt (syn_of ctxt) root (syms, pos)
       handle ERROR msg => parse_failed ctxt pos msg kind;
   in t end;
 
@@ -1479,4 +1491,6 @@ fun pretty_context ctxt =
   end;
 
 end;
+
+val show_abbrevs = ProofContext.show_abbrevs;
 

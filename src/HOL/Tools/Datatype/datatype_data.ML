@@ -242,23 +242,21 @@ val _ = Thy_Output.antiquotation "datatype" (Args.type_name true)
       val thy = ProofContext.theory_of ctxt;
       val (vs, cos) = the_spec thy dtco;
       val ty = Type (dtco, map TFree vs);
-      fun pretty_typ_bracket (ty as Type (_, _ :: _)) =
-            Pretty.enclose "(" ")" [Syntax.pretty_typ ctxt ty]
-        | pretty_typ_bracket ty =
-            Syntax.pretty_typ ctxt ty;
+      val pretty_typ_bracket =
+        Syntax.pretty_typ (Config.put Syntax.pretty_priority (Syntax.max_pri + 1) ctxt);
       fun pretty_constr (co, tys) =
-        (Pretty.block o Pretty.breaks)
+        Pretty.block (Pretty.breaks
           (Syntax.pretty_term ctxt (Const (co, tys ---> ty)) ::
-            map pretty_typ_bracket tys);
+            map pretty_typ_bracket tys));
       val pretty_datatype =
         Pretty.block
-          (Pretty.command "datatype" :: Pretty.brk 1 ::
-           Syntax.pretty_typ ctxt ty ::
-           Pretty.str " =" :: Pretty.brk 1 ::
-           flat (separate [Pretty.brk 1, Pretty.str "| "]
-             (map (single o pretty_constr) cos)));
+         (Pretty.command "datatype" :: Pretty.brk 1 ::
+          Syntax.pretty_typ ctxt ty ::
+          Pretty.str " =" :: Pretty.brk 1 ::
+          flat (separate [Pretty.brk 1, Pretty.str "| "] (map (single o pretty_constr) cos)));
     in
-      Thy_Output.output ctxt (Thy_Output.maybe_pretty_source (K (K pretty_datatype)) ctxt src [()])
+      Thy_Output.output ctxt
+        (Thy_Output.maybe_pretty_source (K (K pretty_datatype)) ctxt src [()])
     end);
 
 
@@ -362,14 +360,14 @@ fun prove_rep_datatype config dt_names alt_names descr sorts
   let
     val raw_distinct = (map o maps) (fn thm => [thm, thm RS not_sym]) half_distinct;
     val new_type_names = map Long_Name.base_name (the_default dt_names alt_names);
+    val prfx = Binding.qualify true (space_implode "_" new_type_names);
     val (((inject, distinct), [induct]), thy2) =
       thy1
       |> store_thmss "inject" new_type_names raw_inject
       ||>> store_thmss "distinct" new_type_names raw_distinct
-      ||> Sign.add_path (space_implode "_" new_type_names)
       ||>> Global_Theory.add_thms
-        [((Binding.name "induct", raw_induct), [mk_case_names_induct descr])]
-      ||> Sign.restore_naming thy1;
+        [((prfx (Binding.name "induct"), raw_induct),
+          [mk_case_names_induct descr])];
   in
     thy2
     |> derive_datatype_props config dt_names alt_names [descr] sorts

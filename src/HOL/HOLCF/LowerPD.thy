@@ -76,7 +76,9 @@ subsection {* Type definition *}
 
 typedef (open) 'a lower_pd =
   "{S::'a pd_basis set. lower_le.ideal S}"
-by (fast intro: lower_le.ideal_principal)
+by (rule lower_le.ex_ideal)
+
+type_notation (xsymbols) lower_pd ("('(_')\<flat>)")
 
 instantiation lower_pd :: ("domain") below
 begin
@@ -335,6 +337,13 @@ definition
   lower_bind :: "'a lower_pd \<rightarrow> ('a \<rightarrow> 'b lower_pd) \<rightarrow> 'b lower_pd" where
   "lower_bind = lower_pd.basis_fun lower_bind_basis"
 
+syntax
+  "_lower_bind" :: "[logic, logic, logic] \<Rightarrow> logic"
+    ("(3\<Union>\<flat>_\<in>_./ _)" [0, 0, 10] 10)
+
+translations
+  "\<Union>\<flat>x\<in>xs. e" == "CONST lower_bind\<cdot>xs\<cdot>(\<Lambda> x. e)"
+
 lemma lower_bind_principal [simp]:
   "lower_bind\<cdot>(lower_principal t) = lower_bind_basis t"
 unfolding lower_bind_def
@@ -384,6 +393,14 @@ by (simp add: cfun_eq_iff ID_def lower_map_ident)
 lemma lower_map_map:
   "lower_map\<cdot>f\<cdot>(lower_map\<cdot>g\<cdot>xs) = lower_map\<cdot>(\<Lambda> x. f\<cdot>(g\<cdot>x))\<cdot>xs"
 by (induct xs rule: lower_pd_induct, simp_all)
+
+lemma lower_bind_map:
+  "lower_bind\<cdot>(lower_map\<cdot>f\<cdot>xs)\<cdot>g = lower_bind\<cdot>xs\<cdot>(\<Lambda> x. g\<cdot>(f\<cdot>x))"
+by (simp add: lower_map_def lower_bind_bind)
+
+lemma lower_map_bind:
+  "lower_map\<cdot>f\<cdot>(lower_bind\<cdot>xs\<cdot>g) = lower_bind\<cdot>xs\<cdot>(\<Lambda> x. lower_map\<cdot>f\<cdot>(g\<cdot>x))"
+by (simp add: lower_map_def lower_bind_bind)
 
 lemma ep_pair_lower_map: "ep_pair e p \<Longrightarrow> ep_pair (lower_map\<cdot>e) (lower_map\<cdot>p)"
 apply default

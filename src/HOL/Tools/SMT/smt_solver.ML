@@ -7,31 +7,34 @@ SMT solvers registry and SMT tactic.
 signature SMT_SOLVER =
 sig
   (*configuration*)
-  type interface = {
-    extra_norm: SMT_Normalize.extra_norm,
-    translate: SMT_Translate.config }
   datatype outcome = Unsat | Sat | Unknown
   type solver_config = {
     name: string,
     env_var: string,
     is_remote: bool,
     options: Proof.context -> string list,
-    interface: interface,
+    class: SMT_Utils.class,
     outcome: string -> string list -> outcome * string list,
     cex_parser: (Proof.context -> SMT_Translate.recon -> string list ->
       term list * term list) option,
     reconstruct: (Proof.context -> SMT_Translate.recon -> string list ->
-      (int list * thm) * Proof.context) option }
+      int list * thm) option,
+    default_max_relevant: int }
 
   (*registry*)
-  type solver = bool option -> Proof.context -> (int * thm) list ->
-    int list * thm
+  type solver = bool option -> Proof.context ->
+    (int * (int option * thm)) list -> int list * thm
   val add_solver: solver_config -> theory -> theory
+  val solver_name_of: Proof.context -> string
   val solver_of: Proof.context -> solver
-  val is_locally_installed: Proof.context -> bool
+  val available_solvers_of: Proof.context -> string list
+  val is_locally_installed: Proof.context -> string -> bool
+  val is_remotely_available: Proof.context -> string -> bool
+  val default_max_relevant: Proof.context -> string -> int
 
   (*filter*)
-  val smt_filter: bool -> Time.time -> Proof.state -> ('a * thm) list -> int ->
+  val smt_filter: bool -> Time.time -> Proof.state ->
+    ('a * (int option * thm)) list -> int ->
     {outcome: SMT_Failure.failure option, used_facts: ('a * thm) list,
     run_time_in_msecs: int option}
 
@@ -51,10 +54,6 @@ structure C = SMT_Config
 
 (* configuration *)
 
-type interface = {
-  extra_norm: SMT_Normalize.extra_norm,
-  translate: SMT_Translate.config }
-
 datatype outcome = Unsat | Sat | Unknown
 
 type solver_config = {
@@ -62,12 +61,13 @@ type solver_config = {
   env_var: string,
   is_remote: bool,
   options: Proof.context -> string list,
-  interface: interface,
+  class: SMT_Utils.class,
   outcome: string -> string list -> outcome * string list,
   cex_parser: (Proof.context -> SMT_Translate.recon -> string list ->
     term list * term list) option,
   reconstruct: (Proof.context -> SMT_Translate.recon -> string list ->
-    (int list * thm) * Proof.context) option }
+    int list * thm) option,
+  default_max_relevant: int }
 
 
 (* interface to external solvers *)
@@ -156,7 +156,7 @@ end
 fun trace_assms ctxt = C.trace_msg ctxt (Pretty.string_of o
   Pretty.big_list "Assertions:" o map (Display.pretty_thm ctxt o snd))
 
-fun trace_recon_data ctxt ({typs, terms, ...} : SMT_Translate.recon) =
+fun trace_recon_data ({context=ctxt, typs, terms, ...} : SMT_Translate.recon) =
   let
     fun pretty_eq n p = Pretty.block [Pretty.str n, Pretty.str " = ", p]
     fun p_typ (n, T) = pretty_eq n (Syntax.pretty_typ ctxt T)
@@ -168,80 +168,64 @@ fun trace_recon_data ctxt ({typs, terms, ...} : SMT_Translate.recon) =
         Pretty.big_list "functions:" (map p_term (Symtab.dest terms))])) ()
   end
 
-fun invoke translate_config name cmd options irules ctxt =
+fun invoke name cmd options ithms ctxt =
   let
     val args = C.solver_options_of ctxt @ options ctxt
     val comments = ("solver: " ^ name) ::
-      ("timeout: " ^ Time.toString (seconds (Config.get ctxt C.timeout))) ::
+      ("timeout: " ^ string_of_real (Config.get ctxt C.timeout)) ::
+      ("random seed: " ^ string_of_int (Config.get ctxt C.random_seed)) ::
       "arguments:" :: args
-  in
-    irules
-    |> tap (trace_assms ctxt)
-    |> SMT_Translate.translate translate_config ctxt comments
-    ||> tap (trace_recon_data ctxt)
-    |>> run_solver ctxt cmd args
-    |> rpair ctxt
-  end
 
-fun discharge_definitions thm =
-  if Thm.nprems_of thm = 0 then thm
-  else discharge_definitions (@{thm reflexive} RS thm)
+    val (str, recon as {context=ctxt', ...}) =
+      ithms
+      |> tap (trace_assms ctxt)
+      |> SMT_Translate.translate ctxt comments
+      ||> tap trace_recon_data
+  in (run_solver ctxt' cmd args str, recon) end
 
-fun set_has_datatypes with_datatypes translate =
+fun trace_assumptions ctxt iwthms idxs =
   let
-    val {prefixes, header, strict, builtins, serialize} = translate
-    val {builtin_typ, builtin_num, builtin_fun, has_datatypes} = builtins
-    val with_datatypes' = has_datatypes andalso with_datatypes
-    val builtins' = {builtin_typ=builtin_typ, builtin_num=builtin_num,
-      builtin_fun=builtin_fun, has_datatypes=with_datatypes}
-    val translate' = {prefixes=prefixes, header=header, strict=strict,
-      builtins=builtins', serialize=serialize}
-  in (with_datatypes', translate') end
-
-fun trace_assumptions ctxt irules idxs =
-  let
-    val thms = filter (fn i => i >= 0) idxs
-      |> map_filter (AList.lookup (op =) irules)
+    val wthms =
+      idxs
+      |> filter (fn i => i >= 0)
+      |> map_filter (AList.lookup (op =) iwthms)
   in
-    if Config.get ctxt C.trace_used_facts andalso length thms > 0
+    if Config.get ctxt C.trace_used_facts andalso length wthms > 0
     then
       tracing (Pretty.string_of (Pretty.big_list "SMT used facts:"
-        (map (Display.pretty_thm ctxt) thms)))
+        (map (Display.pretty_thm ctxt o snd) wthms)))
     else ()
-  end
-
-fun gen_solver name info rm ctxt irules =
-  let
-    val {env_var, is_remote, options, interface, reconstruct} = info
-    val {extra_norm, translate} = interface
-    val (with_datatypes, translate') =
-      set_has_datatypes (Config.get ctxt C.datatypes) translate
-    val cmd = (rm, env_var, is_remote, name)
-  in
-    (irules, ctxt)
-    |-> SMT_Normalize.normalize extra_norm with_datatypes
-    |-> invoke translate' name cmd options
-    |-> reconstruct
-    |-> (fn (idxs, thm) => fn ctxt' => thm
-    |> singleton (ProofContext.export ctxt' ctxt)
-    |> discharge_definitions
-    |> tap (fn _ => trace_assumptions ctxt irules idxs)
-    |> pair idxs)
   end
 
 
 
 (* registry *)
 
-type solver = bool option -> Proof.context -> (int * thm) list -> int list * thm
+type solver = bool option -> Proof.context -> (int * (int option * thm)) list ->
+  int list * thm
 
 type solver_info = {
   env_var: string,
   is_remote: bool,
   options: Proof.context -> string list,
-  interface: interface,
-  reconstruct: string list * SMT_Translate.recon -> Proof.context ->
-    (int list * thm) * Proof.context }
+  reconstruct: Proof.context -> string list * SMT_Translate.recon ->
+    int list * thm,
+  default_max_relevant: int }
+
+fun gen_solver name (info : solver_info) rm ctxt iwthms =
+  let
+    val {env_var, is_remote, options, reconstruct, ...} = info
+    val cmd = (rm, env_var, is_remote, name)
+  in
+    SMT_Normalize.normalize ctxt iwthms
+    |> rpair ctxt
+    |-> SMT_Monomorph.monomorph
+    |> (fn (iwthms', ctxt') => invoke name cmd options iwthms' ctxt'
+    |> reconstruct ctxt')
+    |> (fn (idxs, thm) => thm
+    |> tap (fn _ => trace_assumptions ctxt iwthms idxs)
+    |> pair idxs)
+  end
 
 structure Solvers = Generic_Data
 (
@@ -253,12 +237,13 @@ structure Solvers = Generic_Data
 )
 
 local
-  fun finish outcome cex_parser reconstruct ocl (output, recon) ctxt =
+  fun finish outcome cex_parser reconstruct ocl outer_ctxt
+      (output, (recon as {context=ctxt, ...} : SMT_Translate.recon)) =
     (case outcome output of
       (Unsat, ls) =>
         if not (Config.get ctxt C.oracle) andalso is_some reconstruct
-        then the reconstruct ctxt recon ls
-        else (([], ocl ()), ctxt)
+        then the reconstruct outer_ctxt recon ls
+        else ([], ocl ())
     | (result, ls) =>
         let
           val (ts, us) =
@@ -275,34 +260,43 @@ in
 
 fun add_solver cfg =
   let
-    val {name, env_var, is_remote, options, interface, outcome, cex_parser,
-      reconstruct} = cfg
+    val {name, env_var, is_remote, options, class, outcome, cex_parser,
+      reconstruct, default_max_relevant} = cfg
 
     fun core_oracle () = cfalse
 
     fun solver ocl = { env_var=env_var, is_remote=is_remote, options=options,
-      interface=interface,
-      reconstruct=finish (outcome name) cex_parser reconstruct ocl }
+      reconstruct=finish (outcome name) cex_parser reconstruct ocl,
+      default_max_relevant=default_max_relevant }
   in
     Thm.add_oracle (Binding.name name, core_oracle) #-> (fn (_, ocl) =>
     Context.theory_map (Solvers.map (Symtab.update_new (name, solver ocl)))) #>
-    Context.theory_map (C.add_solver name)
+    Context.theory_map (C.add_solver (name, class))
   end
 
 end
 
+fun get_info ctxt name =
+  the (Symtab.lookup (Solvers.get (Context.Proof ctxt)) name)
+
 fun name_and_solver_of ctxt =
   let val name = C.solver_of ctxt
-  in (name, the (Symtab.lookup (Solvers.get (Context.Proof ctxt)) name)) end
+  in (name, get_info ctxt name) end
 
+val solver_name_of = fst o name_and_solver_of
 fun solver_of ctxt =
   let val (name, raw_solver) = name_and_solver_of ctxt
   in gen_solver name raw_solver end
 
-fun is_locally_installed ctxt =
-  let val (_, {env_var, ...}) = name_and_solver_of ctxt
+val available_solvers_of = Symtab.keys o Solvers.get o Context.Proof
+
+fun is_locally_installed ctxt name =
+  let val {env_var, ...} = get_info ctxt name
   in is_some (get_local_solver env_var) end
 
+val is_remotely_available = #is_remote oo get_info
+
+val default_max_relevant = #default_max_relevant oo get_info
 
 
 (* filter *)
@@ -312,37 +306,45 @@ val has_topsort = Term.exists_type (Term.exists_subtype (fn
   | TVar (_, []) => true
   | _ => false))
 
-fun smt_solver rm ctxt irules =
+fun smt_solver rm ctxt iwthms =
   (* without this test, we would run into problems when atomizing the rules: *)
-  if exists (has_topsort o Thm.prop_of o snd) irules then
+  if exists (has_topsort o Thm.prop_of o snd o snd) iwthms then
     raise SMT_Failure.SMT (SMT_Failure.Other_Failure ("proof state " ^
       "contains the universal sort {}"))
-  else solver_of ctxt rm ctxt irules
+  else solver_of ctxt rm ctxt iwthms
 
 val cnot = Thm.cterm_of @{theory} @{const Not}
 
-fun smt_filter run_remote time_limit st xrules i =
+fun mk_result outcome xrules =
+  { outcome = outcome, used_facts = xrules, run_time_in_msecs = NONE }
+
+fun smt_filter run_remote time_limit st xwrules i =
   let
-    val {facts, goal, ...} = Proof.goal st
     val ctxt =
       Proof.context_of st
       |> Config.put C.oracle false
       |> Config.put C.timeout (Time.toReal time_limit)
       |> Config.put C.drop_bad_facts true
       |> Config.put C.filter_only_facts true
+
+    val {facts, goal, ...} = Proof.goal st
     val ({context=ctxt', prems, concl, ...}, _) = Subgoal.focus ctxt i goal
     fun negate ct = Thm.dest_comb ct ||> Thm.capply cnot |-> Thm.capply
     val cprop = negate (Thm.rhs_of (SMT_Normalize.atomize_conv ctxt' concl))
-    val irs = map (pair ~1) (Thm.assume cprop :: prems @ facts)
-    val rm = SOME run_remote
+
+    val (xs, wthms) = split_list xwrules
+    val xrules = xs ~~ map snd wthms
   in
-    (xrules, map snd xrules)
-    ||> distinct (op =) o fst o smt_solver rm ctxt' o append irs o map_index I
-    |-> map_filter o try o nth
-    |> (fn xs => {outcome=NONE, used_facts=xs, run_time_in_msecs=NONE})
+    wthms
+    |> map_index I
+    |> append (map (pair ~1 o pair NONE) (Thm.assume cprop :: prems @ facts))
+    |> smt_solver (SOME run_remote) ctxt'
+    |> distinct (op =) o fst
+    |> map_filter (try (nth xrules))
+    |> (if solver_name_of ctxt = "z3" (* FIXME *) then I else K xrules)
+    |> mk_result NONE
   end
-  handle SMT_Failure.SMT fail => {outcome=SOME fail, used_facts=[],
-    run_time_in_msecs=NONE}
+  handle SMT_Failure.SMT fail => mk_result (SOME fail) []
   (* FIXME: measure runtime *)
 
 
@@ -354,18 +356,18 @@ fun smt_tac' pass_exns ctxt rules =
   THEN' Tactic.rtac @{thm ccontr}
   THEN' SUBPROOF (fn {context=ctxt', prems, ...} =>
     let
-      fun solve irules = snd (smt_solver NONE ctxt' irules)
+      fun solve iwthms = snd (smt_solver NONE ctxt' iwthms)
       val tag = "Solver " ^ C.solver_of ctxt' ^ ": "
       val str_of = prefix tag o SMT_Failure.string_of_failure ctxt'
-      fun safe_solve irules =
-        if pass_exns then SOME (solve irules)
-        else (SOME (solve irules)
+      fun safe_solve iwthms =
+        if pass_exns then SOME (solve iwthms)
+        else (SOME (solve iwthms)
           handle
             SMT_Failure.SMT (fail as SMT_Failure.Counterexample _) =>
               (C.verbose_msg ctxt' str_of fail; NONE)
           | SMT_Failure.SMT fail => (C.trace_msg ctxt' str_of fail; NONE))
     in
-      safe_solve (map (pair ~1) (rules @ prems))
+      safe_solve (map (pair ~1 o pair NONE) (rules @ prems))
       |> (fn SOME thm => Tactic.rtac thm 1 | _ => Tactical.no_tac)
     end) ctxt
 

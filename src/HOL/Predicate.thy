@@ -9,12 +9,18 @@ imports Inductive Relation
 begin
 
 notation
+  bot ("\<bottom>") and
+  top ("\<top>") and
   inf (infixl "\<sqinter>" 70) and
   sup (infixl "\<squnion>" 65) and
   Inf ("\<Sqinter>_" [900] 900) and
-  Sup ("\<Squnion>_" [900] 900) and
-  top ("\<top>") and
-  bot ("\<bottom>")
+  Sup ("\<Squnion>_" [900] 900)
+
+syntax (xsymbols)
+  "_INF1"     :: "pttrns \<Rightarrow> 'b \<Rightarrow> 'b"           ("(3\<Sqinter>_./ _)" [0, 10] 10)
+  "_INF"      :: "pttrn \<Rightarrow> 'a set \<Rightarrow> 'b \<Rightarrow> 'b"  ("(3\<Sqinter>_\<in>_./ _)" [0, 0, 10] 10)
+  "_SUP1"     :: "pttrns \<Rightarrow> 'b \<Rightarrow> 'b"           ("(3\<Squnion>_./ _)" [0, 10] 10)
+  "_SUP"      :: "pttrn \<Rightarrow> 'a set \<Rightarrow> 'b \<Rightarrow> 'b"  ("(3\<Squnion>_\<in>_./ _)" [0, 0, 10] 10)
 
 
 subsection {* Predicates as (complete) lattices *}
@@ -86,17 +92,11 @@ lemma pred_subset_eq2 [pred_set_conv]: "((\<lambda>x y. (x, y) \<in> R) <= (\<la
 
 subsubsection {* Top and bottom elements *}
 
-lemma top1I [intro!]: "top x"
-  by (simp add: top_fun_eq top_bool_eq)
-
-lemma top2I [intro!]: "top x y"
-  by (simp add: top_fun_eq top_bool_eq)
-
 lemma bot1E [no_atp, elim!]: "bot x \<Longrightarrow> P"
-  by (simp add: bot_fun_eq bot_bool_eq)
+  by (simp add: bot_fun_def bot_bool_def)
 
 lemma bot2E [elim!]: "bot x y \<Longrightarrow> P"
-  by (simp add: bot_fun_eq bot_bool_eq)
+  by (simp add: bot_fun_def bot_bool_def)
 
 lemma bot_empty_eq: "bot = (\<lambda>x. x \<in> {})"
   by (auto simp add: fun_eq_iff)
@@ -104,26 +104,65 @@ lemma bot_empty_eq: "bot = (\<lambda>x. x \<in> {})"
 lemma bot_empty_eq2: "bot = (\<lambda>x y. (x, y) \<in> {})"
   by (auto simp add: fun_eq_iff)
 
+lemma top1I [intro!]: "top x"
+  by (simp add: top_fun_def top_bool_def)
+
+lemma top2I [intro!]: "top x y"
+  by (simp add: top_fun_def top_bool_def)
+
+
+subsubsection {* Binary intersection *}
+
+lemma inf1I [intro!]: "A x ==> B x ==> inf A B x"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf2I [intro!]: "A x y ==> B x y ==> inf A B x y"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf1E [elim!]: "inf A B x ==> (A x ==> B x ==> P) ==> P"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf2E [elim!]: "inf A B x y ==> (A x y ==> B x y ==> P) ==> P"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf1D1: "inf A B x ==> A x"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf2D1: "inf A B x y ==> A x y"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf1D2: "inf A B x ==> B x"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf2D2: "inf A B x y ==> B x y"
+  by (simp add: inf_fun_def inf_bool_def)
+
+lemma inf_Int_eq: "inf (\<lambda>x. x \<in> R) (\<lambda>x. x \<in> S) = (\<lambda>x. x \<in> R \<inter> S)"
+  by (simp add: inf_fun_def inf_bool_def mem_def)
+
+lemma inf_Int_eq2 [pred_set_conv]: "inf (\<lambda>x y. (x, y) \<in> R) (\<lambda>x y. (x, y) \<in> S) = (\<lambda>x y. (x, y) \<in> R \<inter> S)"
+  by (simp add: inf_fun_def inf_bool_def mem_def)
+
 
 subsubsection {* Binary union *}
 
 lemma sup1I1 [elim?]: "A x \<Longrightarrow> sup A B x"
-  by (simp add: sup_fun_eq sup_bool_eq)
+  by (simp add: sup_fun_def sup_bool_def)
 
 lemma sup2I1 [elim?]: "A x y \<Longrightarrow> sup A B x y"
-  by (simp add: sup_fun_eq sup_bool_eq)
+  by (simp add: sup_fun_def sup_bool_def)
 
 lemma sup1I2 [elim?]: "B x \<Longrightarrow> sup A B x"
-  by (simp add: sup_fun_eq sup_bool_eq)
+  by (simp add: sup_fun_def sup_bool_def)
 
 lemma sup2I2 [elim?]: "B x y \<Longrightarrow> sup A B x y"
-  by (simp add: sup_fun_eq sup_bool_eq)
+  by (simp add: sup_fun_def sup_bool_def)
 
 lemma sup1E [elim!]: "sup A B x ==> (A x ==> P) ==> (B x ==> P) ==> P"
-  by (simp add: sup_fun_eq sup_bool_eq) iprover
+  by (simp add: sup_fun_def sup_bool_def) iprover
 
 lemma sup2E [elim!]: "sup A B x y ==> (A x y ==> P) ==> (B x y ==> P) ==> P"
-  by (simp add: sup_fun_eq sup_bool_eq) iprover
+  by (simp add: sup_fun_def sup_bool_def) iprover
 
 text {*
   \medskip Classical introduction rule: no commitment to @{text A} vs
@@ -131,109 +170,76 @@ text {*
 *}
 
 lemma sup1CI [intro!]: "(~ B x ==> A x) ==> sup A B x"
-  by (auto simp add: sup_fun_eq sup_bool_eq)
+  by (auto simp add: sup_fun_def sup_bool_def)
 
 lemma sup2CI [intro!]: "(~ B x y ==> A x y) ==> sup A B x y"
-  by (auto simp add: sup_fun_eq sup_bool_eq)
+  by (auto simp add: sup_fun_def sup_bool_def)
 
 lemma sup_Un_eq: "sup (\<lambda>x. x \<in> R) (\<lambda>x. x \<in> S) = (\<lambda>x. x \<in> R \<union> S)"
-  by (simp add: sup_fun_eq sup_bool_eq mem_def)
+  by (simp add: sup_fun_def sup_bool_def mem_def)
 
 lemma sup_Un_eq2 [pred_set_conv]: "sup (\<lambda>x y. (x, y) \<in> R) (\<lambda>x y. (x, y) \<in> S) = (\<lambda>x y. (x, y) \<in> R \<union> S)"
-  by (simp add: sup_fun_eq sup_bool_eq mem_def)
-
-
-subsubsection {* Binary intersection *}
-
-lemma inf1I [intro!]: "A x ==> B x ==> inf A B x"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf2I [intro!]: "A x y ==> B x y ==> inf A B x y"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf1E [elim!]: "inf A B x ==> (A x ==> B x ==> P) ==> P"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf2E [elim!]: "inf A B x y ==> (A x y ==> B x y ==> P) ==> P"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf1D1: "inf A B x ==> A x"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf2D1: "inf A B x y ==> A x y"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf1D2: "inf A B x ==> B x"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf2D2: "inf A B x y ==> B x y"
-  by (simp add: inf_fun_eq inf_bool_eq)
-
-lemma inf_Int_eq: "inf (\<lambda>x. x \<in> R) (\<lambda>x. x \<in> S) = (\<lambda>x. x \<in> R \<inter> S)"
-  by (simp add: inf_fun_eq inf_bool_eq mem_def)
-
-lemma inf_Int_eq2 [pred_set_conv]: "inf (\<lambda>x y. (x, y) \<in> R) (\<lambda>x y. (x, y) \<in> S) = (\<lambda>x y. (x, y) \<in> R \<inter> S)"
-  by (simp add: inf_fun_eq inf_bool_eq mem_def)
-
-
-subsubsection {* Unions of families *}
-
-lemma SUP1_iff: "(SUP x:A. B x) b = (EX x:A. B x b)"
-  by (simp add: SUPR_def Sup_fun_def Sup_bool_def) blast
-
-lemma SUP2_iff: "(SUP x:A. B x) b c = (EX x:A. B x b c)"
-  by (simp add: SUPR_def Sup_fun_def Sup_bool_def) blast
-
-lemma SUP1_I [intro]: "a : A ==> B a b ==> (SUP x:A. B x) b"
-  by (auto simp add: SUP1_iff)
-
-lemma SUP2_I [intro]: "a : A ==> B a b c ==> (SUP x:A. B x) b c"
-  by (auto simp add: SUP2_iff)
-
-lemma SUP1_E [elim!]: "(SUP x:A. B x) b ==> (!!x. x : A ==> B x b ==> R) ==> R"
-  by (auto simp add: SUP1_iff)
-
-lemma SUP2_E [elim!]: "(SUP x:A. B x) b c ==> (!!x. x : A ==> B x b c ==> R) ==> R"
-  by (auto simp add: SUP2_iff)
-
-lemma SUP_UN_eq: "(SUP i. (\<lambda>x. x \<in> r i)) = (\<lambda>x. x \<in> (UN i. r i))"
-  by (simp add: SUP1_iff fun_eq_iff)
-
-lemma SUP_UN_eq2: "(SUP i. (\<lambda>x y. (x, y) \<in> r i)) = (\<lambda>x y. (x, y) \<in> (UN i. r i))"
-  by (simp add: SUP2_iff fun_eq_iff)
+  by (simp add: sup_fun_def sup_bool_def mem_def)
 
 
 subsubsection {* Intersections of families *}
 
 lemma INF1_iff: "(INF x:A. B x) b = (ALL x:A. B x b)"
-  by (simp add: INFI_def Inf_fun_def Inf_bool_def) blast
+  by (simp add: INFI_apply)
 
 lemma INF2_iff: "(INF x:A. B x) b c = (ALL x:A. B x b c)"
-  by (simp add: INFI_def Inf_fun_def Inf_bool_def) blast
+  by (simp add: INFI_apply)
 
 lemma INF1_I [intro!]: "(!!x. x : A ==> B x b) ==> (INF x:A. B x) b"
-  by (auto simp add: INF1_iff)
+  by (auto simp add: INFI_apply)
 
 lemma INF2_I [intro!]: "(!!x. x : A ==> B x b c) ==> (INF x:A. B x) b c"
-  by (auto simp add: INF2_iff)
+  by (auto simp add: INFI_apply)
 
 lemma INF1_D [elim]: "(INF x:A. B x) b ==> a : A ==> B a b"
-  by (auto simp add: INF1_iff)
+  by (auto simp add: INFI_apply)
 
 lemma INF2_D [elim]: "(INF x:A. B x) b c ==> a : A ==> B a b c"
-  by (auto simp add: INF2_iff)
+  by (auto simp add: INFI_apply)
 
 lemma INF1_E [elim]: "(INF x:A. B x) b ==> (B a b ==> R) ==> (a ~: A ==> R) ==> R"
-  by (auto simp add: INF1_iff)
+  by (auto simp add: INFI_apply)
 
 lemma INF2_E [elim]: "(INF x:A. B x) b c ==> (B a b c ==> R) ==> (a ~: A ==> R) ==> R"
-  by (auto simp add: INF2_iff)
+  by (auto simp add: INFI_apply)
 
 lemma INF_INT_eq: "(INF i. (\<lambda>x. x \<in> r i)) = (\<lambda>x. x \<in> (INT i. r i))"
-  by (simp add: INF1_iff fun_eq_iff)
+  by (simp add: INFI_apply fun_eq_iff)
 
 lemma INF_INT_eq2: "(INF i. (\<lambda>x y. (x, y) \<in> r i)) = (\<lambda>x y. (x, y) \<in> (INT i. r i))"
-  by (simp add: INF2_iff fun_eq_iff)
+  by (simp add: INFI_apply fun_eq_iff)
+
+
+subsubsection {* Unions of families *}
+
+lemma SUP1_iff: "(SUP x:A. B x) b = (EX x:A. B x b)"
+  by (simp add: SUPR_apply)
+
+lemma SUP2_iff: "(SUP x:A. B x) b c = (EX x:A. B x b c)"
+  by (simp add: SUPR_apply)
+
+lemma SUP1_I [intro]: "a : A ==> B a b ==> (SUP x:A. B x) b"
+  by (auto simp add: SUPR_apply)
+
+lemma SUP2_I [intro]: "a : A ==> B a b c ==> (SUP x:A. B x) b c"
+  by (auto simp add: SUPR_apply)
+
+lemma SUP1_E [elim!]: "(SUP x:A. B x) b ==> (!!x. x : A ==> B x b ==> R) ==> R"
+  by (auto simp add: SUPR_apply)
+
+lemma SUP2_E [elim!]: "(SUP x:A. B x) b c ==> (!!x. x : A ==> B x b c ==> R) ==> R"
+  by (auto simp add: SUPR_apply)
+
+lemma SUP_UN_eq: "(SUP i. (\<lambda>x. x \<in> r i)) = (\<lambda>x. x \<in> (UN i. r i))"
+  by (simp add: SUPR_apply fun_eq_iff)
+
+lemma SUP_UN_eq2: "(SUP i. (\<lambda>x y. (x, y) \<in> r i)) = (\<lambda>x y. (x, y) \<in> (UN i. r i))"
+  by (simp add: SUPR_apply fun_eq_iff)
 
 
 subsection {* Predicates as relations *}
@@ -286,11 +292,11 @@ lemma converse_pred_comp: "(r OO s)^--1 = s^--1 OO r^--1"
     elim: pred_compE dest: conversepD)
 
 lemma converse_meet: "(inf r s)^--1 = inf r^--1 s^--1"
-  by (simp add: inf_fun_eq inf_bool_eq)
+  by (simp add: inf_fun_def inf_bool_def)
     (iprover intro: conversepI ext dest: conversepD)
 
 lemma converse_join: "(sup r s)^--1 = sup r^--1 s^--1"
-  by (simp add: sup_fun_eq sup_bool_eq)
+  by (simp add: sup_fun_def sup_bool_def)
     (iprover intro: conversepI ext dest: conversepD)
 
 lemma conversep_noteq [simp]: "(op ~=)^--1 = op ~="
@@ -493,8 +499,7 @@ lemma eval_minus [simp]:
   by (simp add: minus_pred_def)
 
 instance proof
-qed (auto intro!: pred_eqI simp add: less_eq_pred_def less_pred_def
-  fun_Compl_def fun_diff_def bool_Compl_def bool_diff_def)
+qed (auto intro!: pred_eqI simp add: less_eq_pred_def less_pred_def uminus_apply minus_apply)
 
 end
 
@@ -514,10 +519,10 @@ lemma eval_single [simp]:
   by (simp add: single_def)
 
 definition bind :: "'a pred \<Rightarrow> ('a \<Rightarrow> 'b pred) \<Rightarrow> 'b pred" (infixl "\<guillemotright>=" 70) where
-  "P \<guillemotright>= f = (SUPR {x. Predicate.eval P x} f)"
+  "P \<guillemotright>= f = (SUPR {x. eval P x} f)"
 
 lemma eval_bind [simp]:
-  "eval (P \<guillemotright>= f) = Predicate.eval (SUPR {x. Predicate.eval P x} f)"
+  "eval (P \<guillemotright>= f) = eval (SUPR {x. eval P x} f)"
   by (simp add: bind_def)
 
 lemma bind_bind:
@@ -822,7 +827,7 @@ lemma single_code [code]:
   "single x = Seq (\<lambda>u. Insert x \<bottom>)"
   unfolding Seq_def by simp
 
-primrec "apply" :: "('a \<Rightarrow> 'b Predicate.pred) \<Rightarrow> 'a seq \<Rightarrow> 'b seq" where
+primrec "apply" :: "('a \<Rightarrow> 'b pred) \<Rightarrow> 'a seq \<Rightarrow> 'b seq" where
     "apply f Empty = Empty"
   | "apply f (Insert x P) = Join (f x) (Join (P \<guillemotright>= f) Empty)"
   | "apply f (Join P xq) = Join (P \<guillemotright>= f) (apply f xq)"
@@ -972,7 +977,7 @@ where
   "the A = (THE x. eval A x)"
 
 lemma the_eqI:
-  "(THE x. Predicate.eval P x) = x \<Longrightarrow> Predicate.the P = x"
+  "(THE x. eval P x) = x \<Longrightarrow> the P = x"
   by (simp add: the_def)
 
 lemma the_eq [code]: "the A = singleton (\<lambda>x. not_unique A) A"
@@ -1022,13 +1027,19 @@ end;
 *}
 
 no_notation
+  bot ("\<bottom>") and
+  top ("\<top>") and
   inf (infixl "\<sqinter>" 70) and
   sup (infixl "\<squnion>" 65) and
   Inf ("\<Sqinter>_" [900] 900) and
   Sup ("\<Squnion>_" [900] 900) and
-  top ("\<top>") and
-  bot ("\<bottom>") and
   bind (infixl "\<guillemotright>=" 70)
+
+no_syntax (xsymbols)
+  "_INF1"     :: "pttrns \<Rightarrow> 'b \<Rightarrow> 'b"           ("(3\<Sqinter>_./ _)" [0, 10] 10)
+  "_INF"      :: "pttrn \<Rightarrow> 'a set \<Rightarrow> 'b \<Rightarrow> 'b"  ("(3\<Sqinter>_\<in>_./ _)" [0, 0, 10] 10)
+  "_SUP1"     :: "pttrns \<Rightarrow> 'b \<Rightarrow> 'b"           ("(3\<Squnion>_./ _)" [0, 10] 10)
+  "_SUP"      :: "pttrn \<Rightarrow> 'a set \<Rightarrow> 'b \<Rightarrow> 'b"  ("(3\<Squnion>_\<in>_./ _)" [0, 0, 10] 10)
 
 hide_type (open) pred seq
 hide_const (open) Pred eval single bind is_empty singleton if_pred not_pred holds

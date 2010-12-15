@@ -77,28 +77,33 @@ val do_methods = map do_named_method named_methods
 fun time_string (s, ms) = s ^ ": " ^ string_of_int ms ^ " ms"
 
 fun do_try auto timeout_opt st =
-  case do_methods |> Par_List.map (fn f => f auto timeout_opt st)
-                  |> map_filter I |> sort (int_ord o pairself snd) of
-    [] => (if auto then () else writeln "No proof found."; (false, st))
-  | xs as (s, _) :: _ =>
-    let
-      val xs = xs |> map swap |> AList.coalesce (op =)
-                  |> map (swap o apsnd commas)
-      val message =
-        (if auto then "Auto Try found a proof" else "Try this command") ^ ": " ^
-        Markup.markup Markup.sendback
-            ((if nprems_of (#goal (Proof.goal st)) = 1 then "by" else "apply") ^
-             " " ^ s) ^
-        "\n(" ^ space_implode "; " (map time_string xs) ^ ").\n"
-    in
-      (true, st |> (if auto then
-                      Proof.goal_message
-                          (fn () => Pretty.chunks [Pretty.str "",
-                                    Pretty.markup Markup.hilite
-                                                  [Pretty.str message]])
-                    else
-                      tap (fn _ => Output.urgent_message message)))
-    end
+  let
+    val st = st |> Proof.map_context (Config.put Metis_Tactics.verbose false)
+  in
+    case do_methods |> Par_List.map (fn f => f auto timeout_opt st)
+                    |> map_filter I |> sort (int_ord o pairself snd) of
+      [] => (if auto then () else writeln "No proof found."; (false, st))
+    | xs as (s, _) :: _ =>
+      let
+        val xs = xs |> map swap |> AList.coalesce (op =)
+                    |> map (swap o apsnd commas)
+        val message =
+          (if auto then "Auto Try found a proof" else "Try this command") ^
+          ": " ^
+          Markup.markup Markup.sendback
+              ((if nprems_of (#goal (Proof.goal st)) = 1 then "by"
+                else "apply") ^ " " ^ s) ^
+          "\n(" ^ space_implode "; " (map time_string xs) ^ ").\n"
+      in
+        (true, st |> (if auto then
+                        Proof.goal_message
+                            (fn () => Pretty.chunks [Pretty.str "",
+                                      Pretty.markup Markup.hilite
+                                                    [Pretty.str message]])
+                      else
+                        tap (fn _ => Output.urgent_message message)))
+      end
+  end
 
 val invoke_try = fst oo do_try false
 
@@ -110,8 +115,8 @@ val _ =
       (Scan.succeed (Toplevel.keep (K () o do_try false (SOME default_timeout)
                                     o Toplevel.proof_of)))
 
-fun auto_try st = if not (!auto) then (false, st) else do_try true NONE st
+val auto_try = do_try true NONE
 
-val setup = Auto_Tools.register_tool (tryN, auto_try)
+val setup = Auto_Tools.register_tool (auto, auto_try)
 
 end;

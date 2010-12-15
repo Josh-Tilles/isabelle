@@ -4,7 +4,7 @@
     Copyright   1991  University of Cambridge
 *)
 
-header {* Set Theory examples: Cantor's Theorem, Schröder-Bernstein Theorem, etc. *}
+header {* Set Theory examples: Cantor's Theorem, SchrÃ¶der-Bernstein Theorem, etc. *}
 
 theory set imports Main begin
 
@@ -73,7 +73,7 @@ schematic_lemma "?S \<notin> range (f :: 'a \<Rightarrow> 'a set)"
   by best
 
 
-subsection {* The Schröder-Berstein Theorem *}
+subsection {* The SchrÃ¶der-Berstein Theorem *}
 
 lemma disj_lemma: "- (f ` X) = g ` (-X) \<Longrightarrow> f a = g b \<Longrightarrow> a \<in> X \<Longrightarrow> b \<in> X"
   by blast
@@ -205,7 +205,7 @@ text {* The paper has no Example 10! *}
 lemma "(\<forall>A. 0 \<in> A \<and> (\<forall>x \<in> A. Suc x \<in> A) \<longrightarrow> n \<in> A) \<and>
   P 0 \<and> (\<forall>x. P x \<longrightarrow> P (Suc x)) \<longrightarrow> P n"
   -- {* Example 11: needs a hint. *}
-by(metis Nat.induct)
+by(metis nat.induct)
 
 lemma
   "(\<forall>A. (0, 0) \<in> A \<and> (\<forall>x y. (x, y) \<in> A \<longrightarrow> (Suc x, Suc y) \<in> A) \<longrightarrow> (n, m) \<in> A)

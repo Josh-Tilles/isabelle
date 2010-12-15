@@ -34,7 +34,7 @@ sig
     bool -> int -> (string * string) list -> (failure * string) list -> string
     -> string * failure option
   val is_same_step : step_name * step_name -> bool
-  val atp_proof_from_tstplike_string : string -> string proof
+  val atp_proof_from_tstplike_string : bool -> string -> string proof
   val map_term_names_in_atp_proof :
     (string -> string) -> string proof -> string proof
   val nasty_atp_proof : string Symtab.table -> string proof -> string proof
@@ -109,7 +109,8 @@ fun string_for_failure prover Unprovable =
   | string_for_failure prover InternalError =
     "An internal " ^ prover ^ " error occurred."
   | string_for_failure prover UnknownError =
-    "An unknown " ^ prover ^ " error occurred."
+    (* "An" is correct for "ATP" and "SMT". *)
+    "An " ^ prover ^ " error occurred."
 
 fun extract_delimited (begin_delim, end_delim) output =
   output |> first_field begin_delim |> the |> snd
@@ -279,9 +280,14 @@ val parse_tstp_line =
 
 (**** PARSING OF VAMPIRE OUTPUT ****)
 
+val parse_vampire_braced_stuff =
+  $$ "{" -- scan_general_id -- $$ "}"
+  -- Scan.option ($$ "(" |-- parse_vampire_detritus --| $$ ")")
+
 (* Syntax: <num>. <formula> <annotation> *)
 val parse_vampire_line =
-  scan_general_id --| $$ "." -- parse_formula -- parse_annotation true
+  scan_general_id --| $$ "." -- parse_formula
+    --| Scan.option parse_vampire_braced_stuff -- parse_annotation true
   >> (fn ((num, phi), deps) =>
          Inference ((num, NONE), phi, map (rpair NONE) deps))
 
@@ -336,11 +342,11 @@ fun clean_up_dependencies _ [] = []
     Inference (name, u, map_filter (clean_up_dependency seen) deps) ::
     clean_up_dependencies (name :: seen) steps
 
-val atp_proof_from_tstplike_string =
+fun atp_proof_from_tstplike_string clean =
   suffix "$" (* the $ sign acts as a sentinel (FIXME: needed?) *)
   #> parse_proof
-  #> sort (step_name_ord o pairself step_name)
-  #> clean_up_dependencies []
+  #> clean ? (sort (step_name_ord o pairself step_name)
+              #> clean_up_dependencies [])
 
 fun map_term_names_in_term f (ATerm (s, ts)) =
   ATerm (f s, map (map_term_names_in_term f) ts)

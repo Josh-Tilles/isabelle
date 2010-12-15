@@ -147,7 +147,6 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   $(SRC)/Tools/solve_direct.ML \
   $(SRC)/Tools/value.ML \
   HOL.thy \
-  Tools/functorial_mappers.ML \
   Tools/hologic.ML \
   Tools/recfun_codegen.ML \
   Tools/simpdata.ML
@@ -156,6 +155,14 @@ $(OUT)/HOL-Base: base.ML $(BASE_DEPENDENCIES)
 	@$(ISABELLE_TOOL) usedir -b -f base.ML -d false -g false $(OUT)/Pure HOL-Base
 
 PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES) \
+  $(SRC)/Provers/Arith/cancel_div_mod.ML \
+  $(SRC)/Provers/Arith/cancel_sums.ML \
+  $(SRC)/Provers/Arith/fast_lin_arith.ML \
+  $(SRC)/Provers/order.ML \
+  $(SRC)/Provers/trancl.ML \
+  $(SRC)/Tools/Metis/metis.ML \
+  $(SRC)/Tools/rat.ML \
+  $(SRC)/Tools/subtyping.ML \
   Complete_Lattice.thy \
   Complete_Partial_Order.thy \
   Datatype.thy \
@@ -182,10 +189,7 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES) \
   SAT.thy \
   Set.thy \
   Sum_Type.thy \
-  Tools/abel_cancel.ML \
-  Tools/arith_data.ML \
-  Tools/async_manager.ML \
-  Tools/cnf_funcs.ML \
+  Tools/Datatype/datatype.ML \
   Tools/Datatype/datatype_abs_proofs.ML \
   Tools/Datatype/datatype_aux.ML \
   Tools/Datatype/datatype_case.ML \
@@ -193,14 +197,12 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES) \
   Tools/Datatype/datatype_data.ML \
   Tools/Datatype/datatype_prop.ML \
   Tools/Datatype/datatype_realizer.ML \
-  Tools/Datatype/datatype.ML \
-  Tools/dseq.ML \
   Tools/Function/context_tree.ML \
+  Tools/Function/fun.ML \
+  Tools/Function/function.ML \
   Tools/Function/function_common.ML \
   Tools/Function/function_core.ML \
   Tools/Function/function_lib.ML \
-  Tools/Function/function.ML \
-  Tools/Function/fun.ML \
   Tools/Function/induction_schema.ML \
   Tools/Function/lexicographic_order.ML \
   Tools/Function/measure_functions.ML \
@@ -214,17 +216,21 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES) \
   Tools/Function/size.ML \
   Tools/Function/sum_tree.ML \
   Tools/Function/termination.ML \
-  Tools/inductive_codegen.ML \
-  Tools/inductive.ML \
-  Tools/inductive_realizer.ML \
-  Tools/inductive_set.ML \
-  Tools/lin_arith.ML \
   Tools/Meson/meson.ML \
   Tools/Meson/meson_clausify.ML \
   Tools/Meson/meson_tactic.ML \
   Tools/Metis/metis_reconstruct.ML \
-  Tools/Metis/metis_translate.ML \
   Tools/Metis/metis_tactics.ML \
+  Tools/Metis/metis_translate.ML \
+  Tools/abel_cancel.ML \
+  Tools/arith_data.ML \
+  Tools/cnf_funcs.ML \
+  Tools/dseq.ML \
+  Tools/inductive.ML \
+  Tools/inductive_codegen.ML \
+  Tools/inductive_realizer.ML \
+  Tools/inductive_set.ML \
+  Tools/lin_arith.ML \
   Tools/nat_arith.ML \
   Tools/primrec.ML \
   Tools/prop_logic.ML \
@@ -235,16 +241,10 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES) \
   Tools/split_rule.ML \
   Tools/try.ML \
   Tools/typedef.ML \
+  Tools/type_lifting.ML \
   Transitive_Closure.thy \
   Typedef.thy \
-  Wellfounded.thy \
-  $(SRC)/Provers/Arith/cancel_div_mod.ML \
-  $(SRC)/Provers/Arith/cancel_sums.ML \
-  $(SRC)/Provers/Arith/fast_lin_arith.ML \
-  $(SRC)/Provers/order.ML \
-  $(SRC)/Provers/trancl.ML \
-  $(SRC)/Tools/Metis/metis.ML \
-  $(SRC)/Tools/rat.ML
+  Wellfounded.thy
 
 $(OUT)/HOL-Plain: plain.ML $(PLAIN_DEPENDENCIES)
 	@$(ISABELLE_TOOL) usedir -b -f plain.ML -g true $(OUT)/Pure HOL-Plain
@@ -343,12 +343,14 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Tools/recdef.ML \
   Tools/record.ML \
   Tools/semiring_normalizer.ML \
-  Tools/Sledgehammer/sledgehammer.ML \
+  Tools/Sledgehammer/async_manager.ML \
+  Tools/Sledgehammer/sledgehammer_atp_reconstruct.ML \
+  Tools/Sledgehammer/sledgehammer_atp_translate.ML \
   Tools/Sledgehammer/sledgehammer_filter.ML \
   Tools/Sledgehammer/sledgehammer_minimize.ML \
   Tools/Sledgehammer/sledgehammer_isar.ML \
-  Tools/Sledgehammer/sledgehammer_atp_reconstruct.ML \
-  Tools/Sledgehammer/sledgehammer_atp_translate.ML \
+  Tools/Sledgehammer/sledgehammer_provers.ML \
+  Tools/Sledgehammer/sledgehammer_run.ML \
   Tools/Sledgehammer/sledgehammer_util.ML \
   Tools/smallvalue_generators.ML \
   Tools/SMT/smtlib_interface.ML \
@@ -385,7 +387,6 @@ $(OUT)/HOL-Main: main.ML $(MAIN_DEPENDENCIES)
 	@$(ISABELLE_TOOL) usedir -b -f main.ML -g true $(OUT)/Pure HOL-Main
 
 HOL_DEPENDENCIES = $(MAIN_DEPENDENCIES) \
-  $(SRC)/Tools/subtyping.ML \
   Archimedean_Field.thy \
   Complex.thy \
   Complex_Main.thy \
@@ -680,11 +681,11 @@ $(LOG)/HOL-Library-Codegenerator_Test.gz: $(OUT)/HOL-Library		\
 
 HOL-Metis_Examples: HOL $(LOG)/HOL-Metis_Examples.gz
 
-$(LOG)/HOL-Metis_Examples.gz: $(OUT)/HOL Metis_Examples/ROOT.ML		\
-  Metis_Examples/Abstraction.thy Metis_Examples/BigO.thy		\
-  Metis_Examples/BT.thy Metis_Examples/Message.thy			\
-  Metis_Examples/Tarski.thy Metis_Examples/TransClosure.thy		\
-  Metis_Examples/set.thy
+$(LOG)/HOL-Metis_Examples.gz: $(OUT)/HOL Metis_Examples/ROOT.ML \
+  Metis_Examples/Abstraction.thy Metis_Examples/BigO.thy \
+  Metis_Examples/BT.thy Metis_Examples/HO_Reas.thy \
+  Metis_Examples/Message.thy Metis_Examples/Tarski.thy \
+  Metis_Examples/TransClosure.thy Metis_Examples/set.thy
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Metis_Examples
 
 
@@ -1156,7 +1157,7 @@ $(OUT)/HOL-Multivariate_Analysis: $(OUT)/HOL				\
   Multivariate_Analysis/Finite_Cartesian_Product.thy			\
   Multivariate_Analysis/Integration.certs				\
   Multivariate_Analysis/Integration.thy					\
-  Multivariate_Analysis/Gauge_Measure.thy					\
+  Multivariate_Analysis/Gauge_Measure.thy				\
   Multivariate_Analysis/L2_Norm.thy					\
   Multivariate_Analysis/Multivariate_Analysis.thy			\
   Multivariate_Analysis/Operator_Norm.thy				\
@@ -1166,8 +1167,8 @@ $(OUT)/HOL-Multivariate_Analysis: $(OUT)/HOL				\
   Multivariate_Analysis/Topology_Euclidean_Space.thy			\
   Multivariate_Analysis/document/root.tex				\
   Multivariate_Analysis/normarith.ML Library/Glbs.thy			\
-  Library/Inner_Product.thy Library/Numeral_Type.thy			\
-  Library/Convex.thy Library/FrechetDeriv.thy				\
+  Library/Indicator_Function.thy Library/Inner_Product.thy		\
+  Library/Numeral_Type.thy Library/Convex.thy Library/FrechetDeriv.thy	\
   Library/Product_Vector.thy Library/Product_plus.thy
 	@cd Multivariate_Analysis; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL HOL-Multivariate_Analysis
 
@@ -1176,16 +1177,19 @@ $(OUT)/HOL-Multivariate_Analysis: $(OUT)/HOL				\
 
 HOL-Probability: HOL-Multivariate_Analysis $(OUT)/HOL-Probability
 
-$(OUT)/HOL-Probability: $(OUT)/HOL-Multivariate_Analysis Probability/ROOT.ML	\
-  Probability/Probability.thy Probability/Sigma_Algebra.thy		\
-  Probability/Caratheodory.thy		\
-  Probability/Borel.thy Probability/Measure.thy				\
-  Probability/Lebesgue_Integration.thy Probability/Lebesgue_Measure.thy		\
-  Probability/Positive_Infinite_Real.thy Probability/Product_Measure.thy	\
-  Probability/Probability_Space.thy Probability/Information.thy		\
-  Probability/ex/Dining_Cryptographers.thy Library/FuncSet.thy		\
-  Probability/Lebesgue_Measure.thy \
-  Library/Nat_Bijection.thy Library/Countable.thy
+$(OUT)/HOL-Probability: $(OUT)/HOL-Multivariate_Analysis		\
+  Probability/Borel_Space.thy Probability/Caratheodory.thy		\
+  Probability/Complete_Measure.thy					\
+  Probability/ex/Dining_Cryptographers.thy				\
+  Probability/ex/Koepf_Duermuth_Countermeasure.thy			\
+  Probability/Information.thy Probability/Lebesgue_Integration.thy	\
+  Probability/Lebesgue_Measure.thy Probability/Measure.thy		\
+  Probability/Positive_Extended_Real.thy				\
+  Probability/Probability_Space.thy Probability/Probability.thy		\
+  Probability/Product_Measure.thy Probability/Radon_Nikodym.thy		\
+  Probability/ROOT.ML Probability/Sigma_Algebra.thy			\
+  Library/Countable.thy Library/FuncSet.thy				\
+  Library/Nat_Bijection.thy
 	@cd Probability; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL-Multivariate_Analysis HOL-Probability
 
 
@@ -1251,7 +1255,7 @@ $(OUT)/HOL-Word: $(OUT)/HOL Word/ROOT.ML Library/Boolean_Algebra.thy	\
   Word/Type_Length.thy Word/Bit_Representation.thy Word/Bit_Int.thy	\
   Word/Bool_List_Representation.thy Word/Bit_Operations.thy		\
   Word/Word.thy Word/document/root.tex					\
-  Word/document/root.bib Tools/SMT/smt_word.ML
+  Word/document/root.bib Word/Tools/smt_word.ML
 	@cd Word; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL HOL-Word
 
 
@@ -1467,7 +1471,14 @@ HOLCF-Library: HOLCF $(LOG)/HOLCF-Library.gz
 
 $(LOG)/HOLCF-Library.gz: $(OUT)/HOLCF \
   HOLCF/Library/Defl_Bifinite.thy \
+  HOLCF/Library/Bool_Discrete.thy \
+  HOLCF/Library/Char_Discrete.thy \
+  HOLCF/Library/HOL_Cpo.thy \
+  HOLCF/Library/Int_Discrete.thy \
   HOLCF/Library/List_Cpo.thy \
+  HOLCF/Library/List_Predomain.thy \
+  HOLCF/Library/Nat_Discrete.thy \
+  HOLCF/Library/Option_Cpo.thy \
   HOLCF/Library/Stream.thy \
   HOLCF/Library/Sum_Cpo.thy \
   HOLCF/Library/HOLCF_Library.thy \

@@ -1109,6 +1109,15 @@ defs (overloaded)
   real_of_nat_def [code_unfold]: "real == real_of_nat"
   real_of_int_def [code_unfold]: "real == real_of_int"
 
+declare [[coercion_enabled]]
+declare [[coercion "real::nat\<Rightarrow>real"]]
+declare [[coercion "real::int\<Rightarrow>real"]]
+declare [[coercion "int"]]
+
+declare [[coercion_map map]]
+declare [[coercion_map "% f g h . g o h o f"]]
+declare [[coercion_map "% f g (x,y) . (f x, g y)"]]
+
 lemma real_eq_of_nat: "real = of_nat"
   unfolding real_of_nat_def ..
 

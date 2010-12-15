@@ -92,7 +92,7 @@ fun obtain_serializer thy some_target = Code_Target.produce_code_for thy
 fun base_evaluator cookie serializer (naming : Code_Thingol.naming) thy program ((vs, ty), t) deps args =
   let
     val ctxt = ProofContext.init_global thy;
-    val _ = if Code_Thingol.contains_dictvar t then
+    val _ = if Code_Thingol.contains_dict_var t then
       error "Term to be evaluated contains free dictionaries" else ();
     val v' = Name.variant (map fst vs) "a";
     val vs' = (v', []) :: vs
@@ -115,6 +115,9 @@ fun partiality_as_none e = SOME (Exn.release e)
 fun dynamic_value_exn cookie thy some_target postproc t args =
   let
     val _ = reject_vars thy t;
+    val _ = if ! trace
+      then tracing ("Evaluation of term " ^ quote (Syntax.string_of_term_global thy t))
+      else ()
     fun evaluator naming program ((_, vs_ty), t) deps =
       base_evaluator cookie (obtain_serializer thy some_target) naming thy program (vs_ty, t) deps args;
   in Code_Thingol.dynamic_eval_value thy (Exn.map_result o postproc) evaluator t end;

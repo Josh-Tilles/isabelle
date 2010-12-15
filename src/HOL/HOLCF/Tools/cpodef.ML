@@ -9,10 +9,10 @@ signature CPODEF =
 sig
   type cpo_info =
     { below_def: thm, adm: thm, cont_Rep: thm, cont_Abs: thm,
-      is_lub: thm, lub: thm, compact: thm }
+      lub: thm, compact: thm }
   type pcpo_info =
-    { Rep_strict: thm, Abs_strict: thm, Rep_bottom_iff: thm, Abs_bottom_iff: thm,
-      Rep_defined: thm, Abs_defined: thm }
+    { Rep_strict: thm, Abs_strict: thm,
+      Rep_bottom_iff: thm, Abs_bottom_iff: thm }
 
   val add_podef: bool -> binding option -> binding * (string * sort) list * mixfix ->
     term -> (binding * binding) option -> tactic -> theory ->
@@ -45,11 +45,11 @@ struct
 
 type cpo_info =
   { below_def: thm, adm: thm, cont_Rep: thm, cont_Abs: thm,
-    is_lub: thm, lub: thm, compact: thm }
+    lub: thm, compact: thm }
 
 type pcpo_info =
-  { Rep_strict: thm, Abs_strict: thm, Rep_bottom_iff: thm, Abs_bottom_iff: thm,
-    Rep_defined: thm, Abs_defined: thm }
+  { Rep_strict: thm, Abs_strict: thm,
+    Rep_bottom_iff: thm, Abs_bottom_iff: thm }
 
 (* building terms *)
 
@@ -94,7 +94,6 @@ fun prove_cpo
     fun make thm = Drule.zero_var_indexes (thm OF cpo_thms')
     val cont_Rep = make @{thm typedef_cont_Rep}
     val cont_Abs = make @{thm typedef_cont_Abs}
-    val is_lub = make @{thm typedef_is_lub}
     val lub = make @{thm typedef_lub}
     val compact = make @{thm typedef_compact}
     val (_, thy) =
@@ -104,13 +103,12 @@ fun prove_cpo
         ([((Binding.prefix_name "adm_"      name, admissible'), []),
           ((Binding.prefix_name "cont_" Rep_name, cont_Rep   ), []),
           ((Binding.prefix_name "cont_" Abs_name, cont_Abs   ), []),
-          ((Binding.prefix_name "is_lub_"   name, is_lub     ), []),
           ((Binding.prefix_name "lub_"      name, lub        ), []),
           ((Binding.prefix_name "compact_"  name, compact    ), [])])
       ||> Sign.parent_path
     val cpo_info : cpo_info =
       { below_def = below_def, adm = admissible', cont_Rep = cont_Rep,
-        cont_Abs = cont_Abs, is_lub = is_lub, lub = lub, compact = compact }
+        cont_Abs = cont_Abs, lub = lub, compact = compact }
   in
     (cpo_info, thy)
   end
@@ -138,8 +136,6 @@ fun prove_pcpo
     val Abs_strict = make @{thm typedef_Abs_strict}
     val Rep_bottom_iff = make @{thm typedef_Rep_bottom_iff}
     val Abs_bottom_iff = make @{thm typedef_Abs_bottom_iff}
-    val Rep_defined = make @{thm typedef_Rep_defined}
-    val Abs_defined = make @{thm typedef_Abs_defined}
     val (_, thy) =
       thy
       |> Sign.add_path (Binding.name_of name)
@@ -147,14 +143,11 @@ fun prove_pcpo
         ([((Binding.suffix_name "_strict"     Rep_name, Rep_strict), []),
           ((Binding.suffix_name "_strict"     Abs_name, Abs_strict), []),
           ((Binding.suffix_name "_bottom_iff" Rep_name, Rep_bottom_iff), []),
-          ((Binding.suffix_name "_bottom_iff" Abs_name, Abs_bottom_iff), []),
-          ((Binding.suffix_name "_defined"    Rep_name, Rep_defined), []),
-          ((Binding.suffix_name "_defined"    Abs_name, Abs_defined), [])])
+          ((Binding.suffix_name "_bottom_iff" Abs_name, Abs_bottom_iff), [])])
       ||> Sign.parent_path
     val pcpo_info =
       { Rep_strict = Rep_strict, Abs_strict = Abs_strict,
-        Rep_bottom_iff = Rep_bottom_iff, Abs_bottom_iff = Abs_bottom_iff,
-        Rep_defined = Rep_defined, Abs_defined = Abs_defined }
+        Rep_bottom_iff = Rep_bottom_iff, Abs_bottom_iff = Abs_bottom_iff }
   in
     (pcpo_info, thy)
   end
@@ -193,7 +186,7 @@ fun prepare prep_term name (tname, raw_args, mx) raw_set opt_morphs thy =
 fun add_podef def opt_name typ set opt_morphs tac thy =
   let
     val name = the_default (#1 typ) opt_name
-    val ((full_tname, info as ({Rep_name, ...}, {type_definition, set_def, ...})), thy2) = thy
+    val ((full_tname, info as ({Rep_name, ...}, {type_definition, set_def, ...})), thy) = thy
       |> Typedef.add_typedef_global def opt_name typ set opt_morphs tac
     val oldT = #rep_type (#1 info)
     val newT = #abs_type (#1 info)
@@ -202,18 +195,16 @@ fun add_podef def opt_name typ set opt_morphs tac thy =
     val RepC = Const (Rep_name, newT --> oldT)
     val below_eqn = Logic.mk_equals (below_const newT,
       Abs ("x", newT, Abs ("y", newT, below_const oldT $ (RepC $ Bound 1) $ (RepC $ Bound 0))))
-    val lthy3 = thy2
+    val ((_, (_, below_ldef)), lthy) = thy
       |> Class.instantiation ([full_tname], lhs_tfrees, @{sort po})
-    val ((_, (_, below_ldef)), lthy4) = lthy3
       |> Specification.definition (NONE,
           ((Binding.prefix_name "below_" (Binding.suffix_name "_def" name), []), below_eqn))
-    val ctxt_thy = ProofContext.init_global (ProofContext.theory_of lthy4)
-    val below_def = singleton (ProofContext.export lthy4 ctxt_thy) below_ldef
-    val thy5 = lthy4
-      |> Class.prove_instantiation_instance
+    val ctxt_thy = ProofContext.init_global (ProofContext.theory_of lthy)
+    val below_def = singleton (ProofContext.export lthy ctxt_thy) below_ldef
+    val thy = lthy
+      |> Class.prove_instantiation_exit
           (K (Tactic.rtac (@{thm typedef_po} OF [type_definition, below_def]) 1))
-      |> Local_Theory.exit_global
-  in ((info, below_def), thy5) end
+  in ((info, below_def), thy) end
 
 fun prepare_cpodef
       (prep_term: Proof.context -> 'a -> term)
@@ -235,12 +226,12 @@ fun prepare_cpodef
 
     fun cpodef_result nonempty admissible thy =
       let
-        val ((info as (_, {type_definition, set_def, ...}), below_def), thy2) = thy
+        val ((info as (_, {type_definition, set_def, ...}), below_def), thy) = thy
           |> add_podef def (SOME name) typ set opt_morphs (Tactic.rtac nonempty 1)
-        val (cpo_info, thy3) = thy2
+        val (cpo_info, thy) = thy
           |> prove_cpo name newT morphs type_definition set_def below_def admissible
       in
-        ((info, cpo_info), thy3)
+        ((info, cpo_info), thy)
       end
   in
     (goal_nonempty, goal_admissible, cpodef_result)
@@ -270,14 +261,14 @@ fun prepare_pcpodef
     fun pcpodef_result UU_mem admissible thy =
       let
         val tac = Tactic.rtac exI 1 THEN Tactic.rtac UU_mem 1
-        val ((info as (_, {type_definition, set_def, ...}), below_def), thy2) = thy
+        val ((info as (_, {type_definition, set_def, ...}), below_def), thy) = thy
           |> add_podef def (SOME name) typ set opt_morphs tac
-        val (cpo_info, thy3) = thy2
+        val (cpo_info, thy) = thy
           |> prove_cpo name newT morphs type_definition set_def below_def admissible
-        val (pcpo_info, thy4) = thy3
+        val (pcpo_info, thy) = thy
           |> prove_pcpo name newT morphs type_definition set_def below_def UU_mem
       in
-        ((info, cpo_info, pcpo_info), thy4)
+        ((info, cpo_info, pcpo_info), thy)
       end
   in
     (goal_UU_mem, goal_admissible, pcpodef_result)

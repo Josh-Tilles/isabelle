@@ -74,7 +74,9 @@ subsection {* Type definition *}
 
 typedef (open) 'a upper_pd =
   "{S::'a pd_basis set. upper_le.ideal S}"
-by (fast intro: upper_le.ideal_principal)
+by (rule upper_le.ex_ideal)
+
+type_notation (xsymbols) upper_pd ("('(_')\<sharp>)")
 
 instantiation upper_pd :: ("domain") below
 begin
@@ -330,6 +332,13 @@ definition
   upper_bind :: "'a upper_pd \<rightarrow> ('a \<rightarrow> 'b upper_pd) \<rightarrow> 'b upper_pd" where
   "upper_bind = upper_pd.basis_fun upper_bind_basis"
 
+syntax
+  "_upper_bind" :: "[logic, logic, logic] \<Rightarrow> logic"
+    ("(3\<Union>\<sharp>_\<in>_./ _)" [0, 0, 10] 10)
+
+translations
+  "\<Union>\<sharp>x\<in>xs. e" == "CONST upper_bind\<cdot>xs\<cdot>(\<Lambda> x. e)"
+
 lemma upper_bind_principal [simp]:
   "upper_bind\<cdot>(upper_principal t) = upper_bind_basis t"
 unfolding upper_bind_def
@@ -379,6 +388,14 @@ by (simp add: cfun_eq_iff ID_def upper_map_ident)
 lemma upper_map_map:
   "upper_map\<cdot>f\<cdot>(upper_map\<cdot>g\<cdot>xs) = upper_map\<cdot>(\<Lambda> x. f\<cdot>(g\<cdot>x))\<cdot>xs"
 by (induct xs rule: upper_pd_induct, simp_all)
+
+lemma upper_bind_map:
+  "upper_bind\<cdot>(upper_map\<cdot>f\<cdot>xs)\<cdot>g = upper_bind\<cdot>xs\<cdot>(\<Lambda> x. g\<cdot>(f\<cdot>x))"
+by (simp add: upper_map_def upper_bind_bind)
+
+lemma upper_map_bind:
+  "upper_map\<cdot>f\<cdot>(upper_bind\<cdot>xs\<cdot>g) = upper_bind\<cdot>xs\<cdot>(\<Lambda> x. upper_map\<cdot>f\<cdot>(g\<cdot>x))"
+by (simp add: upper_map_def upper_bind_bind)
 
 lemma ep_pair_upper_map: "ep_pair e p \<Longrightarrow> ep_pair (upper_map\<cdot>e) (upper_map\<cdot>p)"
 apply default

@@ -6,7 +6,7 @@ Adds "sledgehammer" and related commands to Isabelle/Isar's outer syntax.
 
 signature SLEDGEHAMMER_ISAR =
 sig
-  type params = Sledgehammer.params
+  type params = Sledgehammer_Provers.params
 
   val auto : bool Unsynchronized.ref
   val provers : string Unsynchronized.ref
@@ -21,8 +21,10 @@ struct
 
 open ATP_Systems
 open Sledgehammer_Util
-open Sledgehammer
+open Sledgehammer_ATP_Translate
+open Sledgehammer_Provers
 open Sledgehammer_Minimize
+open Sledgehammer_Run
 
 val auto = Unsynchronized.ref false
 
@@ -77,6 +79,7 @@ val default_default_params =
    ("debug", "false"),
    ("verbose", "false"),
    ("overlord", "false"),
+   ("type_sys", "smart"),
    ("explicit_apply", "false"),
    ("relevance_thresholds", "0.45 0.85"),
    ("max_relevant", "smart"),
@@ -97,7 +100,7 @@ val negated_alias_params =
    ("no_isar_proof", "isar_proof")]
 
 val params_for_minimize =
-  ["debug", "verbose", "overlord", "full_types", "isar_proof",
+  ["debug", "verbose", "overlord", "type_sys", "full_types", "isar_proof",
    "isar_shrink_factor", "timeout"]
 
 val property_dependent_params = ["provers", "full_types", "timeout"]
@@ -130,39 +133,36 @@ structure Data = Theory_Data(
   val extend = I
   fun merge p : T = AList.merge (op =) (K true) p)
 
-fun remotify_prover_if_available_and_not_already_remote thy name =
+fun remotify_prover_if_available_and_not_already_remote ctxt name =
   if String.isPrefix remote_prefix name then
     SOME name
   else
     let val remote_name = remote_prefix ^ name in
-      if is_prover_available thy remote_name then SOME remote_name else NONE
+      if is_prover_available ctxt remote_name then SOME remote_name else NONE
     end
 
 fun remotify_prover_if_not_installed ctxt name =
-  let val thy = ProofContext.theory_of ctxt in
-    if is_prover_available thy name andalso is_prover_installed ctxt name then
-      SOME name
-    else
-      remotify_prover_if_available_and_not_already_remote thy name
-  end
+  if is_prover_available ctxt name andalso is_prover_installed ctxt name then
+    SOME name
+  else
+    remotify_prover_if_available_and_not_already_remote ctxt name
 
 fun avoid_too_many_local_threads _ _ [] = []
-  | avoid_too_many_local_threads thy 0 provers =
-    map_filter (remotify_prover_if_available_and_not_already_remote thy) provers
-  | avoid_too_many_local_threads thy n (prover :: provers) =
+  | avoid_too_many_local_threads ctxt 0 provers =
+    map_filter (remotify_prover_if_available_and_not_already_remote ctxt)
+               provers
+  | avoid_too_many_local_threads ctxt n (prover :: provers) =
     let val n = if String.isPrefix remote_prefix prover then n else n - 1 in
-      prover :: avoid_too_many_local_threads thy n provers
+      prover :: avoid_too_many_local_threads ctxt n provers
     end
 
 (* The first ATP of the list is used by Auto Sledgehammer. Because of the low
    timeout, it makes sense to put SPASS first. *)
 fun default_provers_param_value ctxt =
-  let val thy = ProofContext.theory_of ctxt in
-    [spassN, eN, vampireN, sine_eN, smtN]
-    |> map_filter (remotify_prover_if_not_installed ctxt)
-    |> avoid_too_many_local_threads thy (Multithreading.max_threads_value ())
-    |> space_implode " "
-  end
+  [spassN, eN, vampireN, sine_eN, SMT_Solver.solver_name_of ctxt]
+  |> map_filter (remotify_prover_if_not_installed ctxt)
+  |> avoid_too_many_local_threads ctxt (Multithreading.max_threads_value ())
+  |> space_implode " "
 
 val set_default_raw_param = Data.map o AList.update (op =) o unalias_raw_param
 fun default_raw_params ctxt =
@@ -178,6 +178,9 @@ fun default_raw_params ctxt =
                             else string_of_int timeout]
                          end)]
   end
+
+val smart_full_type_sys = Tags true
+val smart_partial_type_sys = Const_Args
 
 val infinity_time_in_secs = 60 * 60 * 24 * 365
 val the_timeout = the_default (Time.fromSeconds infinity_time_in_secs)
@@ -222,7 +225,17 @@ fun extract_params auto default_params override_params =
     val overlord = lookup_bool "overlord"
     val provers = lookup_string "provers" |> space_explode " "
                   |> auto ? single o hd
-    val full_types = lookup_bool "full_types"
+    val type_sys =
+      case (lookup_string "type_sys", lookup_bool "full_types") of
+        ("tags", full_types) => Tags full_types
+      | ("preds", full_types) => Preds full_types
+      | ("const_args", false) => Const_Args
+      | ("none", false) => No_Types
+      | (type_sys, full_types) =>
+        if member (op =) ["const_args", "none", "smart"] type_sys then
+          if full_types then smart_full_type_sys else smart_partial_type_sys
+        else
+          error ("Unknown type system: " ^ quote type_sys ^ ".")
     val explicit_apply = lookup_bool "explicit_apply"
     val relevance_thresholds = lookup_real_pair "relevance_thresholds"
     val max_relevant = lookup_int_option "max_relevant"
@@ -232,8 +245,7 @@ fun extract_params auto default_params override_params =
     val expect = lookup_string "expect"
   in
     {blocking = blocking, debug = debug, verbose = verbose, overlord = overlord,
-     provers = provers, full_types = full_types,
-     explicit_apply = explicit_apply,
+     provers = provers, type_sys = type_sys, explicit_apply = explicit_apply,
      relevance_thresholds = relevance_thresholds, max_relevant = max_relevant,
      isar_proof = isar_proof, isar_shrink_factor = isar_shrink_factor,
      timeout = timeout, expect = expect}
@@ -270,7 +282,6 @@ fun minimize_command override_params i prover_name fact_names =
 fun hammer_away override_params subcommand opt_i relevance_override state =
   let
     val ctxt = Proof.context_of state
-    val thy = Proof.theory_of state
     val _ = app check_raw_param override_params
   in
     if subcommand = runN then
@@ -286,7 +297,7 @@ fun hammer_away override_params subcommand opt_i relevance_override state =
     else if subcommand = messagesN then
       messages opt_i
     else if subcommand = available_proversN then
-      available_provers thy
+      available_provers ctxt
     else if subcommand = running_proversN then
       running_provers ()
     else if subcommand = kill_proversN then
@@ -347,14 +358,11 @@ val _ =
       parse_sledgehammer_params_command
 
 fun auto_sledgehammer state =
-  if not (!auto) then
-    (false, state)
-  else
-    let val ctxt = Proof.context_of state in
-      run_sledgehammer (get_params true ctxt []) true 1 no_relevance_override
-                       (minimize_command [] 1) state
-    end
+  let val ctxt = Proof.context_of state in
+    run_sledgehammer (get_params true ctxt []) true 1 no_relevance_override
+                     (minimize_command [] 1) state
+  end
 
-val setup = Auto_Tools.register_tool (sledgehammerN, auto_sledgehammer)
+val setup = Auto_Tools.register_tool (auto, auto_sledgehammer)
 
 end;

@@ -9,6 +9,7 @@ val proverK = "prover"
 val prover_timeoutK = "prover_timeout"
 val keepK = "keep"
 val full_typesK = "full_types"
+val type_sysK = "type_sys"
 val minimizeK = "minimize"
 val minimize_timeoutK = "minimize_timeout"
 val metis_ftK = "metis_ft"
@@ -316,11 +317,11 @@ fun change_data id f = (Unsynchronized.change data (AList.map_entry (op =) id f)
 
 fun get_prover ctxt args =
   let
-    val thy = ProofContext.theory_of ctxt
     fun default_prover_name () =
       hd (#provers (Sledgehammer_Isar.default_params ctxt []))
       handle Empty => error "No ATP available."
-    fun get_prover name = (name, Sledgehammer.get_prover thy false name)
+    fun get_prover name =
+      (name, Sledgehammer_Provers.get_prover ctxt false name)
   in
     (case AList.lookup (op =) args proverK of
       SOME name => get_prover name
@@ -331,7 +332,9 @@ type locality = Sledgehammer_Filter.locality
 
 (* hack *)
 fun reconstructor_from_msg msg =
-  if String.isSubstring "metis" msg then "metis" else "smt"
+  if String.isSubstring "metisFT" msg then "metisFT"
+  else if String.isSubstring "metis" msg then "metis"
+  else "smt"
 
 local
 
@@ -340,42 +343,47 @@ datatype sh_result =
   SH_FAIL of int * int |
   SH_ERROR
 
-fun run_sh prover_name prover hard_timeout timeout dir st =
+fun run_sh prover_name prover type_sys hard_timeout timeout dir st =
   let
     val {context = ctxt, facts = chained_ths, goal} = Proof.goal st
     val thy = ProofContext.theory_of ctxt
     val i = 1
-    fun change_dir (SOME dir) = Config.put Sledgehammer.dest_dir dir
+    fun change_dir (SOME dir) = Config.put Sledgehammer_Provers.dest_dir dir
       | change_dir NONE = I
     val st' =
       st |> Proof.map_context
                 (change_dir dir
-                 #> Config.put Sledgehammer.measure_run_time true)
-    val params as {full_types, relevance_thresholds, max_relevant, ...} =
+                 #> Config.put Sledgehammer_Provers.measure_run_time true)
+    val params as {type_sys, relevance_thresholds, max_relevant, ...} =
       Sledgehammer_Isar.default_params ctxt
           [("verbose", "true"),
+           ("type_sys", type_sys),
            ("timeout", Int.toString timeout)]
     val default_max_relevant =
-      Sledgehammer.default_max_relevant_for_prover thy prover_name
+      Sledgehammer_Provers.default_max_relevant_for_prover ctxt prover_name
     val is_built_in_const =
-      Sledgehammer.is_built_in_const_for_prover ctxt prover_name
-    val relevance_fudge = Sledgehammer.relevance_fudge_for_prover prover_name
+      Sledgehammer_Provers.is_built_in_const_for_prover ctxt prover_name
+    val relevance_fudge =
+      Sledgehammer_Provers.relevance_fudge_for_prover ctxt prover_name
     val relevance_override = {add = [], del = [], only = false}
     val (_, hyp_ts, concl_t) = Sledgehammer_Util.strip_subgoal goal i
+    val no_dangerous_types =
+      Sledgehammer_ATP_Translate.types_dangerous_types type_sys
     val facts =
-      Sledgehammer_Filter.relevant_facts ctxt full_types relevance_thresholds
+      Sledgehammer_Filter.relevant_facts ctxt no_dangerous_types
+          relevance_thresholds
           (the_default default_max_relevant max_relevant) is_built_in_const
           relevance_fudge relevance_override chained_ths hyp_ts concl_t
     val problem =
       {state = st', goal = goal, subgoal = i,
        subgoal_count = Sledgehammer_Util.subgoal_count st,
-       facts = facts |> map Sledgehammer.Untranslated, only = true}
+       facts = facts |> map Sledgehammer_Provers.Untranslated_Fact}
     val time_limit =
       (case hard_timeout of
         NONE => I
       | SOME secs => TimeLimit.timeLimit (Time.fromSeconds secs))
     val ({outcome, message, used_facts, run_time_in_msecs, ...}
-         : Sledgehammer.prover_result,
+         : Sledgehammer_Provers.prover_result,
         time_isa) = time_limit (Mirabelle.cpu_time
                       (prover params (K ""))) problem
     val time_prover = run_time_in_msecs |> the_default ~1
@@ -408,10 +416,12 @@ fun run_sledgehammer trivial args reconstructor named_thms id ({pre=st, log, ...
     val _ = change_data id inc_sh_calls
     val _ = if trivial then () else change_data id inc_sh_nontriv_calls
     val (prover_name, prover) = get_prover (Proof.context_of st) args
+    val type_sys = AList.lookup (op =) args type_sysK |> the_default "smart"
     val dir = AList.lookup (op =) args keepK
     val timeout = Mirabelle.get_int_setting args (prover_timeoutK, 30)
     val hard_timeout = SOME timeout (* always use a hard timeout *)
-    val (msg, result) = run_sh prover_name prover hard_timeout timeout dir st
+    val (msg, result) =
+      run_sh prover_name prover type_sys hard_timeout timeout dir st
   in
     case result of
       SH_OK (time_isa, time_prover, names) =>
@@ -447,16 +457,18 @@ fun run_minimize args reconstructor named_thms id
     val ctxt = Proof.context_of st
     val n0 = length (these (!named_thms))
     val (prover_name, _) = get_prover ctxt args
+    val type_sys = AList.lookup (op =) args type_sysK |> the_default "smart"
     val timeout =
       AList.lookup (op =) args minimize_timeoutK
       |> Option.map (fst o read_int o raw_explode)  (* FIXME Symbol.explode (?) *)
       |> the_default 5
     val params = Sledgehammer_Isar.default_params ctxt
-      [("verbose", "true"),
-       ("provers", prover_name),
+      [("provers", prover_name),
+       ("verbose", "true"),
+       ("type_sys", type_sys),
        ("timeout", Int.toString timeout)]
     val minimize =
-      Sledgehammer_Minimize.minimize_facts params 1
+      Sledgehammer_Minimize.minimize_facts params true 1
                                            (Sledgehammer_Util.subgoal_count st)
     val _ = log separator
   in
@@ -478,9 +490,12 @@ fun run_reconstructor trivial full m name reconstructor named_thms id
     ({pre=st, timeout, log, pos, ...}: Mirabelle.run_args) =
   let
     fun do_reconstructor thms ctxt =
-      (if !reconstructor = "smt" then SMT_Solver.smt_tac
-       else if full then Metis_Tactics.metisFT_tac
-       else Metis_Tactics.metis_tac) ctxt thms
+      (if !reconstructor = "smt" then
+         SMT_Solver.smt_tac
+       else if full orelse !reconstructor = "metisFT" then
+         Metis_Tactics.metisFT_tac
+       else
+         Metis_Tactics.metis_tac) ctxt thms
     fun apply_reconstructor thms =
       Mirabelle.can_apply timeout (do_reconstructor thms) st
 
@@ -524,6 +539,7 @@ fun sledgehammer_action args id (st as {pre, name, ...}: Mirabelle.run_args) =
         Unsynchronized.ref (NONE : ((string * locality) * thm list) list option)
       val ctxt = Proof.context_of pre
       val (prover_name, _) = get_prover ctxt args
+      val type_sys = AList.lookup (op =) args type_sysK |> the_default "smart"
       val minimize = AList.defined (op =) args minimizeK
       val metis_ft = AList.defined (op =) args metis_ftK
       val trivial =

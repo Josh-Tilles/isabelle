@@ -110,10 +110,10 @@ val simp_thms' = map mk_meta_eq
       "(P & True) = P" "(True & P) = P"
     by (fact simp_thms)+};
 
-val simp_thms'' = map mk_meta_eq [@{thm inf_fun_eq}, @{thm inf_bool_eq}] @ simp_thms';
+val simp_thms'' = map mk_meta_eq [@{thm inf_fun_def}, @{thm inf_bool_def}] @ simp_thms';
 
 val simp_thms''' = map mk_meta_eq
-  [@{thm le_fun_def}, @{thm le_bool_def}, @{thm sup_fun_eq}, @{thm sup_bool_eq}];
+  [@{thm le_fun_def}, @{thm le_bool_def}, @{thm sup_fun_def}, @{thm sup_bool_def}];
 
 
 (** context data **)
@@ -596,7 +596,7 @@ fun gen_inductive_simps prep_att prep_prop args lthy =
 
 val inductive_simps = gen_inductive_simps Attrib.intern_src Syntax.read_prop;
 val inductive_simps_i = gen_inductive_simps (K I) Syntax.check_prop;
-    
+
 (* prove induction rule *)
 
 fun prove_indrule quiet_mode cs argTs bs xs rec_const params intr_ts mono

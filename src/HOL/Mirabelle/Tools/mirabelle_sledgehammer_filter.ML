@@ -11,12 +11,13 @@ fun get args name default_value =
   | NONE => default_value
 
 fun extract_relevance_fudge args
-      {worse_irrel_freq, higher_order_irrel_weight, abs_rel_weight,
+      {allow_ext, worse_irrel_freq, higher_order_irrel_weight, abs_rel_weight,
        abs_irrel_weight, skolem_irrel_weight, theory_const_rel_weight,
        theory_const_irrel_weight, intro_bonus, elim_bonus, simp_bonus,
        local_bonus, assum_bonus, chained_bonus, max_imperfect,
        max_imperfect_exp, threshold_divisor, ridiculous_threshold} =
-  {worse_irrel_freq = get args "worse_irrel_freq" worse_irrel_freq,
+  {allow_ext = allow_ext,
+   worse_irrel_freq = get args "worse_irrel_freq" worse_irrel_freq,
    higher_order_irrel_weight =
        get args "higher_order_irrel_weight" higher_order_irrel_weight,
    abs_rel_weight = get args "abs_rel_weight" abs_rel_weight,
@@ -106,23 +107,24 @@ fun action args id ({pre, pos, log, ...} : Mirabelle.run_args) =
        SOME proofs =>
        let
          val {context = ctxt, facts, goal} = Proof.goal pre
-         val thy = ProofContext.theory_of ctxt
          val prover = AList.lookup (op =) args "prover"
                       |> the_default default_prover
          val default_max_relevant =
-           Sledgehammer.default_max_relevant_for_prover thy prover
+           Sledgehammer_Provers.default_max_relevant_for_prover ctxt prover
         val is_built_in_const =
-          Sledgehammer.is_built_in_const_for_prover ctxt default_prover
+          Sledgehammer_Provers.is_built_in_const_for_prover ctxt default_prover
          val relevance_fudge =
            extract_relevance_fudge args
-               (Sledgehammer.relevance_fudge_for_prover prover)
+               (Sledgehammer_Provers.relevance_fudge_for_prover ctxt prover)
          val relevance_override = {add = [], del = [], only = false}
-         val {relevance_thresholds, full_types, max_relevant, ...} =
+         val {relevance_thresholds, type_sys, max_relevant, ...} =
            Sledgehammer_Isar.default_params ctxt args
          val subgoal = 1
          val (_, hyp_ts, concl_t) = Sledgehammer_Util.strip_subgoal goal subgoal
+         val no_dangerous_types =
+           Sledgehammer_ATP_Translate.types_dangerous_types type_sys
          val facts =
-           Sledgehammer_Filter.relevant_facts ctxt full_types
+           Sledgehammer_Filter.relevant_facts ctxt no_dangerous_types
                relevance_thresholds
                (the_default default_max_relevant max_relevant) is_built_in_const
                relevance_fudge relevance_override facts hyp_ts concl_t

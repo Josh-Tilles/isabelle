@@ -81,16 +81,13 @@ fun strip_happ args (Metis_Term.Fn(".",[t,u])) = strip_happ (u::args) t
 
 fun make_tvar s = TVar (("'" ^ s, 0), HOLogic.typeS)
 
-fun smart_invert_const "fequal" = @{const_name HOL.eq}
-  | smart_invert_const s = invert_const s
-
 fun hol_type_from_metis_term _ (Metis_Term.Var v) =
      (case strip_prefix_and_unascii tvar_prefix v of
           SOME w => make_tvar w
         | NONE   => make_tvar v)
   | hol_type_from_metis_term ctxt (Metis_Term.Fn(x, tys)) =
      (case strip_prefix_and_unascii type_const_prefix x of
-          SOME tc => Type (smart_invert_const tc,
+          SOME tc => Type (invert_const tc,
                            map (hol_type_from_metis_term ctxt) tys)
         | NONE    =>
       case strip_prefix_and_unascii tfree_prefix x of
@@ -126,7 +123,7 @@ fun hol_term_from_metis_PT ctxt new_skolem_var_count fol_tm =
             case strip_prefix_and_unascii const_prefix a of
                 SOME b =>
                   let
-                    val c = smart_invert_const b
+                    val c = invert_const b
                     val ntypes = num_type_args thy c
                     val nterms = length ts - ntypes
                     val tts = map tm_to_tt ts
@@ -152,7 +149,7 @@ fun hol_term_from_metis_PT ctxt new_skolem_var_count fol_tm =
               | NONE => (*Not a constant. Is it a type constructor?*)
             case strip_prefix_and_unascii type_const_prefix a of
                 SOME b =>
-                SomeType (Type (smart_invert_const b, types_of (map tm_to_tt ts)))
+                SomeType (Type (invert_const b, types_of (map tm_to_tt ts)))
               | NONE => (*Maybe a TFree. Should then check that ts=[].*)
             case strip_prefix_and_unascii tfree_prefix a of
                 SOME b => SomeType (mk_tfree ctxt b)
@@ -180,7 +177,7 @@ fun hol_term_from_metis_FT ctxt new_skolem_var_count fol_tm =
             Const (@{const_name HOL.eq}, HOLogic.typeT)
         | cvt (Metis_Term.Fn ("ti", [Metis_Term.Fn (x,[]), ty])) =
            (case strip_prefix_and_unascii const_prefix x of
-                SOME c => Const (smart_invert_const c, dummyT)
+                SOME c => Const (invert_const c, dummyT)
               | NONE => (*Not a constant. Is it a fixed variable??*)
             case strip_prefix_and_unascii fixed_var_prefix x of
                 SOME v => Free (v, hol_type_from_metis_term ctxt ty)
@@ -194,7 +191,7 @@ fun hol_term_from_metis_FT ctxt new_skolem_var_count fol_tm =
             list_comb(Const (@{const_name HOL.eq}, HOLogic.typeT), map cvt [tm1,tm2])
         | cvt (t as Metis_Term.Fn (x, [])) =
            (case strip_prefix_and_unascii const_prefix x of
-                SOME c => Const (smart_invert_const c, dummyT)
+                SOME c => Const (invert_const c, dummyT)
               | NONE => (*Not a constant. Is it a fixed variable??*)
             case strip_prefix_and_unascii fixed_var_prefix x of
                 SOME v => Free (v, dummyT)
@@ -376,12 +373,16 @@ fun make_last i th =
       else raise THM("select_literal", i, [th])
   end;
 
+val neg_neg_imp = @{lemma "~ ~ Q ==> Q" by blast}
+
 (* Maps a rule that ends "... ==> P ==> False" to "... ==> ~P" while suppressing
    double-negations. *)
-val negate_head = rewrite_rule [@{thm atomize_not}, not_not RS eq_reflection]
+fun negate_head thy =
+  rewrite_rule @{thms atomize_not}
+  #> perhaps (try (fn th => resolve_inc_tyvars thy th 1 neg_neg_imp))
 
 (* Maps the clause  [P1,...Pn]==>False to [P1,...,P(i-1),P(i+1),...Pn] ==> ~P *)
-val select_literal = negate_head oo make_last
+fun select_literal thy = negate_head thy oo make_last
 
 fun resolve_inf ctxt mode skolem_params thpairs atm th1 th2 =
   let
@@ -412,7 +413,8 @@ fun resolve_inf ctxt mode skolem_params thpairs atm th1 th2 =
           handle Empty => raise Fail "Failed to find literal in th2"
         val _ = trace_msg ctxt (fn () => "  index_th2: " ^ Int.toString index_th2)
     in
-      resolve_inc_tyvars thy (select_literal index_th1 i_th1) index_th2 i_th2
+      resolve_inc_tyvars thy (select_literal thy index_th1 i_th1) index_th2
+                         i_th2
     end
   end;
 
@@ -554,22 +556,32 @@ fun is_isabelle_literal_genuine t =
 fun count p xs = fold (fn x => if p x then Integer.add 1 else I) xs 0
 
 fun replay_one_inference ctxt mode skolem_params (fol_th, inf) thpairs =
-  let
-    val _ = trace_msg ctxt (fn () => "=============================================")
-    val _ = trace_msg ctxt (fn () => "METIS THM: " ^ Metis_Thm.toString fol_th)
-    val _ = trace_msg ctxt (fn () => "INFERENCE: " ^ Metis_Proof.inferenceToString inf)
-    val th = step ctxt mode skolem_params thpairs (fol_th, inf)
-             |> flexflex_first_order
-    val _ = trace_msg ctxt (fn () => "ISABELLE THM: " ^ Display.string_of_thm ctxt th)
-    val _ = trace_msg ctxt (fn () => "=============================================")
-    val num_metis_lits =
-      fol_th |> Metis_Thm.clause |> Metis_LiteralSet.toList
-             |> count is_metis_literal_genuine
-    val num_isabelle_lits =
-      th |> prems_of |> count is_isabelle_literal_genuine
-    val _ = if num_metis_lits = num_isabelle_lits then ()
-            else error "Cannot replay Metis proof in Isabelle: Out of sync."
-  in (fol_th, th) :: thpairs end
+  if not (null thpairs) andalso prop_of (snd (hd thpairs)) aconv @{prop False} then
+    (* Isabelle sometimes identifies literals (premises) that are distinct in
+       Metis (e.g., because of type variables). We give the Isabelle proof the
+       benefice of the doubt. *)
+    thpairs
+  else
+    let
+      val _ = trace_msg ctxt
+                  (fn () => "=============================================")
+      val _ = trace_msg ctxt
+                  (fn () => "METIS THM: " ^ Metis_Thm.toString fol_th)
+      val _ = trace_msg ctxt
+                  (fn () => "INFERENCE: " ^ Metis_Proof.inferenceToString inf)
+      val th = step ctxt mode skolem_params thpairs (fol_th, inf)
+               |> flexflex_first_order
+      val _ = trace_msg ctxt
+                  (fn () => "ISABELLE THM: " ^ Display.string_of_thm ctxt th)
+      val _ = trace_msg ctxt
+                  (fn () => "=============================================")
+      val num_metis_lits =
+        count is_metis_literal_genuine
+              (Metis_LiteralSet.toList (Metis_Thm.clause fol_th))
+      val num_isabelle_lits = count is_isabelle_literal_genuine (prems_of th)
+      val _ = if num_metis_lits >= num_isabelle_lits then ()
+              else error "Cannot replay Metis proof in Isabelle: Out of sync."
+    in (fol_th, th) :: thpairs end
 
 fun term_instantiate thy = cterm_instantiate o map (pairself (cterm_of thy))
 
@@ -653,12 +665,12 @@ fun instantiate_forall_tac thy t i st =
      THEN PRIMITIVE do_instantiate) st
   end
 
-fun fix_exists_tac thy t =
+fun fix_exists_tac t =
   etac @{thm exE}
   THEN' rename_tac [t |> dest_Var |> fst |> fst]
 
 fun release_quantifier_tac thy (skolem, t) =
-  (if skolem then fix_exists_tac else instantiate_forall_tac) thy t
+  (if skolem then fix_exists_tac else instantiate_forall_tac thy) t
 
 fun release_clusters_tac _ _ _ [] = K all_tac
   | release_clusters_tac thy ax_counts substs

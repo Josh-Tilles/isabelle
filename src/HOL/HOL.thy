@@ -29,13 +29,12 @@ uses
   "~~/src/Tools/induct.ML"
   ("~~/src/Tools/induct_tacs.ML")
   ("Tools/recfun_codegen.ML")
-  "Tools/async_manager.ML"
-  "Tools/try.ML"
   ("Tools/cnf_funcs.ML")
-  ("Tools/functorial_mappers.ML")
+  "~~/src/Tools/subtyping.ML"
 begin
 
 setup {* Intuitionistic.method_setup @{binding iprover} *}
+setup Subtyping.setup
 
 
 subsection {* Primitive logic *}
@@ -712,7 +711,6 @@ lemmas [trans] = trans
   and [Pure.elim?] = iffD1 iffD2 impE
 
 use "Tools/hologic.ML"
-use "Tools/functorial_mappers.ML"
 
 
 subsubsection {* Atomizing meta-level connectives *}
@@ -1981,10 +1979,6 @@ method_setup normalization = {*
     (CHANGED_PROP o (CONVERSION Nbe.dynamic_eval_conv THEN' (fn k => TRY (rtac TrueI k))))))
 *} "solve goal by normalization"
 
-
-subsection {* Try *}
-
-setup {* Try.setup *}
 
 subsection {* Counterexample Search Units *}
 

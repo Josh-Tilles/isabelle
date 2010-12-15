@@ -132,6 +132,11 @@ by (unfold Id_on_def) (iprover elim!: UN_E singletonE)
 lemma Id_on_iff: "((x, y) : Id_on A) = (x = y & x : A)"
 by blast
 
+lemma Id_on_def'[nitpick_def, code]:
+  "(Id_on (A :: 'a => bool)) = (%(x, y). x = y \<and> A x)"
+by (auto simp add: fun_eq_iff
+  elim: Id_onE[unfolded mem_def] intro: Id_onI[unfolded mem_def])
+
 lemma Id_on_subset_Times: "Id_on A \<subseteq> A \<times> A"
 by blast
 
@@ -222,6 +227,9 @@ by(simp add:refl_on_def)
 lemma refl_on_Id_on: "refl_on A (Id_on A)"
 by (rule refl_onI [OF Id_on_subset_Times Id_onI])
 
+lemma refl_on_def'[nitpick_def, code]:
+  "refl_on A r = ((\<forall>(x, y) \<in> r. x : A \<and> y : A) \<and> (\<forall>x \<in> A. (x, x) : r))"
+by (auto intro: refl_onI dest: refl_onD refl_onD1 refl_onD2)
 
 subsection {* Antisymmetry *}
 

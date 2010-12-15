@@ -517,6 +517,9 @@ begin
 lemma finite [simp]: "finite (A \<Colon> 'a set)"
   by (rule subset_UNIV finite_UNIV finite_subset)+
 
+lemma finite_code [code]: "finite (A \<Colon> 'a set) = True"
+  by simp
+
 end
 
 lemma UNIV_unit [no_atp]:
@@ -2274,7 +2277,7 @@ apply (unfold inj_on_def)
 apply (blast elim!: equalityE)
 done
 
-text {* Relates to equivalence classes.  Based on a theorem of F. Kammüller.  *}
+text {* Relates to equivalence classes.  Based on a theorem of F. KammÃ¼ller.  *}
 
 lemma dvd_partition:
   "finite (Union C) ==>

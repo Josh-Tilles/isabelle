@@ -39,6 +39,8 @@ notation (HTML output)
   not_member  ("op \<notin>") and
   not_member  ("(_/ \<notin> _)" [50, 51] 50)
 
+
+
 text {* Set comprehensions *}
 
 syntax
@@ -53,19 +55,19 @@ syntax (xsymbols)
 translations
   "{x:A. P}" => "{x. x:A & P}"
 
-lemma mem_Collect_eq [iff]: "(a : {x. P(x)}) = P(a)"
+lemma mem_Collect_eq [iff]: "a \<in> {x. P x} = P a"
   by (simp add: Collect_def mem_def)
 
-lemma Collect_mem_eq [simp]: "{x. x:A} = A"
+lemma Collect_mem_eq [simp]: "{x. x \<in> A} = A"
   by (simp add: Collect_def mem_def)
 
-lemma CollectI: "P(a) ==> a : {x. P(x)}"
+lemma CollectI: "P a \<Longrightarrow> a \<in> {x. P x}"
   by simp
 
-lemma CollectD: "a : {x. P(x)} ==> P(a)"
+lemma CollectD: "a \<in> {x. P x} \<Longrightarrow> P a"
   by simp
 
-lemma Collect_cong: "(!!x. P x = Q x) ==> {x. P(x)} = {x. Q(x)}"
+lemma Collect_cong: "(\<And>x. P x = Q x) ==> {x. P x} = {x. Q x}"
   by simp
 
 text {*
@@ -87,6 +89,18 @@ end
 *}
 
 lemmas CollectE = CollectD [elim_format]
+
+lemma set_eqI:
+  assumes "\<And>x. x \<in> A \<longleftrightarrow> x \<in> B"
+  shows "A = B"
+proof -
+  from assms have "{x. x \<in> A} = {x. x \<in> B}" by simp
+  then show ?thesis by simp
+qed
+
+lemma set_eq_iff [no_atp]:
+  "A = B \<longleftrightarrow> (\<forall>x. x \<in> A \<longleftrightarrow> x \<in> B)"
+  by (auto intro:set_eqI)
 
 text {* Set enumerations *}
 
@@ -489,15 +503,6 @@ lemmas basic_trans_rules [trans] =
 
 subsubsection {* Equality *}
 
-lemma set_eqI: assumes prem: "(!!x. (x:A) = (x:B))" shows "A = B"
-  apply (rule prem [THEN ext, THEN arg_cong, THEN box_equals])
-   apply (rule Collect_mem_eq)
-  apply (rule Collect_mem_eq)
-  done
-
-lemma set_eq_iff [no_atp]: "(A = B) = (ALL x. (x:A) = (x:B))"
-by(auto intro:set_eqI)
-
 lemma subset_antisym [intro!]: "A \<subseteq> B ==> B \<subseteq> A ==> A = B"
   -- {* Anti-symmetry of the subset relation. *}
   by (iprover intro: set_eqI subsetD)
@@ -533,6 +538,36 @@ lemma eqelem_imp_iff: "x = y ==> (x : A) = (y : A)"
   by simp
 
 
+subsubsection {* The empty set *}
+
+lemma empty_def:
+  "{} = {x. False}"
+  by (simp add: bot_fun_def bot_bool_def Collect_def)
+
+lemma empty_iff [simp]: "(c : {}) = False"
+  by (simp add: empty_def)
+
+lemma emptyE [elim!]: "a : {} ==> P"
+  by simp
+
+lemma empty_subsetI [iff]: "{} \<subseteq> A"
+    -- {* One effect is to delete the ASSUMPTION @{prop "{} <= A"} *}
+  by blast
+
+lemma equals0I: "(!!y. y \<in> A ==> False) ==> A = {}"
+  by blast
+
+lemma equals0D: "A = {} ==> a \<notin> A"
+    -- {* Use for reasoning about disjointness: @{text "A Int B = {}"} *}
+  by blast
+
+lemma ball_empty [simp]: "Ball {} P = True"
+  by (simp add: Ball_def)
+
+lemma bex_empty [simp]: "Bex {} P = False"
+  by (simp add: Bex_def)
+
+
 subsubsection {* The universal set -- UNIV *}
 
 abbreviation UNIV :: "'a set" where
@@ -540,7 +575,7 @@ abbreviation UNIV :: "'a set" where
 
 lemma UNIV_def:
   "UNIV = {x. True}"
-  by (simp add: top_fun_eq top_bool_eq Collect_def)
+  by (simp add: top_fun_def top_bool_def Collect_def)
 
 lemma UNIV_I [simp]: "x : UNIV"
   by (simp add: UNIV_def)
@@ -567,36 +602,6 @@ lemma bex_UNIV [simp]: "Bex UNIV P = Ex P"
 
 lemma UNIV_eq_I: "(\<And>x. x \<in> A) \<Longrightarrow> UNIV = A"
   by auto
-
-
-subsubsection {* The empty set *}
-
-lemma empty_def:
-  "{} = {x. False}"
-  by (simp add: bot_fun_eq bot_bool_eq Collect_def)
-
-lemma empty_iff [simp]: "(c : {}) = False"
-  by (simp add: empty_def)
-
-lemma emptyE [elim!]: "a : {} ==> P"
-  by simp
-
-lemma empty_subsetI [iff]: "{} \<subseteq> A"
-    -- {* One effect is to delete the ASSUMPTION @{prop "{} <= A"} *}
-  by blast
-
-lemma equals0I: "(!!y. y \<in> A ==> False) ==> A = {}"
-  by blast
-
-lemma equals0D: "A = {} ==> a \<notin> A"
-    -- {* Use for reasoning about disjointness: @{text "A Int B = {}"} *}
-  by blast
-
-lemma ball_empty [simp]: "Ball {} P = True"
-  by (simp add: Ball_def)
-
-lemma bex_empty [simp]: "Bex {} P = False"
-  by (simp add: Bex_def)
 
 lemma UNIV_not_empty [iff]: "UNIV ~= {}"
   by (blast elim: equalityE)
@@ -625,6 +630,7 @@ lemma Pow_top: "A \<in> Pow A"
 lemma Pow_not_empty: "Pow A \<noteq> {}"
   using Pow_top by blast
 
+
 subsubsection {* Set complement *}
 
 lemma Compl_iff [simp]: "(c \<in> -A) = (c \<notin> A)"
@@ -646,10 +652,44 @@ lemmas ComplE = ComplD [elim_format]
 lemma Compl_eq: "- A = {x. ~ x : A}" by blast
 
 
-subsubsection {* Binary union -- Un *}
+subsubsection {* Binary intersection *}
+
+abbreviation inter :: "'a set \<Rightarrow> 'a set \<Rightarrow> 'a set" (infixl "Int" 70) where
+  "op Int \<equiv> inf"
+
+notation (xsymbols)
+  inter  (infixl "\<inter>" 70)
+
+notation (HTML output)
+  inter  (infixl "\<inter>" 70)
+
+lemma Int_def:
+  "A \<inter> B = {x. x \<in> A \<and> x \<in> B}"
+  by (simp add: inf_fun_def inf_bool_def Collect_def mem_def)
+
+lemma Int_iff [simp]: "(c : A Int B) = (c:A & c:B)"
+  by (unfold Int_def) blast
+
+lemma IntI [intro!]: "c:A ==> c:B ==> c : A Int B"
+  by simp
+
+lemma IntD1: "c : A Int B ==> c:A"
+  by simp
+
+lemma IntD2: "c : A Int B ==> c:B"
+  by simp
+
+lemma IntE [elim!]: "c : A Int B ==> (c:A ==> c:B ==> P) ==> P"
+  by simp
+
+lemma mono_Int: "mono f \<Longrightarrow> f (A \<inter> B) \<subseteq> f A \<inter> f B"
+  by (fact mono_inf)
+
+
+subsubsection {* Binary union *}
 
 abbreviation union :: "'a set \<Rightarrow> 'a set \<Rightarrow> 'a set" (infixl "Un" 65) where
-  "op Un \<equiv> sup"
+  "union \<equiv> sup"
 
 notation (xsymbols)
   union  (infixl "\<union>" 65)
@@ -659,7 +699,7 @@ notation (HTML output)
 
 lemma Un_def:
   "A \<union> B = {x. x \<in> A \<or> x \<in> B}"
-  by (simp add: sup_fun_eq sup_bool_eq Collect_def mem_def)
+  by (simp add: sup_fun_def sup_bool_def Collect_def mem_def)
 
 lemma Un_iff [simp]: "(c : A Un B) = (c:A | c:B)"
   by (unfold Un_def) blast
@@ -686,40 +726,6 @@ lemma insert_def: "insert a B = {x. x = a} \<union> B"
 
 lemma mono_Un: "mono f \<Longrightarrow> f A \<union> f B \<subseteq> f (A \<union> B)"
   by (fact mono_sup)
-
-
-subsubsection {* Binary intersection -- Int *}
-
-abbreviation inter :: "'a set \<Rightarrow> 'a set \<Rightarrow> 'a set" (infixl "Int" 70) where
-  "op Int \<equiv> inf"
-
-notation (xsymbols)
-  inter  (infixl "\<inter>" 70)
-
-notation (HTML output)
-  inter  (infixl "\<inter>" 70)
-
-lemma Int_def:
-  "A \<inter> B = {x. x \<in> A \<and> x \<in> B}"
-  by (simp add: inf_fun_eq inf_bool_eq Collect_def mem_def)
-
-lemma Int_iff [simp]: "(c : A Int B) = (c:A & c:B)"
-  by (unfold Int_def) blast
-
-lemma IntI [intro!]: "c:A ==> c:B ==> c : A Int B"
-  by simp
-
-lemma IntD1: "c : A Int B ==> c:A"
-  by simp
-
-lemma IntD2: "c : A Int B ==> c:B"
-  by simp
-
-lemma IntE [elim!]: "c : A Int B ==> (c:A ==> c:B ==> P) ==> P"
-  by simp
-
-lemma mono_Int: "mono f \<Longrightarrow> f (A \<inter> B) \<subseteq> f A \<inter> f B"
-  by (fact mono_inf)
 
 
 subsubsection {* Set difference *}
@@ -881,7 +887,6 @@ lemma rangeI: "f x \<in> range f"
 
 lemma rangeE [elim?]: "b \<in> range (\<lambda>x. f x) ==> (!!x. b = f x ==> P) ==> P"
   by blast
-
 
 subsubsection {* Some rules with @{text "if"} *}
 

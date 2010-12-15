@@ -8,9 +8,9 @@ theory SMT
 imports List
 uses
   "Tools/Datatype/datatype_selectors.ML"
+  "Tools/SMT/smt_utils.ML"
   "Tools/SMT/smt_failure.ML"
   "Tools/SMT/smt_config.ML"
-  "Tools/SMT/smt_utils.ML"
   "Tools/SMT/smt_monomorph.ML"
   ("Tools/SMT/smt_builtin.ML")
   ("Tools/SMT/smt_normalize.ML")
@@ -32,16 +32,18 @@ begin
 subsection {* Triggers for quantifier instantiation *}
 
 text {*
-Some SMT solvers support triggers for quantifier instantiation.
-Each trigger consists of one ore more patterns.  A pattern may either
-be a list of positive subterms (each being tagged by "pat"), or a
-list of negative subterms (each being tagged by "nopat").
-
-When an SMT solver finds a term matching a positive pattern (a
-pattern with positive subterms only), it instantiates the
-corresponding quantifier accordingly.  Negative patterns inhibit
-quantifier instantiations.  Each pattern should mention all preceding
-bound variables.
+Some SMT solvers support patterns as a quantifier instantiation
+heuristics.  Patterns may either be positive terms (tagged by "pat")
+triggering quantifier instantiations -- when the solver finds a
+term matching a positive pattern, it instantiates the corresponding
+quantifier accordingly -- or negative terms (tagged by "nopat")
+inhibiting quantifier instantiations.  A list of patterns
+of the same kind is called a multipattern, and all patterns in a
+multipattern are considered conjunctively for quantifier instantiation.
+A list of multipatterns is called a trigger, and their multipatterns
+act disjunctively during quantifier instantiation.  Each multipattern
+should mention at least all quantified variables of the preceding
+quantifier block.
 *}
 
 datatype pattern = Pattern
@@ -89,7 +91,7 @@ numbers of arguments.  This is achieved by the introduction of the
 following constant.
 *}
 
-definition fun_app where "fun_app f x = f x"
+definition fun_app where "fun_app f = f"
 
 text {*
 Some solvers support a theory of arrays which can be used to encode
@@ -105,16 +107,18 @@ lemmas array_rules = ext fun_upd_apply fun_upd_same fun_upd_other
 subsection {* First-order logic *}
 
 text {*
-Some SMT solvers require a strict separation between formulas and
-terms.  When translating higher-order into first-order problems,
-all uninterpreted constants (those not builtin in the target solver)
+Some SMT solvers only accept problems in first-order logic, i.e.,
+where formulas and terms are syntactically separated. When
+translating higher-order into first-order problems, all
+uninterpreted constants (those not built-in in the target solver)
 are treated as function symbols in the first-order sense.  Their
-occurrences as head symbols in atoms (i.e., as predicate symbols) is
-turned into terms by equating such atoms with @{term True} using the
-following term-level equation symbol.
+occurrences as head symbols in atoms (i.e., as predicate symbols) are
+turned into terms by equating such atoms with @{term True}.
+Whenever the boolean type occurs in first-order terms, it is replaced
+by the following type.
 *}
 
-definition term_eq :: "bool \<Rightarrow> bool \<Rightarrow> bool" where "term_eq x y = (x = y)"
+typedecl term_bool
 
 
 
@@ -126,18 +130,20 @@ definition z3div :: "int \<Rightarrow> int \<Rightarrow> int" where
 definition z3mod :: "int \<Rightarrow> int \<Rightarrow> int" where
   "z3mod k l = (if 0 \<le> l then k mod l else k mod (-l))"
 
-lemma div_by_z3div: "k div l = (
-     if k = 0 \<or> l = 0 then 0
-     else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3div k l
-     else z3div (-k) (-l))"
-  by (auto simp add: z3div_def)
+lemma div_by_z3div:
+  "\<forall>k l. k div l = (
+    if k = 0 \<or> l = 0 then 0
+    else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3div k l
+    else z3div (-k) (-l))"
+  by (auto simp add: z3div_def trigger_def)
 
-lemma mod_by_z3mod: "k mod l = (
-     if l = 0 then k
-     else if k = 0 then 0
-     else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3mod k l
-     else - z3mod (-k) (-l))"
-  by (auto simp add: z3mod_def)
+lemma mod_by_z3mod:
+  "\<forall>k l. k mod l = (
+    if l = 0 then k
+    else if k = 0 then 0
+    else if (0 < k \<and> 0 < l) \<or> (k < 0 \<and> 0 < l) then z3mod k l
+    else - z3mod (-k) (-l))"
+  by (auto simp add: z3mod_def trigger_def)
 
 
 
@@ -159,7 +165,10 @@ use "Tools/SMT/smt_setup_solvers.ML"
 
 setup {*
   SMT_Config.setup #>
+  SMT_Normalize.setup #>
   SMT_Solver.setup #>
+  SMTLIB_Interface.setup #>
+  Z3_Interface.setup #>
   Z3_Proof_Reconstruction.setup #>
   SMT_Setup_Solvers.setup
 *}
@@ -200,6 +209,13 @@ Since SMT solvers are potentially non-terminating, there is a timeout
 declare [[ smt_timeout = 20 ]]
 
 text {*
+SMT solvers apply randomized heuristics.  In case a problem is not
+solvable by an SMT solver, changing the following option might help.
+*}
+
+declare [[ smt_random_seed = 1 ]]
+
+text {*
 In general, the binding to SMT solvers runs as an oracle, i.e, the SMT
 solvers are fully trusted without additional checks.  The following
 option can cause the SMT solver to run in proof-producing mode, giving
@@ -223,6 +239,24 @@ mode.
 *}
 
 declare [[ smt_datatypes = false ]]
+
+text {*
+The SMT method provides an inference mechanism to detect simple triggers
+in quantified formulas, which might increase the number of problems
+solvable by SMT solvers (note: triggers guide quantifier instantiations
+in the SMT solver).  To turn it on, set the following option.
+*}
+
+declare [[ smt_infer_triggers = false ]]
+
+text {*
+The SMT method monomorphizes the given facts, that is, it tries to
+instantiate all schematic type variables with fixed types occurring
+in the problem.  This is a (possibly nonterminating) fixed-point
+construction whose cycles are limited by the following option.
+*}
+
+declare [[ smt_monomorph_limit = 10 ]]
 
 
 
@@ -354,9 +388,10 @@ lemma [z3_rule]:
 
 
 
+hide_type term_bool
 hide_type (open) pattern
-hide_const Pattern term_eq
-hide_const (open) trigger pat nopat weight fun_app z3div z3mod
+hide_const Pattern fun_app
+hide_const (open) trigger pat nopat weight z3div z3mod
 
 
 
