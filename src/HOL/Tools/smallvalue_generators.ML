@@ -280,6 +280,52 @@ fun mk_generator_expr ctxt t =
         $ absdummy (T, absdummy (@{typ "unit => term"}, t))) $ Bound i
   in Abs ("d", @{typ code_numeral}, fold_rev mk_small_closure bounds check) end
 
+(** post-processing of function terms **)
+
+fun dest_fun_upd (Const (@{const_name fun_upd}, _) $ t0 $ t1 $ t2) = (t0, (t1, t2))
+  | dest_fun_upd t = raise TERM ("dest_fun_upd", [t])
+
+fun mk_fun_upd T1 T2 (t1, t2) t = 
+  Const (@{const_name fun_upd}, (T1 --> T2) --> T1 --> T2 --> T1 --> T2) $ t $ t1 $ t2
+
+fun dest_plain_fun t =
+  case try dest_fun_upd t of
+    NONE =>
+      (case t of
+        (Abs (_, _, Const (@{const_name HOL.undefined}, _))) => []
+      | _ => raise TERM ("dest_plain_fun", [t]))
+  | SOME (t0, (t1, t2)) => (t1, t2) :: dest_plain_fun t0
+
+fun make_plain_fun T1 T2 tps =
+  fold_rev (mk_fun_upd T1 T2) tps (absdummy (T1, Const ("_", T2)))
+
+fun make_set T1 [] = Const (@{const_abbrev Set.empty}, T1 --> @{typ bool})
+  | make_set T1 ((_, @{const False}) :: tps) = make_set T1 tps
+  | make_set T1 ((t1, @{const True}) :: tps) =
+    Const (@{const_name insert}, T1 --> (T1 --> @{typ bool}) --> T1 --> @{typ bool})
+      $ t1 $ (make_set T1 tps)
+  | make_set T1 ((_, t) :: tps) = raise TERM ("make_set", [t])
+
+fun make_map T1 T2 [] = Const (@{const_abbrev Map.empty}, T1 --> T2)
+  | make_map T1 T2 ((_, Const (@{const_name None}, _)) :: tps) = make_map T1 T2 tps
+  | make_map T1 T2 ((t1, t2) :: tps) = mk_fun_upd T1 T2 (t1, t2) (make_map T1 T2 tps)
+  
+fun post_process_term t =
+  case fastype_of t of
+    Type (@{type_name fun}, [T1, T2]) =>
+      (case try dest_plain_fun t of
+        SOME tps =>
+          tps
+          |> map (pairself post_process_term)
+          |> (case T2 of
+            @{typ bool} => rev #> make_set T1
+          | Type (@{type_name option}, _) => make_map T1 T2
+          | _ => make_plain_fun T1 T2)
+      | NONE => t)
+  | _ => t
+
+(** generator compiliation **)
+
 fun compile_generator_expr ctxt t =
   let
     val thy = ProofContext.theory_of ctxt
@@ -289,7 +335,9 @@ fun compile_generator_expr ctxt t =
     val compile = Code_Runtime.dynamic_value_strict
       (Counterexample.get, put_counterexample, "Smallvalue_Generators.put_counterexample")
       thy (SOME target) (fn proc => fn g => g #> (Option.map o map) proc) t' [];
-  in fn size => rpair NONE (compile size) end;
+  in
+    fn size => rpair NONE (compile size |> Option.map (map post_process_term)) 
+  end;
 
 (** setup **)
 

@@ -24,13 +24,13 @@ sig
   val all: code_graph -> string list
   val pretty: theory -> code_graph -> Pretty.T
   val obtain: bool -> theory -> string list -> term list -> code_algebra * code_graph
-  val dynamic_eval_conv: theory
+  val dynamic_conv: theory
     -> (code_algebra -> code_graph -> (string * sort) list -> term -> conv) -> conv
-  val dynamic_eval_value: theory -> ((term -> term) -> 'a -> 'a)
+  val dynamic_value: theory -> ((term -> term) -> 'a -> 'a)
     -> (code_algebra -> code_graph -> (string * sort) list -> term -> 'a) -> term -> 'a
-  val static_eval_conv: theory -> string list
+  val static_conv: theory -> string list
     -> (code_algebra -> code_graph -> theory -> (string * sort) list -> term -> conv) -> conv
-  val static_eval_value: theory -> ((term -> term) -> 'a -> 'a) -> string list
+  val static_value: theory -> ((term -> term) -> 'a -> 'a) -> string list
     -> (code_algebra -> code_graph -> theory -> (string * sort) list -> term -> 'a) -> term -> 'a
 
   val setup: theory -> theory
@@ -133,12 +133,21 @@ fun eqn_conv conv ct =
 
 val rewrite_eqn = Conv.fconv_rule o eqn_conv o Simplifier.rewrite;
 
-fun term_of_conv thy f =
+fun term_of_conv thy conv =
   Thm.cterm_of thy
-  #> f
+  #> conv
   #> Thm.prop_of
   #> Logic.dest_equals
   #> snd;
+
+fun term_of_conv_resubst thy conv t =
+  let
+    val all_vars = fold_aterms (fn t as Free _ => insert (op aconv) t
+      | t as Var _ => insert (op aconv) t
+      | _ => I) t [];
+    val resubst = curry (Term.betapplys o swap) all_vars;
+  in (resubst, term_of_conv thy conv (fold_rev lambda all_vars t)) end;
+
 
 fun preprocess_functrans thy = 
   let
@@ -154,31 +163,23 @@ fun preprocess thy =
     #> (map o apfst) (rewrite_eqn pre)
   end;
 
-fun preprocess_conv thy ct =
+fun preprocess_conv thy =
   let
     val ctxt = ProofContext.init_global thy;
     val pre = (Simplifier.global_context thy o #pre o the_thmproc) thy;
   in
-    ct
-    |> Simplifier.rewrite pre
-    |> trans_conv_rule (AxClass.unoverload_conv thy)
+    Simplifier.rewrite pre
+    #> trans_conv_rule (AxClass.unoverload_conv thy)
   end;
 
-fun preprocess_term thy t =
-  let
-    val all_vars = fold_aterms (fn t as Free _ => insert (op aconv) t
-      | t as Var _ => insert (op aconv) t
-      | _ => I) t [];
-    val resubst = curry (Term.betapplys o swap) all_vars;
-  in (resubst, term_of_conv thy (preprocess_conv thy) (fold_rev lambda all_vars t)) end;
+fun preprocess_term thy = term_of_conv_resubst thy (preprocess_conv thy);
 
-fun postprocess_conv thy ct =
+fun postprocess_conv thy =
   let
     val post = (Simplifier.global_context thy o #post o the_thmproc) thy;
   in
-    ct
-    |> AxClass.overload_conv thy
-    |> trans_conv_rule (Simplifier.rewrite post)
+    AxClass.overload_conv thy
+    #> trans_conv_rule (Simplifier.rewrite post)
   end;
 
 fun postprocess_term thy = term_of_conv thy (postprocess_conv thy);
@@ -457,7 +458,7 @@ fun obtain ignore_cache thy consts ts = apsnd snd
 
 fun dest_cterm ct = let val t = Thm.term_of ct in (Term.add_tfrees t [], t) end;
 
-fun dynamic_eval_conv thy conv = no_variables_conv (fn ct =>
+fun dynamic_conv thy conv = no_variables_conv (fn ct =>
   let
     val thm1 = preprocess_conv thy ct;
     val ct' = Thm.rhs_of thm1;
@@ -473,7 +474,7 @@ fun dynamic_eval_conv thy conv = no_variables_conv (fn ct =>
       ^ (cat_lines o map (Display.string_of_thm_global thy)) [thm1, thm2, thm3])
   end);
 
-fun dynamic_eval_value thy postproc evaluator t =
+fun dynamic_value thy postproc evaluator t =
   let
     val (resubst, t') = preprocess_term thy t;
     val vs' = Term.add_tfrees t' [];
@@ -486,26 +487,25 @@ fun dynamic_eval_value thy postproc evaluator t =
     |> postproc (postprocess_term thy o resubst)
   end;
 
-fun static_eval_conv thy consts conv =
+fun static_conv thy consts conv =
   let
     val (algebra, eqngr) = obtain true thy consts [];
-    val conv' = conv algebra eqngr;
+    val conv' = conv algebra eqngr thy;
   in
-    no_variables_conv (Conv.tap_thy (fn thy => (preprocess_conv thy)
-      then_conv (fn ct => uncurry (conv' thy) (dest_cterm ct) ct)
-      then_conv (postprocess_conv thy)))
+    no_variables_conv ((preprocess_conv thy)
+      then_conv (fn ct => uncurry conv' (dest_cterm ct) ct)
+      then_conv (postprocess_conv thy))
   end;
 
-fun static_eval_value thy postproc consts evaluator =
+fun static_value thy postproc consts evaluator =
   let
     val (algebra, eqngr) = obtain true thy consts [];
     val evaluator' = evaluator algebra eqngr;
-  in fn t =>
-    t
-    |> preprocess_term thy
-    |-> (fn resubst => fn t => t
-    |> evaluator' thy (Term.add_tfrees t [])
-    |> postproc (postprocess_term thy o resubst))
+  in 
+    preprocess_term thy
+    #-> (fn resubst => fn t => t
+      |> evaluator' thy (Term.add_tfrees t [])
+      |> postproc (postprocess_term thy o resubst))
   end;
 
 
