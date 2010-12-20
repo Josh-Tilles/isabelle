@@ -86,7 +86,8 @@ fun string_of_class [] = "basic"
 
 type 'a dict = (class * 'a) Ord_List.T
 
-fun class_ord ((cs1, _), (cs2, _)) = list_ord fast_string_ord (cs1, cs2)
+fun class_ord ((cs1, _), (cs2, _)) =
+  rev_order (list_ord fast_string_ord (cs1, cs2))
 
 fun dict_insert (cs, x) d =
   if AList.defined (op =) d cs then d
@@ -140,8 +141,6 @@ val is_number =
       | is_num env (Const (@{const_name Let}, _) $ t $ Abs (_, _, u)) =
           is_num (t :: env) u
       | is_num env (Const (@{const_name uminus}, _) $ t) = is_num env t
-      | is_num env (Const (@{const_name divide}, _) $ t $ u) =
-          is_num env t andalso is_num env u
       | is_num env (Bound i) = i < length env andalso is_num env (nth env i)
       | is_num _ t = can HOLogic.dest_number t
   in is_num [] end
