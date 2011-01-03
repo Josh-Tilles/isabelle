@@ -607,7 +607,11 @@ lemma
 
 
 
-section {* Pairs *}  (* FIXME: tests for datatypes and records *)
+section {* Datatypes, Records, and Typedefs *}
+
+subsection {* Without support by the SMT solver *}
+
+subsubsection {* Algebraic datatypes *}
 
 lemma
   "x = fst (x, y)"
@@ -623,6 +627,255 @@ lemma
   "(fst (x, y) = snd (x, y)) = (x = y)"
   "(fst p = snd p) = (p = (snd p, fst p))"
   using fst_conv snd_conv pair_collapse
+  by smt+
+
+lemma
+  "[x] \<noteq> Nil"
+  "[x, y] \<noteq> Nil"
+  "x \<noteq> y \<longrightarrow> [x] \<noteq> [y]"
+  "hd (x # xs) = x"
+  "tl (x # xs) = xs"
+  "hd [x, y, z] = x"
+  "tl [x, y, z] = [y, z]"
+  "hd (tl [x, y, z]) = y"
+  "tl (tl [x, y, z]) = [z]"
+  using hd.simps tl.simps(2) list.simps
+  by smt+
+
+lemma
+  "fst (hd [(a, b)]) = a"
+  "snd (hd [(a, b)]) = b"
+  using fst_conv snd_conv pair_collapse hd.simps tl.simps(2) list.simps
+  by smt+
+
+
+subsubsection {* Records *}
+
+record point =
+  cx :: int
+  cy :: int
+
+record bw_point = point +
+  black :: bool
+
+lemma
+  "p1 = p2 \<longrightarrow> cx p1 = cx p2"
+  "p1 = p2 \<longrightarrow> cy p1 = cy p2"
+  "cx p1 \<noteq> cx p2 \<longrightarrow> p1 \<noteq> p2"
+  "cy p1 \<noteq> cy p2 \<longrightarrow> p1 \<noteq> p2"
+  using point.simps
+  by smt+
+
+lemma
+  "cx \<lparr> cx = 3, cy = 4 \<rparr> = 3"
+  "cy \<lparr> cx = 3, cy = 4 \<rparr> = 4"
+  "cx \<lparr> cx = 3, cy = 4 \<rparr> \<noteq> cy \<lparr> cx = 3, cy = 4 \<rparr>"
+  "\<lparr> cx = 3, cy = 4 \<rparr> \<lparr> cx := 5 \<rparr> = \<lparr> cx = 5, cy = 4 \<rparr>"
+  "\<lparr> cx = 3, cy = 4 \<rparr> \<lparr> cy := 6 \<rparr> = \<lparr> cx = 3, cy = 6 \<rparr>"
+  "p = \<lparr> cx = 3, cy = 4 \<rparr> \<longrightarrow> p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> = p"
+  "p = \<lparr> cx = 3, cy = 4 \<rparr> \<longrightarrow> p \<lparr> cy := 4 \<rparr> \<lparr> cx := 3 \<rparr> = p"
+  using point.simps
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+lemma
+  "cy (p \<lparr> cx := a \<rparr>) = cy p"
+  "cx (p \<lparr> cy := a \<rparr>) = cx p"
+  "p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> = p \<lparr> cy := 4 \<rparr> \<lparr> cx := 3 \<rparr>"
+  sorry
+
+lemma
+  "p1 = p2 \<longrightarrow> cx p1 = cx p2"
+  "p1 = p2 \<longrightarrow> cy p1 = cy p2"
+  "p1 = p2 \<longrightarrow> black p1 = black p2"
+  "cx p1 \<noteq> cx p2 \<longrightarrow> p1 \<noteq> p2"
+  "cy p1 \<noteq> cy p2 \<longrightarrow> p1 \<noteq> p2"
+  "black p1 \<noteq> black p2 \<longrightarrow> p1 \<noteq> p2"
+  using point.simps bw_point.simps
+  by smt+
+
+lemma
+  "cx \<lparr> cx = 3, cy = 4, black = b \<rparr> = 3"
+  "cy \<lparr> cx = 3, cy = 4, black = b \<rparr> = 4"
+  "black \<lparr> cx = 3, cy = 4, black = b \<rparr> = b"
+  "cx \<lparr> cx = 3, cy = 4, black = b \<rparr> \<noteq> cy \<lparr> cx = 3, cy = 4, black = b \<rparr>"
+  "\<lparr> cx = 3, cy = 4, black = b \<rparr> \<lparr> cx := 5 \<rparr> = \<lparr> cx = 5, cy = 4, black = b \<rparr>"
+  "\<lparr> cx = 3, cy = 4, black = b \<rparr> \<lparr> cy := 6 \<rparr> = \<lparr> cx = 3, cy = 6, black = b \<rparr>"
+  "p = \<lparr> cx = 3, cy = 4, black = True \<rparr> \<longrightarrow>
+     p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> \<lparr> black := True \<rparr> = p"
+  "p = \<lparr> cx = 3, cy = 4, black = True \<rparr> \<longrightarrow>
+     p \<lparr> cy := 4 \<rparr> \<lparr> black := True \<rparr> \<lparr> cx := 3 \<rparr> = p"
+  "p = \<lparr> cx = 3, cy = 4, black = True \<rparr> \<longrightarrow>
+     p \<lparr> black := True \<rparr> \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> = p"
+  using point.simps bw_point.simps
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+lemma
+  "\<lparr> cx = 3, cy = 4, black = b \<rparr> \<lparr> black := w \<rparr> = \<lparr> cx = 3, cy = 4, black = w \<rparr>"
+  "\<lparr> cx = 3, cy = 4, black = True \<rparr> \<lparr> black := False \<rparr> =
+     \<lparr> cx = 3, cy = 4, black = False \<rparr>"
+  "p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> \<lparr> black := True \<rparr> =
+     p \<lparr> black := True \<rparr> \<lparr> cy := 4 \<rparr> \<lparr> cx := 3 \<rparr>"
+  sorry
+
+
+subsubsection {* Type definitions *}
+
+typedef three = "{1, 2, 3::int}" by auto
+
+definition n1 where "n1 = Abs_three 1"
+definition n2 where "n2 = Abs_three 2"
+definition n3 where "n3 = Abs_three 3"
+definition nplus where "nplus n m = Abs_three (Rep_three n + Rep_three m)"
+
+lemma three_def': "(n \<in> three) = (n = 1 \<or> n = 2 \<or> n = 3)"
+  by (auto simp add: three_def)
+
+lemma
+  "n1 = n1"
+  "n2 = n2"
+  "n1 \<noteq> n2"
+  "nplus n1 n1 = n2"
+  "nplus n1 n2 = n3"
+  using n1_def n2_def n3_def nplus_def
+  using three_def' Rep_three Abs_three_inverse
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+
+subsection {* With support by the SMT solver (but without proofs) *}
+
+subsubsection {* Algebraic datatypes *}
+
+lemma
+  "x = fst (x, y)"
+  "y = snd (x, y)"
+  "((x, y) = (y, x)) = (x = y)"
+  "((x, y) = (u, v)) = (x = u \<and> y = v)"
+  "(fst (x, y, z) = fst (u, v, w)) = (x = u)"
+  "(snd (x, y, z) = snd (u, v, w)) = (y = v \<and> z = w)"
+  "(fst (snd (x, y, z)) = fst (snd (u, v, w))) = (y = v)"
+  "(snd (snd (x, y, z)) = snd (snd (u, v, w))) = (z = w)"
+  "(fst (x, y) = snd (x, y)) = (x = y)"
+  "p1 = (x, y) \<and> p2 = (y, x) \<longrightarrow> fst p1 = snd p2"
+  "(fst (x, y) = snd (x, y)) = (x = y)"
+  "(fst p = snd p) = (p = (snd p, fst p))"
+  using fst_conv snd_conv pair_collapse
+  using [[smt_datatypes, smt_oracle]]
+  by smt+
+
+lemma
+  "[x] \<noteq> Nil"
+  "[x, y] \<noteq> Nil"
+  "x \<noteq> y \<longrightarrow> [x] \<noteq> [y]"
+  "hd (x # xs) = x"
+  "tl (x # xs) = xs"
+  "hd [x, y, z] = x"
+  "tl [x, y, z] = [y, z]"
+  "hd (tl [x, y, z]) = y"
+  "tl (tl [x, y, z]) = [z]"
+  using hd.simps tl.simps(2)
+  using [[smt_datatypes, smt_oracle]]
+  by smt+
+
+lemma
+  "fst (hd [(a, b)]) = a"
+  "snd (hd [(a, b)]) = b"
+  using fst_conv snd_conv pair_collapse hd.simps tl.simps(2)
+  using [[smt_datatypes, smt_oracle]]
+  by smt+
+
+
+subsubsection {* Records *}
+
+lemma
+  "p1 = p2 \<longrightarrow> cx p1 = cx p2"
+  "p1 = p2 \<longrightarrow> cy p1 = cy p2"
+  "cx p1 \<noteq> cx p2 \<longrightarrow> p1 \<noteq> p2"
+  "cy p1 \<noteq> cy p2 \<longrightarrow> p1 \<noteq> p2"
+  using point.simps
+  using [[smt_datatypes, smt_oracle]]
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+lemma
+  "cx \<lparr> cx = 3, cy = 4 \<rparr> = 3"
+  "cy \<lparr> cx = 3, cy = 4 \<rparr> = 4"
+  "cx \<lparr> cx = 3, cy = 4 \<rparr> \<noteq> cy \<lparr> cx = 3, cy = 4 \<rparr>"
+  "\<lparr> cx = 3, cy = 4 \<rparr> \<lparr> cx := 5 \<rparr> = \<lparr> cx = 5, cy = 4 \<rparr>"
+  "\<lparr> cx = 3, cy = 4 \<rparr> \<lparr> cy := 6 \<rparr> = \<lparr> cx = 3, cy = 6 \<rparr>"
+  "p = \<lparr> cx = 3, cy = 4 \<rparr> \<longrightarrow> p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> = p"
+  "p = \<lparr> cx = 3, cy = 4 \<rparr> \<longrightarrow> p \<lparr> cy := 4 \<rparr> \<lparr> cx := 3 \<rparr> = p"
+  using point.simps
+  using [[smt_datatypes, smt_oracle]]
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+lemma
+  "cy (p \<lparr> cx := a \<rparr>) = cy p"
+  "cx (p \<lparr> cy := a \<rparr>) = cx p"
+  "p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> = p \<lparr> cy := 4 \<rparr> \<lparr> cx := 3 \<rparr>"
+  using point.simps
+  using [[smt_datatypes, smt_oracle]]
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+lemma
+  "p1 = p2 \<longrightarrow> cx p1 = cx p2"
+  "p1 = p2 \<longrightarrow> cy p1 = cy p2"
+  "p1 = p2 \<longrightarrow> black p1 = black p2"
+  "cx p1 \<noteq> cx p2 \<longrightarrow> p1 \<noteq> p2"
+  "cy p1 \<noteq> cy p2 \<longrightarrow> p1 \<noteq> p2"
+  "black p1 \<noteq> black p2 \<longrightarrow> p1 \<noteq> p2"
+  using point.simps bw_point.simps
+  using [[smt_datatypes, smt_oracle]]
+  by smt+
+
+lemma
+  "cx \<lparr> cx = 3, cy = 4, black = b \<rparr> = 3"
+  "cy \<lparr> cx = 3, cy = 4, black = b \<rparr> = 4"
+  "black \<lparr> cx = 3, cy = 4, black = b \<rparr> = b"
+  "cx \<lparr> cx = 3, cy = 4, black = b \<rparr> \<noteq> cy \<lparr> cx = 3, cy = 4, black = b \<rparr>"
+  "\<lparr> cx = 3, cy = 4, black = b \<rparr> \<lparr> cx := 5 \<rparr> = \<lparr> cx = 5, cy = 4, black = b \<rparr>"
+  "\<lparr> cx = 3, cy = 4, black = b \<rparr> \<lparr> cy := 6 \<rparr> = \<lparr> cx = 3, cy = 6, black = b \<rparr>"
+  "p = \<lparr> cx = 3, cy = 4, black = True \<rparr> \<longrightarrow>
+     p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> \<lparr> black := True \<rparr> = p"
+  "p = \<lparr> cx = 3, cy = 4, black = True \<rparr> \<longrightarrow>
+     p \<lparr> cy := 4 \<rparr> \<lparr> black := True \<rparr> \<lparr> cx := 3 \<rparr> = p"
+  "p = \<lparr> cx = 3, cy = 4, black = True \<rparr> \<longrightarrow>
+     p \<lparr> black := True \<rparr> \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> = p"
+  using point.simps bw_point.simps
+  using [[smt_datatypes, smt_oracle]]
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt+
+
+lemma
+  "\<lparr> cx = 3, cy = 4, black = b \<rparr> \<lparr> black := w \<rparr> = \<lparr> cx = 3, cy = 4, black = w \<rparr>"
+  "\<lparr> cx = 3, cy = 4, black = True \<rparr> \<lparr> black := False \<rparr> =
+     \<lparr> cx = 3, cy = 4, black = False \<rparr>"
+  sorry
+
+lemma
+  "p \<lparr> cx := 3 \<rparr> \<lparr> cy := 4 \<rparr> \<lparr> black := True \<rparr> =
+     p \<lparr> black := True \<rparr> \<lparr> cy := 4 \<rparr> \<lparr> cx := 3 \<rparr>"
+  using point.simps bw_point.simps
+  using [[smt_datatypes, smt_oracle]]
+  using [[z3_options="AUTO_CONFIG=false"]]
+  by smt
+
+
+subsubsection {* Type definitions *}
+
+lemma
+  "n1 = n1"
+  "n2 = n2"
+  "n1 \<noteq> n2"
+  "nplus n1 n1 = n2"
+  "nplus n1 n2 = n3"
+  using n1_def n2_def n3_def nplus_def
+  using [[smt_datatypes, smt_oracle]]
+  using [[z3_options="AUTO_CONFIG=false"]]
   by smt+
 
 
