@@ -30,36 +30,26 @@ notation (HTML output)
 
 subsection {* Syntax for continuous lambda abstraction *}
 
-syntax "_cabs" :: "'a"
+syntax "_cabs" :: "[logic, logic] \<Rightarrow> logic"
 
 parse_translation {*
 (* rewrite (_cabs x t) => (Abs_cfun (%x. t)) *)
   [mk_binder_tr (@{syntax_const "_cabs"}, @{const_syntax Abs_cfun})];
 *}
 
-text {* To avoid eta-contraction of body: *}
-typed_print_translation {*
-  let
-    fun cabs_tr' _ _ [Abs abs] = let
-          val (x,t) = atomic_abs_tr' abs
-        in Syntax.const @{syntax_const "_cabs"} $ x $ t end
-
-      | cabs_tr' _ T [t] = let
-          val xT = domain_type (domain_type T);
-          val abs' = ("x",xT,(incr_boundvars 1 t)$Bound 0);
-          val (x,t') = atomic_abs_tr' abs';
-        in Syntax.const @{syntax_const "_cabs"} $ x $ t' end;
-
-  in [(@{const_syntax Abs_cfun}, cabs_tr')] end;
-*}
+print_translation {*
+  [(@{const_syntax Abs_cfun}, fn [Abs abs] =>
+      let val (x, t) = atomic_abs_tr' abs
+      in Syntax.const @{syntax_const "_cabs"} $ x $ t end)]
+*}  -- {* To avoid eta-contraction of body *}
 
 text {* Syntax for nested abstractions *}
 
 syntax
-  "_Lambda" :: "[cargs, 'a] \<Rightarrow> logic"  ("(3LAM _./ _)" [1000, 10] 10)
+  "_Lambda" :: "[cargs, logic] \<Rightarrow> logic"  ("(3LAM _./ _)" [1000, 10] 10)
 
 syntax (xsymbols)
-  "_Lambda" :: "[cargs, 'a] \<Rightarrow> logic" ("(3\<Lambda> _./ _)" [1000, 10] 10)
+  "_Lambda" :: "[cargs, logic] \<Rightarrow> logic" ("(3\<Lambda> _./ _)" [1000, 10] 10)
 
 parse_ast_translation {*
 (* rewrite (LAM x y z. t) => (_cabs x (_cabs y (_cabs z t))) *)
