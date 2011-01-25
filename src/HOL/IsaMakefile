@@ -17,6 +17,7 @@ images: \
   HOL-Nominal \
   HOL-Probability \
   HOL-Proofs \
+  HOL-SPARK \
   HOL-Word \
   HOL4 \
   HOLCF \
@@ -71,6 +72,7 @@ test: \
   HOL-Proofs-Extraction \
   HOL-Proofs-Lambda \
   HOL-SET_Protocol \
+  HOL-SPARK-Examples \
   HOL-Word-SMT_Examples \
   HOL-Statespace \
   HOL-Subst \
@@ -1031,19 +1033,20 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Decision_Procs/Commutative_Ring.thy	\
   ex/HarmonicSeries.thy ex/Hebrew.thy ex/Hex_Bin_Examples.thy		\
   ex/Higher_Order_Logic.thy ex/Iff_Oracle.thy ex/Induction_Schema.thy	\
   ex/InductiveInvariant.thy ex/InductiveInvariant_examples.thy		\
-  ex/Intuitionistic.thy ex/Lagrange.thy \
-  ex/List_to_Set_Comprehension_Examples.thy ex/LocaleTest2.thy ex/MT.thy	\
-  ex/MergeSort.thy ex/Meson_Test.thy ex/MonoidGroup.thy			\
+  ex/Interpretation_with_Defs.thy ex/Intuitionistic.thy ex/Lagrange.thy	\
+  ex/List_to_Set_Comprehension_Examples.thy ex/LocaleTest2.thy		\
+  ex/MT.thy ex/MergeSort.thy ex/Meson_Test.thy ex/MonoidGroup.thy	\
   ex/Multiquote.thy ex/NatSum.thy ex/Normalization_by_Evaluation.thy	\
   ex/Numeral.thy ex/PER.thy ex/PresburgerEx.thy ex/Primrec.thy		\
   ex/Quickcheck_Examples.thy ex/Quickcheck_Lattice_Examples.thy		\
   ex/Quicksort.thy ex/ROOT.ML ex/Recdefs.thy ex/Records.thy		\
   ex/ReflectionEx.thy ex/Refute_Examples.thy ex/SAT_Examples.thy	\
-  ex/SVC_Oracle.thy ex/Serbian.thy ex/Sqrt.thy ex/Sqrt_Script.thy	\
-  ex/Sudoku.thy ex/Tarski.thy ex/Termination.thy ex/Transfer_Ex.thy	\
-  ex/Tree23.thy ex/Unification.thy ex/While_Combinator_Example.thy	\
-  ex/document/root.bib ex/document/root.tex ex/set.thy ex/svc_funcs.ML	\
-  ex/svc_test.thy
+  ex/SVC_Oracle.thy ex/Serbian.thy ex/Set_Algebras.thy ex/Sqrt.thy	\
+  ex/Sqrt_Script.thy ex/Sudoku.thy ex/Tarski.thy ex/Termination.thy	\
+  ex/Transfer_Ex.thy ex/Tree23.thy ex/Unification.thy			\
+  ex/While_Combinator_Example.thy ex/document/root.bib			\
+  ex/document/root.tex ex/set.thy ex/svc_funcs.ML ex/svc_test.thy	\
+  ../Tools/interpretation_with_defs.ML
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL ex
 
 
@@ -1199,7 +1202,6 @@ $(OUT)/HOL-Nominal: $(OUT)/HOL Nominal/ROOT.ML \
   Nominal/nominal_permeq.ML \
   Nominal/nominal_primrec.ML \
   Nominal/nominal_thmdecls.ML \
-  Nominal/old_primrec.ML \
   Library/Infinite_Set.thy
 	@cd Nominal; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL HOL-Nominal
 
@@ -1342,6 +1344,69 @@ $(LOG)/HOL-Boogie-Examples.gz: $(OUT)/HOL-Boogie			\
   Boogie/Examples/VCC_Max.b2i Boogie/Examples/Boogie_Max.certs		\
   Boogie/Examples/Boogie_Dijkstra.certs Boogie/Examples/VCC_Max.certs
 	@cd Boogie; $(ISABELLE_TOOL) usedir $(OUT)/HOL-Boogie Examples
+
+
+## HOL-SPARK
+
+HOL-SPARK: HOL-Word $(OUT)/HOL-SPARK
+
+$(OUT)/HOL-SPARK: $(OUT)/HOL-Word SPARK/ROOT.ML 		\
+  SPARK/SPARK.thy SPARK/SPARK_Setup.thy				\
+  SPARK/Tools/fdl_lexer.ML SPARK/Tools/fdl_parser.ML		\
+  SPARK/Tools/spark_commands.ML SPARK/Tools/spark_vcs.ML
+	@cd SPARK; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL-Word HOL-SPARK
+
+
+## HOL-SPARK-Examples
+
+HOL-SPARK-Examples: HOL-SPARK $(LOG)/HOL-SPARK-Examples.gz
+
+$(LOG)/HOL-SPARK-Examples.gz: $(OUT)/HOL-SPARK				\
+  SPARK/Examples/ROOT.ML						\
+  SPARK/Examples/Gcd/Greatest_Common_Divisor.thy			\
+  SPARK/Examples/Gcd/greatest_common_divisor/g_c_d.fdl			\
+  SPARK/Examples/Gcd/greatest_common_divisor/g_c_d.rls			\
+  SPARK/Examples/Gcd/greatest_common_divisor/g_c_d.siv			\
+  SPARK/Examples/Liseq/Longest_Increasing_Subsequence.thy		\
+  SPARK/Examples/Liseq/liseq/liseq_length.fdl				\
+  SPARK/Examples/Liseq/liseq/liseq_length.rls				\
+  SPARK/Examples/Liseq/liseq/liseq_length.siv				\
+  SPARK/Examples/RIPEMD-160/F.thy SPARK/Examples/RIPEMD-160/Hash.thy	\
+  SPARK/Examples/RIPEMD-160/K_L.thy SPARK/Examples/RIPEMD-160/K_R.thy	\
+  SPARK/Examples/RIPEMD-160/R_L.thy					\
+  SPARK/Examples/RIPEMD-160/RMD_Lemmas.thy				\
+  SPARK/Examples/RIPEMD-160/RMD_Specification.thy			\
+  SPARK/Examples/RIPEMD-160/RMD.thy SPARK/Examples/RIPEMD-160/Round.thy	\
+  SPARK/Examples/RIPEMD-160/R_R.thy SPARK/Examples/RIPEMD-160/S_L.thy	\
+  SPARK/Examples/RIPEMD-160/S_R.thy					\
+  SPARK/Examples/RIPEMD-160/rmd/f.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/f.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/f.siv					\
+  SPARK/Examples/RIPEMD-160/rmd/hash.fdl				\
+  SPARK/Examples/RIPEMD-160/rmd/hash.rls				\
+  SPARK/Examples/RIPEMD-160/rmd/hash.siv				\
+  SPARK/Examples/RIPEMD-160/rmd/k_l.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/k_l.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/k_l.siv					\
+  SPARK/Examples/RIPEMD-160/rmd/k_r.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/k_r.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/k_r.siv					\
+  SPARK/Examples/RIPEMD-160/rmd/r_l.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/r_l.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/r_l.siv					\
+  SPARK/Examples/RIPEMD-160/rmd/round.fdl				\
+  SPARK/Examples/RIPEMD-160/rmd/round.rls				\
+  SPARK/Examples/RIPEMD-160/rmd/round.siv				\
+  SPARK/Examples/RIPEMD-160/rmd/r_r.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/r_r.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/r_r.siv					\
+  SPARK/Examples/RIPEMD-160/rmd/s_l.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/s_l.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/s_l.siv					\
+  SPARK/Examples/RIPEMD-160/rmd/s_r.fdl					\
+  SPARK/Examples/RIPEMD-160/rmd/s_r.rls					\
+  SPARK/Examples/RIPEMD-160/rmd/s_r.siv
+	@cd SPARK; $(ISABELLE_TOOL) usedir $(OUT)/HOL-SPARK Examples
 
 
 ## HOL-Mutabelle
@@ -1649,6 +1714,7 @@ clean:
 		$(LOG)/HOL-Proofs-Extraction.gz				\
 		$(LOG)/HOL-Proofs-Lambda.gz $(LOG)/HOL-SET_Protocol.gz	\
 		$(LOG)/HOL-Word-SMT_Examples.gz				\
+		$(LOG)/HOL-SPARK.gz $(LOG)/HOL-SPARK-Examples.gz	\
 		$(LOG)/HOL-Statespace.gz $(LOG)/HOL-Subst.gz		\
 		$(LOG)/HOL-UNITY.gz $(LOG)/HOL-Unix.gz			\
 		$(LOG)/HOL-Word-Examples.gz $(LOG)/HOL-Word.gz		\
@@ -1659,6 +1725,7 @@ clean:
 		$(OUT)/HOL-Main $(OUT)/HOL-Multivariate_Analysis	\
 		$(OUT)/HOL-NSA $(OUT)/HOL-Nominal $(OUT)/HOL-Plain	\
 		$(OUT)/HOL-Probability $(OUT)/HOL-Proofs		\
+		$(OUT)/HOL-SPARK					\
 		$(OUT)/HOL-Word $(OUT)/HOL4 $(OUT)/TLA			\
 		$(OUT)/HOLCF $(LOG)/HOLCF.gz $(LOG)/HOLCF-IMP.gz	\
 		$(LOG)/HOLCF-ex.gz $(LOG)/HOLCF-FOCUS.gz $(OUT)/IOA	\

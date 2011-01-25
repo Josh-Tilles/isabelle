@@ -7,12 +7,10 @@
         is a version of classical higher-order logic resembling
         that of the <a href="http://www.cl.cam.ac.uk/Research/HVG/HOL/">HOL System</a>.
         </li>
-
-        <ul>
-          <li><a href="HOL/HOLCF/index.html">HOLCF (Higher-Order Logic of Computable Functions)</a>
-          formalizes a model of Scott's Logic for Computable Functions (domain theory) in HOL.
-          </li>
-        </ul>
+      </ul>
+      <ul>
+        <li>HOL with explicit <a href="HOL-Proofs/index.html">proof terms</a>.
+        </li>
       </ul>
     </li>
   </ul>

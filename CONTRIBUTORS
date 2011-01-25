@@ -3,8 +3,15 @@ For the purposes of the license agreement in the file COPYRIGHT, a
 who is listed as an author in one of the source files of this Isabelle
 distribution.
 
+Contributions to this Isabelle version
+--------------------------------------
+
+
 Contributions to Isabelle2011
 -----------------------------
+
+* January 2011: Stefan Berghofer, secunet Security Networks AG
+  HOL-SPARK: an interactive prover back-end for SPARK.
 
 * October 2010: Bogdan Grechuk, University of Edinburgh
   Extended convex analysis in Multivariate Analysis.
@@ -17,20 +24,20 @@ Contributions to Isabelle2011
   partial orders in HOL.
 
 * September 2010: Florian Haftmann, TUM
-  Refined concepts for evaluation, i.e., normalisation of terms using
+  Refined concepts for evaluation, i.e., normalization of terms using
   different techniques.
 
 * September 2010: Florian Haftmann, TUM
   Code generation for Scala.
 
 * August 2010: Johannes Hoelzl, Armin Heller, and Robert Himmelmann, TUM
-  Rewriting the Probability theory.
+  Improved Probability theory in HOL.
 
 * July 2010: Florian Haftmann, TUM
   Reworking and extension of the Imperative HOL framework.
 
-* July 2010: Alexander Krauss, TUM and Christian Sternagel, University of
-    Innsbruck
+* July 2010: Alexander Krauss, TUM and Christian Sternagel, University
+    of Innsbruck
   Ad-hoc overloading. Generic do notation for monads.
 
 

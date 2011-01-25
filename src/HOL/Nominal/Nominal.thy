@@ -10,7 +10,6 @@ uses
   ("nominal_primrec.ML")
   ("nominal_inductive.ML")
   ("nominal_inductive2.ML")
-  ("old_primrec.ML")
 begin 
 
 section {* Permutations *}
@@ -785,7 +784,7 @@ proof -
   hence "((UNIV::'x set) - A) \<noteq> ({}::'x set)" by (force simp only:)
   then obtain c::"'x" where "c\<in>((UNIV::'x set) - A)" by force
   then have "c\<notin>A" by simp
-  then show ?thesis using prems by simp 
+  then show ?thesis ..
 qed
 
 text {* there always exists a fresh name for an object with finite support *}
@@ -3605,7 +3604,6 @@ lemmas [eqvt_force] = numeral_nat_eqvt numeral_int_eqvt
 (***************************************)
 (* setup for the individial atom-kinds *)
 (* and nominal datatypes               *)
-use "old_primrec.ML"
 use "nominal_atoms.ML"
 
 (************************************************************)

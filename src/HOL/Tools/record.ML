@@ -25,6 +25,7 @@ sig
     cases: thm, simps: thm list, iffs: thm list}
   val get_info: theory -> string -> info option
   val the_info: theory -> string -> info
+  val get_hierarchy: theory -> (string * typ list) -> (string * ((string * sort) * typ) list) list
   val add_record: bool -> (string * sort) list * binding -> (typ list * string) option ->
     (binding * typ * mixfix) list -> theory -> theory
 
@@ -93,8 +94,8 @@ structure Iso_Tuple_Thms = Theory_Data
   fun merge data = Symtab.merge Thm.eq_thm_prop data;   (* FIXME handle Symtab.DUP ?? *)
 );
 
-fun get_typedef_info tyco vs (({ rep_type, Abs_name, Rep_name, ...},
-    { Abs_inject, Rep_inject, Abs_inverse, Rep_inverse, ... }) : Typedef.info) thy =
+fun get_typedef_info tyco vs
+    (({rep_type, Abs_name, ...}, {Rep_inject, Abs_inverse, ... }) : Typedef.info) thy =
   let
     val exists_thm =
       UNIV_I
@@ -196,8 +197,6 @@ structure Record: RECORD =
 struct
 
 val eq_reflection = @{thm eq_reflection};
-val atomize_all = @{thm HOL.atomize_all};
-val atomize_imp = @{thm HOL.atomize_imp};
 val meta_allE = @{thm Pure.meta_allE};
 val prop_subst = @{thm prop_subst};
 val K_record_comp = @{thm K_record_comp};
@@ -616,12 +615,14 @@ val get_fieldext = Symtab.lookup o #fieldext o Data.get;
 
 (* parent records *)
 
-fun add_parents _ NONE parents = parents
-  | add_parents thy (SOME (types, name)) parents =
+local
+
+fun add_parents _ NONE = I
+  | add_parents thy (SOME (types, name)) =
       let
         fun err msg = error (msg ^ " parent record " ^ quote name);
 
-        val {args, parent, fields, extension, induct_scheme, ext_def, ...} =
+        val {args, parent, ...} =
           (case get_info thy name of SOME info => info | NONE => err "Unknown");
         val _ = if length types <> length args then err "Bad number of arguments for" else ();
 
@@ -630,15 +631,25 @@ fun add_parents _ NONE parents = parents
         val bads = map_filter bad_inst (args ~~ types);
         val _ = null bads orelse err ("Ill-sorted instantiation of " ^ commas bads ^ " in");
 
-        val inst = map fst args ~~ types;
-        val subst = Term.map_type_tfree (the o AList.lookup (op =) inst o fst);
+        val inst = args ~~ types;
+        val subst = Term.map_type_tfree (the o AList.lookup (op =) inst);
         val parent' = Option.map (apfst (map subst)) parent;
-        val fields' = map (apsnd subst) fields;
-        val extension' = apsnd (map subst) extension;
-      in
-        add_parents thy parent'
-          (make_parent_info name fields' extension' ext_def induct_scheme :: parents)
-      end;
+      in cons (name, inst) #> add_parents thy parent' end;
+
+in
+
+fun get_hierarchy thy (name, types) = add_parents thy (SOME (types, name)) [];
+
+fun get_parent_info thy parent =
+  add_parents thy parent [] |> map (fn (name, inst) =>
+    let
+      val subst = Term.map_type_tfree (the o AList.lookup (op =) inst);
+      val {fields, extension, induct_scheme, ext_def, ...} = the_info thy name;
+      val fields' = map (apsnd subst) fields;
+      val extension' = apsnd (map subst) extension;
+    in make_parent_info name fields' extension' ext_def induct_scheme end);
+
+end;
 
 
 
@@ -942,26 +953,30 @@ end;
 
 local
 
+fun dest_update ctxt c =
+  (case try Syntax.unmark_const c of
+    SOME d => try (unsuffix updateN) (Consts.extern (ProofContext.consts_of ctxt) d)
+  | NONE => NONE);
+
 fun field_updates_tr' ctxt (tm as Const (c, _) $ k $ u) =
-      let
-        val extern = Consts.extern (ProofContext.consts_of ctxt);
-        val t =
-          (case k of
-            Abs (_, _, Abs (_, _, t) $ Bound 0) =>
-              if null (loose_bnos t) then t else raise Match
-          | Abs (_, _, t) =>
-              if null (loose_bnos t) then t else raise Match
-          | _ => raise Match);
-      in
-        (case Option.map extern (try Syntax.unmark_const c) of
-          SOME update_name =>
-            (case try (unsuffix updateN) update_name of
-              SOME name =>
+      (case dest_update ctxt c of
+        SOME name =>
+          let
+            val opt_t =
+              (case k of
+                Abs (_, _, Abs (_, _, t) $ Bound 0) =>
+                  if null (loose_bnos t) then SOME t else NONE
+              | Abs (_, _, t) =>
+                  if null (loose_bnos t) then SOME t else NONE
+              | _ => NONE);
+          in
+            (case opt_t of
+              SOME t =>
                 apfst (cons (Syntax.const @{syntax_const "_field_update"} $ Syntax.free name $ t))
                   (field_updates_tr' ctxt u)
             | NONE => ([], tm))
-        | NONE => ([], tm))
-      end
+          end
+      | NONE => ([], tm))
   | field_updates_tr' _ tm = ([], tm);
 
 fun record_update_tr' ctxt tm =
@@ -1509,11 +1524,6 @@ val split_wrapper = (split_name, fn tac => split_tac ORELSE' tac);
 
 (* prepare arguments *)
 
-fun read_raw_parent ctxt raw_T =
-  (case ProofContext.read_typ_abbrev ctxt raw_T of
-    Type (name, Ts) => (Ts, name)
-  | T => error ("Bad parent record specification: " ^ Syntax.string_of_typ ctxt T));
-
 fun read_typ ctxt raw_T env =
   let
     val ctxt' = fold (Variable.declare_typ o TFree) env ctxt;
@@ -1809,7 +1819,7 @@ fun instantiate_random_record tyco vs extN Ts thy =
           ((HOLogic.mk_random T' size, @{typ Random.seed}), SOME (v, termifyT T'))) params)
         tc @{typ Random.seed} (SOME Tm, @{typ Random.seed});
     val eq = HOLogic.mk_Trueprop (HOLogic.mk_eq (lhs, rhs));
-  in 
+  in
     thy
     |> Class.instantiation ([tyco], vs, @{sort random})
     |> `(fn lthy => Syntax.check_term lthy eq)
@@ -1822,11 +1832,14 @@ fun ensure_random_record ext_tyco vs extN Ts thy =
   let
     val algebra = Sign.classes_of thy;
     val has_inst = can (Sorts.mg_domain algebra ext_tyco) @{sort random};
-  in if has_inst then thy
-    else case Quickcheck_Generators.perhaps_constrain thy (map (rpair @{sort random}) Ts) vs
-     of SOME constrain => instantiate_random_record ext_tyco (map constrain vs) extN
-          ((map o map_atyps) (fn TFree v => TFree (constrain v)) Ts) thy
-      | NONE => thy
+  in
+    if has_inst then thy
+    else
+      (case Quickcheck_Generators.perhaps_constrain thy (map (rpair @{sort random}) Ts) vs of
+        SOME constrain =>
+          instantiate_random_record ext_tyco (map constrain vs) extN
+            ((map o map_atyps) (fn TFree v => TFree (constrain v)) Ts) thy
+      | NONE => thy)
   end;
 
 fun add_code ext_tyco vs extT ext simps inject thy =
@@ -1844,7 +1857,7 @@ fun add_code ext_tyco vs extT ext simps inject thy =
     fun mk_eq_refl thy =
       @{thm equal_refl}
       |> Thm.instantiate
-        ([pairself (Thm.ctyp_of thy) (TVar (("'a", 0), @{sort equal}), Logic.varifyT_global extT)], [])
+        ([pairself (ctyp_of thy) (TVar (("'a", 0), @{sort equal}), Logic.varifyT_global extT)], [])
       |> AxClass.unoverload thy;
   in
     thy
@@ -1853,11 +1866,12 @@ fun add_code ext_tyco vs extT ext simps inject thy =
     |> Class.instantiation ([ext_tyco], vs, [HOLogic.class_equal])
     |> `(fn lthy => Syntax.check_term lthy eq)
     |-> (fn eq => Specification.definition
-         (NONE, (Attrib.empty_binding, eq)))
+          (NONE, (Attrib.empty_binding, eq)))
     |-> (fn (_, (_, eq_def)) =>
        Class.prove_instantiation_exit_result Morphism.thm
-         (fn _ => fn eq_def => tac eq_def) eq_def)
-    |-> (fn eq_def => fn thy => thy |> Code.del_eqn eq_def |> Code.add_default_eqn (mk_eq thy eq_def))
+          (fn _ => fn eq_def => tac eq_def) eq_def)
+    |-> (fn eq_def => fn thy =>
+          thy |> Code.del_eqn eq_def |> Code.add_default_eqn (mk_eq thy eq_def))
     |> (fn thy => Code.add_nbe_default_eqn (mk_eq_refl thy) thy)
     |> ensure_random_record ext_tyco vs (fst ext) (binder_types (snd ext))
   end;
@@ -2418,7 +2432,7 @@ fun add_record quiet_mode (params, binding) raw_parent raw_fields thy =
       handle ERROR msg =>
         cat_error msg ("The error(s) above occurred in parent record specification");
     val parent_args = (case parent of SOME (Ts, _) => Ts | NONE => []);
-    val parents = add_parents thy parent [];
+    val parents = get_parent_info thy parent;
 
     val bfields = map (prep_field cert_typ) raw_fields;
 
