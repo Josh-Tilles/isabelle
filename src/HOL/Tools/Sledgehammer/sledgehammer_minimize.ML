@@ -30,11 +30,6 @@ open Sledgehammer_Provers
 
 (* wrapper for calling external prover *)
 
-fun short_string_for_failure ATP_Proof.Unprovable = "Unprovable."
-  | short_string_for_failure ATP_Proof.TimedOut = "Timed out."
-  | short_string_for_failure ATP_Proof.Interrupted = "Interrupted."
-  | short_string_for_failure _ = "Error."
-
 fun n_facts names =
   let val n = length names in
     string_of_int n ^ " fact" ^ plural_s n ^
@@ -81,10 +76,9 @@ fun test_facts ({debug, verbose, overlord, provers, type_sys, isar_proof,
   in
     print silent (fn () =>
         case outcome of
-          SOME failure => short_string_for_failure failure
-        | NONE =>
-          if length used_facts = length facts then "Found proof."
-          else "Found proof with " ^ n_facts used_facts ^ ".");
+          SOME failure => string_for_failure failure
+        | NONE => if length used_facts = length facts then "Found proof."
+                  else "Found proof with " ^ n_facts used_facts ^ ".");
     result
   end
 
@@ -151,13 +145,11 @@ val slack_msecs = 200
 fun minimize_facts prover_name (params as {timeout, ...}) explicit_apply_opt
                    silent i n state facts =
   let
-    val thy = Proof.theory_of state
     val ctxt = Proof.context_of state
     val prover = get_prover ctxt false prover_name
     val msecs = Time.toMilliseconds timeout
     val _ = print silent (fn () => "Sledgehammer minimize: " ^
                                    quote prover_name ^ ".")
-    val {goal, ...} = Proof.goal state
     fun do_test timeout =
       test_facts params explicit_apply_opt silent prover timeout i n state
     val timer = Timer.startRealTimer ()
