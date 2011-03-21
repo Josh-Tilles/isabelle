@@ -9,16 +9,62 @@ theory Quickcheck_Narrowing_Examples
 imports "~~/src/HOL/Library/Quickcheck_Narrowing"
 begin
 
+subsection {* Minimalistic examples *}
+(*
+lemma
+  "x = y"
+quickcheck[tester = narrowing, finite_types = false, default_type = int, expect = counterexample]
+oops
+*)
+(*
+lemma
+  "x = y"
+quickcheck[tester = narrowing, finite_types = true, expect = counterexample]
+oops
+*)
+
 subsection {* Simple list examples *}
 
 lemma "rev xs = xs"
-quickcheck[tester = narrowing, finite_types = false, default_type = nat, expect = counterexample]
+  quickcheck[tester = narrowing, finite_types = false, default_type = nat, expect = counterexample]
 oops
 
-text {* Example fails due to some strange thing... *}
-(*
 lemma "rev xs = xs"
-quickcheck[tester = lazy_exhaustive, finite_types = true]
+  quickcheck[tester = narrowing, finite_types = false, default_type = int, expect = counterexample]
+oops
+
+lemma "rev xs = xs"
+  quickcheck[tester = narrowing, finite_types = true, expect = counterexample]
+oops
+
+subsection {* Simple examples with functions *}
+
+declare [[quickcheck_finite_functions]]
+
+lemma "map f xs = map g xs"
+  quickcheck[tester = narrowing, finite_types = true, expect = counterexample]
+oops
+
+lemma "map f xs = map f ys ==> xs = ys"
+  quickcheck[tester = narrowing, finite_types = true, expect = counterexample]
+oops
+
+lemma
+  "list_all2 P (rev xs) (rev ys) = list_all2 P xs (rev ys)"
+  quickcheck[tester = narrowing, expect = counterexample]
+oops
+
+lemma "map f xs = F f xs"
+  quickcheck[tester = narrowing, finite_types = true, expect = counterexample]
+oops
+
+lemma "map f xs = F f xs"
+  quickcheck[tester = narrowing, finite_types = false, expect = counterexample]
+oops
+
+(* requires some work...
+lemma "R O S = S O R"
+  quickcheck[tester = narrowing, size = 2]
 oops
 *)
 
@@ -117,7 +163,7 @@ subsubsection {* Invalid Lemma due to typo in lbal *}
 
 lemma is_ord_l_bal:
  "\<lbrakk> is_ord(MKT (x :: nat) l r h); height l = height r + 2 \<rbrakk> \<Longrightarrow> is_ord(l_bal(x,l,r))"
-quickcheck[tester = narrowing, finite_types = false, default_type = nat, size = 1, timeout = 100, expect = counterexample]
+quickcheck[tester = narrowing, finite_types = false, default_type = nat, size = 6, timeout = 100, expect = counterexample]
 oops
 
 

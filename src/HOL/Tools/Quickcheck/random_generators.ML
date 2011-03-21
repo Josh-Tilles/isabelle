@@ -11,7 +11,7 @@ sig
     -> (seed -> ('b * (unit -> term)) * seed) -> (seed -> seed * seed)
     -> seed -> (('a -> 'b) * (unit -> term)) * seed
   val compile_generator_expr:
-    Proof.context -> term -> int -> term list option * Quickcheck.report option
+    Proof.context -> term * term list -> int -> term list option * Quickcheck.report option
   val put_counterexample: (unit -> int -> seed -> term list option * seed)
     -> Proof.context -> Proof.context
   val put_counterexample_report: (unit -> int -> seed -> (term list option * (bool list * bool)) * seed)
@@ -375,18 +375,19 @@ fun collect_single_report single_report
 val empty_report = Quickcheck.Report { iterations = 0, raised_match_errors = 0,
   satisfied_assms = [], positive_concl_tests = 0 }
     
-fun compile_generator_expr ctxt t =
+fun compile_generator_expr ctxt (t, eval_terms) =
   let
-    val Ts = (map snd o fst o strip_abs) t;
+    val t' = list_abs_free (Term.add_frees t [], t)
+    val Ts = (map snd o fst o strip_abs) t';
     val thy = ProofContext.theory_of ctxt
     val iterations = Config.get ctxt Quickcheck.iterations
   in
     if Config.get ctxt Quickcheck.report then
       let
-        val t' = mk_reporting_generator_expr thy t Ts;
+        val t'' = mk_reporting_generator_expr thy t' Ts;
         val compile = Code_Runtime.dynamic_value_strict
           (Counterexample_Report.get, put_counterexample_report, "Random_Generators.put_counterexample_report")
-          thy (SOME target) (fn proc => fn g => fn s => g s #>> (apfst o Option.map o map) proc) t' [];
+          thy (SOME target) (fn proc => fn g => fn s => g s #>> (apfst o Option.map o map) proc) t'' [];
         val single_tester = compile #> Random_Engine.run
         fun iterate_and_collect size 0 report = (NONE, report)
           | iterate_and_collect size j report =
@@ -404,10 +405,10 @@ fun compile_generator_expr ctxt t =
       end
     else
       let
-        val t' = mk_generator_expr thy t Ts;
+        val t'' = mk_generator_expr thy t' Ts;
         val compile = Code_Runtime.dynamic_value_strict
           (Counterexample.get, put_counterexample, "Random_Generators.put_counterexample")
-          thy (SOME target) (fn proc => fn g => fn s => g s #>> (Option.map o map) proc) t' [];
+          thy (SOME target) (fn proc => fn g => fn s => g s #>> (Option.map o map) proc) t'' [];
         val single_tester = compile #> Random_Engine.run
         fun iterate size 0 = NONE
           | iterate size j =
