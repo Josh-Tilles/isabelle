@@ -6,17 +6,25 @@ Common functions for quickcheck's generators.
 
 signature QUICKCHECK_COMMON =
 sig
+  val strip_imp : term -> (term list * term)
   val perhaps_constrain: theory -> (typ * sort) list -> (string * sort) list
     -> (string * sort -> string * sort) option
   val ensure_sort_datatype:
     sort * (Datatype.config -> Datatype.descr -> (string * sort) list -> string list -> string ->
       string list * string list -> typ list * typ list -> theory -> theory)
     -> Datatype.config -> string list -> theory -> theory
+  val gen_mk_parametric_generator_expr :
+   (((Proof.context -> term * term list -> term) * term) * typ) -> Proof.context -> (term * term list) list -> term
   val post_process_term : term -> term
 end;
 
 structure Quickcheck_Common : QUICKCHECK_COMMON =
 struct
+
+(* HOLogic's term functions *)
+
+fun strip_imp (Const(@{const_name HOL.implies},_) $ A $ B) = apfst (cons A) (strip_imp B)
+  | strip_imp A = ([], A)
 
 (** ensuring sort constraints **)
 
@@ -53,6 +61,18 @@ fun ensure_sort_datatype (sort, instantiate_datatype) config raw_tycos thy =
       | NONE => thy
   end;
   
+(** generic parametric compilation **)
+
+fun gen_mk_parametric_generator_expr ((mk_generator_expr, out_of_bounds), T) ctxt ts =
+  let
+    val if_t = Const (@{const_name "If"}, @{typ bool} --> T --> T --> T)
+    fun mk_if (index, (t, eval_terms)) else_t =
+      if_t $ (HOLogic.eq_const @{typ code_numeral} $ Bound 0 $ HOLogic.mk_number @{typ code_numeral} index) $
+        (mk_generator_expr ctxt (t, eval_terms)) $ else_t
+  in
+    absdummy (@{typ "code_numeral"}, fold_rev mk_if (1 upto (length ts) ~~ ts) out_of_bounds)
+  end
+
 (** post-processing of function terms **)
 
 fun dest_fun_upd (Const (@{const_name fun_upd}, _) $ t0 $ t1 $ t2) = (t0, (t1, t2))

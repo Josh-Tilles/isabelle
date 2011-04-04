@@ -49,13 +49,25 @@ been discontinued.  INCOMPATIBILITY.
 * Sledgehammer:
   - sledgehammer available_provers ~> sledgehammer supported_provers
     INCOMPATIBILITY.
+  - Added "monomorphize" and "monomorphize_limit" options.
 
 * "try":
   - Added "simp:", "intro:", and "elim:" options.
 
+* Quickcheck:
+  - Added "eval" option to evaluate terms for the found counterexample
+    (currently only supported by the default (exhaustive) tester)
+  - Added post-processing of terms to obtain readable counterexamples
+    (currently only supported by the default (exhaustive) tester)
+
 * Function package: discontinued option "tailrec".
 INCOMPATIBILITY. Use partial_function instead.
 
+* HOL-Probability:
+  - Caratheodory's extension lemma is now proved for ring_of_sets.
+  - Infinite products of probability measures are now available.
+  - Use extended reals instead of positive extended reals.
+    INCOMPATIBILITY.
 
 *** Document preparation ***
 

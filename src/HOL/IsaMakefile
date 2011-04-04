@@ -650,12 +650,12 @@ $(LOG)/HOL-Old_Number_Theory.gz: $(OUT)/HOL Library/Permutation.thy	\
 HOL-Hoare: HOL $(LOG)/HOL-Hoare.gz
 
 $(LOG)/HOL-Hoare.gz: $(OUT)/HOL Hoare/Arith2.thy Hoare/Examples.thy	\
-  Hoare/Hoare.thy Hoare/hoare_tac.ML Hoare/Heap.thy			\
-  Hoare/Hoare_Logic.thy	Hoare/Hoare_Logic_Abort.thy			\
+  Hoare/Hoare.thy Hoare/hoare_syntax.ML Hoare/hoare_tac.ML		\
+  Hoare/Heap.thy Hoare/Hoare_Logic.thy Hoare/Hoare_Logic_Abort.thy	\
   Hoare/HeapSyntax.thy Hoare/Pointer_Examples.thy Hoare/ROOT.ML		\
   Hoare/ExamplesAbort.thy Hoare/HeapSyntaxAbort.thy			\
-  Hoare/SchorrWaite.thy Hoare/Separation.thy				\
-  Hoare/SepLogHeap.thy Hoare/document/root.tex Hoare/document/root.bib
+  Hoare/SchorrWaite.thy Hoare/Separation.thy Hoare/SepLogHeap.thy	\
+  Hoare/document/root.tex Hoare/document/root.bib
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Hoare
 
 
@@ -1049,7 +1049,7 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Decision_Procs/Commutative_Ring.thy	\
   ex/Multiquote.thy ex/NatSum.thy ex/Normalization_by_Evaluation.thy	\
   ex/Numeral.thy ex/PER.thy ex/PresburgerEx.thy ex/Primrec.thy		\
   ex/Quickcheck_Examples.thy ex/Quickcheck_Lattice_Examples.thy		\
-  ex/Quickcheck_Narrowing_Examples.thy \
+  ex/Quickcheck_Narrowing_Examples.thy ex/SML_Quickcheck_Examples.thy   \
   ex/Quicksort.thy ex/ROOT.ML ex/Recdefs.thy ex/Records.thy		\
   ex/ReflectionEx.thy ex/Refute_Examples.thy ex/SAT_Examples.thy	\
   ex/SVC_Oracle.thy ex/Serbian.thy ex/Set_Algebras.thy			\
@@ -1186,17 +1186,17 @@ $(OUT)/HOL-Multivariate_Analysis: $(OUT)/HOL				\
 HOL-Probability: HOL-Multivariate_Analysis $(OUT)/HOL-Probability
 
 $(OUT)/HOL-Probability: $(OUT)/HOL-Multivariate_Analysis		\
-  Probability/Borel_Space.thy Probability/Caratheodory.thy		\
-  Probability/Complete_Measure.thy					\
+  Probability/Binary_Product_Measure.thy Probability/Borel_Space.thy	\
+  Probability/Caratheodory.thy Probability/Complete_Measure.thy		\
   Probability/ex/Dining_Cryptographers.thy				\
   Probability/ex/Koepf_Duermuth_Countermeasure.thy			\
-  Probability/Information.thy Probability/Lebesgue_Integration.thy	\
-  Probability/Lebesgue_Measure.thy Probability/Measure.thy		\
-  Probability/Probability_Space.thy Probability/Probability.thy		\
-  Probability/Product_Measure.thy Probability/Radon_Nikodym.thy		\
+  Probability/Finite_Product_Measure.thy				\
+  Probability/Infinite_Product_Measure.thy Probability/Information.thy	\
+  Probability/Lebesgue_Integration.thy Probability/Lebesgue_Measure.thy \
+  Probability/Measure.thy Probability/Probability_Measure.thy		\
+  Probability/Probability.thy Probability/Radon_Nikodym.thy		\
   Probability/ROOT.ML Probability/Sigma_Algebra.thy			\
-  Library/Countable.thy Library/FuncSet.thy				\
-  Library/Nat_Bijection.thy
+  Library/Countable.thy Library/FuncSet.thy Library/Nat_Bijection.thy
 	@cd Probability; $(ISABELLE_TOOL) usedir -b -g true $(OUT)/HOL-Multivariate_Analysis HOL-Probability
 
 
