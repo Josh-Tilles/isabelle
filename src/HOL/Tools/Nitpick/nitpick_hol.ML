@@ -34,7 +34,7 @@ sig
      case_names: (string * int) list,
      def_tables: const_table * const_table,
      nondef_table: const_table,
-     user_nondefs: term list,
+     nondefs: term list,
      simp_table: const_table Unsynchronized.ref,
      psimp_table: const_table,
      choice_spec_table: const_table,
@@ -181,8 +181,8 @@ sig
   val coerce_term : hol_context -> typ list -> typ -> typ -> term -> term
   val special_bounds : term list -> (indexname * typ) list
   val is_funky_typedef : Proof.context -> typ -> bool
-  val all_axioms_of :
-    Proof.context -> (term * term) list -> term list * term list * term list
+  val all_defs_of : theory -> (term * term) list -> term list
+  val all_nondefs_of : Proof.context -> (term * term) list -> term list
   val arity_of_built_in_const :
     theory -> (typ option * bool) list -> styp -> int option
   val is_built_in_const :
@@ -267,7 +267,7 @@ type hol_context =
    case_names: (string * int) list,
    def_tables: const_table * const_table,
    nondef_table: const_table,
-   user_nondefs: term list,
+   nondefs: term list,
    simp_table: const_table Unsynchronized.ref,
    psimp_table: const_table,
    choice_spec_table: const_table,
@@ -1066,7 +1066,11 @@ fun loose_bvar1_count (Bound i, k) = if i = k then 1 else 0
   | loose_bvar1_count (Abs (_, _, t), k) = loose_bvar1_count (t, k + 1)
   | loose_bvar1_count _ = 0
 
-fun s_betapply _ (Const (@{const_name If}, _) $ @{const True} $ t1', _) = t1'
+fun s_betapply _ (t1 as Const (@{const_name "=="}, _) $ t1', t2) =
+    if t1' aconv t2 then @{prop True} else t1 $ t2
+  | s_betapply _ (t1 as Const (@{const_name HOL.eq}, _) $ t1', t2) =
+    if t1' aconv t2 then @{term True} else t1 $ t2
+  | s_betapply _ (Const (@{const_name If}, _) $ @{const True} $ t1', _) = t1'
   | s_betapply _ (Const (@{const_name If}, _) $ @{const False} $ _, t2) = t2
   | s_betapply Ts (Const (@{const_name Let},
                           Type (_, [bound_T, Type (_, [_, body_T])]))
@@ -1251,9 +1255,6 @@ fun is_funky_typedef_name ctxt s =
   is_frac_type ctxt (Type (s, []))
 fun is_funky_typedef ctxt (Type (s, _)) = is_funky_typedef_name ctxt s
   | is_funky_typedef _ _ = false
-fun is_arity_type_axiom (Const (@{const_name HOL.type_class}, _)
-                         $ Const (@{const_name TYPE}, _)) = true
-  | is_arity_type_axiom _ = false
 fun is_typedef_axiom ctxt boring (@{const "==>"} $ _ $ t2) =
     is_typedef_axiom ctxt boring t2
   | is_typedef_axiom ctxt boring
@@ -1262,72 +1263,34 @@ fun is_typedef_axiom ctxt boring (@{const "==>"} $ _ $ t2) =
          $ Const _ $ _)) =
     boring <> is_funky_typedef_name ctxt s andalso is_typedef ctxt s
   | is_typedef_axiom _ _ _ = false
-val is_class_axiom =
-  Logic.strip_horn #> swap #> op :: #> forall (can Logic.dest_of_class)
 
-(* Distinguishes between (1) constant definition axioms, (2) type arity and
-   typedef axioms, and (3) other axioms, and returns the pair ((1), (3)).
-   Typedef axioms are uninteresting to Nitpick, because it can retrieve them
-   using "typedef_info". *)
-fun partition_axioms_by_definitionality ctxt axioms def_names =
+fun all_defs_of thy subst =
   let
-    val axioms = sort (fast_string_ord o pairself fst) axioms
-    val defs = Ord_List.inter (fast_string_ord o apsnd fst) def_names axioms
-    val nondefs =
-      Ord_List.subtract (fast_string_ord o apsnd fst) def_names axioms
-      |> filter_out ((is_arity_type_axiom orf is_typedef_axiom ctxt true) o snd)
-  in pairself (map snd) (defs, nondefs) end
+    val def_names =
+      thy |> Theory.defs_of
+          |> Defs.all_specifications_of
+          |> maps snd |> map_filter #def
+          |> Ord_List.make fast_string_ord
+  in
+    thy :: Theory.ancestors_of thy
+    |> maps Thm.axioms_of
+    |> map (apsnd (subst_atomic subst o prop_of))
+    |> sort (fast_string_ord o pairself fst)
+    |> Ord_List.inter (fast_string_ord o apsnd fst) def_names
+    |> map snd
+  end
 
 (* Ideally we would check against "Complex_Main", not "Refute", but any theory
    will do as long as it contains all the "axioms" and "axiomatization"
    commands. *)
 fun is_built_in_theory thy = Theory.subthy (thy, @{theory Refute})
 
-val is_trivial_definition =
-  the_default false o try (op aconv o Logic.dest_equals)
-val is_plain_definition =
-  let
-    fun do_lhs t1 =
-      case strip_comb t1 of
-        (Const _, args) =>
-        forall is_Var args andalso not (has_duplicates (op =) args)
-      | _ => false
-    fun do_eq (Const (@{const_name "=="}, _) $ t1 $ _) = do_lhs t1
-      | do_eq (@{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ t1 $ _)) =
-        do_lhs t1
-      | do_eq _ = false
-  in do_eq end
-
-fun all_axioms_of ctxt subst =
-  let
-    val thy = Proof_Context.theory_of ctxt
-    val axioms_of_thys =
-      maps Thm.axioms_of
-      #> map (apsnd (subst_atomic subst o prop_of))
-      #> filter_out (is_class_axiom o snd)
-    val specs = Defs.all_specifications_of (Theory.defs_of thy)
-    val def_names = specs |> maps snd |> map_filter #def
-                    |> Ord_List.make fast_string_ord
-    val thys = thy :: Theory.ancestors_of thy
-    val (built_in_thys, user_thys) = List.partition is_built_in_theory thys
-    val built_in_axioms = axioms_of_thys built_in_thys
-    val user_axioms = axioms_of_thys user_thys
-    val (built_in_defs, built_in_nondefs) =
-      partition_axioms_by_definitionality ctxt built_in_axioms def_names
-      ||> filter (is_typedef_axiom ctxt false)
-    val (user_defs, user_nondefs) =
-      partition_axioms_by_definitionality ctxt user_axioms def_names
-    val (built_in_nondefs, user_nondefs) =
-      List.partition (is_typedef_axiom ctxt false) user_nondefs
-      |>> append built_in_nondefs
-    val defs =
-      (thy |> Global_Theory.all_thms_of
-           |> filter (curry (op =) Thm.definitionK o Thm.get_kind o snd)
-           |> map (prop_of o snd)
-           |> filter_out is_trivial_definition
-           |> filter is_plain_definition) @
-      user_defs @ built_in_defs
-  in (defs, built_in_nondefs, user_nondefs) end
+fun all_nondefs_of ctxt subst =
+  ctxt |> Spec_Rules.get
+       |> filter (curry (op =) Spec_Rules.Unknown o fst)
+       |> maps (snd o snd)
+       |> filter_out (is_built_in_theory o theory_of_thm)
+       |> map (subst_atomic subst o prop_of)
 
 fun arity_of_built_in_const thy stds (s, T) =
   if s = @{const_name If} then
