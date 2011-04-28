@@ -9,7 +9,6 @@ signature FUNCTION_LIB =
 sig
   val plural: string -> string -> 'a list -> string
 
-  val focus_term: term -> Proof.context -> ((string * typ) list * term) * Proof.context
   val dest_all_all: term -> term list * term
 
   val map4: ('a -> 'b -> 'c -> 'd -> 'e) -> 'a list -> 'b list -> 'c list -> 'd list -> 'e list
@@ -18,7 +17,6 @@ sig
 
   val unordered_pairs: 'a list -> ('a * 'a) list
 
-  val replace_frees: (string * term) list -> term -> term
   val rename_bound: string -> term -> term
   val mk_forall_rename: (string * term) -> term -> term
   val forall_intr_rename: (string * cterm) -> thm -> thm
@@ -37,19 +35,6 @@ struct
 (* "The variable" ^ plural " is" "s are" vs *)
 fun plural sg pl [x] = sg
   | plural sg pl _ = pl
-
-
-(*term variant of Variable.focus*)
-fun focus_term t ctxt =
-  let
-    val ps = Term.variant_frees t (Term.strip_all_vars t);   (*as they are printed :-*)
-    val (xs, Ts) = split_list ps;
-    val (xs', ctxt') = Variable.variant_fixes xs ctxt;
-    val ps' = xs' ~~ Ts;
-    val inst = map Free ps'
-    val t' = Term.subst_bounds (rev inst, Term.strip_all_body t);
-    val ctxt'' = ctxt' |> fold Variable.declare_constraints inst;
-  in ((ps', t'), ctxt'') end;
 
 
 (* Removes all quantifiers from a term, replacing bound variables by frees. *)
@@ -78,11 +63,7 @@ fun unordered_pairs [] = []
   | unordered_pairs (x::xs) = map (pair x) (x::xs) @ unordered_pairs xs
 
 
-(* Replaces Frees by name. Works with loose Bounds. *)
-fun replace_frees assoc =
-  map_aterms (fn c as Free (n, _) => the_default c (AList.lookup (op =) assoc n)
-    | t => t)
-
+(* renaming bound variables *)
 
 fun rename_bound n (Q $ Abs (_, T, b)) = (Q $ Abs (n, T, b))
   | rename_bound n _ = raise Match
