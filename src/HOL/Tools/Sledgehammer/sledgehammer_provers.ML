@@ -404,13 +404,17 @@ val atp_blacklist_max_iters = 10
 val atp_important_message_keep_quotient = 10
 
 val fallback_best_type_systems =
-  [Preds (Polymorphic, Const_Arg_Types, Light),
-   Preds (Mangled_Monomorphic, Nonmonotonic_Types, Light)]
+  [Preds (Mangled_Monomorphic, Nonmonotonic_Types, Light)]
 
 fun adjust_dumb_type_sys formats (Simple_Types level) =
     if member (op =) formats Tff then (Tff, Simple_Types level)
     else (Fof, Preds (Mangled_Monomorphic, level, Heavy))
-  | adjust_dumb_type_sys formats type_sys = (hd formats, type_sys)
+  | adjust_dumb_type_sys formats type_sys =
+    (* We could return (Tff, type_sys) in all cases but this would require the
+       TFF provers to accept problems in which constants are implicitly
+       declared. Today neither SNARK nor ToFoF-E satisfy this criterion. *)
+    if member (op =) formats Fof then (Fof, type_sys)
+    else (Tff, Simple_Types All_Types)
 fun determine_format_and_type_sys _ formats (Dumb_Type_Sys type_sys) =
     adjust_dumb_type_sys formats type_sys
   | determine_format_and_type_sys best_type_systems formats
@@ -530,7 +534,7 @@ fun run_atp auto name
                   else
                     ()
                 val (atp_problem, pool, conjecture_offset, facts_offset,
-                     fact_names, sym_tab) =
+                     fact_names, typed_helpers, sym_tab) =
                   prepare_atp_problem ctxt conj_sym_kind prem_kind type_sys
                                       explicit_apply hyp_ts concl_t facts
                 fun weights () = atp_problem_weights atp_problem
@@ -560,30 +564,32 @@ fun run_atp auto name
                          I)
                   |>> (if measure_run_time then split_time else rpair NONE)
                 val (atp_proof, outcome) =
-                  extract_tstplike_proof_and_outcome debug verbose complete
-                      res_code proof_delims known_failures output
+                  extract_tstplike_proof_and_outcome verbose complete res_code
+                      proof_delims known_failures output
                   |>> atp_proof_from_tstplike_proof
-                val (conjecture_shape, facts_offset, fact_names) =
+                val (conjecture_shape, facts_offset, fact_names,
+                     typed_helpers) =
                   if is_none outcome then
                     repair_conjecture_shape_and_fact_names type_sys output
-                        conjecture_shape facts_offset fact_names
+                        conjecture_shape facts_offset fact_names typed_helpers
                   else
                     (* don't bother repairing *)
-                    (conjecture_shape, facts_offset, fact_names)
+                    (conjecture_shape, facts_offset, fact_names, typed_helpers)
                 val outcome =
                   case outcome of
                     NONE =>
-                    if is_unsound_proof type_sys conjecture_shape facts_offset
-                                        fact_names atp_proof then
-                      SOME (UnsoundProof (is_type_sys_virtually_sound type_sys))
-                    else
-                      NONE
+                    used_facts_in_unsound_atp_proof type_sys
+                        conjecture_shape facts_offset fact_names atp_proof
+                    |> Option.map (fn facts =>
+                           UnsoundProof (is_type_sys_virtually_sound type_sys,
+                                         facts))
                   | SOME Unprovable =>
                     if null blacklist then outcome
                     else SOME IncompleteUnprovable
                   | _ => outcome
               in
-                ((pool, conjecture_shape, facts_offset, fact_names, sym_tab),
+                ((pool, conjecture_shape, facts_offset, fact_names,
+                  typed_helpers, sym_tab),
                  (output, msecs, type_sys, atp_proof, outcome))
               end
             val timer = Timer.startRealTimer ()
@@ -603,9 +609,9 @@ fun run_atp auto name
                 end
               | maybe_run_slice _ _ result = result
             fun maybe_blacklist_facts_and_retry iter blacklist
-                    (result as ((_, _, facts_offset, fact_names, _),
+                    (result as ((_, _, facts_offset, fact_names, _, _),
                                 (_, _, type_sys, atp_proof,
-                                 SOME (UnsoundProof false)))) =
+                                 SOME (UnsoundProof (false, _))))) =
                 (case used_facts_in_atp_proof type_sys facts_offset fact_names
                                               atp_proof of
                    [] => result
@@ -620,7 +626,7 @@ fun run_atp auto name
                      result)
               | maybe_blacklist_facts_and_retry _ _ result = result
           in
-            ((Symtab.empty, [], 0, Vector.fromList [], Symtab.empty),
+            ((Symtab.empty, [], 0, Vector.fromList [], [], Symtab.empty),
              ("", SOME 0, hd fallback_best_type_systems, [],
               SOME InternalError))
             |> fold (maybe_run_slice []) actual_slices
@@ -640,7 +646,8 @@ fun run_atp auto name
         ()
       else
         File.write (Path.explode (Path.implode prob_file ^ "_proof")) output
-    val ((pool, conjecture_shape, facts_offset, fact_names, sym_tab),
+    val ((pool, conjecture_shape, facts_offset, fact_names, typed_helpers,
+          sym_tab),
          (output, msecs, type_sys, atp_proof, outcome)) =
       with_path cleanup export run_on problem_path_name
     val important_message =
@@ -664,15 +671,17 @@ fun run_atp auto name
       (ctxt, debug, isar_shrink_factor, pool, conjecture_shape, sym_tab)
     val metis_params =
       (proof_banner auto, minimize_command, type_sys, atp_proof, facts_offset,
-       fact_names, goal, subgoal)
+       fact_names, typed_helpers, goal, subgoal)
     val (outcome, (message, used_facts)) =
       case outcome of
         NONE =>
         (NONE, proof_text isar_proof isar_params metis_params
                |>> append_to_message)
-      | SOME ProofMissing =>
-        (NONE, metis_proof_text metis_params |>> append_to_message)
-      | SOME failure => (outcome, (string_for_failure failure, []))
+      | SOME failure =>
+        if failure = ProofMissing orelse failure = ProofIncomplete then
+          (NONE, metis_proof_text metis_params |>> append_to_message)
+        else
+          (outcome, (string_for_failure failure, []))
   in
     {outcome = outcome, message = message, used_facts = used_facts,
      run_time_in_msecs = msecs}

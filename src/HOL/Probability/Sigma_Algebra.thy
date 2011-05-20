@@ -77,6 +77,42 @@ lemma (in ring_of_sets) Int_space_eq1 [simp]: "x \<in> sets M \<Longrightarrow> 
 lemma (in ring_of_sets) Int_space_eq2 [simp]: "x \<in> sets M \<Longrightarrow> x \<inter> space M = x"
   by (metis Int_absorb2 sets_into_space)
 
+lemma (in ring_of_sets) sets_Collect_conj:
+  assumes "{x\<in>space M. P x} \<in> sets M" "{x\<in>space M. Q x} \<in> sets M"
+  shows "{x\<in>space M. Q x \<and> P x} \<in> sets M"
+proof -
+  have "{x\<in>space M. Q x \<and> P x} = {x\<in>space M. Q x} \<inter> {x\<in>space M. P x}"
+    by auto
+  with assms show ?thesis by auto
+qed
+
+lemma (in ring_of_sets) sets_Collect_disj:
+  assumes "{x\<in>space M. P x} \<in> sets M" "{x\<in>space M. Q x} \<in> sets M"
+  shows "{x\<in>space M. Q x \<or> P x} \<in> sets M"
+proof -
+  have "{x\<in>space M. Q x \<or> P x} = {x\<in>space M. Q x} \<union> {x\<in>space M. P x}"
+    by auto
+  with assms show ?thesis by auto
+qed
+
+lemma (in ring_of_sets) sets_Collect_finite_All:
+  assumes "\<And>i. i \<in> S \<Longrightarrow> {x\<in>space M. P i x} \<in> sets M" "finite S" "S \<noteq> {}"
+  shows "{x\<in>space M. \<forall>i\<in>S. P i x} \<in> sets M"
+proof -
+  have "{x\<in>space M. \<forall>i\<in>S. P i x} = (\<Inter>i\<in>S. {x\<in>space M. P i x})"
+    using `S \<noteq> {}` by auto
+  with assms show ?thesis by auto
+qed
+
+lemma (in ring_of_sets) sets_Collect_finite_Ex:
+  assumes "\<And>i. i \<in> S \<Longrightarrow> {x\<in>space M. P i x} \<in> sets M" "finite S"
+  shows "{x\<in>space M. \<exists>i\<in>S. P i x} \<in> sets M"
+proof -
+  have "{x\<in>space M. \<exists>i\<in>S. P i x} = (\<Union>i\<in>S. {x\<in>space M. P i x})"
+    by auto
+  with assms show ?thesis by auto
+qed
+
 locale algebra = ring_of_sets +
   assumes top [iff]: "space M \<in> sets M"
 
@@ -133,6 +169,22 @@ next
     finally show "a \<union> b \<in> sets M" .
   qed
 qed
+
+lemma (in algebra) sets_Collect_neg:
+  assumes "{x\<in>space M. P x} \<in> sets M"
+  shows "{x\<in>space M. \<not> P x} \<in> sets M"
+proof -
+  have "{x\<in>space M. \<not> P x} = space M - {x\<in>space M. P x}" by auto
+  with assms show ?thesis by auto
+qed
+
+lemma (in algebra) sets_Collect_imp:
+  "{x\<in>space M. P x} \<in> sets M \<Longrightarrow> {x\<in>space M. Q x} \<in> sets M \<Longrightarrow> {x\<in>space M. Q x \<longrightarrow> P x} \<in> sets M"
+  unfolding imp_conv_disj by (intro sets_Collect_disj sets_Collect_neg)
+
+lemma (in algebra) sets_Collect_const:
+  "{x\<in>space M. P} \<in> sets M"
+  by (cases P) auto
 
 section {* Restricted algebras *}
 
@@ -211,6 +263,26 @@ lemma sigma_algebra_iff:
      "sigma_algebra M \<longleftrightarrow>
       algebra M \<and> (\<forall>A. range A \<subseteq> sets M \<longrightarrow> (\<Union>i::nat. A i) \<in> sets M)"
   by (simp add: sigma_algebra_def sigma_algebra_axioms_def)
+
+lemma (in sigma_algebra) sets_Collect_countable_All:
+  assumes "\<And>i. {x\<in>space M. P i x} \<in> sets M"
+  shows "{x\<in>space M. \<forall>i::'i::countable. P i x} \<in> sets M"
+proof -
+  have "{x\<in>space M. \<forall>i::'i::countable. P i x} = (\<Inter>i. {x\<in>space M. P i x})" by auto
+  with assms show ?thesis by auto
+qed
+
+lemma (in sigma_algebra) sets_Collect_countable_Ex:
+  assumes "\<And>i. {x\<in>space M. P i x} \<in> sets M"
+  shows "{x\<in>space M. \<exists>i::'i::countable. P i x} \<in> sets M"
+proof -
+  have "{x\<in>space M. \<exists>i::'i::countable. P i x} = (\<Union>i. {x\<in>space M. P i x})" by auto
+  with assms show ?thesis by auto
+qed
+
+lemmas (in sigma_algebra) sets_Collect =
+  sets_Collect_imp sets_Collect_disj sets_Collect_conj sets_Collect_neg sets_Collect_const
+  sets_Collect_countable_All sets_Collect_countable_Ex sets_Collect_countable_All
 
 subsection {* Binary Unions *}
 
@@ -440,6 +512,18 @@ lemma in_sigma[intro, simp]: "A \<in> sets M \<Longrightarrow> A \<in> sets (sig
 
 lemma (in sigma_algebra) sigma_eq[simp]: "sigma M = M"
   unfolding sigma_def sigma_sets_eq by simp
+
+lemma restricted_sigma:
+  assumes S: "S \<in> sets (sigma M)" and M: "sets M \<subseteq> Pow (space M)"
+  shows "algebra.restricted_space (sigma M) S = sigma (algebra.restricted_space M S)"
+proof -
+  from S sigma_sets_into_sp[OF M]
+  have "S \<in> sigma_sets (space M) (sets M)" "S \<subseteq> space M"
+    by (auto simp: sigma_def)
+  from sigma_sets_Int[OF this]
+  show ?thesis
+    by (simp add: sigma_def)
+qed
 
 section {* Measurable functions *}
 
@@ -1416,5 +1500,38 @@ lemma measurable_sigma_sigma:
   shows "f \<in> measurable M N \<Longrightarrow> f \<in> measurable (sigma M) (sigma N)"
   using sigma_algebra.measurable_subset[OF sigma_algebra_sigma[OF M], of N]
   using measurable_up_sigma[of M N] N by auto
+
+lemma (in sigma_algebra) measurable_Least:
+  assumes meas: "\<And>i::nat. {x\<in>space M. P i x} \<in> sets M"
+  shows "(\<lambda>x. LEAST j. P j x) -` A \<inter> space M \<in> sets M"
+proof -
+  { fix i have "(\<lambda>x. LEAST j. P j x) -` {i} \<inter> space M \<in> sets M"
+    proof cases
+      assume i: "(LEAST j. False) = i"
+      have "(\<lambda>x. LEAST j. P j x) -` {i} \<inter> space M =
+        {x\<in>space M. P i x} \<inter> (space M - (\<Union>j<i. {x\<in>space M. P j x})) \<union> (space M - (\<Union>i. {x\<in>space M. P i x}))"
+        by (simp add: set_eq_iff, safe)
+           (insert i, auto dest: Least_le intro: LeastI intro!: Least_equality)
+      with meas show ?thesis
+        by (auto intro!: Int)
+    next
+      assume i: "(LEAST j. False) \<noteq> i"
+      then have "(\<lambda>x. LEAST j. P j x) -` {i} \<inter> space M =
+        {x\<in>space M. P i x} \<inter> (space M - (\<Union>j<i. {x\<in>space M. P j x}))"
+      proof (simp add: set_eq_iff, safe)
+        fix x assume neq: "(LEAST j. False) \<noteq> (LEAST j. P j x)"
+        have "\<exists>j. P j x"
+          by (rule ccontr) (insert neq, auto)
+        then show "P (LEAST j. P j x) x" by (rule LeastI_ex)
+      qed (auto dest: Least_le intro!: Least_equality)
+      with meas show ?thesis
+        by (auto intro!: Int)
+    qed }
+  then have "(\<Union>i\<in>A. (\<lambda>x. LEAST j. P j x) -` {i} \<inter> space M) \<in> sets M"
+    by (intro countable_UN) auto
+  moreover have "(\<Union>i\<in>A. (\<lambda>x. LEAST j. P j x) -` {i} \<inter> space M) =
+    (\<lambda>x. LEAST j. P j x) -` A \<inter> space M" by auto
+  ultimately show ?thesis by auto
+qed
 
 end

@@ -209,6 +209,7 @@ val e_config : atp_config =
    known_failures =
      [(Unprovable, "SZS status: CounterSatisfiable"),
       (Unprovable, "SZS status CounterSatisfiable"),
+      (ProofMissing, "SZS status Theorem"),
       (TimedOut, "Failure: Resource limit exceeded (time)"),
       (TimedOut, "time limit exceeded"),
       (OutOfResources,
@@ -221,11 +222,12 @@ val e_config : atp_config =
    best_slices = fn ctxt =>
      (* FUDGE *)
      if effective_e_weight_method ctxt = e_slicesN then
-       [(0.333, (true, (100, ["mangled_preds?"]))) (* sym_offset_weight *),
-        (0.333, (true, (800, ["poly_tags!"]))) (* auto *),
-        (0.334, (true, (200, ["mangled_preds?"]))) (* fun_weight *)]
+       [(0.333, (true, (100, ["poly_preds"]))) (* sym_offset_weight *),
+        (0.333, (true, (800, ["mangled_preds_heavy"]))) (* auto *),
+        (0.334, (true, (200, ["mangled_tags!", "mangled_tags?"])))
+                                                               (* fun_weight *)]
      else
-       [(1.0, (true, (250, ["mangled_preds?"])))]}
+       [(1.0, (true, (200, ["mangled_tags!", "mangled_tags?"])))]}
 
 val e = (eN, e_config)
 
@@ -243,7 +245,7 @@ val spass_config : atp_config =
    arguments = fn ctxt => fn slice => fn timeout => fn _ =>
      ("-Auto -PGiven=0 -PProblem=0 -Splits=0 -FullRed=0 -DocProof \
       \-VarWeight=3 -TimeLimit=" ^ string_of_int (to_secs 0 timeout))
-     |> (slice = 0 orelse Config.get ctxt spass_force_sos) ? prefix "-SOS=1 ",
+     |> (slice < 2 orelse Config.get ctxt spass_force_sos) ? prefix "-SOS=1 ",
    proof_delims = [("Here is a proof", "Formulae used in the proof")],
    known_failures =
      known_perl_failures @
@@ -259,8 +261,9 @@ val spass_config : atp_config =
    formats = [Fof],
    best_slices = fn ctxt =>
      (* FUDGE *)
-     [(0.667, (false, (150, ["mangled_preds"]))) (* SOS *),
-      (0.333, (true, (150, ["mangled_preds"]))) (* ~SOS *)]
+     [(0.333, (false, (150, ["mangled_preds_heavy"]))) (* SOS *),
+      (0.333, (false, (150, ["mangled_preds?"]))) (* SOS *),
+      (0.334, (true, (150, ["poly_preds"]))) (* ~SOS *)]
      |> (if Config.get ctxt spass_force_sos then hd #> apfst (K 1.0) #> single
          else I)}
 
@@ -278,7 +281,7 @@ val vampire_config : atp_config =
    arguments = fn ctxt => fn slice => fn timeout => fn _ =>
      "--proof tptp --mode casc -t " ^ string_of_int (to_secs 0 timeout) ^
      " --thanks \"Andrei and Krystof\" --input_file"
-     |> (slice = 0 orelse Config.get ctxt vampire_force_sos)
+     |> (slice < 2 orelse Config.get ctxt vampire_force_sos)
         ? prefix "--sos on ",
    proof_delims =
      [("=========== Refutation ==========",
@@ -289,8 +292,7 @@ val vampire_config : atp_config =
      [(Unprovable, "UNPROVABLE"),
       (IncompleteUnprovable, "CANNOT PROVE"),
       (IncompleteUnprovable, "SZS status GaveUp"),
-      (ProofMissing, "[predicate definition introduction]"),
-      (ProofMissing, "predicate_definition_introduction,[]"), (* TSTP *)
+      (ProofIncomplete, "predicate_definition_introduction,[]"),
       (TimedOut, "SZS status Timeout"),
       (Unprovable, "Satisfiability detected"),
       (Unprovable, "Termination reason: Satisfiable"),
@@ -301,8 +303,9 @@ val vampire_config : atp_config =
    formats = [Fof],
    best_slices = fn ctxt =>
      (* FUDGE *)
-     [(0.667, (false, (450, ["mangled_tags!", "mangled_preds?"]))) (* SOS *),
-      (0.333, (true, (450, ["mangled_tags!", "mangled_preds?"]))) (* ~SOS *)]
+     [(0.333, (false, (400, ["mangled_preds_heavy"]))) (* SOS *),
+      (0.333, (false, (400, ["mangled_tags?"]))) (* SOS *),
+      (0.334, (true, (400, ["poly_preds"]))) (* ~SOS *)]
      |> (if Config.get ctxt vampire_force_sos then hd #> apfst (K 1.0) #> single
          else I)}
 
@@ -403,14 +406,14 @@ val remote_vampire = remotify_atp vampire "Vampire" ["0.6", "9.0", "1.0"]
 val remote_z3_atp = remotify_atp z3_atp "Z3" ["2.18"]
 val remote_tofof_e =
   remote_atp tofof_eN "ToFoF" ["0.1"] [] (#known_failures e_config)
-             Axiom Conjecture [Tff] (K (200, ["simple_types"]) (* FUDGE *))
+             Axiom Conjecture [Tff] (K (200, ["simple"]) (* FUDGE *))
 val remote_sine_e =
   remote_atp sine_eN "SInE" ["0.4"] [] [] Axiom Conjecture [Fof]
-             (K (500, ["poly_args"]) (* FUDGE *))
+             (K (500, ["poly_tags_heavy!", "poly_tags_heavy"]) (* FUDGE *))
 val remote_snark =
   remote_atp snarkN "SNARK" ["20080805r024"]
              [("refutation.", "end_refutation.")] [] Hypothesis Conjecture
-             [Tff, Fof] (K (250, ["simple_types"]) (* FUDGE *))
+             [Tff, Fof] (K (250, ["simple"]) (* FUDGE *))
 
 (* Setup *)
 

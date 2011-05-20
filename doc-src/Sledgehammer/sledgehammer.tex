@@ -118,7 +118,7 @@ imported---this is rarely a problem in practice since it is part of
 \textit{Main}. Examples of Sledgehammer use can be found in Isabelle's
 \texttt{src/HOL/Metis\_Examples} directory.
 Comments and bug reports concerning Sledgehammer or this manual should be
-directed to \authoremail.
+directed to the author at \authoremail.
 
 \vskip2.5\smallskipamount
 
@@ -169,9 +169,10 @@ Vampire executable from somewhere (e.g., \url{http://www.vprover.org/}),
 set the environment variable \texttt{E\_HOME}, \texttt{SPASS\_HOME}, or
 \texttt{VAMPIRE\_HOME} to the directory that contains the \texttt{eproof},
 \texttt{SPASS}, or \texttt{vampire} executable. Sledgehammer has been tested
-with E 1.0 and 1.2, SPASS 3.5 and 3.7, and Vampire 1.0%
+with E 1.0 and 1.2, SPASS 3.5 and 3.7, and Vampire 0.6 and 1.0%
 \footnote{Following the rewrite of Vampire, the counter for version numbers was
-reset to 0; hence the new Vampire 1.0 is more recent than Vampire 11.5.}%
+reset to 0; hence the (new) Vampire versions 0.6 and 1.0 are more recent than,
+say, Vampire 11.5.}%
 . Since the ATPs' output formats are neither documented nor stable, other
 versions of the ATPs might or might not work well with Sledgehammer. Ideally,
 also set \texttt{E\_VERSION}, \texttt{SPASS\_VERSION}, or
@@ -254,19 +255,19 @@ To minimize the number of lemmas, try this: \\
 %
 Sledgehammer: ``\textit{vampire}'' for subgoal 1: \\
 $([a] = [b]) = (a = b)$ \\
-Try this command: \textbf{by} (\textit{metis eq\_commute last\_snoc}) \\
+Try this command: \textbf{by} (\textit{metis eq\_commute last\_snoc}). \\
 To minimize the number of lemmas, try this: \\
 \textbf{sledgehammer} \textit{minimize} [\textit{prover} = \textit{vampire}]~(\textit{eq\_commute last\_snoc}). \\[3\smallskipamount]
 %
 Sledgehammer: ``\textit{remote\_sine\_e}'' for subgoal 1: \\
 $([a] = [b]) = (a = b)$ \\
-Try this command: \textbf{by} (\textit{metis hd.simps}) \\
+Try this command: \textbf{by} (\textit{metis hd.simps}). \\
 To minimize the number of lemmas, try this: \\
-\textbf{sledgehammer} \textit{minimize} [\textit{prover} = \textit{remote\_sine\_e}]~(\textit{hd.simps}).
+\textbf{sledgehammer} \textit{minimize} [\textit{prover} = \textit{remote\_sine\_e}]~(\textit{hd.simps}). \\[3\smallskipamount]
 %
 Sledgehammer: ``\textit{remote\_z3}'' for subgoal 1: \\
 $([a] = [b]) = (a = b)$ \\
-Try this command: \textbf{by} (\textit{metis hd.simps}) \\
+Try this command: \textbf{by} (\textit{metis hd.simps}). \\
 To minimize the number of lemmas, try this: \\
 \textbf{sledgehammer} \textit{minimize} [\textit{prover} = \textit{remote\_sine\_e}]~(\textit{hd.simps}).
 \postw
@@ -282,7 +283,7 @@ command if you want to look for a shorter (and probably faster) proof. But here
 the proof found by E looks perfect, so click it to finish the proof.
 
 You can ask Sledgehammer for an Isar text proof by passing the
-\textit{isar\_proof} option:
+\textit{isar\_proof} option (\S\ref{output-format}):
 
 \prew
 \textbf{sledgehammer} [\textit{isar\_proof}]
@@ -294,6 +295,10 @@ experimental and is only available for ATPs.
 
 \section{Hints}
 \label{hints}
+
+This section presents a few hints that should help you get the most out of
+Sledgehammer and Metis. Frequently (and infrequently) asked questions are
+answered in \S\ref{frequently-asked-questions}.
 
 \newcommand\point[1]{{\sl\bfseries#1}\par\nopagebreak}
 
@@ -320,49 +325,54 @@ the options are very specialized, but serious users of the tool should at least
 familiarize themselves with the following options:
 
 \begin{enum}
-\item[$\bullet$] \textbf{\textit{provers}} specifies the ATP and SMT solvers to
-use (e.g., ``\textit{provers} = \textit{e spass remote\_vampire}'').
+\item[$\bullet$] \textbf{\textit{provers}} (\S\ref{mode-of-operation}) specifies
+the automatic provers (ATPs and SMT solvers) that should be run whenever
+Sledgehammer is invoked (e.g., ``\textit{provers}~= \textit{e spass
+remote\_vampire}'').
 
-\item[$\bullet$] \textbf{\textit{timeout}} controls the time limit. It is set to
-30 seconds, but since Sledgehammer runs asynchronously you should not hesitate
-to crank up this limit to 60 or 120 seconds if you are the kind of user who can
-think clearly while ATPs are active.
+\item[$\bullet$] \textbf{\textit{timeout}} (\S\ref{mode-of-operation}) controls
+the provers' time limit. It is set to 30 seconds, but since Sledgehammer runs
+asynchronously you should not hesitate to raise this limit to 60 or 120 seconds
+if you are the kind of user who can think clearly while ATPs are active.
 
-\item[$\bullet$] \textbf{\textit{full\_types}} specifies whether type-sound
-encodings should be used. By default, Sledgehammer employs a mixture of
-type-sound and type-unsound encodings, occasionally yielding unsound ATP proofs.
-(SMT solver proofs should always be sound, although we occasionally find
-soundness bugs in the solvers.)
+\item[$\bullet$] \textbf{\textit{full\_types}} (\S\ref{problem-encoding})
+specifies whether type-sound encodings should be used. By default, Sledgehammer
+employs a mixture of type-sound and type-unsound encodings, occasionally
+yielding unsound ATP proofs. (SMT solver proofs should always be sound, although
+we occasionally find soundness bugs in the solvers.)
 
-\item[$\bullet$] \textbf{\textit{max\_relevant}} specifies the maximum number of
-facts that should be passed to the provers. By default, the value is
-prover-dependent but varies between about 150 and 1000. If the provers time out,
-you can try lowering this value to, say, 100 or 50 and see if that helps.
+\item[$\bullet$] \textbf{\textit{max\_relevant}} (\S\ref{relevance-filter})
+specifies the maximum number of facts that should be passed to the provers. By
+default, the value is prover-dependent but varies between about 150 and 1000. If
+the provers time out, you can try lowering this value to, say, 100 or 50 and see
+if that helps.
 
-\item[$\bullet$] \textbf{\textit{isar\_proof}} specifies that Isar proofs should
-be generated, instead of one-liner Metis proofs. The length of the Isar proofs
-can be controlled by setting \textit{isar\_shrink\_factor}.
+\item[$\bullet$] \textbf{\textit{isar\_proof}} (\S\ref{output-format}) specifies
+that Isar proofs should be generated, instead of one-liner Metis proofs. The
+length of the Isar proofs can be controlled by setting
+\textit{isar\_shrink\_factor} (\S\ref{output-format}).
 \end{enum}
 
-Options can be set globally using \textbf{sledgehammer\_params}. Fact selection
-can be influenced by specifying ``$(\textit{add}{:}~\textit{some\_facts})$'' after
-the \textbf{sledgehammer} call to ensure that certain facts are included, or
-simply ``$(\textit{some\_facts})$'' to force Sledgehammer to run only with
-$\textit{some\_facts}$.
+Options can be set globally using \textbf{sledgehammer\_params}
+(\S\ref{command-syntax}). Fact selection can be influenced by specifying
+``$(\textit{add}{:}~\textit{my\_facts})$'' after the \textbf{sledgehammer}
+call to ensure that certain facts are included, or simply
+``$(\textit{my\_facts})$'' to force Sledgehammer to run only with
+$\textit{my\_facts}$.
 
 \section{Frequently Asked Questions}
 \label{frequently-asked-questions}
 
 \point{Why does Metis fail to reconstruct the proof?}
 
-There can be many reasons. If Metis runs seemingly forever, that's a sign that
-the proof is too difficult for it. Metis is complete, so it should eventually
-find it, but that's little consolation. There are several possible solutions:
+There are many reasons. If Metis runs seemingly forever, that is a sign that the
+proof is too difficult for it. Metis is complete, so it should eventually find
+it, but that's little consolation. There are several possible solutions:
 
 \begin{enum}
-\item[$\bullet$] Try the \textit{isar\_proof} option to obtain a step-by-step
-Isar proof where each step is justified by Metis. Since the steps are fairly
-small, Metis is more likely to be able to replay them.
+\item[$\bullet$] Try the \textit{isar\_proof} option (\S\ref{output-format}) to
+obtain a step-by-step Isar proof where each step is justified by Metis. Since
+the steps are fairly small, Metis is more likely to be able to replay them.
 
 \item[$\bullet$] Try the \textit{smt} proof method instead of \textit{metis}. It
 is usually stronger, but you need to have Z3 available to replay the proofs,
@@ -374,70 +384,119 @@ facts via \textbf{unfolding}, \textbf{using}, \textit{intro}{:},
 \textit{elim}{:}, \textit{dest}{:}, or \textit{simp}{:}, as appropriate.
 \end{enum}
 
-%    * sometimes Metis runs into some error, e.g. a type error. then it tries
-%      again with metisFT, where FT stands for ``full type information'
-%    * metisFT is much slower, but its proof search is fully typed, and it also
-%      includes more powerful rules such as the axiom ``$x = \mathit{True}
-%      \mathrel{\lor} x = \mathit{False}$'' for reasoning in higher-order places
-%      (e.g., in set comprehensions)
-%
-%    * finally, in some cases the ATP proof is simply type-incorrect.
-%      Sledgehammer drops some type information to speed up the search. Try
-%      Sledgehammer again with full type information: \textit{full\_types}
-%      (\S\ref{problem-encoding}), or choose a specific type encoding with
-%      \textit{type\_sys} (\S\ref{problem-encoding}). Older versions of
-%      Sledgehammer were frequent victims of this problem. Now this should very
-%      seldom be an issue, but if you notice too many unsound proofs, contact
-%
-%\point{How can I easily tell whether a Sledgehammer proof is sound?}
-%
-%Easiest way: Once it's found: ... by (metis facts)
-%try
-%sledgehammer [full\_types] (facts)
-%
-%should usually give unprovable or refind the proof fairly quickly
-%
-%Same trick if you believe that there exists a proof with certain facts.
-%
-%\point{Which facts does Sledgehammer select?}
-%
-%    * heuristic
-%    * and several hundreds
-%    * show them: debug
-%    * influence it with sledgehammer (add: xxx)
-%
-%    * S/h good at finding short proofs combining a handful of existing lemmas
-%    * for deeper proofs, you must restrict the number of facts, e.g.
-%      max\_relevant = 50
-%    * but then proof reconstruction is an issue
-%
-%\point{Why are the Isar proofs generated by Sledgehammer so ugly?}
-%
-%    * experimental
-%    * working on this
-%    * there is a large body of research into transforming resolution proofs into
-%      natural deduction proofs (e.g., Isar proofs)
-%    * meantime: isar\_shrink\_factor
-%
-%
-%\point{Should I let Sledgehammer minimize the number of lemmas?}
-%
-%    * in general, yes
-%    * proofs involving fewer lemmas tend to be shorter as well, and hence easier
-%      to re-find by Metis
-%    * but the opposite is sometimes the case
+In some rare cases, Metis fails fairly quickly. This usually indicates that
+Sledgehammer found a type-incorrect proof. Sledgehammer erases some type
+information to speed up the search. Try Sledgehammer again with full type
+information: \textit{full\_types} (\S\ref{problem-encoding}), or choose a
+specific type encoding with \textit{type\_sys} (\S\ref{problem-encoding}). Older
+versions of Sledgehammer were frequent victims of this problem. Now this should
+very seldom be an issue, but if you notice many unsound proofs, contact the
+author at \authoremail.
+
+\point{How can I tell whether a Sledgehammer proof is sound?}
+
+First, if \emph{metis} (or \emph{metisFT}) can reconstruct it, the proof is
+sound (modulo soundness of Isabelle's inference kernel). If it fails or runs
+seemingly forever, you can try
+
+\prew
+\textbf{apply}~\textbf{--} \\
+\textbf{sledgehammer} [\textit{type\_sys} = \textit{poly\_tags}] (\textit{metis\_facts})
+\postw
+
+where \textit{metis\_facts} is the list of facts appearing in the suggested
+Metis call. The automatic provers should be able to refind the proof very
+quickly if it is sound, and the \textit{type\_sys} $=$ \textit{poly\_tags}
+option (\S\ref{problem-encoding}) ensures that no unsound proofs are found.
+
+The \textit{full\_types} option (\S\ref{problem-encoding}) can also be used
+here, but it is unsound in extremely rare degenerate cases such as the
+following:
+
+\prew
+\textbf{lemma} ``$\forall x\> y\Colon{'}a.\ x = y \,\Longrightarrow \exists f\> g\Colon\mathit{nat} \Rightarrow {'}a.\ f \not= g$'' \\
+\textbf{sledgehammer} [\textit{full\_types}] (\textit{nat.distinct\/}(1))
+\postw
+
+\point{How does Sledgehammer select the facts that should be passed to the
+automatic provers?}
+
+Briefly, the relevance filter assigns a score to every available fact (lemma,
+theorem, definition, or axiom)\ based upon how many constants that fact shares
+with the conjecture; this process iterates to include facts relevant to those
+just accepted, but with a decay factor to ensure termination. The constants are
+weighted to give unusual ones greater significance. The relevance filter copes
+best when the conjecture contains some unusual constants; if all the constants
+are common, it is unable to discriminate among the hundreds of facts that are
+picked up. The relevance filter is also memoryless: It has no information about
+how many times a particular fact has been used in a proof, and it cannot learn.
+
+The number of facts included in a problem varies from prover to prover, since
+some provers get overwhelmed quicker than others. You can show the number of
+facts given using the \textit{verbose} option (\S\ref{output-format}) and the
+actual facts using \textit{debug} (\S\ref{output-format}).
+
+Sledgehammer is good at finding short proofs combining a handful of existing
+lemmas. If you are looking for longer proofs, you must typically restrict the
+number of facts, by setting the \textit{max\_relevant} option
+(\S\ref{relevance-filter}) to, say, 50 or 100.
+
+\point{Why are the Isar proofs generated by Sledgehammer so ugly?}
+
+The current implementation is experimental and explodes exponentially in the
+worst case. Work on a new implementation has begun. There is a large body of
+research into transforming resolution proofs into natural deduction proofs (such
+as Isar proofs), which we hope to leverage. In the meantime, a workaround is to
+set the \textit{isar\_shrink\_factor} option (\S\ref{output-format}) to a larger
+value or to try several provers and keep the nicest-looking proof.
+
+\point{Should I let Sledgehammer minimize the number of lemmas?}
+
+In general, minimization is a good idea, because proofs involving fewer lemmas
+tend to be shorter as well, and hence easier to re-find by Metis. But the
+opposite is sometimes the case.
+
+\point{Why does the minimizer sometimes starts of its own?}
+
+There are two scenarios in which this can happen. First, some provers (e.g.,
+CVC3 and Yices) do not provide proofs or provide incomplete proofs. The
+minimizer is then invoked to find out which facts are actually needed from the
+(large) set of facts that was initinally given to the prover. Second, if a
+prover returns a proof with lots of facts, the minimizer is invoked
+automatically since Metis is unlikely to refind the proof.
+
+\point{What is metisFT?}
+
+The \textit{metisFT} proof method is the fully-typed version of Metis. It is
+much slower than \textit{metis}, but the proof search is fully typed, and it
+also includes more powerful rules such as the axiom ``$x = \mathit{True}
+\mathrel{\lor} x = \mathit{False}$'' for reasoning in higher-order places (e.g.,
+in set comprehensions). The method kicks in automatically as a fallback when
+\textit{metis} fails, and it is sometimes generated by Sledgehammer instead of
+\textit{metis} if the proof obviously requires type information.
+
+If you see the warning
+
+\prew
+\textsl
+Metis: Falling back on ``\textit{metisFT}''.
+\postw
+
+in a successful Metis proof, you can advantageously replace the \textit{metis}
+call with \textit{metisFT}.
 
 \point{I got a strange error from Sledgehammer---what should I do?}
 
 Sledgehammer tries to give informative error messages. Please report any strange
-error to \authoremail. This applies double if you get the message
+error to the author at \authoremail. This applies double if you get the message
 
-\begin{quote}
+\prew
 \slshape
-The prover found a type-unsound proof even though a supposedly type-sound
-encoding was used (or, very unlikely, your axioms are inconsistent). You
-might want to report this to the Isabelle developers.
-\end{quote}
+The prover found a type-unsound proof involving ``\textit{foo}'',
+``\textit{bar}'', ``\textit{baz}'' even though a supposedly type-sound encoding
+was used (or, less likely, your axioms are inconsistent). You might want to
+report this to the Isabelle developers.
+\postw
 
 \point{Auto can solve it---why not Sledgehammer?}
 
@@ -445,6 +504,13 @@ Problems can be easy for \textit{auto} and difficult for automatic provers, but
 the reverse is also true, so don't be discouraged if your first attempts fail.
 Because the system refers to all theorems known to Isabelle, it is particularly
 suitable when your goal has a short proof from lemmas that you don't know about.
+
+\point{Why are there so many options?}
+
+Sledgehammer's philosophy should work out of the box, without user guidance.
+Many of the options are meant to be used mostly by the Sledgehammer developers
+for experimentation purposes. Of course, feel free to experiment with them if
+you are so inclined.
 
 \section{Command Syntax}
 \label{command-syntax}
@@ -632,7 +698,7 @@ Vampire runs on Geoff Sutcliffe's Miami servers. Version 9 is used.
 developed by Geoff Sutcliffe \cite{tofof} based on E running on his Miami
 servers. This ATP supports a fragment of the TPTP many-typed first-order format
 (TFF). It is supported primarily for experimenting with the
-\textit{type\_sys} $=$ \textit{simple\_types} option (\S\ref{problem-encoding}).
+\textit{type\_sys} $=$ \textit{simple} option (\S\ref{problem-encoding}).
 
 \item[$\bullet$] \textbf{\textit{remote\_sine\_e}:} SInE-E is a metaprover
 developed by Kry\v stof Hoder \cite{sine} based on E. The remote version of
@@ -669,17 +735,18 @@ for 120 seconds \cite{boehme-nipkow-2010}.
 \opnodefault{prover}{string}
 Alias for \textit{provers}.
 
-\opnodefault{atps}{string}
-Legacy alias for \textit{provers}.
+%\opnodefault{atps}{string}
+%Legacy alias for \textit{provers}.
 
-\opnodefault{atp}{string}
-Legacy alias for \textit{provers}.
+%\opnodefault{atp}{string}
+%Legacy alias for \textit{provers}.
 
 \opdefault{timeout}{float\_or\_none}{\upshape 30}
 Specifies the maximum number of seconds that the automatic provers should spend
-searching for a proof. For historical reasons, the default value of this option
-can be overridden using the option ``Sledgehammer: Time Limit'' from the
-``Isabelle'' menu in Proof General.
+searching for a proof. This excludes problem preparation and is a soft limit.
+For historical reasons, the default value of this option can be overridden using
+the option ``Sledgehammer: Time Limit'' from the ``Isabelle'' menu in Proof
+General.
 
 \opfalse{blocking}{non\_blocking}
 Specifies whether the \textbf{sledgehammer} command should operate
@@ -732,45 +799,42 @@ historical reasons, the default value of this option can be overridden using the
 option ``Sledgehammer: Full Types'' from the ``Isabelle'' menu in Proof General.
 
 \opdefault{type\_sys}{string}{smart}
-Specifies the type system to use in ATP problems. The option can take the
-following values:
+Specifies the type system to use in ATP problems. Some of the type systems are
+unsound, meaning that they can give rise to spurious proofs (unreconstructible
+using Metis). The supported type systems are listed below, with an indication of
+their soundness in parentheses:
 
 \begin{enum}
-\item[$\bullet$] \textbf{\textit{poly\_preds}:} Types are encoded using a predicate
-$\mathit{has\_type\/}(\tau, t)$ that restricts the range of bound variables.
-Constants are annotated with their types, supplied as extra arguments, to
-resolve overloading.
+\item[$\bullet$] \textbf{\textit{erased} (very unsound):} No type information is
+supplied to the ATP. Types are simply erased.
 
-\item[$\bullet$] \textbf{\textit{poly\_tags}:} Each term and subterm is tagged with
-its type using a function $\mathit{type\_info\/}(\tau, t)$.
+\item[$\bullet$] \textbf{\textit{poly\_preds} (sound):} Types are encoded using
+a predicate \textit{has\_\allowbreak type\/}$(\tau, t)$ that restricts the range
+of bound variables. Constants are annotated with their types, supplied as extra
+arguments, to resolve overloading.
 
-\item[$\bullet$] \textbf{\textit{poly\_args}:}
-Like for the other sound encodings, constants are annotated with their types to
+\item[$\bullet$] \textbf{\textit{poly\_tags} (sound):} Each term and subterm is
+tagged with its type using a function $\mathit{type\_info\/}(\tau, t)$.
+
+\item[$\bullet$] \textbf{\textit{poly\_args} (unsound):}
+Like for \textit{poly\_preds} constants are annotated with their types to
 resolve overloading, but otherwise no type information is encoded.
-
-\item[$\bullet$] \textbf{\textit{erased}:} No type information is supplied to
-the ATP. Types are simply erased.
 
 \item[$\bullet$]
 \textbf{%
-\textit{mono\_preds},
-\textit{mono\_tags},
-\textit{mono\_args}:} \\
+\textit{mono\_preds}, \textit{mono\_tags} (sound);
+\textit{mono\_args} (unsound):} \\
 Similar to \textit{poly\_preds}, \textit{poly\_tags}, and \textit{poly\_args},
 respectively, but the problem is additionally monomorphized, meaning that type
 variables are instantiated with heuristically chosen ground types.
 Monomorphization can simplify reasoning but also leads to larger fact bases,
 which can slow down the ATPs.
 
-\item[$\bullet$] \textbf{\textit{simple\_types}:} Use the prover's support for
-simply typed first-order logic if available; otherwise, fall back on
-\textit{mangled\_preds}. The problem is monomorphized.
-
 \item[$\bullet$]
 \textbf{%
 \textit{mangled\_preds},
-\textit{mangled\_tags},
-\textit{mangled\_args}:} \\
+\textit{mangled\_tags} (sound); \\
+\textit{mangled\_args} (unsound):} \\
 Similar to
 \textit{mono\_preds}, \textit{mono\_tags}, and \textit{mono\_args},
 respectively but types are mangled in constant names instead of being supplied
@@ -779,50 +843,52 @@ becomes a unary predicate $\mathit{has\_type\_}\tau(t)$, and the binary function
 $\mathit{type\_info\/}(\tau, t)$ becomes a unary function
 $\mathit{type\_info\_}\tau(t)$.
 
-\item[$\bullet$]
-\textbf{%
-\textit{mono\_preds}?, \textit{mono\_tags}?, \textit{simple\_types}?, \\
-\textit{mangled\_preds}?, \textit{mangled\_tags}?:} \\
-The type systems \textit{mono\_preds}, \textit{mono\_tags}, \textit{simple\_types},
-\textit{mangled\_preds}, and \textit{mangled\_tags} are fully typed and
-virtually sound---except for pathological cases, all found proofs are
-type-correct. For each of these, Sledgehammer also provides a lighter (but
-virtually sound) variant identified by a question mark (`{?}')\ that detects and
-erases monotonic types, notably infinite types. (For \textit{simple\_types}, the
-types are not actually erased but rather replaced by a shared uniform type of
-individuals.)
+\item[$\bullet$] \textbf{\textit{simple} (sound):} Use the prover's support for
+simply typed first-order logic if available; otherwise, fall back on
+\textit{mangled\_preds}. The problem is monomorphized.
 
 \item[$\bullet$]
 \textbf{%
-\textit{poly\_tags}!, \textit{mono\_preds}!, \textit{mono\_tags}!, \\
-\textit{simple\_types}!, \textit{mangled\_preds}!, \textit{mangled\_tags}!:} \\
+\textit{poly\_preds}?, \textit{poly\_tags}?, \textit{mono\_preds}?, \textit{mono\_tags}?, \\
+\textit{mangled\_preds}?, \textit{mangled\_tags}?, \textit{simple}? (quasi-sound):} \\
 The type systems \textit{poly\_preds}, \textit{poly\_tags},
-\textit{mono\_preds}, \textit{mono\_tags}, \textit{simple\_types},
-\textit{mangled\_preds}, and \textit{mangled\_tags} also admit a somewhat
-unsound (but very efficient) variant identified by an exclamation mark (`{!}')
-that detects and erases erases all types except those that are clearly finite
-(e.g., \textit{bool}). (For \textit{simple\_types}, the types are not actually
-erased but rather replaced by a shared uniform type of individuals.)
+\textit{mono\_preds}, \textit{mono\_tags}, \textit{mangled\_preds},
+\textit{mangled\_tags}, and \textit{simple} are fully typed and sound. For each
+of these, Sledgehammer also provides a lighter, virtually sound variant
+identified by a question mark (`{?}')\ that detects and erases monotonic types,
+notably infinite types. (For \textit{simple}, the types are not actually erased
+but rather replaced by a shared uniform type of individuals.)
+
+\item[$\bullet$]
+\textbf{%
+\textit{poly\_preds}!, \textit{poly\_tags}!, \textit{mono\_preds}!, \textit{mono\_tags}!, \\
+\textit{mangled\_preds}!, \textit{mangled\_tags}!, \textit{simple}! \\
+(mildly unsound):} \\
+The type systems \textit{poly\_preds}, \textit{poly\_tags},
+\textit{mono\_preds}, \textit{mono\_tags}, \textit{mangled\_preds},
+\textit{mangled\_tags}, and \textit{simple} also admit a mildly unsound (but
+very efficient) variant identified by an exclamation mark (`{!}') that detects
+and erases erases all types except those that are clearly finite (e.g.,
+\textit{bool}). (For \textit{simple}, the types are not actually erased but
+rather replaced by a shared uniform type of individuals.)
 
 \item[$\bullet$] \textbf{\textit{smart}:} If \textit{full\_types} is enabled,
-uses a fully typed, virtually sound encoding; otherwise, uses any encoding. The
-actual encoding used depends on the ATP and should be the most efficient for
-that ATP.
+uses a sound or virtually sound encoding; otherwise, uses any encoding. The actual
+encoding used depends on the ATP and should be the most efficient for that ATP.
 \end{enum}
 
-For SMT solvers and ToFoF-E, the type system is always \textit{simple\_types}.
+In addition, all the \textit{preds} and \textit{tags} type systems are available
+in two variants, a lightweight and a heavyweight variant. The lightweight
+variants are generally more efficient and are the default; the heavyweight
+variants are identified by a \textit{\_heavy} suffix (e.g.,
+\textit{mangled\_preds\_heavy}{?}).
 
-\opdefault{max\_mono\_iters}{int}{\upshape 5}
-Specifies the maximum number of iterations for the monomorphization fixpoint
-construction. The higher this limit is, the more monomorphic instances are
-potentially generated. Whether monomorphization takes place depends on the
-type system used.
+For SMT solvers and ToFoF-E, the type system is always \textit{simple},
+irrespective of the value of this option.
 
-\opdefault{max\_new\_mono\_instances}{int}{\upshape 250}
-Specifies the maximum number of monomorphic instances to generate beyond
-\textit{max\_relevant}. The higher this limit is, the more monomorphic instances
-are potentially generated. Whether monomorphization takes place depends on the
-type system used.
+\nopagebreak
+{\small See also \textit{max\_new\_mono\_instances} (\S\ref{relevance-filter})
+and \textit{max\_mono\_iters} (\S\ref{relevance-filter}).}
 \end{enum}
 
 \subsection{Relevance Filter}
@@ -843,6 +909,23 @@ filter. If the option is set to \textit{smart}, it is set to a value that was
 empirically found to be appropriate for the prover. A typical value would be
 300.
 
+\opdefault{max\_new\_mono\_instances}{int}{\upshape 400}
+Specifies the maximum number of monomorphic instances to generate beyond
+\textit{max\_relevant}. The higher this limit is, the more monomorphic instances
+are potentially generated. Whether monomorphization takes place depends on the
+type system used.
+
+\nopagebreak
+{\small See also \textit{type\_sys} (\S\ref{problem-encoding}).}
+
+\opdefault{max\_mono\_iters}{int}{\upshape 3}
+Specifies the maximum number of iterations for the monomorphization fixpoint
+construction. The higher this limit is, the more monomorphic instances are
+potentially generated. Whether monomorphization takes place depends on the
+type system used.
+
+\nopagebreak
+{\small See also \textit{type\_sys} (\S\ref{problem-encoding}).}
 \end{enum}
 
 \subsection{Output Format}

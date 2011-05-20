@@ -3,7 +3,7 @@
     Author:     Claire Quigley, Cambridge University Computer Laboratory
     Author:     Jasmin Blanchette, TU Muenchen
 
-Abstract representation of ATP proofs and TSTP/Vampire/SPASS syntax.
+Abstract representation of ATP proofs and TSTP/SPASS syntax.
 *)
 
 signature ATP_PROOF =
@@ -15,7 +15,8 @@ sig
     Unprovable |
     IncompleteUnprovable |
     ProofMissing |
-    UnsoundProof of bool |
+    ProofIncomplete |
+    UnsoundProof of bool * string list |
     CantConnect |
     TimedOut |
     OutOfResources |
@@ -46,8 +47,8 @@ sig
   val extract_known_failure :
     (failure * string) list -> string -> failure option
   val extract_tstplike_proof_and_outcome :
-    bool -> bool -> bool -> int -> (string * string) list
-    -> (failure * string) list -> string -> string * failure option
+    bool -> bool -> int -> (string * string) list -> (failure * string) list
+    -> string -> string * failure option
   val is_same_step : step_name * step_name -> bool
   val atp_proof_from_tstplike_proof : string -> string proof
   val map_term_names_in_atp_proof :
@@ -64,7 +65,8 @@ datatype failure =
   Unprovable |
   IncompleteUnprovable |
   ProofMissing |
-  UnsoundProof of bool |
+  ProofIncomplete |
+  UnsoundProof of bool * string list |
   CantConnect |
   TimedOut |
   OutOfResources |
@@ -117,20 +119,27 @@ val missing_message_tail =
   " appears to be missing. You will need to install it if you want to invoke \
   \remote provers."
 
+fun involving [] = ""
+  | involving ss = "involving " ^ commas_quote ss ^ " "
+
 fun string_for_failure Unprovable =
     "The problem is unprovable."
   | string_for_failure IncompleteUnprovable =
     "The prover gave up."
   | string_for_failure ProofMissing =
     "The prover claims the conjecture is a theorem but did not provide a proof."
-  | string_for_failure (UnsoundProof false) =
-    "The prover found a type-unsound proof (or, very unlikely, your axioms \
-    \are inconsistent). Try passing the \"full_types\" option to Sledgehammer \
-    \to avoid such spurious proofs."
-  | string_for_failure (UnsoundProof true) =
-    "The prover found a type-unsound proof even though a supposedly type-sound \
-    \encoding was used (or, very unlikely, your axioms are inconsistent). You \
-    \might want to report this to the Isabelle developers."
+  | string_for_failure ProofIncomplete =
+    "The prover claims the conjecture is a theorem but provided an incomplete \
+    \proof."
+  | string_for_failure (UnsoundProof (false, ss)) =
+    "The prover found a type-unsound proof " ^ involving ss ^
+    "(or, less likely, your axioms are inconsistent). Try passing the \
+    \\"full_types\" option to Sledgehammer to avoid such spurious proofs."
+  | string_for_failure (UnsoundProof (true, ss)) =
+    "The prover found a type-unsound proof " ^ involving ss ^
+    "even though a supposedly type-sound encoding was used (or, less likely, \
+    \your axioms are inconsistent). You might want to report this to the \
+    \Isabelle developers."
   | string_for_failure CantConnect = "Cannot connect to remote server."
   | string_for_failure TimedOut = "Timed out."
   | string_for_failure OutOfResources = "The prover ran out of resources."
@@ -193,24 +202,18 @@ fun extract_known_failure known_failures output =
   |> find_first (fn (_, pattern) => String.isSubstring pattern output)
   |> Option.map fst
 
-fun extract_tstplike_proof_and_outcome debug verbose complete res_code
-                                       proof_delims known_failures output =
-  case extract_known_failure known_failures output of
-    NONE =>
-    (case extract_tstplike_proof proof_delims output of
-       "" =>
-       ("", SOME (if res_code = 0 andalso (not debug orelse output = "") then
-                    ProofMissing
-                  else
-                    UnknownError (short_output verbose output)))
-     | tstplike_proof =>
-       if res_code = 0 then (tstplike_proof, NONE)
-       else ("", SOME (UnknownError (short_output verbose output))))
-  | SOME failure =>
-    ("", SOME (if failure = IncompleteUnprovable andalso complete then
-                 Unprovable
-               else
-                 failure))
+fun extract_tstplike_proof_and_outcome verbose complete res_code proof_delims
+                                       known_failures output =
+  case (extract_tstplike_proof proof_delims output,
+        extract_known_failure known_failures output) of
+    (_, SOME ProofIncomplete) => ("", SOME ProofIncomplete)
+  | ("", SOME failure) =>
+    ("", SOME (if failure = IncompleteUnprovable andalso complete then Unprovable
+               else failure))
+  | ("", NONE) =>
+    ("", SOME (if res_code = 0 andalso output = "" then ProofMissing
+               else UnknownError (short_output verbose output)))
+  | (tstplike_proof, _) => (tstplike_proof, NONE)
 
 fun mk_anot (AConn (ANot, [phi])) = phi
   | mk_anot phi = AConn (ANot, [phi])
