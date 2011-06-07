@@ -10,10 +10,11 @@ signature SLEDGEHAMMER_PROVERS =
 sig
   type failure = ATP_Proof.failure
   type locality = ATP_Translate.locality
-  type relevance_fudge = Sledgehammer_Filter.relevance_fudge
   type type_sys = ATP_Translate.type_sys
+  type reconstructor = ATP_Reconstruct.reconstructor
   type play = ATP_Reconstruct.play
   type minimize_command = ATP_Reconstruct.minimize_command
+  type relevance_fudge = Sledgehammer_Filter.relevance_fudge
 
   datatype mode = Auto_Try | Try | Normal | Minimize
 
@@ -79,6 +80,7 @@ sig
   val smt_slice_min_secs : int Config.T
   val das_tool : string
   val select_smt_solver : string -> Proof.context -> Proof.context
+  val prover_name_for_reconstructor : reconstructor -> string option
   val is_metis_prover : string -> bool
   val is_atp : theory -> string -> bool
   val is_smt_prover : Proof.context -> string -> bool
@@ -137,13 +139,15 @@ val metis_prover_infos =
    (metis_full_typesN, Metis_Full_Types),
    (metis_no_typesN, Metis_No_Types)]
 
+val prover_name_for_reconstructor =
+  AList.find (op =) metis_prover_infos #> try hd
+
 val metis_reconstructors = map snd metis_prover_infos
 
 val is_metis_prover = AList.defined (op =) metis_prover_infos
 val is_atp = member (op =) o supported_atps
 
-val select_smt_solver =
-  Context.proof_map o SMT_Config.select_solver
+val select_smt_solver = Context.proof_map o SMT_Config.select_solver
 
 fun is_smt_prover ctxt name =
   member (op =) (SMT_Solver.available_solvers_of ctxt) name
@@ -531,22 +535,19 @@ fun choose_minimize_command minimize_command name preplay =
   (case preplay of
      Played (reconstructor, time) =>
      if Time.<= (time, metis_minimize_max_time) then
-       case AList.find (op =) metis_prover_infos reconstructor of
-         metis_name :: _ => metis_name
-       | [] => name
+       prover_name_for_reconstructor reconstructor |> the_default name
      else
        name
    | _ => name)
   |> minimize_command
 
-fun repair_monomorph_context debug max_iters max_new_instances =
-  Config.put Monomorph.verbose debug
-  #> Config.put Monomorph.max_rounds max_iters
+fun repair_monomorph_context max_iters max_new_instances =
+  Config.put Monomorph.max_rounds max_iters
   #> Config.put Monomorph.max_new_instances max_new_instances
   #> Config.put Monomorph.keep_partial_instances false
 
 fun repair_smt_monomorph_context debug max_mono_iters max_mono_instances =
-  Config.put SMT_Config.verbose debug
+  (not debug ? Config.put SMT_Config.verbose false)
   #> Config.put SMT_Config.monomorph_limit max_mono_iters
   #> Config.put SMT_Config.monomorph_instances max_mono_instances
   #> Config.put SMT_Config.monomorph_full false
@@ -603,7 +604,7 @@ fun run_atp mode name
             fun monomorphize_facts facts =
               let
                 val ctxt =
-                  ctxt |> repair_monomorph_context debug max_mono_iters
+                  ctxt |> repair_monomorph_context max_mono_iters
                                                    max_new_mono_instances
                 (* pseudo-theorem involving the same constants as the subgoal *)
                 val subgoal_th =
@@ -876,14 +877,14 @@ fun smt_filter_loop ctxt name
   let
     val max_slices = if slicing then Config.get ctxt smt_max_slices else 1
     val repair_context =
-          select_smt_solver name
-          #> (if overlord then
-                Config.put SMT_Config.debug_files
-                           (overlord_file_location_for_prover name
-                            |> (fn (path, name) => path ^ "/" ^ name))
-              else
-                I)
-          #> Config.put SMT_Config.infer_triggers (Config.get ctxt smt_triggers)
+      select_smt_solver name
+      #> (if overlord then
+            Config.put SMT_Config.debug_files
+                       (overlord_file_location_for_prover name
+                        |> (fn (path, name) => path ^ "/" ^ name))
+          else
+            I)
+      #> Config.put SMT_Config.infer_triggers (Config.get ctxt smt_triggers)
     val state = state |> Proof.map_context repair_context
     fun do_slice timeout slice outcome0 time_so_far facts =
       let
