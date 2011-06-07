@@ -453,7 +453,7 @@ $(OUT)/HOL-Library: $(OUT)/HOL Library/ROOT.ML				\
   Library/Indicator_Function.thy Library/Infinite_Set.thy		\
   Library/Inner_Product.thy Library/Kleene_Algebra.thy			\
   Library/LaTeXsugar.thy Library/Lattice_Algebras.thy			\
-  Library/Lattice_Syntax.thy Library/Library.thy			\
+  Library/Lattice_Syntax.thy Library/Library.thy Library/List_Cset.thy 	\
   Library/List_Prefix.thy Library/List_lexord.thy Library/Mapping.thy	\
   Library/Monad_Syntax.thy Library/More_List.thy Library/More_Set.thy	\
   Library/Multiset.thy Library/Nat_Bijection.thy			\
@@ -1047,7 +1047,7 @@ HOL-ex: HOL $(LOG)/HOL-ex.gz
 $(LOG)/HOL-ex.gz: $(OUT)/HOL Decision_Procs/Commutative_Ring.thy	\
   Number_Theory/Primes.thy ex/Abstract_NAT.thy ex/Antiquote.thy		\
   ex/ATP_Export.thy ex/Arith_Examples.thy ex/Arithmetic_Series_Complex.thy \
-  ex/BT.thy	ex/BinEx.thy ex/Binary.thy ex/Birthday_Paradoxon.thy			\
+  ex/BT.thy	ex/BinEx.thy ex/Binary.thy ex/Birthday_Paradox.thy			\
   ex/CASC_Setup.thy ex/CTL.thy ex/Case_Product.thy			\
   ex/Chinese.thy ex/Classical.thy ex/CodegenSML_Test.thy		\
   ex/Coercion_Examples.thy ex/Coherent.thy ex/Dedekind_Real.thy		\
