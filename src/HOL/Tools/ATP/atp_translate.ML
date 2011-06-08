@@ -625,7 +625,7 @@ fun choose_format formats (Simple_Types level) =
        CNF_UEQ =>
        (CNF_UEQ, case type_sys of
                    Preds stuff =>
-                   (if is_type_sys_fairly_sound type_sys then Preds else Tags)
+                   (if is_type_sys_fairly_sound type_sys then Tags else Preds)
                        stuff
                  | _ => type_sys)
      | format => (format, type_sys))
@@ -975,16 +975,15 @@ fun make_formula thy format type_sys eq_as_iff name loc kind t =
      atomic_types = atomic_types}
   end
 
-fun make_fact ctxt format type_sys keep_trivial eq_as_iff preproc presimp_consts
+fun make_fact ctxt format type_sys eq_as_iff preproc presimp_consts
               ((name, loc), t) =
   let val thy = Proof_Context.theory_of ctxt in
-    case (keep_trivial,
-          t |> preproc ? preprocess_prop ctxt presimp_consts Axiom
-            |> make_formula thy format type_sys eq_as_iff name loc Axiom) of
-      (false,
-       formula as {combformula = AAtom (CombConst ((s, _), _, _)), ...}) =>
+    case t |> preproc ? preprocess_prop ctxt presimp_consts Axiom
+           |> make_formula thy format type_sys (eq_as_iff andalso format <> CNF)
+                           name loc Axiom of
+      formula as {combformula = AAtom (CombConst ((s, _), _, _)), ...} =>
       if s = tptp_true then NONE else SOME formula
-    | (_, formula) => SOME formula
+    | formula => SOME formula
   end
 
 fun make_conjecture ctxt format prem_kind type_sys preproc presimp_consts ts =
@@ -1005,7 +1004,7 @@ fun make_conjecture ctxt format prem_kind type_sys preproc presimp_consts ts =
                 t |> preproc ?
                      (preprocess_prop ctxt presimp_consts kind #> freeze_term)
                   |> make_formula thy format type_sys (format <> CNF)
-                                  (string_of_int j) General kind
+                                  (string_of_int j) Local kind
                   |> maybe_negate
               end)
          (0 upto last) ts
@@ -1354,7 +1353,7 @@ fun helper_facts_for_sym ctxt format type_sys (s, {types, ...} : sym_info) =
                    | _ => I)
          end)
       val make_facts =
-        map_filter (make_fact ctxt format type_sys false false false [])
+        map_filter (make_fact ctxt format type_sys false false [])
       val fairly_sound = is_type_sys_fairly_sound type_sys
     in
       helper_table
@@ -1417,8 +1416,7 @@ fun translate_formulas ctxt format prem_kind type_sys preproc hyp_ts concl_t
     val thy = Proof_Context.theory_of ctxt
     val fact_ts = facts |> map snd
     val presimp_consts = Meson.presimplified_consts ctxt
-    val make_fact =
-      make_fact ctxt format type_sys false true true presimp_consts
+    val make_fact = make_fact ctxt format type_sys true preproc presimp_consts
     val (facts, fact_names) =
       facts |> map (fn (name, t) => (name, t) |> make_fact |> rpair name)
             |> map_filter (try (apfst the))
@@ -1648,21 +1646,22 @@ val known_infinite_types =
 
 (* This inference is described in section 2.3 of Claessen et al.'s "Sorting it
    out with monotonicity" paper presented at CADE 2011. *)
-fun add_combterm_nonmonotonic_types _ _ (SOME false) _ = I
-  | add_combterm_nonmonotonic_types ctxt level _
+fun add_combterm_nonmonotonic_types _ _ _ (SOME false) _ = I
+  | add_combterm_nonmonotonic_types ctxt level locality _
         (CombApp (CombApp (CombConst ((s, _), Type (_, [T, _]), _), tm1),
                            tm2)) =
     (is_tptp_equal s andalso exists is_var_or_bound_var [tm1, tm2] andalso
      (case level of
         Nonmonotonic_Types =>
+        not (is_locality_global locality) orelse
         not (is_type_surely_infinite ctxt known_infinite_types T)
       | Finite_Types => is_type_surely_finite ctxt T
       | _ => true)) ? insert_type ctxt I (deep_freeze_type T)
-  | add_combterm_nonmonotonic_types _ _ _ _ = I
-fun add_fact_nonmonotonic_types ctxt level ({kind, combformula, ...}
+  | add_combterm_nonmonotonic_types _ _ _ _ _ = I
+fun add_fact_nonmonotonic_types ctxt level ({kind, locality, combformula, ...}
                                             : translated_formula) =
   formula_fold (SOME (kind <> Conjecture))
-               (add_combterm_nonmonotonic_types ctxt level) combformula
+               (add_combterm_nonmonotonic_types ctxt level locality) combformula
 fun nonmonotonic_types_for_facts ctxt type_sys facts =
   let val level = level_of_type_sys type_sys in
     if level = Nonmonotonic_Types orelse level = Finite_Types then
