@@ -9,33 +9,75 @@ HOL setup for the Metis prover.
 
 signature METIS_TACTICS =
 sig
+  val metisN : string
+  val full_typesN : string
+  val partial_typesN : string
+  val no_typesN : string
+  val full_type_sys : string
+  val partial_type_sys : string
+  val no_type_sys : string
   val trace : bool Config.T
   val verbose : bool Config.T
-  val type_lits : bool Config.T
   val new_skolemizer : bool Config.T
-  val metis_tac : Proof.context -> thm list -> int -> tactic
-  val metisF_tac : Proof.context -> thm list -> int -> tactic
-  val metisFT_tac : Proof.context -> thm list -> int -> tactic
+  val metis_tac : string list -> Proof.context -> thm list -> int -> tactic
   val setup : theory -> theory
 end
 
 structure Metis_Tactics : METIS_TACTICS =
 struct
 
+open ATP_Translate
 open Metis_Translate
 open Metis_Reconstruct
 
-val type_lits = Attrib.setup_config_bool @{binding metis_type_lits} (K true)
-val new_skolemizer = Attrib.setup_config_bool @{binding metis_new_skolemizer} (K false)
+val metisN = Binding.qualified_name_of @{binding metis}
 
-fun is_false t = t aconv (HOLogic.mk_Trueprop HOLogic.false_const);
+val full_typesN = "full_types"
+val partial_typesN = "partial_types"
+val no_typesN = "no_types"
 
+val full_type_sys = "poly_preds_heavy_query"
+val partial_type_sys = "poly_args"
+val no_type_sys = "erased"
+
+val type_sys_aliases =
+  [(full_typesN, full_type_sys),
+   (partial_typesN, partial_type_sys),
+   (no_typesN, no_type_sys)]
+
+fun method_call_for_type_sys type_sys =
+  metisN ^ " (" ^
+  (case AList.find (op =) type_sys_aliases type_sys of
+     [alias] => alias
+   | _ => type_sys) ^ ")"
+
+val new_skolemizer =
+  Attrib.setup_config_bool @{binding metis_new_skolemizer} (K false)
+
+(* Designed to work also with monomorphic instances of polymorphic theorems. *)
 fun have_common_thm ths1 ths2 =
-  exists (member Thm.eq_thm ths1) (map Meson.make_meta_clause ths2)
+  exists (member (untyped_aconv o pairself prop_of) ths1)
+         (map Meson.make_meta_clause ths2)
 
 (*Determining which axiom clauses are actually used*)
 fun used_axioms axioms (th, Metis_Proof.Axiom _) = SOME (lookth axioms th)
-  | used_axioms _ _ = NONE;
+  | used_axioms _ _ = NONE
+
+(* Lightweight predicate type information comes in two flavors, "t = t'" and
+   "t => t'", where "t" and "t'" are the same term modulo type tags.
+   In Isabelle, type tags are stripped away, so we are left with "t = t" or
+   "t => t". Type tag idempotence is also handled this way. *)
+fun reflexive_or_trivial_from_metis ctxt sym_tab old_skolems mth =
+  let val thy = Proof_Context.theory_of ctxt in
+    case hol_clause_from_metis ctxt sym_tab old_skolems mth of
+      Const (@{const_name HOL.eq}, _) $ _ $ t =>
+      t |> cterm_of thy |> Thm.reflexive RS @{thm meta_eq_to_obj_eq}
+    | Const (@{const_name disj}, _) $ t1 $ t2 =>
+      (if can HOLogic.dest_not t1 then t2 else t1)
+      |> HOLogic.mk_Trueprop |> cterm_of thy |> Thm.trivial
+    | _ => raise Fail "unexpected tags sym clause"
+  end
+  |> Meson.make_meta_clause
 
 val clause_params =
   {ordering = Metis_KnuthBendixOrder.default,
@@ -53,9 +95,8 @@ val waiting_params =
 val resolution_params = {active = active_params, waiting = waiting_params}
 
 (* Main function to start Metis proof and reconstruction *)
-fun FOL_SOLVE mode ctxt cls ths0 =
+fun FOL_SOLVE (type_sys :: fallback_type_syss) ctxt cls ths0 =
   let val thy = Proof_Context.theory_of ctxt
-      val type_lits = Config.get ctxt type_lits
       val new_skolemizer =
         Config.get ctxt new_skolemizer orelse null (Meson.choice_theorems thy)
       val th_cls_pairs =
@@ -63,26 +104,26 @@ fun FOL_SOLVE mode ctxt cls ths0 =
                 (Thm.get_name_hint th,
                  Meson_Clausify.cnf_axiom ctxt new_skolemizer j th))
              (0 upto length ths0 - 1) ths0
-      val thss = map (snd o snd) th_cls_pairs
+      val ths = maps (snd o snd) th_cls_pairs
       val dischargers = map (fst o snd) th_cls_pairs
       val _ = trace_msg ctxt (fn () => "FOL_SOLVE: CONJECTURE CLAUSES")
       val _ = app (fn th => trace_msg ctxt (fn () => Display.string_of_thm ctxt th)) cls
       val _ = trace_msg ctxt (fn () => "THEOREM CLAUSES")
-      val _ = app (app (fn th => trace_msg ctxt (fn () => Display.string_of_thm ctxt th))) thss
-      val (mode, {axioms, tfrees, old_skolems}) =
-        prepare_metis_problem mode ctxt type_lits cls thss
-      val _ = if null tfrees then ()
-              else (trace_msg ctxt (fn () => "TFREE CLAUSES");
-                    app (fn TyLitFree ((s, _), (s', _)) =>
-                            trace_msg ctxt (fn () => s ^ "(" ^ s' ^ ")")) tfrees)
+      val _ = app (fn th => trace_msg ctxt (fn () => Display.string_of_thm ctxt th)) ths
+      val (sym_tab, axioms, old_skolems) =
+        prepare_metis_problem ctxt type_sys cls ths
+      fun get_isa_thm mth Isa_Reflexive_or_Trivial =
+          reflexive_or_trivial_from_metis ctxt sym_tab old_skolems mth
+        | get_isa_thm _ (Isa_Raw ith) = ith
+      val axioms = axioms |> map (fn (mth, ith) => (mth, get_isa_thm mth ith))
       val _ = trace_msg ctxt (fn () => "CLAUSES GIVEN TO METIS")
-      val thms = map #1 axioms
+      val thms = axioms |> map fst
       val _ = app (fn th => trace_msg ctxt (fn () => Metis_Thm.toString th)) thms
-      val _ = trace_msg ctxt (fn () => "mode = " ^ string_of_mode mode)
+      val _ = trace_msg ctxt (fn () => "type_sys = " ^ type_sys)
       val _ = trace_msg ctxt (fn () => "START METIS PROVE PROCESS")
   in
-      case filter (is_false o prop_of) cls of
-          false_th::_ => [false_th RS @{thm FalseE}]
+      case filter (fn t => prop_of t aconv @{prop False}) cls of
+          false_th :: _ => [false_th RS @{thm FalseE}]
         | [] =>
       case Metis_Resolution.new resolution_params {axioms = thms, conjecture = []}
            |> Metis_Resolution.loop of
@@ -92,20 +133,27 @@ fun FOL_SOLVE mode ctxt cls ths0 =
                 val ctxt' = fold Variable.declare_constraints (map prop_of cls) ctxt
                              (*add constraints arising from converting goal to clause form*)
                 val proof = Metis_Proof.proof mth
-                val result = fold (replay_one_inference ctxt' mode old_skolems)
-                                  proof axioms
-                and used = map_filter (used_axioms axioms) proof
+                val result =
+                  axioms
+                  |> fold (replay_one_inference ctxt' old_skolems sym_tab) proof
+                val used = map_filter (used_axioms axioms) proof
                 val _ = trace_msg ctxt (fn () => "METIS COMPLETED...clauses actually used:")
                 val _ = app (fn th => trace_msg ctxt (fn () => Display.string_of_thm ctxt th)) used
-                val unused = th_cls_pairs |> map_filter (fn (name, (_, cls)) =>
-                  if have_common_thm used cls then NONE else SOME name)
+                val names = th_cls_pairs |> map fst
+                val used_names =
+                  th_cls_pairs
+                  |> map_filter (fn (name, (_, cls)) =>
+                                    if have_common_thm used cls then SOME name
+                                    else NONE)
+                val unused_names = names |> subtract (op =) used_names
             in
                 if not (null cls) andalso not (have_common_thm used cls) then
                   verbose_warning ctxt "The assumptions are inconsistent"
                 else
                   ();
-                if not (null unused) then
-                  verbose_warning ctxt ("Unused theorems: " ^ commas_quote unused)
+                if not (null unused_names) then
+                  "Unused theorems: " ^ commas_quote unused_names
+                  |> verbose_warning ctxt
                 else
                   ();
                 case result of
@@ -116,21 +164,23 @@ fun FOL_SOLVE mode ctxt cls ths0 =
             end
         | Metis_Resolution.Satisfiable _ =>
             (trace_msg ctxt (fn () => "Metis: No first-order proof with the lemmas supplied");
-             if mode <> FT then
-               raise METIS ("FOL_SOLVE",
-                            "No first-order proof with the lemmas supplied")
+             if null fallback_type_syss then
+               ()
              else
-               ();
+               raise METIS ("FOL_SOLVE",
+                            "No first-order proof with the lemmas supplied");
              [])
   end
   handle METIS (loc, msg) =>
-         if mode <> FT then
-           (verbose_warning ctxt ("Falling back on \"metisFT\".");
-            FOL_SOLVE FT ctxt cls ths0)
-         else
-           error ("Failed to replay Metis proof in Isabelle." ^
-                  (if Config.get ctxt verbose then "\n" ^ loc ^ ": " ^ msg
-                   else ""))
+         case fallback_type_syss of
+           [] => error ("Failed to replay Metis proof in Isabelle." ^
+                        (if Config.get ctxt verbose then "\n" ^ loc ^ ": " ^ msg
+                         else ""))
+         | type_sys :: _ =>
+           (verbose_warning ctxt
+                ("Falling back on " ^
+                 quote (method_call_for_type_sys type_sys) ^ "...");
+            FOL_SOLVE fallback_type_syss ctxt cls ths0)
 
 val neg_clausify =
   single
@@ -149,47 +199,65 @@ fun preskolem_tac ctxt st0 =
 val type_has_top_sort =
   exists_subtype (fn TFree (_, []) => true | TVar (_, []) => true | _ => false)
 
-fun generic_metis_tac mode ctxt ths i st0 =
+fun generic_metis_tac type_syss ctxt ths i st0 =
   let
     val _ = trace_msg ctxt (fn () =>
-        "Metis called with theorems " ^ cat_lines (map (Display.string_of_thm ctxt) ths))
+        "Metis called with theorems\n" ^
+        cat_lines (map (Display.string_of_thm ctxt) ths))
+    fun tac clause = resolve_tac (FOL_SOLVE type_syss ctxt clause ths) 1
   in
     if exists_type type_has_top_sort (prop_of st0) then
       (verbose_warning ctxt "Proof state contains the universal sort {}";
        Seq.empty)
     else
-      Meson.MESON (preskolem_tac ctxt) (maps neg_clausify)
-                  (fn cls => resolve_tac (FOL_SOLVE mode ctxt cls ths) 1)
-                  ctxt i st0
+      Meson.MESON (preskolem_tac ctxt) (maps neg_clausify) tac ctxt i st0
   end
 
-val metis_tac = generic_metis_tac HO
-val metisF_tac = generic_metis_tac FO
-val metisFT_tac = generic_metis_tac FT
+val metis_default_type_syss = [partial_type_sys, full_type_sys]
+val metisFT_type_syss = [full_type_sys]
+
+fun metis_tac [] = generic_metis_tac metis_default_type_syss
+  | metis_tac type_syss = generic_metis_tac type_syss
 
 (* Whenever "X" has schematic type variables, we treat "using X by metis" as
-   "by (metis X)", to prevent "Subgoal.FOCUS" from freezing the type variables.
+   "by (metis X)" to prevent "Subgoal.FOCUS" from freezing the type variables.
    We don't do it for nonschematic facts "X" because this breaks a few proofs
    (in the rare and subtle case where a proof relied on extensionality not being
    applied) and brings few benefits. *)
 val has_tvar =
   exists_type (exists_subtype (fn TVar _ => true | _ => false)) o prop_of
-fun method name mode =
-  Method.setup name (Attrib.thms >> (fn ths => fn ctxt =>
-    METHOD (fn facts =>
-               let
-                 val (schem_facts, nonschem_facts) =
-                   List.partition has_tvar facts
-               in
-                 HEADGOAL (Method.insert_tac nonschem_facts THEN'
-                           CHANGED_PROP
-                           o generic_metis_tac mode ctxt (schem_facts @ ths))
-               end)))
+
+fun method type_syss (type_sys, ths) ctxt facts =
+  let
+    val _ =
+      if type_syss = metisFT_type_syss then
+        legacy_feature "Old 'metisFT' method -- \
+                       \use 'metis (full_types)' instead"
+      else
+        ()
+    val (schem_facts, nonschem_facts) = List.partition has_tvar facts
+    val type_syss = type_sys |> Option.map single |> the_default type_syss
+  in
+    HEADGOAL (Method.insert_tac nonschem_facts THEN'
+              CHANGED_PROP
+              o generic_metis_tac type_syss ctxt (schem_facts @ ths))
+  end
+
+fun setup_method (binding, type_syss) =
+  (if type_syss = metis_default_type_syss then
+     (Args.parens Parse.short_ident
+      >> (fn s => AList.lookup (op =) type_sys_aliases s |> the_default s))
+     |> Scan.option |> Scan.lift
+   else
+     Scan.succeed NONE)
+  -- Attrib.thms >> (METHOD oo method type_syss)
+  |> Method.setup binding
 
 val setup =
-  method @{binding metis} HO "Metis for FOL/HOL problems"
-  #> method @{binding metisF} FO "Metis for FOL problems"
-  #> method @{binding metisFT} FT
-            "Metis for FOL/HOL problems with fully-typed translation"
+  [((@{binding metis}, metis_default_type_syss),
+    "Metis for FOL and HOL problems"),
+   ((@{binding metisFT}, metisFT_type_syss),
+    "Metis for FOL/HOL problems with fully-typed translation")]
+  |> fold (uncurry setup_method)
 
 end;

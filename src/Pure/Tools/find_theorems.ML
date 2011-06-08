@@ -13,12 +13,32 @@ sig
   datatype theorem =
     Internal of Facts.ref * thm | External of Facts.ref * term
 
+  type 'term query = {
+    goal: thm option,
+    limit: int option,
+    rem_dups: bool,
+    criteria: (bool * 'term criterion) list
+  }
+
   val tac_limit: int Unsynchronized.ref
   val limit: int Unsynchronized.ref
+
+  val read_criterion: Proof.context -> string criterion -> term criterion
+  val query_parser: (bool * string criterion) list parser
+
+  val xml_of_query: term query -> XML.tree
+  val query_of_xml: XML.tree -> term query
+  val xml_of_result: int option * theorem list -> XML.tree
+  val result_of_xml: XML.tree -> int option * theorem list
+
   val find_theorems: Proof.context -> thm option -> int option -> bool ->
+    (bool * term criterion) list -> int option * (Facts.ref * thm) list
+  val find_theorems_cmd: Proof.context -> thm option -> int option -> bool ->
     (bool * string criterion) list -> int option * (Facts.ref * thm) list
-  val filter_theorems: Proof.context -> theorem list -> thm option ->
-    int option -> bool -> (bool * string criterion) list ->
+
+  val filter_theorems: Proof.context -> theorem list -> term query ->
+    int option * theorem list
+  val filter_theorems_cmd: Proof.context -> theorem list -> string query ->
     int option * theorem list
 
   val pretty_theorem: Proof.context -> theorem -> Pretty.T
@@ -81,11 +101,98 @@ fun pretty_criterion ctxt (b, c) =
   end;
 
 
+(** queries **)
+
+type 'term query = {
+  goal: thm option,
+  limit: int option,
+  rem_dups: bool,
+  criteria: (bool * 'term criterion) list
+};
+
+fun map_criteria f {goal, limit, rem_dups, criteria} =
+  {goal=goal, limit=limit, rem_dups=rem_dups, criteria=f criteria};
+
+fun xml_of_criterion (Name name) = XML.Elem (("Name", [("val", name)]), [])
+  | xml_of_criterion Intro = XML.Elem (("Intro", []) , [])
+  | xml_of_criterion IntroIff = XML.Elem (("IntroIff", []) , [])
+  | xml_of_criterion Elim = XML.Elem (("Elim", []) , [])
+  | xml_of_criterion Dest = XML.Elem (("Dest", []) , [])
+  | xml_of_criterion Solves = XML.Elem (("Solves", []) , [])
+  | xml_of_criterion (Simp pat) = XML.Elem (("Simp", []) , [XML_Syntax.xml_of_term pat])
+  | xml_of_criterion (Pattern pat) = XML.Elem (("Pattern", []) , [XML_Syntax.xml_of_term pat]);
+
+fun criterion_of_xml (XML.Elem (("Name", [("val", name)]), [])) = Name name
+  | criterion_of_xml (XML.Elem (("Intro", []) , [])) = Intro
+  | criterion_of_xml (XML.Elem (("IntroIff", []) , [])) = IntroIff
+  | criterion_of_xml (XML.Elem (("Elim", []) , [])) = Elim
+  | criterion_of_xml (XML.Elem (("Dest", []) , [])) = Dest
+  | criterion_of_xml (XML.Elem (("Solves", []) , [])) = Solves
+  | criterion_of_xml (XML.Elem (("Simp", []) , [tree])) = Simp (XML_Syntax.term_of_xml tree)
+  | criterion_of_xml (XML.Elem (("Pattern", []) , [tree])) = Pattern (XML_Syntax.term_of_xml tree)
+  | criterion_of_xml tree = raise XML_Syntax.XML ("criterion_of_xml: bad tree", tree);
+
+fun xml_of_query {goal=NONE, limit, rem_dups, criteria} =
+      let
+        val properties = []
+          |> (if rem_dups then cons ("rem_dups", "") else I)
+          |> (if is_some limit then cons ("limit", Markup.print_int (the limit)) else I);
+      in
+        XML.Elem (("Query", properties), XML_Data.make_list 
+          (XML_Data.make_pair XML_Data.make_bool (single o xml_of_criterion)) criteria)
+      end
+  | xml_of_query _ = raise Fail "cannot serialize goal";
+
+fun query_of_xml (XML.Elem (("Query", properties), body)) =
+      let
+        val rem_dups = Properties.defined properties "rem_dups";
+        val limit = Properties.get properties "limit" |> Option.map Markup.parse_int;
+        val criteria = XML_Data.dest_list (XML_Data.dest_pair XML_Data.dest_bool 
+          (criterion_of_xml o the_single)) body;
+      in
+        {goal=NONE, limit=limit, rem_dups=rem_dups, criteria=criteria}
+      end
+  | query_of_xml tree = raise XML_Syntax.XML ("query_of_xml: bad tree", tree);
+
 (** theorems, either internal or external (without proof) **)
 
 datatype theorem =
   Internal of Facts.ref * thm |
-  External of Facts.ref * term;
+  External of Facts.ref * term; (* FIXME: Facts.ref not appropriate *)
+
+fun fact_ref_markup (Facts.Named ((name, pos), SOME [Facts.Single i])) =
+      Position.markup pos o Markup.properties [("name", name), ("index", Markup.print_int i)]
+  | fact_ref_markup (Facts.Named ((name, pos), NONE)) =
+      Position.markup pos o Markup.properties [("name", name)]
+  | fact_ref_markup fact_ref = raise Fail "bad fact ref"
+
+fun xml_of_theorem (Internal _) = raise Fail "xml_of_theorem: Internal"
+  | xml_of_theorem (External (fact_ref, prop)) =
+      XML.Elem (fact_ref_markup fact_ref ("External", []), [XML_Syntax.xml_of_term prop])
+
+fun theorem_of_xml (XML.Elem (("External", properties), [tree])) =
+    let
+      val name = the (Properties.get properties "name");
+      val pos = Position.of_properties properties;
+      val intvs_opt = Option.map (single o Facts.Single o Markup.parse_int)
+        (Properties.get properties "index");
+    in
+      External (Facts.Named ((name, pos), intvs_opt), XML_Syntax.term_of_xml tree)
+    end
+  | theorem_of_xml tree = raise XML_Syntax.XML ("theorem_of_xml: bad tree", tree);
+
+fun xml_of_result (opt_found, theorems) =
+  let
+    val properties =
+      if is_some opt_found then [("found", Markup.print_int (the opt_found))] else [];
+  in
+    XML.Elem (("Result", properties), XML_Data.make_list (single o xml_of_theorem) theorems)
+  end;
+
+fun result_of_xml (XML.Elem (("Result", properties), body)) =
+      (Properties.get properties "found" |> Option.map Markup.parse_int,
+       XML_Data.dest_list (theorem_of_xml o the_single) body)
+  | result_of_xml tree = raise XML_Syntax.XML ("result_of_xml: bad tree", tree);
 
 fun prop_of (Internal (_, thm)) = Thm.full_prop_of thm
   | prop_of (External (_, prop)) = prop;
@@ -420,16 +527,10 @@ fun all_facts_of ctxt =
 
 val limit = Unsynchronized.ref 40;
 
-fun filter_theorems ctxt theorems opt_goal opt_limit rem_dups raw_criteria =
+fun filter_theorems ctxt theorems query =
   let
-    val assms =
-      Proof_Context.get_fact ctxt (Facts.named "local.assms")
-        handle ERROR _ => [];
-    val add_prems = Seq.hd o TRY (Method.insert_tac assms 1);
-    val opt_goal' = Option.map add_prems opt_goal;
-
-    val criteria = map (apsnd (read_criterion ctxt)) raw_criteria;
-    val filters = map (filter_criterion ctxt opt_goal') criteria;
+    val {goal=opt_goal, limit=opt_limit, rem_dups, criteria} = query
+    val filters = map (filter_criterion ctxt opt_goal) criteria;
 
     fun find_all theorems =
       let
@@ -451,10 +552,25 @@ fun filter_theorems ctxt theorems opt_goal opt_limit rem_dups raw_criteria =
 
   in find theorems end;
 
-fun find_theorems ctxt opt_goal opt_limit rem_dups raw_criteria =
-  filter_theorems ctxt (map Internal (all_facts_of ctxt)) opt_goal opt_limit
-     rem_dups raw_criteria
-  |> apsnd (map (fn Internal f => f));
+fun filter_theorems_cmd ctxt theorems raw_query = 
+  filter_theorems ctxt theorems (map_criteria 
+    (map (apsnd (read_criterion ctxt))) raw_query);
+
+fun gen_find_theorems filter ctxt opt_goal opt_limit rem_dups raw_criteria =
+  let
+    val assms =
+      Proof_Context.get_fact ctxt (Facts.named "local.assms")
+        handle ERROR _ => [];
+    val add_prems = Seq.hd o TRY (Method.insert_tac assms 1);
+    val opt_goal' = Option.map add_prems opt_goal;
+  in
+    filter ctxt (map Internal (all_facts_of ctxt)) 
+      {goal=opt_goal', limit=opt_limit, rem_dups=rem_dups, criteria=raw_criteria}
+    |> apsnd (map (fn Internal f => f))
+  end;
+
+val find_theorems = gen_find_theorems filter_theorems;
+val find_theorems_cmd = gen_find_theorems filter_theorems_cmd;
 
 fun pretty_theorem ctxt (Internal (thmref, thm)) = Pretty.block
       [Pretty.str (Facts.string_of_ref thmref), Pretty.str ":", Pretty.brk 1,
@@ -465,13 +581,13 @@ fun pretty_theorem ctxt (Internal (thmref, thm)) = Pretty.block
 
 fun pretty_thm ctxt (thmref, thm) = pretty_theorem ctxt (Internal (thmref, thm));
 
-fun print_theorems ctxt opt_goal opt_limit rem_dups raw_criteria =
+fun gen_print_theorems find ctxt opt_goal opt_limit rem_dups raw_criteria =
   let
     val start = Timing.start ();
 
     val criteria = map (apsnd (read_criterion ctxt)) raw_criteria;
-    val (foundo, theorems) = filter_theorems ctxt (map Internal (all_facts_of ctxt))
-      opt_goal opt_limit rem_dups raw_criteria;
+    val (foundo, theorems) = find
+      {goal=opt_goal, limit=opt_limit, rem_dups=rem_dups, criteria=criteria};
     val returned = length theorems;
 
     val tally_msg =
@@ -493,6 +609,8 @@ fun print_theorems ctxt opt_goal opt_limit rem_dups raw_criteria =
         map (pretty_theorem ctxt) theorems)
   end |> Pretty.chunks |> Pretty.writeln;
 
+fun print_theorems ctxt =
+  gen_print_theorems (filter_theorems ctxt (map Internal (all_facts_of ctxt))) ctxt;
 
 
 (** command syntax **)
@@ -516,10 +634,12 @@ val options =
         --| Parse.$$$ ")")) (NONE, true);
 in
 
+val query_parser = Scan.repeat (((Scan.option Parse.minus >> is_none) -- criterion));
+
 val _ =
   Outer_Syntax.improper_command "find_theorems" "print theorems meeting specified criteria"
     Keyword.diag
-    (options -- Scan.repeat (((Scan.option Parse.minus >> is_none) -- criterion))
+    (options -- query_parser
       >> (fn ((opt_lim, rem_dups), spec) =>
         Toplevel.no_timing o
         Toplevel.keep (fn state =>

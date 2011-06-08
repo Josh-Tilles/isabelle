@@ -8,87 +8,146 @@ Sledgehammer's heart.
 
 signature SLEDGEHAMMER_RUN =
 sig
+  type minimize_command = ATP_Reconstruct.minimize_command
   type relevance_override = Sledgehammer_Filter.relevance_override
-  type minimize_command = Sledgehammer_ATP_Reconstruct.minimize_command
+  type mode = Sledgehammer_Provers.mode
   type params = Sledgehammer_Provers.params
   type prover = Sledgehammer_Provers.prover
 
+  val someN : string
+  val noneN : string
+  val timeoutN : string
+  val unknownN : string
   val auto_minimize_min_facts : int Config.T
-  val get_minimizing_prover : Proof.context -> bool -> string -> prover
+  val auto_minimize_max_seconds : real Config.T
+  val get_minimizing_prover : Proof.context -> mode -> string -> prover
   val run_sledgehammer :
-    params -> bool -> int -> relevance_override -> (string -> minimize_command)
-    -> Proof.state -> bool * Proof.state
+    params -> mode -> int -> relevance_override -> (string -> minimize_command)
+    -> Proof.state -> bool * (string * Proof.state)
 end;
 
 structure Sledgehammer_Run : SLEDGEHAMMER_RUN =
 struct
 
+open ATP_Util
+open ATP_Translate
+open ATP_Reconstruct
 open Sledgehammer_Util
 open Sledgehammer_Filter
-open Sledgehammer_ATP_Translate
 open Sledgehammer_Provers
 open Sledgehammer_Minimize
 
+val someN = "some"
+val noneN = "none"
+val timeoutN = "timeout"
+val unknownN = "unknown"
+
+val ordered_outcome_codes = [someN, unknownN, timeoutN, noneN]
+
+fun max_outcome_code codes =
+  NONE
+  |> fold (fn candidate =>
+              fn accum as SOME _ => accum
+               | NONE => if member (op =) codes candidate then SOME candidate
+                         else NONE)
+          ordered_outcome_codes
+  |> the_default unknownN
+
 fun prover_description ctxt ({verbose, blocking, ...} : params) name num_facts i
                        n goal =
-  quote name ^
-  (if verbose then
-     " with " ^ string_of_int num_facts ^ " fact" ^ plural_s num_facts
-   else
-     "") ^
-  " on " ^ (if n = 1 then "goal" else "subgoal " ^ string_of_int i) ^
-  (if blocking then
-     "."
-   else
-     ":\n" ^ Syntax.string_of_term ctxt (Thm.term_of (Thm.cprem_of goal i)))
+  (name,
+   (if verbose then
+      " with " ^ string_of_int num_facts ^ " fact" ^ plural_s num_facts
+    else
+      "") ^
+   " on " ^ (if n = 1 then "goal" else "subgoal " ^ string_of_int i) ^
+   (if blocking then
+      "."
+    else
+      "\n" ^ Syntax.string_of_term ctxt (Thm.term_of (Thm.cprem_of goal i))))
 
 val auto_minimize_min_facts =
   Attrib.setup_config_int @{binding sledgehammer_auto_minimize_min_facts}
       (fn generic => Config.get_generic generic binary_min_facts)
+val auto_minimize_max_seconds =
+  Attrib.setup_config_real @{binding sledgehammer_auto_minimize_max_seconds}
+      (K 5.0)
 
-fun get_minimizing_prover ctxt auto name
-        (params as {debug, verbose, explicit_apply, ...}) minimize_command
-        (problem as {state, subgoal, subgoal_count, facts, ...}) =
-  get_prover ctxt auto name params minimize_command problem
-  |> (fn result as {outcome, used_facts, run_time_in_msecs, message} =>
-         if is_some outcome then
-           result
+fun minimize ctxt mode name (params as {debug, verbose, isar_proof, ...})
+             ({state, subgoal, subgoal_count, facts, ...} : prover_problem)
+             (result as {outcome, used_facts, run_time_in_msecs, preplay,
+                         message, message_tail} : prover_result) =
+  if is_some outcome then
+    result
+  else
+    let
+      val num_facts = length used_facts
+      val ((minimize, minimize_name), preplay) =
+        if mode = Normal then
+          if num_facts >= Config.get ctxt auto_minimize_min_facts then
+            ((true, name), preplay)
+          else
+            let
+              fun can_min_fast_enough msecs =
+                0.001 * Real.fromInt ((num_facts + 2) * msecs)
+                <= Config.get ctxt auto_minimize_max_seconds
+              val prover_fast_enough =
+                run_time_in_msecs |> Option.map can_min_fast_enough
+                                  |> the_default false
+            in
+              if isar_proof then
+                ((prover_fast_enough, name), preplay)
+              else
+                let val preplay = preplay () in
+                  (case preplay of
+                     Played (reconstructor, timeout) =>
+                     if can_min_fast_enough (Time.toMilliseconds timeout) then
+                       (true, prover_name_for_reconstructor reconstructor
+                              |> the_default name)
+                     else
+                       (prover_fast_enough, name)
+                   | _ => (prover_fast_enough, name),
+                   K preplay)
+                end
+            end
+        else
+          ((false, name), preplay)
+      val (used_facts, (preplay, message, _)) =
+        if minimize then
+          minimize_facts minimize_name params (not verbose) subgoal
+                         subgoal_count state
+                         (filter_used_facts used_facts
+                              (map (apsnd single o untranslated_fact) facts))
+          |>> Option.map (map fst)
+        else
+          (SOME used_facts, (preplay, message, ""))
+    in
+      case used_facts of
+        SOME used_facts =>
+        (if debug andalso not (null used_facts) then
+           facts ~~ (0 upto length facts - 1)
+           |> map (fn (fact, j) => fact |> untranslated_fact |> apsnd (K j))
+           |> filter_used_facts used_facts
+           |> map (fn ((name, _), j) => name ^ "@" ^ string_of_int j)
+           |> commas
+           |> enclose ("Fact" ^ plural_s (length facts) ^ " in " ^ quote name ^
+                       " proof (of " ^ string_of_int (length facts) ^ "): ") "."
+           |> Output.urgent_message
          else
-           let
-             val (used_facts, message) =
-               if length used_facts
-                  >= Config.get ctxt auto_minimize_min_facts then
-                 minimize_facts name params (SOME explicit_apply) (not verbose)
-                     subgoal subgoal_count state
-                     (filter_used_facts used_facts
-                          (map (apsnd single o untranslated_fact) facts))
-                 |>> Option.map (map fst)
-               else
-                 (SOME used_facts, message)
-           in
-             case used_facts of
-               SOME used_facts =>
-               (if debug andalso not (null used_facts) then
-                  facts ~~ (0 upto length facts - 1)
-                  |> map (fn (fact, j) =>
-                             fact |> untranslated_fact |> apsnd (K j))
-                  |> filter_used_facts used_facts
-                  |> map (fn ((name, _), j) => name ^ "@" ^ string_of_int j)
-                  |> commas
-                  |> enclose ("Fact" ^ plural_s (length facts) ^ " in " ^
-                              quote name ^ " proof (of " ^
-                              string_of_int (length facts) ^ "): ") "."
-                  |> Output.urgent_message
-                else
-                  ();
-                {outcome = NONE, used_facts = used_facts,
-                 run_time_in_msecs = run_time_in_msecs, message = message})
-             | NONE => result
-           end)
+           ();
+         {outcome = NONE, used_facts = used_facts,
+          run_time_in_msecs = run_time_in_msecs, preplay = preplay,
+          message = message, message_tail = message_tail})
+      | NONE => result
+    end
 
-fun launch_prover (params as {debug, blocking, max_relevant, slicing, timeout,
-                              expect, ...})
-        auto minimize_command only
+fun get_minimizing_prover ctxt mode name params minimize_command problem =
+  get_prover ctxt mode name params minimize_command problem
+  |> minimize ctxt mode name params problem
+
+fun launch_prover (params as {debug, verbose, blocking, max_relevant, slicing,
+                              timeout, expect, ...})
+        mode minimize_command only
         {state, goal, subgoal, subgoal_count, facts, smt_filter} name =
   let
     val ctxt = Proof.context_of state
@@ -99,7 +158,7 @@ fun launch_prover (params as {debug, blocking, max_relevant, slicing, timeout,
       max_relevant
       |> the_default (default_max_relevant_for_prover ctxt slicing name)
     val num_facts = length facts |> not only ? Integer.min max_relevant
-    val desc =
+    fun desc () =
       prover_description ctxt params name num_facts subgoal subgoal_count goal
     val problem =
       {state = state, goal = goal, subgoal = subgoal,
@@ -107,9 +166,11 @@ fun launch_prover (params as {debug, blocking, max_relevant, slicing, timeout,
        smt_filter = smt_filter}
     fun really_go () =
       problem
-      |> get_minimizing_prover ctxt auto name params (minimize_command name)
-      |> (fn {outcome, message, ...} =>
-             (if is_some outcome then "none" else "some" (* sic *), message))
+      |> get_minimizing_prover ctxt mode name params minimize_command
+      |> (fn {outcome, preplay, message, message_tail, ...} =>
+             (if outcome = SOME ATP_Proof.TimedOut then timeoutN
+              else if is_some outcome then noneN
+              else someN, fn () => message (preplay ()) ^ message_tail))
     fun go () =
       let
         val (outcome_code, message) =
@@ -117,13 +178,13 @@ fun launch_prover (params as {debug, blocking, max_relevant, slicing, timeout,
             really_go ()
           else
             (really_go ()
-             handle ERROR message => ("unknown", "Error: " ^ message ^ "\n")
+             handle ERROR msg => (unknownN, fn () => "Error: " ^ msg ^ "\n")
                   | exn =>
                     if Exn.is_interrupt exn then
                       reraise exn
                     else
-                      ("unknown", "Internal error:\n" ^
-                                  ML_Compiler.exn_message exn ^ "\n"))
+                      (unknownN, fn () => "Internal error:\n" ^
+                                          ML_Compiler.exn_message exn ^ "\n"))
         val _ =
           (* The "expect" argument is deliberately ignored if the prover is
              missing so that the "Metis_Examples" can be processed on any
@@ -135,30 +196,44 @@ fun launch_prover (params as {debug, blocking, max_relevant, slicing, timeout,
             error ("Unexpected outcome: " ^ quote outcome_code ^ ".")
           else
             warning ("Unexpected outcome: " ^ quote outcome_code ^ ".");
-      in (outcome_code = "some", message) end
+      in (outcome_code, message) end
   in
-    if auto then
-      let val (success, message) = TimeLimit.timeLimit timeout go () in
-        (success, state |> success ? Proof.goal_message (fn () =>
-             Pretty.chunks [Pretty.str "",
-                            Pretty.mark Markup.hilite (Pretty.str message)]))
+    if mode = Auto_Try then
+      let val (outcome_code, message) = TimeLimit.timeLimit timeout go () in
+        (outcome_code,
+         state
+         |> outcome_code = someN
+            ? Proof.goal_message (fn () =>
+                  [Pretty.str "",
+                   Pretty.mark Markup.hilite (Pretty.str (message ()))]
+                  |> Pretty.chunks))
       end
     else if blocking then
-      let val (success, message) = TimeLimit.timeLimit hard_timeout go () in
-        List.app Output.urgent_message
-                 (Async_Manager.break_into_chunks [desc ^ "\n" ^ message]);
-        (success, state)
+      let
+        val (outcome_code, message) = TimeLimit.timeLimit hard_timeout go ()
+      in
+        (if outcome_code = someN orelse mode = Normal then
+           quote name ^ ": " ^ message ()
+         else
+           "")
+        |> Async_Manager.break_into_chunks
+        |> List.app Output.urgent_message;
+        (outcome_code, state)
       end
     else
-      (Async_Manager.launch das_Tool birth_time death_time desc (snd o go);
-       (false, state))
+      (Async_Manager.launch das_tool birth_time death_time (desc ())
+                            ((fn (outcome_code, message) =>
+                                 (verbose orelse outcome_code = someN,
+                                  message ())) o go);
+       (unknownN, state))
   end
 
 fun class_of_smt_solver ctxt name =
   ctxt |> select_smt_solver name
        |> SMT_Config.solver_class_of |> SMT_Utils.string_of_class
 
-(* Makes backtraces more transparent and might be more efficient as well. *)
+(* Makes backtraces more transparent and might well be more efficient as
+   well. *)
 fun smart_par_list_map _ [] = []
   | smart_par_list_map f [x] = [f x]
   | smart_par_list_map f xs = Par_List.map f xs
@@ -166,30 +241,34 @@ fun smart_par_list_map _ [] = []
 fun dest_SMT_Weighted_Fact (SMT_Weighted_Fact p) = p
   | dest_SMT_Weighted_Fact _ = raise Fail "dest_SMT_Weighted_Fact"
 
-val auto_max_relevant_divisor = 2 (* FUDGE *)
+val auto_try_max_relevant_divisor = 2 (* FUDGE *)
 
-fun run_sledgehammer (params as {debug, blocking, provers, relevance_thresholds,
-                                 max_relevant, slicing, timeout, ...})
-        auto i (relevance_override as {only, ...}) minimize_command state =
+fun run_sledgehammer (params as {debug, verbose, blocking, provers,
+                                 relevance_thresholds, max_relevant, slicing,
+                                 timeout, ...})
+        mode i (relevance_override as {only, ...}) minimize_command state =
   if null provers then
     error "No prover is set."
   else case subgoal_count state of
-    0 => (Output.urgent_message "No subgoal!"; (false, state))
+    0 => (Output.urgent_message "No subgoal!"; (false, (noneN, state)))
   | n =>
     let
       val _ = Proof.assert_backward state
-      val print = if auto then K () else Output.urgent_message
+      val print = if mode = Normal then Output.urgent_message else K ()
       val state =
         state |> Proof.map_context (Config.put SMT_Config.verbose debug)
       val ctxt = Proof.context_of state
       val {facts = chained_ths, goal, ...} = Proof.goal state
-      val (_, hyp_ts, concl_t) = strip_subgoal goal i
+      val chained_ths = chained_ths |> normalize_chained_theorems
+      val (_, hyp_ts, concl_t) = strip_subgoal ctxt goal i
       val _ = () |> not blocking ? kill_provers
       val _ = case find_first (not o is_prover_supported ctxt) provers of
                 SOME name => error ("No such prover: " ^ name ^ ".")
               | NONE => ()
       val _ = print "Sledgehammering..."
-      val (smts, atps) = provers |> List.partition (is_smt_prover ctxt)
+      val (smts, (ueq_atps, full_atps)) =
+        provers |> List.partition (is_smt_prover ctxt)
+                ||> List.partition (is_unit_equational_atp ctxt)
       fun launch_provers state get_facts translate maybe_smt_filter provers =
         let
           val facts = get_facts ()
@@ -201,18 +280,21 @@ fun run_sledgehammer (params as {debug, blocking, provers, relevance_thresholds,
              facts = facts,
              smt_filter = maybe_smt_filter
                   (fn () => map_filter (try dest_SMT_Weighted_Fact) facts) i}
-          val launch = launch_prover params auto minimize_command only
+          val launch = launch_prover params mode minimize_command only
         in
-          if auto then
-            fold (fn prover => fn (true, state) => (true, state)
-                                | (false, _) => launch problem prover)
-                 provers (false, state)
+          if mode = Auto_Try orelse mode = Try then
+            (unknownN, state)
+            |> fold (fn prover => fn accum as (outcome_code, _) =>
+                        if outcome_code = someN then accum
+                        else launch problem prover)
+                    provers
           else
             provers
-            |> (if blocking then smart_par_list_map else map) (launch problem)
-            |> exists fst |> rpair state
+            |> (if blocking then smart_par_list_map else map)
+                   (launch problem #> fst)
+            |> max_outcome_code |> rpair state
         end
-      fun get_facts label relevance_fudge provers =
+      fun get_facts label is_appropriate_prop relevance_fudge provers =
         let
           val max_max_relevant =
             case max_relevant of
@@ -221,13 +303,14 @@ fun run_sledgehammer (params as {debug, blocking, provers, relevance_thresholds,
               0 |> fold (Integer.max
                          o default_max_relevant_for_prover ctxt slicing)
                         provers
-                |> auto ? (fn n => n div auto_max_relevant_divisor)
+                |> mode = Auto_Try
+                   ? (fn n => n div auto_try_max_relevant_divisor)
           val is_built_in_const =
             is_built_in_const_for_prover ctxt (hd provers)
         in
           relevant_facts ctxt relevance_thresholds max_max_relevant
-                         is_built_in_const relevance_fudge relevance_override
-                         chained_ths hyp_ts concl_t
+                         is_appropriate_prop is_built_in_const relevance_fudge
+                         relevance_override chained_ths hyp_ts concl_t
           |> tap (fn facts =>
                      if debug then
                        label ^ plural_s (length provers) ^ ": " ^
@@ -241,18 +324,27 @@ fun run_sledgehammer (params as {debug, blocking, provers, relevance_thresholds,
                      else
                        ())
         end
-      fun launch_atps accum =
+      fun launch_atps label is_appropriate_prop atps accum =
         if null atps then
           accum
+        else if not (is_appropriate_prop concl_t) then
+          (if verbose orelse length atps = length provers then
+             "Goal outside the scope of " ^
+             space_implode " " (serial_commas "and" (map quote atps)) ^ "."
+             |> Output.urgent_message
+           else
+             ();
+           accum)
         else
-          launch_provers state (get_facts "ATP" atp_relevance_fudge o K atps)
-                         (K (Untranslated_Fact o fst)) (K (K NONE)) atps
+          launch_provers state
+              (get_facts label is_appropriate_prop atp_relevance_fudge o K atps)
+              (K (Untranslated_Fact o fst)) (K (K NONE)) atps
       fun launch_smts accum =
         if null smts then
           accum
         else
           let
-            val facts = get_facts "SMT solver" smt_relevance_fudge smts
+            val facts = get_facts "SMT solver" (K true) smt_relevance_fudge smts
             val weight = SMT_Weighted_Fact oo weight_smt_fact ctxt
             fun smt_filter facts =
               (if debug then curry (op o) SOME
@@ -261,19 +353,29 @@ fun run_sledgehammer (params as {debug, blocking, provers, relevance_thresholds,
           in
             smts |> map (`(class_of_smt_solver ctxt))
                  |> AList.group (op =)
-                 |> map (launch_provers state (K facts) weight smt_filter o snd)
-                 |> exists fst |> rpair state
+                 |> map (snd #> launch_provers state (K facts) weight smt_filter
+                             #> fst)
+                 |> max_outcome_code |> rpair state
           end
+      val launch_full_atps = launch_atps "ATP" (K true) full_atps
+      val launch_ueq_atps =
+        launch_atps "Unit equational provers" is_unit_equality ueq_atps
       fun launch_atps_and_smt_solvers () =
-        [launch_atps, launch_smts]
-        |> smart_par_list_map (fn f => f (false, state) |> K ())
+        [launch_full_atps, launch_smts, launch_ueq_atps]
+        |> smart_par_list_map (fn f => ignore (f (unknownN, state)))
         handle ERROR msg => (print ("Error: " ^ msg); error msg)
+      fun maybe f (accum as (outcome_code, _)) =
+        accum |> (mode = Normal orelse outcome_code <> someN) ? f
     in
-      (false, state)
-      |> (if blocking then launch_atps #> not auto ? launch_smts
-          else (fn p => Future.fork (tap launch_atps_and_smt_solvers) |> K p))
+      (unknownN, state)
+      |> (if blocking then
+            launch_full_atps
+            #> mode <> Auto_Try ? (maybe launch_ueq_atps #> maybe launch_smts)
+          else
+            (fn p => Future.fork (tap launch_atps_and_smt_solvers) |> K p))
       handle TimeLimit.TimeOut =>
-             (print "Sledgehammer ran out of time."; (false, state))
+             (print "Sledgehammer ran out of time."; (unknownN, state))
     end
+    |> `(fn (outcome_code, _) => outcome_code = someN)
 
 end;

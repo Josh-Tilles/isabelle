@@ -1,212 +1,249 @@
-theory Live imports Natural
+(* Author: Tobias Nipkow *)
+
+header "Live Variable Analysis"
+
+theory Live imports Vars Big_Step
 begin
 
-text{* Which variables/locations does an expression depend on?
-Any set of variables that completely determine the value of the expression,
-in the worst case all locations: *}
+subsection "Liveness Analysis"
 
-consts Dep :: "((loc \<Rightarrow> 'a) \<Rightarrow> 'b) \<Rightarrow> loc set"
-specification (Dep)
-dep_on: "(\<forall>x\<in>Dep e. s x = t x) \<Longrightarrow> e s = e t"
-by(rule_tac x="%x. UNIV" in exI)(simp add: fun_eq_iff[symmetric])
+fun L :: "com \<Rightarrow> name set \<Rightarrow> name set" where
+"L SKIP X = X" |
+"L (x ::= a) X = X-{x} \<union> vars a" |
+"L (c\<^isub>1; c\<^isub>2) X = (L c\<^isub>1 \<circ> L c\<^isub>2) X" |
+"L (IF b THEN c\<^isub>1 ELSE c\<^isub>2) X = vars b \<union> L c\<^isub>1 X \<union> L c\<^isub>2 X" |
+"L (WHILE b DO c) X = vars b \<union> X \<union> L c X"
 
-text{* The following definition of @{const Dep} looks very tempting
-@{prop"Dep e = {a. EX s t. (ALL x. x\<noteq>a \<longrightarrow> s x = t x) \<and> e s \<noteq> e t}"}
-but does not work in case @{text e} depends on an infinite set of variables.
-For example, if @{term"e s"} tests if @{text s} is 0 at infinitely many locations. Then @{term"Dep e"} incorrectly yields the empty set!
+value "show (L (''y'' ::= V ''z''; ''x'' ::= Plus (V ''y'') (V ''z'')) {''x''})"
 
-If we had a concrete representation of expressions, we would simply write
-a recursive free-variables function.
-*}
+value "show (L (WHILE Less (V ''x'') (V ''x'') DO ''y'' ::= V ''z'') {''x''})"
 
-primrec L :: "com \<Rightarrow> loc set \<Rightarrow> loc set" where
-"L SKIP A = A" |
-"L (x :== e) A = A-{x} \<union> Dep e" |
-"L (c1; c2) A = (L c1 \<circ> L c2) A" |
-"L (IF b THEN c1 ELSE c2) A = Dep b \<union> L c1 A \<union> L c2 A" |
-"L (WHILE b DO c) A = Dep b \<union> A \<union> L c A"
-
-primrec "kill" :: "com \<Rightarrow> loc set" where
+fun "kill" :: "com \<Rightarrow> name set" where
 "kill SKIP = {}" |
-"kill (x :== e) = {x}" |
-"kill (c1; c2) = kill c1 \<union> kill c2" |
-"kill (IF b THEN c1 ELSE c2) = Dep b \<union> kill c1 \<inter>  kill c2" |
+"kill (x ::= a) = {x}" |
+"kill (c\<^isub>1; c\<^isub>2) = kill c\<^isub>1 \<union> kill c\<^isub>2" |
+"kill (IF b THEN c\<^isub>1 ELSE c\<^isub>2) = kill c\<^isub>1 \<inter> kill c\<^isub>2" |
 "kill (WHILE b DO c) = {}"
 
-primrec gen :: "com \<Rightarrow> loc set" where
+fun gen :: "com \<Rightarrow> name set" where
 "gen SKIP = {}" |
-"gen (x :== e) = Dep e" |
-"gen (c1; c2) = gen c1 \<union> (gen c2-kill c1)" |
-"gen (IF b THEN c1 ELSE c2) = Dep b \<union> gen c1 \<union> gen c2" |
-"gen (WHILE b DO c) = Dep b \<union> gen c"
+"gen (x ::= a) = vars a" |
+"gen (c\<^isub>1; c\<^isub>2) = gen c\<^isub>1 \<union> (gen c\<^isub>2 - kill c\<^isub>1)" |
+"gen (IF b THEN c\<^isub>1 ELSE c\<^isub>2) = vars b \<union> gen c\<^isub>1 \<union> gen c\<^isub>2" |
+"gen (WHILE b DO c) = vars b \<union> gen c"
 
-lemma L_gen_kill: "L c A = gen c \<union> (A - kill c)"
-by(induct c arbitrary:A) auto
+lemma L_gen_kill: "L c X = (X - kill c) \<union> gen c"
+by(induct c arbitrary:X) auto
 
-lemma L_idemp: "L c (L c A) \<subseteq> L c A"
-by(fastsimp simp add:L_gen_kill)
+lemma L_While_subset: "L c (L (WHILE b DO c) X) \<subseteq> L (WHILE b DO c) X"
+by(auto simp add:L_gen_kill)
 
-theorem L_sound: "\<forall> x \<in> L c A. s x = t x \<Longrightarrow> \<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s' \<Longrightarrow> \<langle>c,t\<rangle> \<longrightarrow>\<^sub>c t' \<Longrightarrow>
- \<forall>x\<in>A. s' x = t' x"
-proof (induct c arbitrary: A s t s' t')
-  case SKIP then show ?case by auto
+
+subsection "Soundness"
+
+theorem L_sound:
+  "(c,s) \<Rightarrow> s'  \<Longrightarrow> s = t on L c X \<Longrightarrow>
+  \<exists> t'. (c,t) \<Rightarrow> t' & s' = t' on X"
+proof (induct arbitrary: X t rule: big_step_induct)
+  case Skip then show ?case by auto
 next
-  case (Assign x e) then show ?case
-    by (auto simp:update_def ball_Un dest!: dep_on)
+  case Assign then show ?case
+    by (auto simp: ball_Un)
 next
-  case (Semi c1 c2)
-  from Semi(4) obtain s'' where s1: "\<langle>c1,s\<rangle> \<longrightarrow>\<^sub>c s''" and s2: "\<langle>c2,s''\<rangle> \<longrightarrow>\<^sub>c s'"
+  case (Semi c1 s1 s2 c2 s3 X t1)
+  from Semi(2,5) obtain t2 where
+    t12: "(c1, t1) \<Rightarrow> t2" and s2t2: "s2 = t2 on L c2 X"
+    by simp blast
+  from Semi(4)[OF s2t2] obtain t3 where
+    t23: "(c2, t2) \<Rightarrow> t3" and s3t3: "s3 = t3 on X"
     by auto
-  from Semi(5) obtain t'' where t1: "\<langle>c1,t\<rangle> \<longrightarrow>\<^sub>c t''" and t2: "\<langle>c2,t''\<rangle> \<longrightarrow>\<^sub>c t'"
+  show ?case using t12 t23 s3t3 by auto
+next
+  case (IfTrue b s c1 s' c2)
+  hence "s = t on vars b" "s = t on L c1 X" by auto
+  from  bval_eq_if_eq_on_vars[OF this(1)] IfTrue(1) have "bval b t" by simp
+  from IfTrue(3)[OF `s = t on L c1 X`] obtain t' where
+    "(c1, t) \<Rightarrow> t'" "s' = t' on X" by auto
+  thus ?case using `bval b t` by auto
+next
+  case (IfFalse b s c2 s' c1)
+  hence "s = t on vars b" "s = t on L c2 X" by auto
+  from  bval_eq_if_eq_on_vars[OF this(1)] IfFalse(1) have "~bval b t" by simp
+  from IfFalse(3)[OF `s = t on L c2 X`] obtain t' where
+    "(c2, t) \<Rightarrow> t'" "s' = t' on X" by auto
+  thus ?case using `~bval b t` by auto
+next
+  case (WhileFalse b s c)
+  hence "~ bval b t" by (auto simp: ball_Un) (metis bval_eq_if_eq_on_vars)
+  thus ?case using WhileFalse(2) by auto
+next
+  case (WhileTrue b s1 c s2 s3 X t1)
+  let ?w = "WHILE b DO c"
+  from `bval b s1` WhileTrue(6) have "bval b t1"
+    by (auto simp: ball_Un) (metis bval_eq_if_eq_on_vars)
+  have "s1 = t1 on L c (L ?w X)" using  L_While_subset WhileTrue.prems
+    by (blast)
+  from WhileTrue(3)[OF this] obtain t2 where
+    "(c, t1) \<Rightarrow> t2" "s2 = t2 on L ?w X" by auto
+  from WhileTrue(5)[OF this(2)] obtain t3 where "(?w,t2) \<Rightarrow> t3" "s3 = t3 on X"
     by auto
-  show ?case using Semi(1)[OF _ s1 t1] Semi(2)[OF _ s2 t2] Semi(3) by fastsimp
-next
-  case (Cond b c1 c2)
-  show ?case
-  proof cases
-    assume "b s"
-    hence s: "\<langle>c1,s\<rangle> \<longrightarrow>\<^sub>c s'" using Cond(4) by simp
-    have "b t" using `b s` Cond(3) by (simp add: ball_Un)(blast dest: dep_on)
-    hence t: "\<langle>c1,t\<rangle> \<longrightarrow>\<^sub>c t'" using Cond(5) by auto
-    show ?thesis using Cond(1)[OF _ s t] Cond(3) by fastsimp
-  next
-    assume "\<not> b s"
-    hence s: "\<langle>c2,s\<rangle> \<longrightarrow>\<^sub>c s'" using Cond(4) by auto
-    have "\<not> b t" using `\<not> b s` Cond(3) by (simp add: ball_Un)(blast dest: dep_on)
-    hence t: "\<langle>c2,t\<rangle> \<longrightarrow>\<^sub>c t'" using Cond(5) by auto
-    show ?thesis using Cond(2)[OF _ s t] Cond(3) by fastsimp
-  qed
-next
-  case (While b c) note IH = this
-  { fix cw
-    have "\<langle>cw,s\<rangle> \<longrightarrow>\<^sub>c s' \<Longrightarrow> cw = (While b c) \<Longrightarrow> \<langle>cw,t\<rangle> \<longrightarrow>\<^sub>c t' \<Longrightarrow>
-          \<forall> x \<in> L cw A. s x = t x \<Longrightarrow> \<forall>x\<in>A. s' x = t' x"
-    proof (induct arbitrary: t A pred:evalc)
-      case WhileFalse
-      have "\<not> b t" using WhileFalse by (simp add: ball_Un)(blast dest:dep_on)
-      then have "t' = t" using WhileFalse by auto
-      then show ?case using WhileFalse by auto
-    next
-      case (WhileTrue _ s _ s'' s')
-      have "\<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s''" using WhileTrue(2,6) by simp
-      have "b t" using WhileTrue by (simp add: ball_Un)(blast dest:dep_on)
-      then obtain t'' where "\<langle>c,t\<rangle> \<longrightarrow>\<^sub>c t''" and "\<langle>While b c,t''\<rangle> \<longrightarrow>\<^sub>c t'"
-        using WhileTrue(6,7) by auto
-      have "\<forall>x\<in>Dep b \<union> A \<union> L c A. s'' x = t'' x"
-        using IH(1)[OF _ `\<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s''` `\<langle>c,t\<rangle> \<longrightarrow>\<^sub>c t''`] WhileTrue(6,8)
-        by (auto simp:L_gen_kill)
-      then have "\<forall>x\<in>L (While b c) A. s'' x = t'' x" by auto
-      then show ?case using WhileTrue(5,6) `\<langle>While b c,t''\<rangle> \<longrightarrow>\<^sub>c t'` by metis
-    qed auto }
--- "a terser version"
-  { let ?w = "While b c"
-    have "\<langle>?w,s\<rangle> \<longrightarrow>\<^sub>c s' \<Longrightarrow> \<langle>?w,t\<rangle> \<longrightarrow>\<^sub>c t' \<Longrightarrow>
-          \<forall> x \<in> L ?w A. s x = t x \<Longrightarrow> \<forall>x\<in>A. s' x = t' x"
-    proof (induct ?w s s' arbitrary: t A pred:evalc)
-      case WhileFalse
-      have "\<not> b t" using WhileFalse by (simp add: ball_Un)(blast dest:dep_on)
-      then have "t' = t" using WhileFalse by auto
-      then show ?case using WhileFalse by simp
-    next
-      case (WhileTrue s s'' s')
-      have "b t" using WhileTrue by (simp add: ball_Un)(blast dest:dep_on)
-      then obtain t'' where "\<langle>c,t\<rangle> \<longrightarrow>\<^sub>c t''" and "\<langle>While b c,t''\<rangle> \<longrightarrow>\<^sub>c t'"
-        using WhileTrue(6,7) by auto
-      have "\<forall>x\<in>Dep b \<union> A \<union> L c A. s'' x = t'' x"
-        using IH(1)[OF _ `\<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s''` `\<langle>c,t\<rangle> \<longrightarrow>\<^sub>c t''`] WhileTrue(7)
-        by (auto simp:L_gen_kill)
-      then have "\<forall>x\<in>L (While b c) A. s'' x = t'' x" by auto
-      then show ?case using WhileTrue(5) `\<langle>While b c,t''\<rangle> \<longrightarrow>\<^sub>c t'` by metis
-    qed }
-  from this[OF IH(3) IH(4,2)] show ?case by metis
+  with `bval b t1` `(c, t1) \<Rightarrow> t2` show ?case by auto
 qed
 
 
-primrec bury :: "com \<Rightarrow> loc set \<Rightarrow> com" where
-"bury SKIP _ = SKIP" |
-"bury (x :== e) A = (if x:A then x:== e else SKIP)" |
-"bury (c1; c2) A = (bury c1 (L c2 A); bury c2 A)" |
-"bury (IF b THEN c1 ELSE c2) A = (IF b THEN bury c1 A ELSE bury c2 A)" |
-"bury (WHILE b DO c) A = (WHILE b DO bury c (Dep b \<union> A \<union> L c A))"
+subsection "Program Optimization"
+
+text{* Burying assignments to dead variables: *}
+fun bury :: "com \<Rightarrow> name set \<Rightarrow> com" where
+"bury SKIP X = SKIP" |
+"bury (x ::= a) X = (if x:X then x::= a else SKIP)" |
+"bury (c\<^isub>1; c\<^isub>2) X = (bury c\<^isub>1 (L c\<^isub>2 X); bury c\<^isub>2 X)" |
+"bury (IF b THEN c\<^isub>1 ELSE c\<^isub>2) X = IF b THEN bury c\<^isub>1 X ELSE bury c\<^isub>2 X" |
+"bury (WHILE b DO c) X = WHILE b DO bury c (vars b \<union> X \<union> L c X)"
+
+text{* We could prove the analogous lemma to @{thm[source]L_sound}, and the
+proof would be very similar. However, we phrase it as a semantics
+preservation property: *}
 
 theorem bury_sound:
-  "\<forall> x \<in> L c A. s x = t x \<Longrightarrow> \<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s' \<Longrightarrow> \<langle>bury c A,t\<rangle> \<longrightarrow>\<^sub>c t' \<Longrightarrow>
-   \<forall>x\<in>A. s' x = t' x"
-proof (induct c arbitrary: A s t s' t')
-  case SKIP then show ?case by auto
+  "(c,s) \<Rightarrow> s'  \<Longrightarrow> s = t on L c X \<Longrightarrow>
+  \<exists> t'. (bury c X,t) \<Rightarrow> t' & s' = t' on X"
+proof (induct arbitrary: X t rule: big_step_induct)
+  case Skip then show ?case by auto
 next
-  case (Assign x e) then show ?case
-    by (auto simp:update_def ball_Un split:split_if_asm dest!: dep_on)
+  case Assign then show ?case
+    by (auto simp: ball_Un)
 next
-  case (Semi c1 c2)
-  from Semi(4) obtain s'' where s1: "\<langle>c1,s\<rangle> \<longrightarrow>\<^sub>c s''" and s2: "\<langle>c2,s''\<rangle> \<longrightarrow>\<^sub>c s'"
+  case (Semi c1 s1 s2 c2 s3 X t1)
+  from Semi(2,5) obtain t2 where
+    t12: "(bury c1 (L c2 X), t1) \<Rightarrow> t2" and s2t2: "s2 = t2 on L c2 X"
+    by simp blast
+  from Semi(4)[OF s2t2] obtain t3 where
+    t23: "(bury c2 X, t2) \<Rightarrow> t3" and s3t3: "s3 = t3 on X"
     by auto
-  from Semi(5) obtain t'' where t1: "\<langle>bury c1 (L c2 A),t\<rangle> \<longrightarrow>\<^sub>c t''" and t2: "\<langle>bury c2 A,t''\<rangle> \<longrightarrow>\<^sub>c t'"
+  show ?case using t12 t23 s3t3 by auto
+next
+  case (IfTrue b s c1 s' c2)
+  hence "s = t on vars b" "s = t on L c1 X" by auto
+  from  bval_eq_if_eq_on_vars[OF this(1)] IfTrue(1) have "bval b t" by simp
+  from IfTrue(3)[OF `s = t on L c1 X`] obtain t' where
+    "(bury c1 X, t) \<Rightarrow> t'" "s' =t' on X" by auto
+  thus ?case using `bval b t` by auto
+next
+  case (IfFalse b s c2 s' c1)
+  hence "s = t on vars b" "s = t on L c2 X" by auto
+  from  bval_eq_if_eq_on_vars[OF this(1)] IfFalse(1) have "~bval b t" by simp
+  from IfFalse(3)[OF `s = t on L c2 X`] obtain t' where
+    "(bury c2 X, t) \<Rightarrow> t'" "s' = t' on X" by auto
+  thus ?case using `~bval b t` by auto
+next
+  case (WhileFalse b s c)
+  hence "~ bval b t" by (auto simp: ball_Un) (metis bval_eq_if_eq_on_vars)
+  thus ?case using WhileFalse(2) by auto
+next
+  case (WhileTrue b s1 c s2 s3 X t1)
+  let ?w = "WHILE b DO c"
+  from `bval b s1` WhileTrue(6) have "bval b t1"
+    by (auto simp: ball_Un) (metis bval_eq_if_eq_on_vars)
+  have "s1 = t1 on L c (L ?w X)"
+    using L_While_subset WhileTrue.prems by blast
+  from WhileTrue(3)[OF this] obtain t2 where
+    "(bury c (L ?w X), t1) \<Rightarrow> t2" "s2 = t2 on L ?w X" by auto
+  from WhileTrue(5)[OF this(2)] obtain t3
+    where "(bury ?w X,t2) \<Rightarrow> t3" "s3 = t3 on X"
     by auto
-  show ?case using Semi(1)[OF _ s1 t1] Semi(2)[OF _ s2 t2] Semi(3) by fastsimp
-next
-  case (Cond b c1 c2)
-  show ?case
-  proof cases
-    assume "b s"
-    hence s: "\<langle>c1,s\<rangle> \<longrightarrow>\<^sub>c s'" using Cond(4) by simp
-    have "b t" using `b s` Cond(3) by (simp add: ball_Un)(blast dest: dep_on)
-    hence t: "\<langle>bury c1 A,t\<rangle> \<longrightarrow>\<^sub>c t'" using Cond(5) by auto
-    show ?thesis using Cond(1)[OF _ s t] Cond(3) by fastsimp
-  next
-    assume "\<not> b s"
-    hence s: "\<langle>c2,s\<rangle> \<longrightarrow>\<^sub>c s'" using Cond(4) by auto
-    have "\<not> b t" using `\<not> b s` Cond(3) by (simp add: ball_Un)(blast dest: dep_on)
-    hence t: "\<langle>bury c2 A,t\<rangle> \<longrightarrow>\<^sub>c t'" using Cond(5) by auto
-    show ?thesis using Cond(2)[OF _ s t] Cond(3) by fastsimp
-  qed
-next
-  case (While b c) note IH = this
-  { fix cw
-    have "\<langle>cw,s\<rangle> \<longrightarrow>\<^sub>c s' \<Longrightarrow> cw = (While b c) \<Longrightarrow> \<langle>bury cw A,t\<rangle> \<longrightarrow>\<^sub>c t' \<Longrightarrow>
-          \<forall> x \<in> L cw A. s x = t x \<Longrightarrow> \<forall>x\<in>A. s' x = t' x"
-    proof (induct arbitrary: t A pred:evalc)
-      case WhileFalse
-      have "\<not> b t" using WhileFalse by (simp add: ball_Un)(blast dest:dep_on)
-      then have "t' = t" using WhileFalse by auto
-      then show ?case using WhileFalse by auto
-    next
-      case (WhileTrue _ s _ s'' s')
-      have "\<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s''" using WhileTrue(2,6) by simp
-      have "b t" using WhileTrue by (simp add: ball_Un)(blast dest:dep_on)
-      then obtain t'' where tt'': "\<langle>bury c (Dep b \<union> A \<union> L c A),t\<rangle> \<longrightarrow>\<^sub>c t''"
-        and "\<langle>bury (While b c) A,t''\<rangle> \<longrightarrow>\<^sub>c t'"
-        using WhileTrue(6,7) by auto
-      have "\<forall>x\<in>Dep b \<union> A \<union> L c A. s'' x = t'' x"
-        using IH(1)[OF _ `\<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s''` tt''] WhileTrue(6,8)
-        by (auto simp:L_gen_kill)
-      moreover then have "\<forall>x\<in>L (While b c) A. s'' x = t'' x" by auto
-      ultimately show ?case
-        using WhileTrue(5,6) `\<langle>bury (While b c) A,t''\<rangle> \<longrightarrow>\<^sub>c t'` by metis
-    qed auto }
-  { let ?w = "While b c"
-    have "\<langle>?w,s\<rangle> \<longrightarrow>\<^sub>c s' \<Longrightarrow> \<langle>bury ?w A,t\<rangle> \<longrightarrow>\<^sub>c t' \<Longrightarrow>
-          \<forall> x \<in> L ?w A. s x = t x \<Longrightarrow> \<forall>x\<in>A. s' x = t' x"
-    proof (induct ?w s s' arbitrary: t A pred:evalc)
-      case WhileFalse
-      have "\<not> b t" using WhileFalse by (simp add: ball_Un)(blast dest:dep_on)
-      then have "t' = t" using WhileFalse by auto
-      then show ?case using WhileFalse by simp
-    next
-      case (WhileTrue s s'' s')
-      have "b t" using WhileTrue by (simp add: ball_Un)(blast dest:dep_on)
-      then obtain t'' where tt'': "\<langle>bury c (Dep b \<union> A \<union> L c A),t\<rangle> \<longrightarrow>\<^sub>c t''"
-        and "\<langle>bury (While b c) A,t''\<rangle> \<longrightarrow>\<^sub>c t'"
-        using WhileTrue(6,7) by auto
-      have "\<forall>x\<in>Dep b \<union> A \<union> L c A. s'' x = t'' x"
-        using IH(1)[OF _ `\<langle>c,s\<rangle> \<longrightarrow>\<^sub>c s''` tt''] WhileTrue(7)
-        by (auto simp:L_gen_kill)
-      then have "\<forall>x\<in>L (While b c) A. s'' x = t'' x" by auto
-      then show ?case
-        using WhileTrue(5) `\<langle>bury (While b c) A,t''\<rangle> \<longrightarrow>\<^sub>c t'` by metis
-    qed }
-  from this[OF IH(3) IH(4,2)] show ?case by metis
+  with `bval b t1` `(bury c (L ?w X), t1) \<Rightarrow> t2` show ?case by auto
+    (* FIXME why does s/h fail here? *)
 qed
 
+corollary final_bury_sound: "(c,s) \<Rightarrow> s' \<Longrightarrow> (bury c UNIV,s) \<Rightarrow> s'"
+using bury_sound[of c s s' UNIV]
+by (auto simp: fun_eq_iff[symmetric])
+
+text{* Now the opposite direction. *}
+
+lemma SKIP_bury[simp]:
+  "SKIP = bury c X \<longleftrightarrow> c = SKIP | (EX x a. c = x::=a & x \<notin> X)"
+by (cases c) auto
+
+lemma Assign_bury[simp]: "x::=a = bury c X \<longleftrightarrow> c = x::=a & x : X"
+by (cases c) auto
+
+lemma Semi_bury[simp]: "bc\<^isub>1;bc\<^isub>2 = bury c X \<longleftrightarrow>
+  (EX c\<^isub>1 c\<^isub>2. c = c\<^isub>1;c\<^isub>2 & bc\<^isub>2 = bury c\<^isub>2 X & bc\<^isub>1 = bury c\<^isub>1 (L c\<^isub>2 X))"
+by (cases c) auto
+
+lemma If_bury[simp]: "IF b THEN bc1 ELSE bc2 = bury c X \<longleftrightarrow>
+  (EX c1 c2. c = IF b THEN c1 ELSE c2 &
+     bc1 = bury c1 X & bc2 = bury c2 X)"
+by (cases c) auto
+
+lemma While_bury[simp]: "WHILE b DO bc' = bury c X \<longleftrightarrow>
+  (EX c'. c = WHILE b DO c' & bc' = bury c' (vars b \<union> X \<union> L c X))"
+by (cases c) auto
+
+theorem bury_sound2:
+  "(bury c X,s) \<Rightarrow> s'  \<Longrightarrow> s = t on L c X \<Longrightarrow>
+  \<exists> t'. (c,t) \<Rightarrow> t' & s' = t' on X"
+proof (induct "bury c X" s s' arbitrary: c X t rule: big_step_induct)
+  case Skip then show ?case by auto
+next
+  case Assign then show ?case
+    by (auto simp: ball_Un)
+next
+  case (Semi bc1 s1 s2 bc2 s3 c X t1)
+  then obtain c1 c2 where c: "c = c1;c2"
+    and bc2: "bc2 = bury c2 X" and bc1: "bc1 = bury c1 (L c2 X)" by auto
+  from Semi(2)[OF bc1, of t1] Semi.prems c obtain t2 where
+    t12: "(c1, t1) \<Rightarrow> t2" and s2t2: "s2 = t2 on L c2 X" by auto
+  from Semi(4)[OF bc2 s2t2] obtain t3 where
+    t23: "(c2, t2) \<Rightarrow> t3" and s3t3: "s3 = t3 on X"
+    by auto
+  show ?case using c t12 t23 s3t3 by auto
+next
+  case (IfTrue b s bc1 s' bc2)
+  then obtain c1 c2 where c: "c = IF b THEN c1 ELSE c2"
+    and bc1: "bc1 = bury c1 X" and bc2: "bc2 = bury c2 X" by auto
+  have "s = t on vars b" "s = t on L c1 X" using IfTrue.prems c by auto
+  from bval_eq_if_eq_on_vars[OF this(1)] IfTrue(1) have "bval b t" by simp
+  from IfTrue(3)[OF bc1 `s = t on L c1 X`] obtain t' where
+    "(c1, t) \<Rightarrow> t'" "s' =t' on X" by auto
+  thus ?case using c `bval b t` by auto
+next
+  case (IfFalse b s bc2 s' bc1)
+  then obtain c1 c2 where c: "c = IF b THEN c1 ELSE c2"
+    and bc1: "bc1 = bury c1 X" and bc2: "bc2 = bury c2 X" by auto
+  have "s = t on vars b" "s = t on L c2 X" using IfFalse.prems c by auto
+  from bval_eq_if_eq_on_vars[OF this(1)] IfFalse(1) have "~bval b t" by simp
+  from IfFalse(3)[OF bc2 `s = t on L c2 X`] obtain t' where
+    "(c2, t) \<Rightarrow> t'" "s' =t' on X" by auto
+  thus ?case using c `~bval b t` by auto
+next
+  case (WhileFalse b s c)
+  hence "~ bval b t" by (auto simp: ball_Un dest: bval_eq_if_eq_on_vars)
+  thus ?case using WhileFalse by auto
+next
+  case (WhileTrue b s1 bc' s2 s3 c X t1)
+  then obtain c' where c: "c = WHILE b DO c'"
+    and bc': "bc' = bury c' (vars b \<union> X \<union> L c' X)" by auto
+  let ?w = "WHILE b DO c'"
+  from `bval b s1` WhileTrue.prems c have "bval b t1"
+    by (auto simp: ball_Un) (metis bval_eq_if_eq_on_vars)
+  have "s1 = t1 on L c' (L ?w X)"
+    using L_While_subset WhileTrue.prems c by blast
+  with WhileTrue(3)[OF bc', of t1] obtain t2 where
+    "(c', t1) \<Rightarrow> t2" "s2 = t2 on L ?w X" by auto
+  from WhileTrue(5)[OF WhileTrue(6), of t2] c this(2) obtain t3
+    where "(?w,t2) \<Rightarrow> t3" "s3 = t3 on X"
+    by auto
+  with `bval b t1` `(c', t1) \<Rightarrow> t2` c show ?case by auto
+qed
+
+corollary final_bury_sound2: "(bury c UNIV,s) \<Rightarrow> s' \<Longrightarrow> (c,s) \<Rightarrow> s'"
+using bury_sound2[of c UNIV]
+by (auto simp: fun_eq_iff[symmetric])
+
+corollary bury_iff: "(bury c UNIV,s) \<Rightarrow> s' \<longleftrightarrow> (c,s) \<Rightarrow> s'"
+by(metis final_bury_sound final_bury_sound2)
 
 end

@@ -2,7 +2,7 @@
     Author:     Jasmin Blanchette, TU Muenchen
     Copyright   2010, 2011
 
-Finite model generation for TPTP first-order formulas via Nitpick.
+Finite model generation for TPTP first-order formulas (FOF and CNF) via Nitpick.
 *)
 
 signature NITROX =
@@ -13,56 +13,22 @@ end;
 structure Nitrox : NITROX =
 struct
 
-datatype 'a fo_term = ATerm of 'a * 'a fo_term list
-datatype quantifier = AForall | AExists
-datatype connective = ANot | AAnd | AOr | AImplies | AIf | AIff | ANotIff
-datatype 'a formula =
-  AQuant of quantifier * 'a list * 'a formula |
-  AConn of connective * 'a formula list |
-  APred of 'a fo_term
+open ATP_Util
+open ATP_Problem
+open ATP_Proof
+open Nitpick
+open Nitpick_Isar
 
 exception SYNTAX of string
 
-fun is_ident_char c = Char.isAlphaNum c orelse c = #"_"
-
-fun takewhile _ [] = []
-  | takewhile p (x :: xs) = if p x then x :: takewhile p xs else []
-
-fun dropwhile _ [] = []
-  | dropwhile p (x :: xs) =  if p x then dropwhile p xs else x :: xs
-
-fun strip_c_style_comment [] = ""
-  | strip_c_style_comment (#"*" :: #"/" :: cs) = strip_spaces_in_list cs
-  | strip_c_style_comment (_ :: cs) = strip_c_style_comment cs
-and strip_spaces_in_list [] = ""
-  | strip_spaces_in_list (#"%" :: cs) =
-    strip_spaces_in_list (dropwhile (not_equal #"\n") cs)
-  | strip_spaces_in_list (#"/" :: #"*" :: cs) = strip_c_style_comment cs
-  | strip_spaces_in_list [c1] = if Char.isSpace c1 then "" else str c1
-  | strip_spaces_in_list [c1, c2] =
-    strip_spaces_in_list [c1] ^ strip_spaces_in_list [c2]
-  | strip_spaces_in_list (c1 :: c2 :: c3 :: cs) =
-    if Char.isSpace c1 then
-      strip_spaces_in_list (c2 :: c3 :: cs)
-    else if Char.isSpace c2 then
-      if Char.isSpace c3 then
-        strip_spaces_in_list (c1 :: c3 :: cs)
-      else
-        str c1 ^ (if forall is_ident_char [c1, c3] then " " else "") ^
-        strip_spaces_in_list (c3 :: cs)
-    else
-      str c1 ^ strip_spaces_in_list (c2 :: c3 :: cs)
-val strip_spaces = strip_spaces_in_list o String.explode
-
 val parse_keyword = Scan.this_string
 
-fun parse_file_path ("'" :: ss) =
-    (takewhile (not_equal "'") ss |> implode,
-     List.drop (dropwhile (not_equal "'") ss, 1))
-  | parse_file_path ("\"" :: ss) =
-    (takewhile (not_equal "\"") ss |> implode,
-     List.drop (dropwhile (not_equal "\"") ss, 1))
-  | parse_file_path _ = raise SYNTAX "invalid file path"
+fun parse_file_path (c :: ss) =
+    if c = "'" orelse c = "\"" then
+      ss |> chop_while (curry (op <>) c) |>> implode ||> tl
+    else
+      raise SYNTAX "invalid file path"
+  | parse_file_path [] = raise SYNTAX "invalid file path"
 
 fun parse_include x =
   let
@@ -70,43 +36,10 @@ fun parse_include x =
       (parse_keyword "include" |-- $$ "(" |-- parse_file_path --| $$ ")"
        --| $$ ".") x
   in
-    ((), raw_explode (strip_spaces (File.read (Path.explode file_name))) @ rest)
+    ((), (file_name |> Path.explode |> File.read
+                    |> strip_spaces true (K true)
+                    |> raw_explode) @ rest)
   end
-
-fun mk_anot phi = AConn (ANot, [phi])
-fun mk_aconn c (phi1, phi2) = AConn (c, [phi1, phi2])
-
-val parse_dollar_name =
-  Scan.repeat ($$ "$") -- Symbol.scan_id >> (fn (ss, s) => implode ss ^ s)
-
-fun parse_term x =
-  (parse_dollar_name
-   -- Scan.optional ($$ "(" |-- parse_terms --| $$ ")") [] >> ATerm) x
-and parse_terms x = (parse_term ::: Scan.repeat ($$ "," |-- parse_term)) x
-
-(* Apply equal or not-equal to a term. *)
-val parse_predicate_term =
-  parse_term -- Scan.option (Scan.option ($$ "!") --| $$ "=" -- parse_term)
-  >> (fn (u, NONE) => APred u
-       | (u1, SOME (NONE, u2)) => APred (ATerm ("=", [u1, u2]))
-       | (u1, SOME (SOME _, u2)) => mk_anot (APred (ATerm ("=", [u1, u2]))))
-
-fun fo_term_head (ATerm (s, _)) = s
-
-fun parse_formula x =
-  (($$ "(" |-- parse_formula --| $$ ")"
-    || ($$ "!" >> K AForall || $$ "?" >> K AExists)
-       --| $$ "[" -- parse_terms --| $$ "]" --| $$ ":" -- parse_formula
-       >> (fn ((q, ts), phi) => AQuant (q, map fo_term_head ts, phi))
-    || $$ "~" |-- parse_formula >> mk_anot
-    || parse_predicate_term)
-   -- Scan.option ((Scan.this_string "=>" >> K AImplies
-                    || Scan.this_string "<=>" >> K AIff
-                    || Scan.this_string "<~>" >> K ANotIff
-                    || Scan.this_string "<=" >> K AIf
-                    || $$ "|" >> K AOr || $$ "&" >> K AAnd) -- parse_formula)
-   >> (fn (phi1, NONE) => phi1
-        | (phi1, SOME (c, phi2)) => mk_aconn c (phi1, phi2))) x
 
 val parse_fof_or_cnf =
   (parse_keyword "fof" || parse_keyword "cnf") |-- $$ "(" |--
@@ -126,7 +59,7 @@ val parse_tptp_problem =
   Scan.finite Symbol.stopper
       (Scan.error (!! (fn _ => raise SYNTAX "malformed TPTP input")
                   parse_problem))
-  o raw_explode o strip_spaces
+  o raw_explode o strip_spaces true (K true)
 
 val boolT = @{typ bool}
 val iotaT = @{typ iota}
@@ -147,7 +80,7 @@ fun hol_term_from_fo_term res_T (ATerm (x, us)) =
 fun hol_prop_from_formula phi =
   case phi of
     AQuant (_, [], phi') => hol_prop_from_formula phi'
-  | AQuant (q, x :: xs, phi') =>
+  | AQuant (q, (x, _) :: xs, phi') =>
     Const (case q of AForall => @{const_name All} | AExists => @{const_name Ex},
            quantT)
     $ lambda (Free (x, iotaT)) (hol_prop_from_formula (AQuant (q, xs, phi')))
@@ -163,7 +96,7 @@ fun hol_prop_from_formula phi =
         | ANotIff => HOLogic.mk_not o HOLogic.mk_eq
         | ANot => raise Fail "binary \"ANot\"")
   | AConn _ => raise Fail "malformed AConn"
-  | APred u => hol_term_from_fo_term boolT u
+  | AAtom u => hol_term_from_fo_term boolT u
 
 fun mk_all x t = Const (@{const_name All}, quantT) $ lambda x t
 
@@ -182,8 +115,7 @@ fun pick_nits_in_fof_file file_name =
 *)
       val state = Proof.init @{context}
       val params =
-        [("card iota", "1\<midarrow>100"),
-         ("card", "1\<midarrow>8"),
+        [("card", "1\<emdash>8"),
          ("box", "false"),
          ("sat_solver", "smart"),
          ("max_threads", "1"),
@@ -195,16 +127,15 @@ fun pick_nits_in_fof_file file_name =
          ("format", "1000"),
          ("max_potential", "0"),
          (* ("timeout", "240 s"), *)
-         ("expect", "genuine")]
-        |> Nitpick_Isar.default_params @{theory}
-      val auto = false
+         ("expect", genuineN)]
+        |> default_params @{theory}
       val i = 1
       val n = 1
       val step = 0
       val subst = []
     in
-      Nitpick.pick_nits_in_term state params auto i n step subst ts
-                                @{prop False} |> fst
+      pick_nits_in_term state params Normal i n step subst ts @{prop False}
+      |> fst
     end
 
 end;

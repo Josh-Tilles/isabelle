@@ -7,15 +7,16 @@ Minimization of fact list for Metis using external provers.
 
 signature SLEDGEHAMMER_MINIMIZE =
 sig
-  type locality = Sledgehammer_Filter.locality
+  type locality = ATP_Translate.locality
+  type play = ATP_Reconstruct.play
   type params = Sledgehammer_Provers.params
 
   val binary_min_facts : int Config.T
-  val filter_used_facts : ''a list -> (''a * 'b) list -> (''a * 'b) list
   val minimize_facts :
-    string -> params -> bool option -> bool -> int -> int -> Proof.state
+    string -> params -> bool -> int -> int -> Proof.state
     -> ((string * locality) * thm list) list
-    -> ((string * locality) * thm list) list option * string
+    -> ((string * locality) * thm list) list option
+       * ((unit -> play) * (play -> string) * string)
   val run_minimize :
     params -> int -> (Facts.ref * Attrib.src list) list -> Proof.state -> unit
 end;
@@ -23,7 +24,10 @@ end;
 structure Sledgehammer_Minimize : SLEDGEHAMMER_MINIMIZE =
 struct
 
+open ATP_Util
 open ATP_Proof
+open ATP_Translate
+open ATP_Reconstruct
 open Sledgehammer_Util
 open Sledgehammer_Filter
 open Sledgehammer_Provers
@@ -44,44 +48,43 @@ fun print silent f = if silent then () else Output.urgent_message (f ())
 
 fun test_facts ({debug, verbose, overlord, provers, max_mono_iters,
                  max_new_mono_instances, type_sys, isar_proof,
-                 isar_shrink_factor, ...} : params)
-        explicit_apply_opt silent (prover : prover) timeout i n state facts =
+                 isar_shrink_factor, preplay_timeout, ...} : params)
+               silent (prover : prover) timeout i n state facts =
   let
-    val thy = Proof.theory_of state
     val _ =
       print silent (fn () =>
           "Testing " ^ n_facts (map fst facts) ^
           (if verbose then " (timeout: " ^ string_from_time timeout ^ ")"
-          else "") ^ "...")
+           else "") ^ "...")
     val {goal, ...} = Proof.goal state
-    val explicit_apply =
-      case explicit_apply_opt of
-        SOME explicit_apply => explicit_apply
-      | NONE =>
-        let val (_, hyp_ts, concl_t) = strip_subgoal goal i in
-          not (forall (Meson.is_fol_term thy)
-                      (concl_t :: hyp_ts @ maps (map prop_of o snd) facts))
-        end
     val params =
       {debug = debug, verbose = verbose, overlord = overlord, blocking = true,
-       provers = provers, type_sys = type_sys, explicit_apply = explicit_apply,
+       provers = provers, type_sys = type_sys,
        relevance_thresholds = (1.01, 1.01), max_relevant = NONE,
        max_mono_iters = max_mono_iters,
        max_new_mono_instances = max_new_mono_instances, isar_proof = isar_proof,
        isar_shrink_factor = isar_shrink_factor, slicing = false,
-       timeout = timeout, expect = ""}
+       timeout = timeout, preplay_timeout = preplay_timeout, expect = ""}
     val facts =
       facts |> maps (fn (n, ths) => ths |> map (Untranslated_Fact o pair n))
     val problem =
       {state = state, goal = goal, subgoal = i, subgoal_count = n,
        facts = facts, smt_filter = NONE}
-    val result as {outcome, used_facts, ...} = prover params (K "") problem
+    val result as {outcome, used_facts, run_time_in_msecs, ...} =
+      prover params (K (K "")) problem
   in
-    print silent (fn () =>
-        case outcome of
-          SOME failure => string_for_failure failure
-        | NONE => if length used_facts = length facts then "Found proof."
-                  else "Found proof with " ^ n_facts used_facts ^ ".");
+    print silent
+          (fn () =>
+              case outcome of
+                SOME failure => string_for_failure failure
+              | NONE =>
+                "Found proof" ^
+                 (if length used_facts = length facts then ""
+                  else " with " ^ n_facts used_facts) ^
+                 (case run_time_in_msecs of
+                    SOME ms =>
+                    " (" ^ string_from_time (Time.fromMilliseconds ms) ^ ")"
+                  | NONE => "") ^ ".");
     result
   end
 
@@ -95,8 +98,6 @@ fun test_facts ({debug, verbose, overlord, provers, max_mono_iters,
 val binary_min_facts =
   Attrib.setup_config_int @{binding sledgehammer_minimize_binary_min_facts}
                           (K 20)
-
-fun filter_used_facts used = filter (member (op =) used o fst)
 
 fun sublinear_minimize _ [] p = p
   | sublinear_minimize test (x :: xs) (seen, result) =
@@ -147,16 +148,15 @@ fun binary_minimize test xs =
    part of the timeout. *)
 val slack_msecs = 200
 
-fun minimize_facts prover_name (params as {timeout, ...}) explicit_apply_opt
-                   silent i n state facts =
+fun minimize_facts prover_name (params as {timeout, ...}) silent i n state
+                   facts =
   let
     val ctxt = Proof.context_of state
-    val prover = get_prover ctxt false prover_name
+    val prover = get_prover ctxt Minimize prover_name
     val msecs = Time.toMilliseconds timeout
-    val _ = print silent (fn () => "Sledgehammer minimize: " ^
+    val _ = print silent (fn () => "Sledgehammer minimizer: " ^
                                    quote prover_name ^ ".")
-    fun do_test timeout =
-      test_facts params explicit_apply_opt silent prover timeout i n state
+    fun do_test timeout = test_facts params silent prover timeout i n state
     val timer = Timer.startRealTimer ()
   in
     (case do_test timeout facts of
@@ -167,7 +167,7 @@ fun minimize_facts prover_name (params as {timeout, ...}) explicit_apply_opt
            Int.min (msecs, Time.toMilliseconds time + slack_msecs)
            |> Time.fromMilliseconds
          val facts = filter_used_facts used_facts facts
-         val (min_thms, {message, ...}) =
+         val (min_thms, {preplay, message, message_tail, ...}) =
            if length facts >= Config.get ctxt binary_min_facts then
              binary_minimize (do_test new_timeout) facts
            else
@@ -178,20 +178,25 @@ fun minimize_facts prover_name (params as {timeout, ...}) explicit_apply_opt
             (case length (filter (curry (op =) Chained o snd o fst) min_thms) of
                0 => ""
              | n => " (including " ^ string_of_int n ^ " chained)") ^ ".")
-       in (SOME min_thms, message) end
-     | {outcome = SOME TimedOut, ...} =>
-       (NONE, "Timeout: You can increase the time limit using the \"timeout\" \
-              \option (e.g., \"timeout = " ^
-              string_of_int (10 + msecs div 1000) ^ "\").")
-     | {message, ...} => (NONE, "Prover error: " ^ message))
-    handle ERROR msg => (NONE, "Error: " ^ msg)
+       in (SOME min_thms, (preplay, message, message_tail)) end
+     | {outcome = SOME TimedOut, preplay, ...} =>
+       (NONE,
+        (preplay,
+         fn _ => "Timeout: You can increase the time limit using the \
+                 \\"timeout\" option (e.g., \"timeout = " ^
+                 string_of_int (10 + msecs div 1000) ^ "\").",
+         ""))
+     | {preplay, message, ...} =>
+       (NONE, (preplay, prefix "Prover error: " o message, "")))
+    handle ERROR msg =>
+           (NONE, (K (Failed_to_Play Metis), fn _ => "Error: " ^ msg, ""))
   end
 
 fun run_minimize (params as {provers, ...}) i refs state =
   let
     val ctxt = Proof.context_of state
     val reserved = reserved_isar_keyword_table ()
-    val chained_ths = #facts (Proof.goal state)
+    val chained_ths = normalize_chained_theorems (#facts (Proof.goal state))
     val facts =
       refs
       |> maps (map (apsnd single) o fact_from_ref ctxt reserved chained_ths)
@@ -202,8 +207,10 @@ fun run_minimize (params as {provers, ...}) i refs state =
              [] => error "No prover is set."
            | prover :: _ =>
              (kill_provers ();
-              minimize_facts prover params NONE false i n state facts
-              |> #2 |> Output.urgent_message)
+              minimize_facts prover params false i n state facts
+              |> (fn (_, (preplay, message, message_tail)) =>
+                     message (preplay ()) ^ message_tail
+                     |> Output.urgent_message))
   end
 
 end;

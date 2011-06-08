@@ -10,17 +10,26 @@ feature.
 
 signature SOLVE_DIRECT =
 sig
+  val solve_directN: string
+  val someN: string
+  val noneN: string
+  val unknownN: string
   val auto: bool Unsynchronized.ref
   val max_solutions: int Unsynchronized.ref
-  val solve_direct: bool -> Proof.state -> bool * Proof.state
+  val solve_direct: Proof.state -> bool * (string * Proof.state)
   val setup: theory -> theory
 end;
 
 structure Solve_Direct: SOLVE_DIRECT =
 struct
 
+datatype mode = Auto_Try | Try | Normal
+
 val solve_directN = "solve_direct";
 
+val someN = "some";
+val noneN = "none";
+val unknownN = "none";
 
 (* preferences *)
 
@@ -37,7 +46,7 @@ val _ =
 
 (* solve_direct command *)
 
-fun solve_direct auto state =
+fun do_solve_direct mode state =
   let
     val ctxt = Proof.context_of state;
 
@@ -48,7 +57,7 @@ fun solve_direct auto state =
     fun prt_result (goal, results) =
       let
         val msg =
-          (if auto then "Auto " else "") ^ solve_directN ^ ": " ^
+          (if mode = Auto_Try then "Auto " else "") ^ solve_directN ^ ": " ^
           (case goal of
             NONE => "The current goal"
           | SOME sg => Syntax.string_of_term ctxt (Thm.term_of sg));
@@ -74,31 +83,40 @@ fun solve_direct auto state =
   in
     (case try seek_against_goal () of
       SOME (SOME results) =>
-        (true,
+        (someN,
           state |>
-           (if auto then
-             Proof.goal_message
-               (fn () =>
-                 Pretty.chunks
-                  [Pretty.str "",
-                   Pretty.markup Markup.hilite (message results)])
-            else
-              tap (fn _ =>
-                Output.urgent_message (Pretty.string_of (Pretty.chunks (message results))))))
-    | _ => (false, state))
-  end;
+            (if mode = Auto_Try then
+               Proof.goal_message
+                 (fn () =>
+                   Pretty.chunks
+                    [Pretty.str "", Pretty.markup Markup.hilite (message results)])
+             else
+               tap (fn _ =>
+                 Output.urgent_message (Pretty.string_of (Pretty.chunks (message results))))))
+    | SOME NONE =>
+        (if mode = Normal then Output.urgent_message "No proof found."
+         else ();
+         (noneN, state))
+    | NONE =>
+        (if mode = Normal then Output.urgent_message "An error occurred."
+         else ();
+         (unknownN, state)))
+  end
+  |> `(fn (outcome_code, _) => outcome_code = someN);
+
+val solve_direct = do_solve_direct Normal
 
 val _ =
   Outer_Syntax.improper_command solve_directN
     "try to solve conjectures directly with existing theorems" Keyword.diag
     (Scan.succeed
-      (Toplevel.keep (fn state => ignore (solve_direct false (Toplevel.proof_of state)))));
+      (Toplevel.keep (ignore o solve_direct o Toplevel.proof_of)));
 
 
 (* hook *)
 
-val auto_solve_direct = solve_direct true
+fun try_solve_direct auto = do_solve_direct (if auto then Auto_Try else Try)
 
-val setup = Auto_Tools.register_tool (auto, auto_solve_direct);
+val setup = Try.register_tool (solve_directN, (10, auto, try_solve_direct));
 
 end;

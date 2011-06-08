@@ -24,7 +24,7 @@ type report = entry list
 val quickcheck_mtd : (Proof.context -> Proof.context) -> string -> mtd
 
 val solve_direct_mtd : mtd
-val try_mtd : mtd
+val try_methods_mtd : mtd
 (*
 val sledgehammer_mtd : mtd
 *)
@@ -119,7 +119,7 @@ type report = entry list
 (** quickcheck **)
 
 fun invoke_quickcheck change_options quickcheck_generator thy t =
-  TimeLimit.timeLimit (seconds (!Auto_Tools.time_limit))
+  TimeLimit.timeLimit (seconds (!Try.auto_time_limit))
       (fn _ =>
           let
             val [result] = Quickcheck.test_goal_terms (change_options (Proof_Context.init_global thy))
@@ -130,7 +130,7 @@ fun invoke_quickcheck change_options quickcheck_generator thy t =
             | SOME _ => (GenuineCex, Quickcheck.timings_of result)
           end) ()
   handle TimeLimit.TimeOut =>
-         (Timeout, [("timelimit", Real.floor (!Auto_Tools.time_limit))])
+         (Timeout, [("timelimit", Real.floor (!Try.auto_time_limit))])
 
 fun quickcheck_mtd change_options quickcheck_generator =
   ("quickcheck_" ^ quickcheck_generator, invoke_quickcheck change_options quickcheck_generator)
@@ -141,7 +141,7 @@ fun invoke_solve_direct thy t =
   let
     val state = Proof.theorem NONE (K I) (map (single o rpair []) [t]) (Proof_Context.init_global thy) 
   in
-    case Solve_Direct.solve_direct false state of
+    case Solve_Direct.solve_direct state of
       (true, _) => (Solved, [])
     | (false, _) => (Unsolved, [])
   end
@@ -150,16 +150,16 @@ val solve_direct_mtd = ("solve_direct", invoke_solve_direct)
 
 (** try **)
 
-fun invoke_try thy t =
+fun invoke_try_methods thy t =
   let
     val state = Proof.theorem NONE (K I) (map (single o rpair []) [t]) (Proof_Context.init_global thy)
   in
-    case Try.invoke_try (SOME (seconds 5.0)) ([], [], [], []) state of
+    case Try_Methods.try_methods (SOME (seconds 5.0)) ([], [], [], []) state of
       true => (Solved, [])
     | false => (Unsolved, [])
   end
 
-val try_mtd = ("try", invoke_try)
+val try_methods_mtd = ("try_methods", invoke_try_methods)
 
 (** sledgehammer **)
 (*
@@ -199,7 +199,7 @@ fun invoke_nitpick thy t =
     val ctxt = Proof_Context.init_global thy
     val state = Proof.init ctxt
     val (res, _) = Nitpick.pick_nits_in_term state
-      (Nitpick_Isar.default_params thy []) false 1 1 1 [] [] t
+      (Nitpick_Isar.default_params thy []) Nitpick.Normal 1 1 1 [] [] t
     val _ = Output.urgent_message ("Nitpick: " ^ res)
   in
     (rpair []) (case res of
@@ -271,8 +271,8 @@ val forbidden_mutant_constnames =
  @{const_name "equal_bool_inst.equal_bool"},
  @{const_name "ord_fun_inst.less_eq_fun"},
  @{const_name "ord_fun_inst.less_fun"},
- @{const_name Metis.fequal},
  @{const_name Meson.skolem},
+ @{const_name ATP.fequal},
  @{const_name transfer_morphism},
  @{const_name enum_prod_inst.enum_all_prod},
  @{const_name enum_prod_inst.enum_ex_prod}
@@ -510,7 +510,8 @@ fun mutate_theorems_and_write_report thy mtds thms file_name =
     "QC options = " ^
       (*"quickcheck_generator: " ^ quickcheck_generator ^ ";*)
       "size: " ^ string_of_int (Config.get ctxt Quickcheck.size) ^
-      "; iterations: " ^ string_of_int (Config.get ctxt Quickcheck.iterations) ^ "\n");
+      "; iterations: " ^ string_of_int (Config.get ctxt Quickcheck.iterations) ^ "\n" ^
+    "Isabelle environment = ISABELLE_GHC: " ^ getenv "ISABELLE_GHC" ^ "\n");
     map (File.append path o gen_string_for_entry o mutate_theorem gen_create_entry thy mtds) thms;
     ()
   end

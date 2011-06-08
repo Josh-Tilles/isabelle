@@ -6,6 +6,10 @@ Generic counterexample search engine.
 
 signature QUICKCHECK =
 sig
+  val quickcheckN: string
+  val genuineN: string
+  val noneN: string
+  val unknownN: string
   val setup: theory -> theory
   (* configuration *)
   val auto: bool Unsynchronized.ref
@@ -27,16 +31,6 @@ sig
   datatype report = Report of
     { iterations : int, raised_match_errors : int,
       satisfied_assms : int list, positive_concl_tests : int }
-  (* registering generators *)
-  val add_generator:
-    string * (Proof.context -> (term * term list) list -> int list -> term list option * report option)
-      -> Context.generic -> Context.generic
-  val add_batch_generator:
-    string * (Proof.context -> term list -> (int -> term list option) list)
-      -> Context.generic -> Context.generic
-  val add_batch_validator:
-    string * (Proof.context -> term list -> (int -> bool) list)
-      -> Context.generic -> Context.generic
   (* quickcheck's result *)
   datatype result =
     Result of
@@ -46,6 +40,23 @@ sig
       reports : (int * report) list}
   val counterexample_of : result -> (string * term) list option
   val timings_of : result -> (string * int) list
+  (* registering generators *)
+  val add_generator:
+    string * (Proof.context -> (term * term list) list -> int list -> term list option * report option)
+      -> Context.generic -> Context.generic
+  val add_tester:
+    string * (Proof.context -> bool * bool -> (string * typ) list -> (term * term list) list -> result list)
+      -> Context.generic -> Context.generic
+  val add_batch_generator:
+    string * (Proof.context -> term list -> (int -> term list option) list)
+      -> Context.generic -> Context.generic
+  val add_batch_validator:
+    string * (Proof.context -> term list -> (int -> bool) list)
+      -> Context.generic -> Context.generic
+  (* basic operations *)
+  val instantiate_goals: Proof.context -> (string * typ) list -> (term * term list) list
+    -> (typ option * (term * term list)) list list
+  val collect_results: ('a -> result) -> 'a list -> result list -> result list
   (* testing terms and proof states *)
   val test_term: Proof.context -> bool * bool -> term * term list -> result
   val test_goal_terms:
@@ -60,6 +71,13 @@ end;
 
 structure Quickcheck : QUICKCHECK =
 struct
+
+val quickcheckN = "quickcheck"
+val quickcheck_paramsN = "quickcheck_params"
+
+val genuineN = "genuine"
+val noneN = "none"
+val unknownN = "unknown"
 
 (* preferences *)
 
@@ -163,17 +181,19 @@ fun merge_test_params
 structure Data = Generic_Data
 (
   type T =
-    ((string * (Proof.context -> (term * term list) list -> int list -> term list option * report option)) list
+    (((string * (Proof.context -> (term * term list) list -> int list -> term list option * report option)) list
+      * (string * (Proof.context -> bool * bool -> (string * typ) list -> (term * term list) list -> result list)) list)
       * ((string * (Proof.context -> term list -> (int -> term list option) list)) list
       * ((string * (Proof.context -> term list -> (int -> bool) list)) list)))
       * test_params;
-  val empty = (([], ([], [])), Test_Params {default_type = [], expect = No_Expectation});
+  val empty = ((([], []), ([], [])), Test_Params {default_type = [], expect = No_Expectation});
   val extend = I;
-  fun merge (((generators1, (batch_generators1, batch_validators1)), params1),
-    ((generators2, (batch_generators2, batch_validators2)), params2)) : T =
-    ((AList.merge (op =) (K true) (generators1, generators2),
-     (AList.merge (op =) (K true) (batch_generators1, batch_generators2),
-      AList.merge (op =) (K true) (batch_validators1, batch_validators2))),
+  fun merge ((((generators1, testers1), (batch_generators1, batch_validators1)), params1),
+    (((generators2, testers2), (batch_generators2, batch_validators2)), params2)) : T =
+    (((AList.merge (op =) (K true) (generators1, generators2),
+       AList.merge (op =) (K true) (testers1, testers2)),
+      (AList.merge (op =) (K true) (batch_generators1, batch_generators2),
+       AList.merge (op =) (K true) (batch_validators1, batch_validators2))),
       merge_test_params (params1, params2));
 );
 
@@ -185,7 +205,9 @@ val expect = snd o dest_test_params o test_params_of
 
 val map_test_params = Data.map o apsnd o map_test_params'
 
-val add_generator = Data.map o apfst o apfst o AList.update (op =);
+val add_generator = Data.map o apfst o apfst o apfst o AList.update (op =);
+
+val add_tester = Data.map o apfst o apfst o apsnd o AList.update (op =);
 
 val add_batch_generator = Data.map o apfst o apsnd o apfst o AList.update (op =);
 
@@ -212,11 +234,14 @@ fun gen_mk_tester lookup ctxt v =
   end
 
 val mk_tester =
-  gen_mk_tester (fn ctxt => AList.lookup (op =) ((fst o fst o Data.get o Context.Proof) ctxt))
+  gen_mk_tester (fn ctxt => AList.lookup (op =) ((fst o fst o fst o Data.get o Context.Proof) ctxt))
 val mk_batch_tester =
   gen_mk_tester (fn ctxt => AList.lookup (op =) ((fst o snd o fst o Data.get o Context.Proof) ctxt))
 val mk_batch_validator =
   gen_mk_tester (fn ctxt => AList.lookup (op =) ((snd o snd o fst o Data.get o Context.Proof) ctxt))
+
+  
+fun lookup_tester ctxt = AList.lookup (op =) ((snd o fst o fst o Data.get o Context.Proof) ctxt)
 
 (* testing propositions *)
 
@@ -392,7 +417,7 @@ fun monomorphic_term thy insts default_T =
 
 datatype wellsorted_error = Wellsorted_Error of string | Term of term * term list
 
-fun test_goal_terms lthy (limit_time, is_interactive) insts check_goals =
+fun instantiate_goals lthy insts goals =
   let
     fun map_goal_and_eval_terms f (check_goal, eval_terms) = (f check_goal, map f eval_terms)
     val thy = Proof_Context.theory_of lthy
@@ -406,7 +431,7 @@ fun test_goal_terms lthy (limit_time, is_interactive) insts check_goals =
               (map_goal_and_eval_terms (monomorphic_term thy insts T) (check_goal, eval_terms))
               handle WELLSORTED s => (SOME T, Wellsorted_Error s)) default_insts
         else
-          [(NONE, Term (Object_Logic.atomize_term thy check_goal, eval_terms))]) check_goals
+          [(NONE, Term (Object_Logic.atomize_term thy check_goal, eval_terms))]) goals
     val error_msg =
       cat_lines
         (maps (map_filter (fn (_, Term t) => NONE | (_, Wellsorted_Error s) => SOME s)) inst_goals)
@@ -417,25 +442,36 @@ fun test_goal_terms lthy (limit_time, is_interactive) insts check_goals =
         [[]] => error error_msg
       | xs => xs
     val _ = if Config.get lthy quiet then () else warning error_msg
-    fun collect_results f [] results = results
-      | collect_results f (t :: ts) results =
-        let
-          val result = f t
-        in
-          if found_counterexample result then
-            (result :: results)
-          else
-            collect_results f ts (result :: results)
-        end
+  in
+    correct_inst_goals
+  end
+
+fun collect_results f [] results = results
+  | collect_results f (t :: ts) results =
+    let
+      val result = f t
+    in
+      if found_counterexample result then
+        (result :: results)
+      else
+        collect_results f ts (result :: results)
+    end  
+
+fun test_goal_terms ctxt (limit_time, is_interactive) insts goals =
+  let
     fun test_term' goal =
       case goal of
-        [(NONE, t)] => test_term lthy (limit_time, is_interactive) t
-      | ts => test_term_with_increasing_cardinality lthy (limit_time, is_interactive) (map snd ts)
+        [(NONE, t)] => test_term ctxt (limit_time, is_interactive) t
+      | ts => test_term_with_increasing_cardinality ctxt (limit_time, is_interactive) (map snd ts)
+    val correct_inst_goals = instantiate_goals ctxt insts goals
   in
-    if Config.get lthy finite_types then
-      collect_results test_term' correct_inst_goals []
-    else
-      collect_results (test_term lthy (limit_time, is_interactive)) (maps (map snd) correct_inst_goals) []
+    case lookup_tester ctxt (Config.get ctxt tester) of
+      SOME test_goal_terms => test_goal_terms ctxt (limit_time, is_interactive) insts goals
+    | NONE =>
+        if Config.get ctxt finite_types then
+          collect_results test_term' correct_inst_goals []
+        else
+          collect_results (test_term ctxt (limit_time, is_interactive)) (maps (map snd) correct_inst_goals) []
   end;
 
 fun test_goal (time_limit, is_interactive) (insts, eval_terms) i state =
@@ -454,13 +490,13 @@ fun test_goal (time_limit, is_interactive) (insts, eval_terms) i state =
      of NONE => Assumption.all_assms_of lthy
       | SOME locale => Assumption.local_assms_of lthy (Locale.init locale thy);
     val proto_goal = Logic.list_implies (map Thm.term_of assms, subst_bounds (frees, strip gi));
-    val check_goals = case some_locale
+    val goals = case some_locale
      of NONE => [(proto_goal, eval_terms)]
       | SOME locale =>
         map (fn (_, phi) => (Morphism.term phi proto_goal, map (Morphism.term phi) eval_terms))
           (Locale.registrations_of (Context.Theory thy) (*FIXME*) locale);
   in
-    test_goal_terms lthy (time_limit, is_interactive) insts check_goals
+    test_goal_terms lthy (time_limit, is_interactive) insts goals
   end
 
 (* pretty printing *)
@@ -472,10 +508,11 @@ fun pretty_counterex ctxt auto NONE = Pretty.str (tool_name auto ^ " found no co
       Pretty.chunks ((Pretty.str (tool_name auto ^ " found a counterexample:\n") ::
         map (fn (s, t) =>
           Pretty.block [Pretty.str (s ^ " ="), Pretty.brk 1, Syntax.pretty_term ctxt t]) (rev cex))
-        @ (Pretty.str ("Evaluated terms:\n") ::
-        map (fn (t, u) =>
-          Pretty.block [Syntax.pretty_term ctxt t, Pretty.str " =", Pretty.brk 1, Syntax.pretty_term ctxt u])
-          (rev eval_terms)));
+        @ (if null eval_terms then []
+           else (Pretty.str ("Evaluated terms:\n") ::
+             map (fn (t, u) =>
+               Pretty.block [Syntax.pretty_term ctxt t, Pretty.str " =", Pretty.brk 1, Syntax.pretty_term ctxt u])
+               (rev eval_terms))));
 
 fun pretty_report (Report {iterations = iterations, raised_match_errors = raised_match_errors,
     satisfied_assms = satisfied_assms, positive_concl_tests = positive_concl_tests}) =
@@ -511,27 +548,6 @@ fun pretty_counterex_and_reports ctxt auto [] =
       (* map (pretty_reports ctxt) (reports_of result) :: *)
       (if Config.get ctxt timing then cons (pretty_timings (timings_of result)) else I) [])
 
-(* automatic testing *)
-
-fun auto_quickcheck state =
-  let
-    val ctxt = Proof.context_of state;
-    val res =
-      state
-      |> Proof.map_context (Config.put report false #> Config.put quiet true)
-      |> try (test_goal (false, false) ([], []) 1);
-  in
-    case res of
-      NONE => (false, state)
-    | SOME (result :: _) => if found_counterexample result then
-        (true, Proof.goal_message (K (Pretty.chunks [Pretty.str "",
-          Pretty.mark Markup.hilite (pretty_counterex ctxt true (response_of result))])) state)
-      else
-        (false, state)
-  end
-
-val setup = Auto_Tools.register_tool (auto, auto_quickcheck)
-
 (* Isar commands *)
 
 fun read_nat s = case (Library.read_int o Symbol.explode) s
@@ -553,7 +569,9 @@ fun read_expectation "no_expectation" = No_Expectation
   | read_expectation "counterexample" = Counterexample
   | read_expectation s = error ("Not an expectation value: " ^ s)
 
-fun valid_tester_name genctxt = AList.defined (op =) (fst (fst (Data.get genctxt)))
+fun valid_tester_name genctxt name =
+  AList.defined (op =) (fst (fst (fst (Data.get genctxt)))) name orelse
+    AList.defined (op =) (snd (fst (fst (Data.get genctxt)))) name
 
 fun parse_tester name genctxt =
   if valid_tester_name genctxt name then
@@ -610,7 +628,8 @@ fun quickcheck args i state = counterexample_of (hd (gen_quickcheck args i state
 
 fun quickcheck_cmd args i state =
   gen_quickcheck args i (Toplevel.proof_of state)
-  |> Pretty.writeln o pretty_counterex_and_reports (Toplevel.context_of state) false;
+  |> Output.urgent_message o Pretty.string_of
+     o pretty_counterex_and_reports (Toplevel.context_of state) false;
 
 val parse_arg =
   Parse.name --
@@ -622,15 +641,47 @@ val parse_args =
   Parse.$$$ "[" |-- Parse.list1 parse_arg --| Parse.$$$ "]" || Scan.succeed [];
 
 val _ =
-  Outer_Syntax.command "quickcheck_params" "set parameters for random testing" Keyword.thy_decl
+  Outer_Syntax.command quickcheck_paramsN "set parameters for random testing" Keyword.thy_decl
     (parse_args >> (fn args => Toplevel.theory (quickcheck_params_cmd args)));
 
 val _ =
-  Outer_Syntax.improper_command "quickcheck" "try to find counterexample for subgoal" Keyword.diag
+  Outer_Syntax.improper_command quickcheckN "try to find counterexample for subgoal" Keyword.diag
     (parse_args -- Scan.optional Parse.nat 1
       >> (fn (args, i) => Toplevel.no_timing o Toplevel.keep (quickcheck_cmd args i)));
 
-end;
+(* automatic testing *)
 
+fun try_quickcheck auto state =
+  let
+    val ctxt = Proof.context_of state;
+    val i = 1;
+    val res =
+      state
+      |> Proof.map_context (Config.put report false #> Config.put quiet true)
+      |> try (test_goal (false, false) ([], []) i);
+  in
+    case res of
+      NONE => (unknownN, state)
+    | SOME results =>
+        let
+          val msg = pretty_counterex_and_reports ctxt auto results
+        in
+          if exists found_counterexample results then
+            (genuineN,
+             state
+             |> (if auto then
+                   Proof.goal_message (K (Pretty.chunks [Pretty.str "",
+                       Pretty.mark Markup.hilite msg]))
+                 else
+                   tap (fn _ => Output.urgent_message (Pretty.string_of msg))))
+          else
+            (noneN, state)
+        end
+  end
+  |> `(fn (outcome_code, _) => outcome_code = genuineN)
+
+val setup = Try.register_tool (quickcheckN, (20, auto, try_quickcheck))
+
+end;
 
 val auto_quickcheck = Quickcheck.auto;

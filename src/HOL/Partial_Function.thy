@@ -16,12 +16,23 @@ setup Partial_Function.setup
 subsection {* Axiomatic setup *}
 
 text {* This techical locale constains the requirements for function
-  definitions with ccpo fixed points.  *}
+  definitions with ccpo fixed points. *}
 
 definition "fun_ord ord f g \<longleftrightarrow> (\<forall>x. ord (f x) (g x))"
 definition "fun_lub L A = (\<lambda>x. L {y. \<exists>f\<in>A. y = f x})"
 definition "img_ord f ord = (\<lambda>x y. ord (f x) (f y))"
 definition "img_lub f g Lub = (\<lambda>A. g (Lub (f ` A)))"
+
+lemma chain_fun: 
+  assumes A: "chain (fun_ord ord) A"
+  shows "chain ord {y. \<exists>f\<in>A. y = f a}" (is "chain ord ?C")
+proof (rule chainI)
+  fix x y assume "x \<in> ?C" "y \<in> ?C"
+  then obtain f g where fg: "f \<in> A" "g \<in> A" 
+    and [simp]: "x = f a" "y = g a" by blast
+  from chainD[OF A fg]
+  show "ord x y \<or> ord y x" unfolding fun_ord_def by auto
+qed
 
 lemma call_mono[partial_function_mono]: "monotone (fun_ord ord) ord (\<lambda>f. f t)"
 by (rule monotoneI) (auto simp: fun_ord_def)
@@ -53,17 +64,6 @@ lemma partial_function_lift:
 proof -
   interpret partial_function_definitions ord lb by fact
 
-  { fix A a assume A: "chain ?ordf A"
-    have "chain ord {y. \<exists>f\<in>A. y = f a}" (is "chain ord ?C")
-    proof (rule chainI)
-      fix x y assume "x \<in> ?C" "y \<in> ?C"
-      then obtain f g where fg: "f \<in> A" "g \<in> A" 
-        and [simp]: "x = f a" "y = g a" by blast
-      from chainD[OF A fg]
-      show "ord x y \<or> ord y x" unfolding fun_ord_def by auto
-    qed }
-  note chain_fun = this
-
   show ?thesis
   proof
     fix x show "?ordf x x"
@@ -75,7 +75,7 @@ proof -
   next
     fix x y assume "?ordf x y" "?ordf y x"
     thus "x = y" unfolding fun_ord_def
-      by (force intro!: ext dest: leq_antisym)
+      by (force intro!: dest: leq_antisym)
   next
     fix A f assume f: "f \<in> A" and A: "chain ?ordf A"
     thus "?ordf f (?lubf A)"
@@ -129,6 +129,7 @@ abbreviation "le_fun \<equiv> fun_ord leq"
 abbreviation "lub_fun \<equiv> fun_lub lub"
 abbreviation "fixp_fun == ccpo.fixp le_fun lub_fun"
 abbreviation "mono_body \<equiv> monotone le_fun leq"
+abbreviation "admissible \<equiv> ccpo.admissible le_fun lub_fun"
 
 text {* Interpret manually, to avoid flooding everything with facts about
   orders *}
@@ -164,13 +165,29 @@ proof -
   finally show "f = F f" .
 qed
 
+text {* Fixpoint induction rule *}
+
+lemma fixp_induct_uc:
+  fixes F :: "'c \<Rightarrow> 'c" and
+    U :: "'c \<Rightarrow> 'b \<Rightarrow> 'a" and
+    C :: "('b \<Rightarrow> 'a) \<Rightarrow> 'c" and
+    P :: "('b \<Rightarrow> 'a) \<Rightarrow> bool"
+  assumes mono: "\<And>x. mono_body (\<lambda>f. U (F (C f)) x)"
+  assumes eq: "f \<equiv> C (fixp_fun (\<lambda>f. U (F (C f))))"
+  assumes inverse: "\<And>f. U (C f) = f"
+  assumes adm: "ccpo.admissible le_fun lub_fun P"
+  assumes step: "\<And>f. P (U f) \<Longrightarrow> P (U (F f))"
+  shows "P (U f)"
+unfolding eq inverse
+apply (rule ccpo.fixp_induct[OF ccpo adm])
+apply (insert mono, auto simp: monotone_def fun_ord_def)[1]
+by (rule_tac f="C x" in step, simp add: inverse)
+
+
 text {* Rules for @{term mono_body}: *}
 
 lemma const_mono[partial_function_mono]: "monotone ord leq (\<lambda>f. c)"
 by (rule monotoneI) (rule leq_refl)
-
-declaration {* Partial_Function.init @{term fixp_fun}
-  @{term mono_body} @{thm fixp_rule_uc} *}
 
 end
 
@@ -226,6 +243,7 @@ interpretation option!:
   partial_function_definitions "flat_ord None" "flat_lub None"
 by (rule flat_interpretation)
 
+
 abbreviation "option_ord \<equiv> flat_ord None"
 abbreviation "mono_option \<equiv> monotone (fun_ord option_ord) option_ord"
 
@@ -246,6 +264,64 @@ proof (rule monotoneI)
   finally (option.leq_trans)
   show "option_ord (Option.bind (B f) (\<lambda>y. C y f)) (Option.bind (B g) (\<lambda>y'. C y' g))" .
 qed
+
+lemma flat_lub_in_chain:
+  assumes ch: "chain (flat_ord b) A "
+  assumes lub: "flat_lub b A = a"
+  shows "a = b \<or> a \<in> A"
+proof (cases "A \<subseteq> {b}")
+  case True
+  then have "flat_lub b A = b" unfolding flat_lub_def by simp
+  with lub show ?thesis by simp
+next
+  case False
+  then obtain c where "c \<in> A" and "c \<noteq> b" by auto
+  { fix z assume "z \<in> A"
+    from chainD[OF ch `c \<in> A` this] have "z = c \<or> z = b"
+      unfolding flat_ord_def using `c \<noteq> b` by auto }
+  with False have "A - {b} = {c}" by auto
+  with False have "flat_lub b A = c" by (auto simp: flat_lub_def)
+  with `c \<in> A` lub show ?thesis by simp
+qed
+
+lemma option_admissible: "option.admissible (%(f::'a \<Rightarrow> 'b option).
+  (\<forall>x y. f x = Some y \<longrightarrow> P x y))"
+proof (rule ccpo.admissibleI[OF option.ccpo])
+  fix A :: "('a \<Rightarrow> 'b option) set"
+  assume ch: "chain option.le_fun A"
+    and IH: "\<forall>f\<in>A. \<forall>x y. f x = Some y \<longrightarrow> P x y"
+  from ch have ch': "\<And>x. chain option_ord {y. \<exists>f\<in>A. y = f x}" by (rule chain_fun)
+  show "\<forall>x y. option.lub_fun A x = Some y \<longrightarrow> P x y"
+  proof (intro allI impI)
+    fix x y assume "option.lub_fun A x = Some y"
+    from flat_lub_in_chain[OF ch' this[unfolded fun_lub_def]]
+    have "Some y \<in> {y. \<exists>f\<in>A. y = f x}" by simp
+    then have "\<exists>f\<in>A. f x = Some y" by auto
+    with IH show "P x y" by auto
+  qed
+qed
+
+lemma fixp_induct_option:
+  fixes F :: "'c \<Rightarrow> 'c" and
+    U :: "'c \<Rightarrow> 'b \<Rightarrow> 'a option" and
+    C :: "('b \<Rightarrow> 'a option) \<Rightarrow> 'c" and
+    P :: "'b \<Rightarrow> 'a \<Rightarrow> bool"
+  assumes mono: "\<And>x. mono_option (\<lambda>f. U (F (C f)) x)"
+  assumes eq: "f \<equiv> C (ccpo.fixp (fun_ord option_ord) (fun_lub (flat_lub None)) (\<lambda>f. U (F (C f))))"
+  assumes inverse2: "\<And>f. U (C f) = f"
+  assumes step: "\<And>f x y. (\<And>x y. U f x = Some y \<Longrightarrow> P x y) \<Longrightarrow> U (F f) x = Some y \<Longrightarrow> P x y"
+  assumes defined: "U f x = Some y"
+  shows "P x y"
+  using step defined option.fixp_induct_uc[of U F C, OF mono eq inverse2 option_admissible]
+  by blast
+
+declaration {* Partial_Function.init "tailrec" @{term tailrec.fixp_fun}
+  @{term tailrec.mono_body} @{thm tailrec.fixp_rule_uc} NONE *}
+
+declaration {* Partial_Function.init "option" @{term option.fixp_fun}
+  @{term option.mono_body} @{thm option.fixp_rule_uc} 
+  (SOME @{thm fixp_induct_option}) *}
+
 
 hide_const (open) chain
 

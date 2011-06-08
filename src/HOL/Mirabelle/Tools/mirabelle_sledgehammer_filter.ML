@@ -118,6 +118,9 @@ fun action args id ({pre, pos, log, ...} : Mirabelle.run_args) =
          val default_max_relevant =
            Sledgehammer_Provers.default_max_relevant_for_prover ctxt slicing
                                                                 prover
+         val is_appropriate_prop =
+           Sledgehammer_Provers.is_appropriate_prop_for_prover ctxt
+               default_prover
          val is_built_in_const =
            Sledgehammer_Provers.is_built_in_const_for_prover ctxt default_prover
          val relevance_fudge =
@@ -125,11 +128,12 @@ fun action args id ({pre, pos, log, ...} : Mirabelle.run_args) =
                (Sledgehammer_Provers.relevance_fudge_for_prover ctxt prover)
          val relevance_override = {add = [], del = [], only = false}
          val subgoal = 1
-         val (_, hyp_ts, concl_t) = Sledgehammer_Util.strip_subgoal goal subgoal
+         val (_, hyp_ts, concl_t) = ATP_Util.strip_subgoal ctxt goal subgoal
          val facts =
            Sledgehammer_Filter.relevant_facts ctxt relevance_thresholds
-               (the_default default_max_relevant max_relevant) is_built_in_const
-               relevance_fudge relevance_override facts hyp_ts concl_t
+               (the_default default_max_relevant max_relevant)
+               is_appropriate_prop is_built_in_const relevance_fudge
+               relevance_override facts hyp_ts concl_t
            |> map (fst o fst)
          val (found_facts, lost_facts) =
            flat proofs |> sort_distinct string_ord

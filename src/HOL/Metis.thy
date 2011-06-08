@@ -7,38 +7,13 @@
 header {* Metis Proof Method *}
 
 theory Metis
-imports Meson
+imports ATP
 uses "~~/src/Tools/Metis/metis.ML"
      ("Tools/Metis/metis_translate.ML")
      ("Tools/Metis/metis_reconstruct.ML")
      ("Tools/Metis/metis_tactics.ML")
-     ("Tools/try.ML")
+     ("Tools/try_methods.ML")
 begin
-
-
-subsection {* Higher-order reasoning helpers *}
-
-definition fFalse :: bool where [no_atp]:
-"fFalse \<longleftrightarrow> False"
-
-definition fTrue :: bool where [no_atp]:
-"fTrue \<longleftrightarrow> True"
-
-definition fNot :: "bool \<Rightarrow> bool" where [no_atp]:
-"fNot P \<longleftrightarrow> \<not> P"
-
-definition fconj :: "bool \<Rightarrow> bool \<Rightarrow> bool" where [no_atp]:
-"fconj P Q \<longleftrightarrow> P \<and> Q"
-
-definition fdisj :: "bool \<Rightarrow> bool \<Rightarrow> bool" where [no_atp]:
-"fdisj P Q \<longleftrightarrow> P \<or> Q"
-
-definition fimplies :: "bool \<Rightarrow> bool \<Rightarrow> bool" where [no_atp]:
-"fimplies P Q \<longleftrightarrow> (P \<longrightarrow> Q)"
-
-definition fequal :: "'a \<Rightarrow> 'a \<Rightarrow> bool" where [no_atp]:
-"fequal x y \<longleftrightarrow> (x = y)"
-
 
 subsection {* Literal selection helpers *}
 
@@ -70,10 +45,10 @@ hide_fact (open) fFalse_def fTrue_def fNot_def fconj_def fdisj_def fimplies_def
     fequal_def select_def not_atomize atomize_not_select not_atomize_select
     select_FalseI
 
-subsection {* Try *}
+subsection {* Try Methods *}
 
-use "Tools/try.ML"
+use "Tools/try_methods.ML"
 
-setup {* Try.setup *}
+setup {* Try_Methods.setup *}
 
 end

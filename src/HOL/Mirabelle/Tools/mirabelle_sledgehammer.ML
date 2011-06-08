@@ -327,21 +327,23 @@ fun get_prover ctxt args =
       hd (#provers (Sledgehammer_Isar.default_params ctxt []))
       handle Empty => error "No ATP available."
     fun get_prover name =
-      (name, Sledgehammer_Run.get_minimizing_prover ctxt false name)
+      (name, Sledgehammer_Run.get_minimizing_prover ctxt
+                Sledgehammer_Provers.Normal name)
   in
     (case AList.lookup (op =) args proverK of
       SOME name => get_prover name
     | NONE => get_prover (default_prover_name ()))
   end
 
-type locality = Sledgehammer_Filter.locality
+type locality = ATP_Translate.locality
 
 (* hack *)
 fun reconstructor_from_msg args msg =
   (case AList.lookup (op =) args reconstructorK of
     SOME name => name
   | NONE =>
-    if String.isSubstring "metisFT" msg then "metisFT"
+    if String.isSubstring "metis (full_types)" msg then "metis (full_types)"
+    else if String.isSubstring "metis (no_types)" msg then "metis (no_types)"
     else if String.isSubstring "metis" msg then "metis"
     else "smt")
 
@@ -360,7 +362,7 @@ fun run_sh prover_name prover type_sys max_relevant slicing e_weight_method spas
     fun change_dir (SOME dir) =
         Config.put Sledgehammer_Provers.dest_dir dir
         #> Config.put SMT_Config.debug_files
-          (dir ^ "/" ^ Name.desymbolize false (ATP_Problem.timestamp ()) ^ "_"
+          (dir ^ "/" ^ Name.desymbolize false (ATP_Util.timestamp ()) ^ "_"
           ^ serial_string ())
       | change_dir NONE = I
     val st' =
@@ -383,38 +385,47 @@ fun run_sh prover_name prover type_sys max_relevant slicing e_weight_method spas
     val default_max_relevant =
       Sledgehammer_Provers.default_max_relevant_for_prover ctxt slicing
         prover_name
+    val is_appropriate_prop =
+      Sledgehammer_Provers.is_appropriate_prop_for_prover ctxt prover_name
     val is_built_in_const =
       Sledgehammer_Provers.is_built_in_const_for_prover ctxt prover_name
     val relevance_fudge =
       Sledgehammer_Provers.relevance_fudge_for_prover ctxt prover_name
     val relevance_override = {add = [], del = [], only = false}
-    val (_, hyp_ts, concl_t) = Sledgehammer_Util.strip_subgoal goal i
+    val (_, hyp_ts, concl_t) = ATP_Util.strip_subgoal ctxt goal i
     val time_limit =
       (case hard_timeout of
         NONE => I
       | SOME secs => TimeLimit.timeLimit (Time.fromSeconds secs))
-    val ({outcome, message, used_facts, run_time_in_msecs}
-         : Sledgehammer_Provers.prover_result,
+    fun failed failure =
+      ({outcome = SOME failure, used_facts = [], run_time_in_msecs = NONE,
+        preplay = K (ATP_Reconstruct.Failed_to_Play ATP_Reconstruct.Metis),
+        message = K "", message_tail = ""}, ~1)
+    val ({outcome, used_facts, run_time_in_msecs, preplay, message,
+          message_tail} : Sledgehammer_Provers.prover_result,
         time_isa) = time_limit (Mirabelle.cpu_time (fn () =>
       let
+        val _ = if is_appropriate_prop concl_t then ()
+                else raise Fail "inappropriate"
         val facts =
           Sledgehammer_Filter.relevant_facts ctxt relevance_thresholds
-              (the_default default_max_relevant max_relevant) is_built_in_const
-              relevance_fudge relevance_override chained_ths hyp_ts concl_t
+              (the_default default_max_relevant max_relevant)
+              is_appropriate_prop is_built_in_const relevance_fudge
+              relevance_override chained_ths hyp_ts concl_t
         val problem =
           {state = st', goal = goal, subgoal = i,
            subgoal_count = Sledgehammer_Util.subgoal_count st,
            facts = facts |> map Sledgehammer_Provers.Untranslated_Fact,
            smt_filter = NONE}
-      in prover params (K "") problem end)) ()
-      handle TimeLimit.TimeOut =>
-             ({outcome = SOME ATP_Proof.TimedOut, message = "", used_facts = [],
-               run_time_in_msecs = NONE}, ~1)
+      in prover params (K (K "")) problem end)) ()
+      handle TimeLimit.TimeOut => failed ATP_Proof.TimedOut
+           | Fail "inappropriate" => failed ATP_Proof.Inappropriate
     val time_prover = run_time_in_msecs |> the_default ~1
+    val msg = message (preplay ()) ^ message_tail
   in
     case outcome of
-      NONE => (message, SH_OK (time_isa, time_prover, used_facts))
-    | SOME _ => (message, SH_FAIL (time_isa, time_prover))
+      NONE => (msg, SH_OK (time_isa, time_prover, used_facts))
+    | SOME _ => (msg, SH_FAIL (time_isa, time_prover))
   end
   handle ERROR msg => ("error: " ^ msg, SH_ERROR)
 
@@ -459,7 +470,7 @@ fun run_sledgehammer trivial args reconstructor named_thms id ({pre=st, log, ...
     case result of
       SH_OK (time_isa, time_prover, names) =>
         let
-          fun get_thms (_, Sledgehammer_Filter.Chained) = NONE
+          fun get_thms (_, ATP_Translate.Chained) = NONE
             | get_thms (name, loc) =
               SOME ((name, loc), thms_of_name (Proof.context_of st) name)
         in
@@ -495,18 +506,21 @@ fun run_minimize args reconstructor named_thms id
       AList.lookup (op =) args minimize_timeoutK
       |> Option.map (fst o read_int o raw_explode)  (* FIXME Symbol.explode (?) *)
       |> the_default 5
-    val params as {explicit_apply, ...} = Sledgehammer_Isar.default_params ctxt
+    val params = Sledgehammer_Isar.default_params ctxt
       [("provers", prover_name),
        ("verbose", "true"),
        ("type_sys", type_sys),
        ("timeout", string_of_int timeout)]
     val minimize =
       Sledgehammer_Minimize.minimize_facts prover_name params
-          (SOME explicit_apply) true 1 (Sledgehammer_Util.subgoal_count st)
+          true 1 (Sledgehammer_Util.subgoal_count st)
     val _ = log separator
+    val (used_facts, (preplay, message, message_tail)) =
+      minimize st (these (!named_thms))
+    val msg = message (preplay ()) ^ message_tail
   in
-    case minimize st (these (!named_thms)) of
-      (SOME named_thms', msg) =>
+    case used_facts of
+      SOME named_thms' =>
         (change_data id inc_min_succs;
          change_data id (inc_min_ab_ratios ((100 * length named_thms') div n0));
          if length named_thms' = n0
@@ -515,7 +529,7 @@ fun run_minimize args reconstructor named_thms id
                named_thms := SOME named_thms';
                log (minimize_tag id ^ "succeeded:\n" ^ msg))
         )
-    | (NONE, msg) => log (minimize_tag id ^ "failed: " ^ msg)
+    | NONE => log (minimize_tag id ^ "failed: " ^ msg)
   end
 
 
@@ -529,10 +543,12 @@ fun run_reconstructor trivial full m name reconstructor named_thms id
             Sledgehammer_Tactics.sledgehammer_as_unsound_oracle_tac ctxt)
        else if !reconstructor = "smt" then
          SMT_Solver.smt_tac
-       else if full orelse !reconstructor = "metisFT" then
-         Metis_Tactics.metisFT_tac
+       else if full orelse !reconstructor = "metis (full_types)" then
+         Metis_Tactics.metis_tac [Metis_Tactics.full_type_sys]
+       else if !reconstructor = "metis (no_types)" then
+         Metis_Tactics.metis_tac [Metis_Tactics.no_type_sys]
        else
-         Metis_Tactics.metis_tac) ctxt thms
+         Metis_Tactics.metis_tac []) ctxt thms
     fun apply_reconstructor thms =
       Mirabelle.can_apply timeout (do_reconstructor thms) st
 
@@ -575,7 +591,8 @@ fun sledgehammer_action args id (st as {pre, name, ...}: Mirabelle.run_args) =
         Unsynchronized.ref (NONE : ((string * locality) * thm list) list option)
       val minimize = AList.defined (op =) args minimizeK
       val metis_ft = AList.defined (op =) args metis_ftK
-      val trivial = Try.invoke_try (SOME try_timeout) ([], [], [], []) pre
+      val trivial =
+        Try_Methods.try_methods (SOME try_timeout) ([], [], [], []) pre
         handle TimeLimit.TimeOut => false
       fun apply_reconstructor m1 m2 =
         if metis_ft

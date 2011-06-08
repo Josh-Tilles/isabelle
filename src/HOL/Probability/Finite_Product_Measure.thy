@@ -325,6 +325,10 @@ lemma (in finite_product_sigma_algebra) in_P[simp, intro]:
   "\<lbrakk> \<And>i. i \<in> I \<Longrightarrow> A i \<in> sets (M i) \<rbrakk> \<Longrightarrow> Pi\<^isub>E I A \<in> sets P"
   by (auto simp: sets_product_algebra)
 
+lemma Int_stable_product_algebra_generator:
+  "(\<And>i. i \<in> I \<Longrightarrow> Int_stable (M i)) \<Longrightarrow> Int_stable (product_algebra_generator I M)"
+  by (auto simp add: product_algebra_generator_def Int_stable_def PiE_Int Pi_iff)
+
 section "Generating set generates also product algebra"
 
 lemma sigma_product_algebra_sigma_eq:
@@ -478,6 +482,32 @@ proof (unfold measurable_def, intro CollectI conjI ballI)
     using `A \<in> sets (M i)` by (auto intro!: product_algebraI)
 qed (insert `i \<in> I`, auto)
 
+lemma (in sigma_algebra) measurable_restrict:
+  assumes I: "finite I"
+  assumes "\<And>i. i \<in> I \<Longrightarrow> sets (N i) \<subseteq> Pow (space (N i))"
+  assumes X: "\<And>i. i \<in> I \<Longrightarrow> X i \<in> measurable M (N i)"
+  shows "(\<lambda>x. \<lambda>i\<in>I. X i x) \<in> measurable M (Pi\<^isub>M I N)"
+  unfolding product_algebra_def
+proof (simp, rule measurable_sigma)
+  show "sets (product_algebra_generator I N) \<subseteq> Pow (space (product_algebra_generator I N))"
+    by (rule product_algebra_generator_sets_into_space) fact
+  show "(\<lambda>x. \<lambda>i\<in>I. X i x) \<in> space M \<rightarrow> space (product_algebra_generator I N)"
+    using X by (auto simp: measurable_def)
+  fix E assume "E \<in> sets (product_algebra_generator I N)"
+  then obtain F where "E = Pi\<^isub>E I F" and F: "\<And>i. i \<in> I \<Longrightarrow> F i \<in> sets (N i)"
+    by (auto simp: product_algebra_generator_def)
+  then have "(\<lambda>x. \<lambda>i\<in>I. X i x) -` E \<inter> space M = (\<Inter>i\<in>I. X i -` F i \<inter> space M) \<inter> space M"
+    by (auto simp: Pi_iff)
+  also have "\<dots> \<in> sets M"
+  proof cases
+    assume "I = {}" then show ?thesis by simp
+  next
+    assume "I \<noteq> {}" with X F I show ?thesis
+      by (intro finite_INT measurable_sets Int) auto
+  qed
+  finally show "(\<lambda>x. \<lambda>i\<in>I. X i x) -` E \<inter> space M \<in> sets M" .
+qed
+
 locale product_sigma_finite =
   fixes M :: "'i \<Rightarrow> ('a,'b) measure_space_scheme"
   assumes sigma_finite_measures: "\<And>i. sigma_finite_measure (M i)"
@@ -494,44 +524,6 @@ sublocale product_sigma_finite \<subseteq> product_sigma_algebra
 
 sublocale finite_product_sigma_finite \<subseteq> finite_product_sigma_algebra
   by default (fact finite_index')
-
-lemma setprod_extreal_0:
-  fixes f :: "'a \<Rightarrow> extreal"
-  shows "(\<Prod>i\<in>A. f i) = 0 \<longleftrightarrow> (finite A \<and> (\<exists>i\<in>A. f i = 0))"
-proof cases
-  assume "finite A"
-  then show ?thesis by (induct A) auto
-qed auto
-
-lemma setprod_extreal_pos:
-  fixes f :: "'a \<Rightarrow> extreal" assumes pos: "\<And>i. i \<in> I \<Longrightarrow> 0 \<le> f i" shows "0 \<le> (\<Prod>i\<in>I. f i)"
-proof cases
-  assume "finite I" from this pos show ?thesis by induct auto
-qed simp
-
-lemma setprod_PInf:
-  assumes "\<And>i. i \<in> I \<Longrightarrow> 0 \<le> f i"
-  shows "(\<Prod>i\<in>I. f i) = \<infinity> \<longleftrightarrow> finite I \<and> (\<exists>i\<in>I. f i = \<infinity>) \<and> (\<forall>i\<in>I. f i \<noteq> 0)"
-proof cases
-  assume "finite I" from this assms show ?thesis
-  proof (induct I)
-    case (insert i I)
-    then have pos: "0 \<le> f i" "0 \<le> setprod f I" by (auto intro!: setprod_extreal_pos)
-    from insert have "(\<Prod>j\<in>insert i I. f j) = \<infinity> \<longleftrightarrow> setprod f I * f i = \<infinity>" by auto
-    also have "\<dots> \<longleftrightarrow> (setprod f I = \<infinity> \<or> f i = \<infinity>) \<and> f i \<noteq> 0 \<and> setprod f I \<noteq> 0"
-      using setprod_extreal_pos[of I f] pos
-      by (cases rule: extreal2_cases[of "f i" "setprod f I"]) auto
-    also have "\<dots> \<longleftrightarrow> finite (insert i I) \<and> (\<exists>j\<in>insert i I. f j = \<infinity>) \<and> (\<forall>j\<in>insert i I. f j \<noteq> 0)"
-      using insert by (auto simp: setprod_extreal_0)
-    finally show ?case .
-  qed simp
-qed simp
-
-lemma setprod_extreal: "(\<Prod>i\<in>A. extreal (f i)) = extreal (setprod f A)"
-proof cases
-  assume "finite A" then show ?thesis
-    by induct (auto simp: one_extreal_def)
-qed (simp add: one_extreal_def)
 
 lemma (in finite_product_sigma_finite) product_algebra_generator_measure:
   assumes "Pi\<^isub>E I F \<in> sets G"
@@ -757,9 +749,8 @@ proof -
       using A unfolding product_algebra_def by auto
   next
     show "Int_stable IJ.G"
-      by (simp add: PiE_Int Int_stable_def product_algebra_def
-                    product_algebra_generator_def)
-          auto
+      by (rule Int_stable_product_algebra_generator)
+         (auto simp: Int_stable_def)
     show "range ?F \<subseteq> sets IJ.G" using F
       by (simp add: image_subset_iff product_algebra_def
                     product_algebra_generator_def)

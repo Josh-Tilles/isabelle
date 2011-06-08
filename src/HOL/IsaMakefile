@@ -138,7 +138,6 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   $(SRC)/Tools/IsaPlanner/rw_tools.ML \
   $(SRC)/Tools/IsaPlanner/zipper.ML \
   $(SRC)/Tools/atomize_elim.ML \
-  $(SRC)/Tools/auto_tools.ML \
   $(SRC)/Tools/case_product.ML \
   $(SRC)/Tools/coherent.ML \
   $(SRC)/Tools/cong_tac.ML \
@@ -151,6 +150,7 @@ BASE_DEPENDENCIES = $(OUT)/Pure \
   $(SRC)/Tools/project_rule.ML \
   $(SRC)/Tools/quickcheck.ML \
   $(SRC)/Tools/solve_direct.ML \
+  $(SRC)/Tools/try.ML \
   $(SRC)/Tools/value.ML \
   HOL.thy \
   Tools/hologic.ML \
@@ -245,7 +245,7 @@ PLAIN_DEPENDENCIES = $(BASE_DEPENDENCIES) \
   Tools/sat_funcs.ML \
   Tools/sat_solver.ML \
   Tools/split_rule.ML \
-  Tools/try.ML \
+  Tools/try_methods.ML \
   Tools/typedef.ML \
   Tools/enriched_type.ML \
   Transitive_Closure.thy \
@@ -300,13 +300,17 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   $(SRC)/Provers/Arith/extract_common_term.ML \
   Tools/ATP/atp_problem.ML \
   Tools/ATP/atp_proof.ML \
+  Tools/ATP/atp_reconstruct.ML \
   Tools/ATP/atp_systems.ML \
+  Tools/ATP/atp_translate.ML \
+  Tools/ATP/atp_util.ML \
   Tools/choice_specification.ML \
   Tools/code_evaluation.ML \
   Tools/groebner.ML \
   Tools/int_arith.ML \
   Tools/list_code.ML \
   Tools/list_to_set_comprehension.ML \
+  Tools/monomorph.ML \
   Tools/nat_numeral_simprocs.ML \
   Tools/Nitpick/kodkod.ML \
   Tools/Nitpick/kodkod_sat.ML \
@@ -353,8 +357,6 @@ MAIN_DEPENDENCIES = $(PLAIN_DEPENDENCIES) \
   Tools/record.ML \
   Tools/semiring_normalizer.ML \
   Tools/Sledgehammer/async_manager.ML \
-  Tools/Sledgehammer/sledgehammer_atp_reconstruct.ML \
-  Tools/Sledgehammer/sledgehammer_atp_translate.ML \
   Tools/Sledgehammer/sledgehammer_filter.ML \
   Tools/Sledgehammer/sledgehammer_minimize.ML \
   Tools/Sledgehammer/sledgehammer_isar.ML \
@@ -441,6 +443,7 @@ $(OUT)/HOL-Library: $(OUT)/HOL Library/ROOT.ML				\
   Library/Code_Prolog.thy Tools/Predicate_Compile/code_prolog.ML	\
   Library/ContNotDenum.thy Library/Continuity.thy Library/Convex.thy	\
   Library/Countable.thy Library/Diagonalize.thy Library/Dlist.thy	\
+  Library/Dlist_Cset.thy 						\
   Library/Efficient_Nat.thy Library/Eval_Witness.thy 			\
   Library/Executable_Set.thy Library/Extended_Reals.thy			\
   Library/Float.thy Library/Formal_Power_Series.thy			\
@@ -450,7 +453,7 @@ $(OUT)/HOL-Library: $(OUT)/HOL Library/ROOT.ML				\
   Library/Indicator_Function.thy Library/Infinite_Set.thy		\
   Library/Inner_Product.thy Library/Kleene_Algebra.thy			\
   Library/LaTeXsugar.thy Library/Lattice_Algebras.thy			\
-  Library/Lattice_Syntax.thy Library/Library.thy			\
+  Library/Lattice_Syntax.thy Library/Library.thy Library/List_Cset.thy 	\
   Library/List_Prefix.thy Library/List_lexord.thy Library/Mapping.thy	\
   Library/Monad_Syntax.thy Library/More_List.thy Library/More_Set.thy	\
   Library/Multiset.thy Library/Nat_Bijection.thy			\
@@ -465,7 +468,8 @@ $(OUT)/HOL-Library: $(OUT)/HOL Library/ROOT.ML				\
   Library/Quotient_List.thy Library/Quotient_Option.thy			\
   Library/Quotient_Product.thy Library/Quotient_Sum.thy			\
   Library/Quotient_Syntax.thy Library/Quotient_Type.thy			\
-  Library/RBT.thy Library/RBT_Impl.thy Library/README.html		\
+  Library/RBT.thy Library/RBT_Impl.thy Library/RBT_Mapping.thy 		\
+  Library/README.html 							\
   Library/Set_Algebras.thy Library/State_Monad.thy Library/Ramsey.thy	\
   Library/Reflection.thy Library/SML_Quickcheck.thy 			\
   Library/Sublist_Order.thy Library/Sum_of_Squares.thy			\
@@ -522,9 +526,17 @@ $(LOG)/HOL-Induct.gz: $(OUT)/HOL Induct/Com.thy Induct/Comb.thy		\
 
 HOL-IMP: HOL $(LOG)/HOL-IMP.gz
 
-$(LOG)/HOL-IMP.gz: $(OUT)/HOL IMP/Com.thy IMP/Compiler0.thy		\
-  IMP/Compiler.thy IMP/Denotation.thy IMP/Expr.thy IMP/Hoare.thy	\
-  IMP/Natural.thy IMP/Examples.thy IMP/Transition.thy IMP/VC.thy	\
+$(LOG)/HOL-IMP.gz: $(OUT)/HOL IMP/ASM.thy IMP/AExp.thy IMP/BExp.thy	\
+  IMP/Big_Step.thy IMP/C_like.thy IMP/Com.thy IMP/Compiler.thy \
+  IMP/Def_Ass.thy IMP/Def_Ass_Big.thy IMP/Def_Ass_Exp.thy \
+  IMP/Def_Ass_Small.thy IMP/Def_Ass_Sound_Big.thy \
+  IMP/Def_Ass_Sound_Small.thy IMP/Denotation.thy IMP/Hoare.thy \
+  IMP/HoareT.thy IMP/Hoare_Examples.thy IMP/Hoare_Sound_Complete.thy \
+  IMP/Live.thy IMP/OO.thy IMP/Poly_Types.thy IMP/Procs.thy \
+  IMP/Procs_Dyn_Vars_Dyn.thy IMP/Procs_Stat_Vars_Dyn.thy \
+  IMP/Procs_Stat_Vars_Stat.thy IMP/Sec_Type_Expr.thy IMP/Sec_Typing.thy \
+  IMP/Sec_TypingT.thy IMP/Small_Step.thy IMP/Star.thy IMP/Types.thy \
+  IMP/Util.thy IMP/VC.thy IMP/Vars.thy \
   IMP/ROOT.ML IMP/document/root.tex IMP/document/root.bib
 	@$(ISABELLE_TOOL) usedir -g true $(OUT)/HOL IMP
 
@@ -694,11 +706,11 @@ $(LOG)/HOL-Library-Codegenerator_Test.gz: $(OUT)/HOL-Library		\
 HOL-Metis_Examples: HOL $(LOG)/HOL-Metis_Examples.gz
 
 $(LOG)/HOL-Metis_Examples.gz: $(OUT)/HOL Metis_Examples/ROOT.ML \
-  Metis_Examples/Abstraction.thy Metis_Examples/BigO.thy \
-  Metis_Examples/BT.thy Metis_Examples/Clausify.thy \
-  Metis_Examples/HO_Reas.thy Metis_Examples/Message.thy \
-  Metis_Examples/Tarski.thy Metis_Examples/TransClosure.thy \
-  Metis_Examples/set.thy
+  Metis_Examples/Abstraction.thy Metis_Examples/Big_O.thy \
+  Metis_Examples/Binary_Tree.thy Metis_Examples/Clausification.thy \
+  Metis_Examples/Message.thy Metis_Examples/Proxies.thy \
+  Metis_Examples/Sets.thy Metis_Examples/Tarski.thy \
+  Metis_Examples/Trans_Closure.thy Metis_Examples/Type_Encodings.thy
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Metis_Examples
 
 
@@ -1034,8 +1046,8 @@ HOL-ex: HOL $(LOG)/HOL-ex.gz
 
 $(LOG)/HOL-ex.gz: $(OUT)/HOL Decision_Procs/Commutative_Ring.thy	\
   Number_Theory/Primes.thy ex/Abstract_NAT.thy ex/Antiquote.thy		\
-  ex/Arith_Examples.thy ex/Arithmetic_Series_Complex.thy ex/BT.thy	\
-  ex/BinEx.thy ex/Binary.thy ex/Birthday_Paradoxon.thy			\
+  ex/ATP_Export.thy ex/Arith_Examples.thy ex/Arithmetic_Series_Complex.thy \
+  ex/BT.thy	ex/BinEx.thy ex/Binary.thy ex/Birthday_Paradox.thy			\
   ex/CASC_Setup.thy ex/CTL.thy ex/Case_Product.thy			\
   ex/Chinese.thy ex/Classical.thy ex/CodegenSML_Test.thy		\
   ex/Coercion_Examples.thy ex/Coherent.thy ex/Dedekind_Real.thy		\
@@ -1056,7 +1068,7 @@ $(LOG)/HOL-ex.gz: $(OUT)/HOL Decision_Procs/Commutative_Ring.thy	\
   ex/SVC_Oracle.thy ex/Serbian.thy ex/Set_Algebras.thy			\
   ex/sledgehammer_tactics.ML ex/Sqrt.thy				\
   ex/Sqrt_Script.thy ex/Sudoku.thy ex/Tarski.thy ex/Termination.thy	\
-  ex/TPTP_Export.thy ex/Transfer_Ex.thy ex/Tree23.thy			\
+  ex/Transfer_Ex.thy ex/Tree23.thy			\
   ex/Unification.thy ex/While_Combinator_Example.thy			\
   ex/document/root.bib ex/document/root.tex ex/set.thy ex/svc_funcs.ML	\
   ex/svc_test.thy							\

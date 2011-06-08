@@ -186,6 +186,11 @@ lemma (in algebra) sets_Collect_const:
   "{x\<in>space M. P} \<in> sets M"
   by (cases P) auto
 
+lemma algebra_single_set:
+  assumes "X \<subseteq> S"
+  shows "algebra \<lparr> space = S, sets = { {}, X, S - X, S }\<rparr>"
+  by default (insert `X \<subseteq> S`, auto)
+
 section {* Restricted algebras *}
 
 abbreviation (in algebra)
@@ -200,6 +205,18 @@ subsection {* Sigma Algebras *}
 locale sigma_algebra = algebra +
   assumes countable_nat_UN [intro]:
          "!!A. range A \<subseteq> sets M \<Longrightarrow> (\<Union>i::nat. A i) \<in> sets M"
+
+lemma (in algebra) is_sigma_algebra:
+  assumes "finite (sets M)"
+  shows "sigma_algebra M"
+proof
+  fix A :: "nat \<Rightarrow> 'a set" assume "range A \<subseteq> sets M"
+  then have "(\<Union>i. A i) = (\<Union>s\<in>sets M \<inter> range A. s)"
+    by auto
+  also have "(\<Union>s\<in>sets M \<inter> range A. s) \<in> sets M"
+    using `finite (sets M)` by (auto intro: finite_UN)
+  finally show "(\<Union>i. A i) \<in> sets M" .
+qed
 
 lemma countable_UN_eq:
   fixes A :: "'i::countable \<Rightarrow> 'a set"
@@ -283,6 +300,11 @@ qed
 lemmas (in sigma_algebra) sets_Collect =
   sets_Collect_imp sets_Collect_disj sets_Collect_conj sets_Collect_neg sets_Collect_const
   sets_Collect_countable_All sets_Collect_countable_Ex sets_Collect_countable_All
+
+lemma sigma_algebra_single_set:
+  assumes "X \<subseteq> S"
+  shows "sigma_algebra \<lparr> space = S, sets = { {}, X, S - X, S }\<rparr>"
+  using algebra.is_sigma_algebra[OF algebra_single_set[OF `X \<subseteq> S`]] by simp
 
 subsection {* Binary Unions *}
 
@@ -417,6 +439,20 @@ proof
     by (metis sigma_sets_subset subset_refl)
 qed
 
+lemma sigma_sets_eqI:
+  assumes A: "\<And>a. a \<in> A \<Longrightarrow> a \<in> sigma_sets M B"
+  assumes B: "\<And>b. b \<in> B \<Longrightarrow> b \<in> sigma_sets M A"
+  shows "sigma_sets M A = sigma_sets M B"
+proof (intro set_eqI iffI)
+  fix a assume "a \<in> sigma_sets M A"
+  from this A show "a \<in> sigma_sets M B"
+    by induct (auto intro!: sigma_sets.intros del: sigma_sets.Basic)
+next
+  fix b assume "b \<in> sigma_sets M B"
+  from this B show "b \<in> sigma_sets M A"
+    by induct (auto intro!: sigma_sets.intros del: sigma_sets.Basic)
+qed
+
 lemma sigma_algebra_sigma:
     "sets M \<subseteq> Pow (space M) \<Longrightarrow> sigma_algebra (sigma M)"
   apply (rule sigma_algebra_sigma_sets)
@@ -426,6 +462,12 @@ lemma sigma_algebra_sigma:
 lemma (in sigma_algebra) sigma_subset:
     "sets N \<subseteq> sets M \<Longrightarrow> space N = space M \<Longrightarrow> sets (sigma N) \<subseteq> (sets M)"
   by (simp add: sigma_def sigma_sets_subset)
+
+lemma sigma_sets_subseteq: assumes "A \<subseteq> B" shows "sigma_sets X A \<subseteq> sigma_sets X B"
+proof
+  fix x assume "x \<in> sigma_sets X A" then show "x \<in> sigma_sets X B"
+    by induct (insert `A \<subseteq> B`, auto intro: sigma_sets.intros)
+qed
 
 lemma (in sigma_algebra) restriction_in_sets:
   fixes A :: "nat \<Rightarrow> 'a set"
@@ -513,6 +555,36 @@ lemma in_sigma[intro, simp]: "A \<in> sets M \<Longrightarrow> A \<in> sets (sig
 lemma (in sigma_algebra) sigma_eq[simp]: "sigma M = M"
   unfolding sigma_def sigma_sets_eq by simp
 
+lemma sigma_sigma_eq:
+  assumes "sets M \<subseteq> Pow (space M)"
+  shows "sigma (sigma M) = sigma M"
+  using sigma_algebra.sigma_eq[OF sigma_algebra_sigma, OF assms] .
+
+lemma sigma_sets_sigma_sets_eq:
+  "M \<subseteq> Pow S \<Longrightarrow> sigma_sets S (sigma_sets S M) = sigma_sets S M"
+  using sigma_sigma_eq[of "\<lparr> space = S, sets = M \<rparr>"]
+  by (simp add: sigma_def)
+
+lemma sigma_sets_singleton:
+  assumes "X \<subseteq> S"
+  shows "sigma_sets S { X } = { {}, X, S - X, S }"
+proof -
+  interpret sigma_algebra "\<lparr> space = S, sets = { {}, X, S - X, S }\<rparr>"
+    by (rule sigma_algebra_single_set) fact
+  have "sigma_sets S { X } \<subseteq> sigma_sets S { {}, X, S - X, S }"
+    by (rule sigma_sets_subseteq) simp
+  moreover have "\<dots> = { {}, X, S - X, S }"
+    using sigma_eq unfolding sigma_def by simp
+  moreover
+  { fix A assume "A \<in> { {}, X, S - X, S }"
+    then have "A \<in> sigma_sets S { X }"
+      by (auto intro: sigma_sets.intros sigma_sets_top) }
+  ultimately have "sigma_sets S { X } = sigma_sets S { {}, X, S - X, S }"
+    by (intro antisym) auto
+  with sigma_eq show ?thesis
+    unfolding sigma_def by simp
+qed
+
 lemma restricted_sigma:
   assumes S: "S \<in> sets (sigma M)" and M: "sets M \<subseteq> Pow (space M)"
   shows "algebra.restricted_space (sigma M) S = sigma (algebra.restricted_space M S)"
@@ -523,6 +595,61 @@ proof -
   from sigma_sets_Int[OF this]
   show ?thesis
     by (simp add: sigma_def)
+qed
+
+lemma sigma_sets_vimage_commute:
+  assumes X: "X \<in> space M \<rightarrow> space M'"
+  shows "{X -` A \<inter> space M |A. A \<in> sets (sigma M')}
+       = sigma_sets (space M) {X -` A \<inter> space M |A. A \<in> sets M'}" (is "?L = ?R")
+proof
+  show "?L \<subseteq> ?R"
+  proof clarify
+    fix A assume "A \<in> sets (sigma M')"
+    then have "A \<in> sigma_sets (space M') (sets M')" by (simp add: sets_sigma)
+    then show "X -` A \<inter> space M \<in> ?R"
+    proof induct
+      case (Basic B) then show ?case
+        by (auto intro!: sigma_sets.Basic)
+    next
+      case Empty then show ?case
+        by (auto intro!: sigma_sets.Empty)
+    next
+      case (Compl B)
+      have [simp]: "X -` (space M' - B) \<inter> space M = space M - (X -` B \<inter> space M)"
+        by (auto simp add: funcset_mem [OF X])
+      with Compl show ?case
+        by (auto intro!: sigma_sets.Compl)
+    next
+      case (Union F)
+      then show ?case
+        by (auto simp add: vimage_UN UN_extend_simps(4) simp del: UN_simps
+                 intro!: sigma_sets.Union)
+    qed
+  qed
+  show "?R \<subseteq> ?L"
+  proof clarify
+    fix A assume "A \<in> ?R"
+    then show "\<exists>B. A = X -` B \<inter> space M \<and> B \<in> sets (sigma M')"
+    proof induct
+      case (Basic B) then show ?case by auto
+    next
+      case Empty then show ?case
+        by (auto simp: sets_sigma intro!: sigma_sets.Empty exI[of _ "{}"])
+    next
+      case (Compl B)
+      then obtain A where A: "B = X -` A \<inter> space M" "A \<in> sets (sigma M')" by auto
+      then have [simp]: "space M - B = X -` (space M' - A) \<inter> space M"
+        by (auto simp add: funcset_mem [OF X])
+      with A(2) show ?case
+        by (auto simp: sets_sigma intro: sigma_sets.Compl)
+    next
+      case (Union F)
+      then have "\<forall>i. \<exists>B. F i = X -` B \<inter> space M \<and> B \<in> sets (sigma M')" by auto
+      from choice[OF this] guess A .. note A = this
+      with A show ?case
+        by (auto simp: sets_sigma vimage_UN[symmetric] intro: sigma_sets.Union)
+    qed
+  qed
 qed
 
 section {* Measurable functions *}
@@ -1279,6 +1406,19 @@ lemma dynkin_systemI:
   shows "dynkin_system M"
   using assms by (auto simp: dynkin_system_def dynkin_system_axioms_def subset_class_def)
 
+lemma dynkin_systemI':
+  assumes 1: "\<And> A. A \<in> sets M \<Longrightarrow> A \<subseteq> space M"
+  assumes empty: "{} \<in> sets M"
+  assumes Diff: "\<And> A. A \<in> sets M \<Longrightarrow> space M - A \<in> sets M"
+  assumes 2: "\<And> A. disjoint_family A \<Longrightarrow> range A \<subseteq> sets M
+          \<Longrightarrow> (\<Union>i::nat. A i) \<in> sets M"
+  shows "dynkin_system M"
+proof -
+  from Diff[OF empty] have "space M \<in> sets M" by auto
+  from 1 this Diff 2 show ?thesis
+    by (intro dynkin_systemI) auto
+qed
+
 lemma dynkin_system_trivial:
   shows "dynkin_system \<lparr> space = A, sets = Pow A \<rparr>"
   by (rule dynkin_systemI) auto
@@ -1295,6 +1435,14 @@ subsection "Intersection stable algebras"
 definition "Int_stable M \<longleftrightarrow> (\<forall> a \<in> sets M. \<forall> b \<in> sets M. a \<inter> b \<in> sets M)"
 
 lemma (in algebra) Int_stable: "Int_stable M"
+  unfolding Int_stable_def by auto
+
+lemma Int_stableI:
+  "(\<And>a b. a \<in> A \<Longrightarrow> b \<in> A \<Longrightarrow> a \<inter> b \<in> A) \<Longrightarrow> Int_stable \<lparr> space = \<Omega>, sets = A \<rparr>"
+  unfolding Int_stable_def by auto
+
+lemma Int_stableD:
+  "Int_stable M \<Longrightarrow> a \<in> sets M \<Longrightarrow> b \<in> sets M \<Longrightarrow> a \<inter> b \<in> sets M"
   unfolding Int_stable_def by auto
 
 lemma (in dynkin_system) sigma_algebra_eq_Int_stable:

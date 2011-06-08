@@ -10,21 +10,24 @@ signature ATP_PROOF =
 sig
   type 'a fo_term = 'a ATP_Problem.fo_term
   type ('a, 'b, 'c) formula = ('a, 'b, 'c) ATP_Problem.formula
+  type 'a problem = 'a ATP_Problem.problem
+
+  exception UNRECOGNIZED_ATP_PROOF of unit
 
   datatype failure =
     Unprovable |
-    IncompleteUnprovable |
+    GaveUp |
     ProofMissing |
     ProofIncomplete |
     UnsoundProof of bool * string list |
     CantConnect |
     TimedOut |
+    Inappropriate |
     OutOfResources |
     SpassTooOld |
     VampireTooOld |
     NoPerl |
     NoLibwwwPerl |
-    NoRealZ3 |
     MalformedInput |
     MalformedOutput |
     Interrupted |
@@ -40,7 +43,6 @@ sig
 
   type 'a proof = ('a, 'a, 'a fo_term) formula step list
 
-  val strip_spaces : (char -> bool) -> string -> string
   val short_output : bool -> string -> string
   val string_for_failure : failure -> string
   val extract_important_message : string -> string
@@ -49,8 +51,12 @@ sig
   val extract_tstplike_proof_and_outcome :
     bool -> bool -> int -> (string * string) list -> (failure * string) list
     -> string -> string * failure option
-  val is_same_step : step_name * step_name -> bool
-  val atp_proof_from_tstplike_proof : string -> string proof
+  val is_same_atp_step : step_name -> step_name -> bool
+  val scan_general_id : string list -> string * string list
+  val parse_formula :
+    string list -> (string, 'a, string fo_term) formula * string list
+  val atp_proof_from_tstplike_proof : string problem -> string -> string proof
+  val clean_up_atp_proof_dependencies : string proof -> string proof
   val map_term_names_in_atp_proof :
     (string -> string) -> string proof -> string proof
   val nasty_atp_proof : string Symtab.table -> string proof -> string proof
@@ -59,22 +65,25 @@ end;
 structure ATP_Proof : ATP_PROOF =
 struct
 
+open ATP_Util
 open ATP_Problem
+
+exception UNRECOGNIZED_ATP_PROOF of unit
 
 datatype failure =
   Unprovable |
-  IncompleteUnprovable |
+  GaveUp |
   ProofMissing |
   ProofIncomplete |
   UnsoundProof of bool * string list |
   CantConnect |
   TimedOut |
+  Inappropriate |
   OutOfResources |
   SpassTooOld |
   VampireTooOld |
   NoPerl |
   NoLibwwwPerl |
-  NoRealZ3 |
   MalformedInput |
   MalformedOutput |
   Interrupted |
@@ -82,26 +91,8 @@ datatype failure =
   InternalError |
   UnknownError of string
 
-fun strip_spaces_in_list _ [] = []
-  | strip_spaces_in_list _ [c1] = if Char.isSpace c1 then [] else [str c1]
-  | strip_spaces_in_list is_evil [c1, c2] =
-    strip_spaces_in_list is_evil [c1] @ strip_spaces_in_list is_evil [c2]
-  | strip_spaces_in_list is_evil (c1 :: c2 :: c3 :: cs) =
-    if Char.isSpace c1 then
-      strip_spaces_in_list is_evil (c2 :: c3 :: cs)
-    else if Char.isSpace c2 then
-      if Char.isSpace c3 then
-        strip_spaces_in_list is_evil (c1 :: c3 :: cs)
-      else
-        str c1 :: (if forall is_evil [c1, c3] then [" "] else []) @
-        strip_spaces_in_list is_evil (c3 :: cs)
-    else
-      str c1 :: strip_spaces_in_list is_evil (c2 :: c3 :: cs)
-fun strip_spaces is_evil =
-  implode o strip_spaces_in_list is_evil o String.explode
-
 fun is_ident_char c = Char.isAlphaNum c orelse c = #"_"
-val strip_spaces_except_between_ident_chars = strip_spaces is_ident_char
+val strip_spaces_except_between_ident_chars = strip_spaces true is_ident_char
 
 fun elide_string threshold s =
   if size s > threshold then
@@ -120,12 +111,12 @@ val missing_message_tail =
   \remote provers."
 
 fun involving [] = ""
-  | involving ss = "involving " ^ commas_quote ss ^ " "
+  | involving ss =
+    "involving " ^ space_implode " " (Try.serial_commas "and" (map quote ss)) ^
+    " "
 
-fun string_for_failure Unprovable =
-    "The problem is unprovable."
-  | string_for_failure IncompleteUnprovable =
-    "The prover gave up."
+fun string_for_failure Unprovable = "The problem is unprovable."
+  | string_for_failure GaveUp = "The prover gave up."
   | string_for_failure ProofMissing =
     "The prover claims the conjecture is a theorem but did not provide a proof."
   | string_for_failure ProofIncomplete =
@@ -142,6 +133,8 @@ fun string_for_failure Unprovable =
     \Isabelle developers."
   | string_for_failure CantConnect = "Cannot connect to remote server."
   | string_for_failure TimedOut = "Timed out."
+  | string_for_failure Inappropriate =
+    "The problem lies outside the prover's scope."
   | string_for_failure OutOfResources = "The prover ran out of resources."
   | string_for_failure SpassTooOld =
     "Isabelle requires a more recent version of SPASS with support for the \
@@ -159,12 +152,11 @@ fun string_for_failure Unprovable =
   | string_for_failure NoPerl = "Perl" ^ missing_message_tail
   | string_for_failure NoLibwwwPerl =
     "The Perl module \"libwww-perl\"" ^ missing_message_tail
-  | string_for_failure NoRealZ3 =
-    "The environment variable \"Z3_REAL_SOLVER\" must be set to Z3's full path."
   | string_for_failure MalformedInput =
     "The generated problem is malformed. Please report this to the Isabelle \
     \developers."
   | string_for_failure MalformedOutput = "The prover output is malformed."
+  | string_for_failure Interrupted = "The prover was interrupted."
   | string_for_failure Crashed = "The prover crashed."
   | string_for_failure InternalError = "An internal prover error occurred."
   | string_for_failure (UnknownError string) =
@@ -207,28 +199,26 @@ fun extract_tstplike_proof_and_outcome verbose complete res_code proof_delims
   case (extract_tstplike_proof proof_delims output,
         extract_known_failure known_failures output) of
     (_, SOME ProofIncomplete) => ("", SOME ProofIncomplete)
+  | ("", SOME ProofMissing) => ("", NONE)
   | ("", SOME failure) =>
-    ("", SOME (if failure = IncompleteUnprovable andalso complete then Unprovable
+    ("", SOME (if failure = GaveUp andalso complete then Unprovable
                else failure))
-  | ("", NONE) =>
-    ("", SOME (if res_code = 0 andalso output = "" then ProofMissing
-               else UnknownError (short_output verbose output)))
+  | ("", NONE) => ("", SOME (UnknownError (short_output verbose output)))
   | (tstplike_proof, _) => (tstplike_proof, NONE)
-
-fun mk_anot (AConn (ANot, [phi])) = phi
-  | mk_anot phi = AConn (ANot, [phi])
-fun mk_aconn c (phi1, phi2) = AConn (c, [phi1, phi2])
 
 type step_name = string * string option
 
-fun is_same_step p = p |> pairself fst |> op =
+fun is_same_atp_step (s1, _) (s2, _) = s1 = s2
+
+val vampire_fact_prefix = "f"
 
 fun step_name_ord p =
   let val q = pairself fst p in
     (* The "unprefix" part is to cope with remote Vampire's output. The proper
        solution would be to perform a topological sort, e.g. using the nice
        "Graph" functor. *)
-    case pairself (Int.fromString o perhaps (try (unprefix "f"))) q of
+    case pairself (Int.fromString
+                   o perhaps (try (unprefix vampire_fact_prefix))) q of
       (NONE, NONE) => string_ord q
     | (NONE, SOME _) => LESS
     | (SOME _, NONE) => GREATER
@@ -246,9 +236,18 @@ fun step_name (Definition (name, _, _)) = name
 
 (**** PARSING OF TSTP FORMAT ****)
 
+(* FIXME: temporary hack *)
+fun repair_waldmeister_step_name s =
+  case space_explode "." s of
+    [a, b, c, d] =>
+    (case a of "0" => "X" | "1" => "Y" | _ => "Z" ^ a) ^
+    (if size b = 1 then "0" else "") ^ b ^ c ^ d
+  | _ => s
+
 (* Strings enclosed in single quotes (e.g., file names) *)
 val scan_general_id =
-  $$ "'" |-- Scan.repeat (~$$ "'") --| $$ "'" >> implode
+  $$ "'" |-- Scan.repeat (~$$ "'") --| $$ "'"
+     >> implode >> repair_waldmeister_step_name
   || Scan.repeat ($$ "$") -- Scan.many1 Symbol.is_letdig
      >> (fn (ss1, ss2) => implode ss1 ^ implode ss2)
 
@@ -263,84 +262,170 @@ and parse_annotations x =
                   ::: Scan.repeat ($$ "," |-- parse_annotation)) []
    >> flat) x
 
-fun parse_term x =
-  (scan_general_id
-     --| Scan.option ($$ ":" -- scan_general_id) (* ignore TFF types for now *)
-     -- Scan.optional ($$ "(" |-- parse_terms --| $$ ")") []
-   >> ATerm) x
-and parse_terms x = (parse_term ::: Scan.repeat ($$ "," |-- parse_term)) x
+fun list_app (f, args) =
+  fold (fn arg => fn f => ATerm (tptp_app, [f, arg])) args f
 
-fun parse_atom x =
-  (parse_term -- Scan.option (Scan.option ($$ "!") --| $$ "=" -- parse_term)
-   >> (fn (u1, NONE) => AAtom u1
-        | (u1, SOME (NONE, u2)) => AAtom (ATerm ("c_equal", [u1, u2]))
+(* We ignore TFF and THF types for now. *)
+fun parse_type_stuff x =
+  Scan.repeat (($$ tptp_has_type || $$ tptp_fun_type) |-- parse_arg) x
+and parse_arg x =
+  ($$ "(" |-- parse_term --| $$ ")" --| parse_type_stuff
+   || scan_general_id --| parse_type_stuff
+        -- Scan.optional ($$ "(" |-- parse_terms --| $$ ")") []
+      >> ATerm) x
+and parse_app x =
+  (parse_arg -- Scan.repeat ($$ tptp_app |-- parse_arg) >> list_app) x
+and parse_term x =
+  (parse_app -- Scan.option (Scan.option ($$ tptp_not_infix) --| $$ tptp_equal
+                             -- parse_app)
+   >> (fn (u1, NONE) => u1
+        | (u1, SOME (NONE, u2)) => ATerm ("equal", [u1, u2])
         | (u1, SOME (SOME _, u2)) =>
-          mk_anot (AAtom (ATerm ("c_equal", [u1, u2]))))) x
+          ATerm (tptp_not, [ATerm ("equal", [u1, u2])]))) x
+and parse_terms x =
+  (parse_term ::: Scan.repeat ($$ "," |-- parse_term)) x
+
+(* TODO: Avoid duplication with "parse_term" above. *)
+fun parse_atom x =
+  (parse_term -- Scan.option (Scan.option ($$ tptp_not_infix) --| $$ tptp_equal
+                              -- parse_term)
+   >> (fn (u1, NONE) => AAtom u1
+        | (u1, SOME (NONE, u2)) => AAtom (ATerm ("equal", [u1, u2]))
+        | (u1, SOME (SOME _, u2)) =>
+          mk_anot (AAtom (ATerm ("equal", [u1, u2]))))) x
 
 fun fo_term_head (ATerm (s, _)) = s
 
 (* TPTP formulas are fully parenthesized, so we don't need to worry about
    operator precedence. *)
 fun parse_literal x =
-  ((Scan.repeat ($$ "~") >> length)
+  ((Scan.repeat ($$ tptp_not) >> length)
       -- ($$ "(" |-- parse_formula --| $$ ")"
           || parse_quantified_formula
           || parse_atom)
       >> (fn (n, phi) => phi |> n mod 2 = 1 ? mk_anot)) x
 and parse_formula x =
   (parse_literal
-   -- Scan.option ((Scan.this_string "=>" >> K AImplies
-                    || Scan.this_string "<=>" >> K AIff
-                    || Scan.this_string "<~>" >> K ANotIff
-                    || Scan.this_string "<=" >> K AIf
-                    || $$ "|" >> K AOr
-                    || $$ "&" >> K AAnd)
-                   -- parse_formula)
+   -- Scan.option ((Scan.this_string tptp_implies
+                    || Scan.this_string tptp_iff
+                    || Scan.this_string tptp_not_iff
+                    || Scan.this_string tptp_if
+                    || $$ tptp_or
+                    || $$ tptp_and) -- parse_formula)
    >> (fn (phi1, NONE) => phi1
-        | (phi1, SOME (c, phi2)) => mk_aconn c (phi1, phi2))) x
+        | (phi1, SOME (c, phi2)) =>
+          if c = tptp_implies then mk_aconn AImplies phi1 phi2
+          else if c = tptp_iff then mk_aconn AIff phi1 phi2
+          else if c = tptp_not_iff then mk_anot (mk_aconn AIff phi1 phi2)
+          else if c = tptp_if then mk_aconn AImplies phi2 phi1
+          else if c = tptp_or then mk_aconn AOr phi1 phi2
+          else if c = tptp_and then mk_aconn AAnd phi1 phi2
+          else raise Fail ("impossible connective " ^ quote c))) x
 and parse_quantified_formula x =
-  (($$ "!" >> K AForall || $$ "?" >> K AExists)
+  (($$ tptp_forall >> K AForall || $$ tptp_exists >> K AExists)
    --| $$ "[" -- parse_terms --| $$ "]" --| $$ ":" -- parse_literal
    >> (fn ((q, ts), phi) =>
-          (* FIXME: TFF *)
+          (* We ignore TFF and THF types for now. *)
           AQuant (q, map (rpair NONE o fo_term_head) ts, phi))) x
+
+fun skip_formula ss =
+  let
+    fun skip _ [] = []
+      | skip 0 (ss as "," :: _) = ss
+      | skip 0 (ss as ")" :: _) = ss
+      | skip 0 (ss as "]" :: _) = ss
+      | skip n ("(" :: ss) = skip (n + 1) ss
+      | skip n ("[" :: ss) = skip (n + 1) ss
+      | skip n ("]" :: ss) = skip (n - 1) ss
+      | skip n (")" :: ss) = skip (n - 1) ss
+      | skip n (_ :: ss) = skip n ss
+  in (AAtom (ATerm ("", [])), skip 0 ss) end
 
 val parse_tstp_extra_arguments =
   Scan.optional ($$ "," |-- parse_annotation
                  --| Scan.option ($$ "," |-- parse_annotations)) []
 
 val vampire_unknown_fact = "unknown"
+val waldmeister_conjecture = "conjecture_1"
+
 val tofof_fact_prefix = "fof_"
 
-(* Syntax: (cnf|fof|tff)\(<num>, <formula_role>, <formula> <extra_arguments>\).
+fun is_same_term subst tm1 tm2 =
+  let
+    fun do_term_pair _ NONE = NONE
+      | do_term_pair (ATerm (s1, tm1), ATerm (s2, tm2)) (SOME subst) =
+        case pairself is_tptp_variable (s1, s2) of
+          (true, true) =>
+          (case AList.lookup (op =) subst s1 of
+             SOME s2' => if s2' = s2 then SOME subst else NONE
+           | NONE =>
+             if null (AList.find (op =) subst s2) then SOME ((s1, s2) :: subst)
+             else NONE)
+        | (false, false) =>
+          if s1 = s2 andalso length tm1 = length tm2 then
+            SOME subst |> fold do_term_pair (tm1 ~~ tm2)
+          else
+            NONE
+        | _ => NONE
+  in SOME subst |> do_term_pair (tm1, tm2) |> is_some end
+
+fun is_same_formula subst (AQuant (q1, xs1, phi1)) (AQuant (q2, xs2, phi2)) =
+    q1 = q2 andalso length xs1 = length xs2 andalso
+    is_same_formula ((map fst xs1 ~~ map fst xs2) @ subst) phi1 phi2
+  | is_same_formula subst (AConn (c1, phis1)) (AConn (c2, phis2)) =
+    c1 = c2 andalso length phis1 = length phis2 andalso
+    forall (uncurry (is_same_formula subst)) (phis1 ~~ phis2)
+  | is_same_formula subst (AAtom (ATerm ("equal", [tm11, tm12]))) (AAtom tm2) =
+    is_same_term subst (ATerm ("equal", [tm11, tm12])) tm2 orelse
+    is_same_term subst (ATerm ("equal", [tm12, tm11])) tm2
+  | is_same_formula subst (AAtom tm1) (AAtom tm2) = is_same_term subst tm1 tm2
+  | is_same_formula _ _ _ = false
+
+fun matching_formula_line_identifier phi (Formula (ident, _, phi', _, _)) =
+    if is_same_formula [] phi phi' then SOME ident else NONE
+  | matching_formula_line_identifier _ _ = NONE
+
+fun find_formula_in_problem problem phi =
+  problem |> maps snd |> map_filter (matching_formula_line_identifier phi)
+          |> try hd
+
+(* Syntax: (cnf|fof|tff|thf)\(<num>, <formula_role>,
+            <formula> <extra_arguments>\).
    The <num> could be an identifier, but we assume integers. *)
-fun parse_tstp_line x =
-  (((Scan.this_string "cnf" || Scan.this_string "fof" || Scan.this_string "tff")
-       -- $$ "(")
-     |-- scan_general_id --| $$ "," -- Symbol.scan_id --| $$ ","
-     -- parse_formula -- parse_tstp_extra_arguments --| $$ ")" --| $$ "."
-    >> (fn (((num, role), phi), deps) =>
-           let
-             val (name, deps) =
-               case deps of
-                 ["file", _, s] =>
-                 ((num,
-                   if s = vampire_unknown_fact then NONE
-                   else SOME (s |> perhaps (try (unprefix tofof_fact_prefix)))),
-                  [])
-               | _ => ((num, NONE), deps)
-           in
-             case role of
-               "definition" =>
-               (case phi of
-                  AConn (AIff, [phi1 as AAtom _, phi2]) =>
-                  Definition (name, phi1, phi2)
-                | AAtom (ATerm ("c_equal", _)) =>
-                  (* Vampire's equality proxy axiom *)
-                  Inference (name, phi, map (rpair NONE) deps)
-                | _ => raise Fail "malformed definition")
-             | _ => Inference (name, phi, map (rpair NONE) deps)
-           end)) x
+fun parse_tstp_line problem =
+  ((Scan.this_string tptp_cnf || Scan.this_string tptp_fof
+    || Scan.this_string tptp_tff || Scan.this_string tptp_thf) -- $$ "(")
+    |-- scan_general_id --| $$ "," -- Symbol.scan_id --| $$ ","
+    -- (parse_formula || skip_formula) -- parse_tstp_extra_arguments --| $$ ")"
+    --| $$ "."
+   >> (fn (((num, role), phi), deps) =>
+          let
+            val (name, deps) =
+              (* Waldmeister isn't exactly helping. *)
+              case deps of
+                ["file", _, s] =>
+                ((num,
+                  if s = vampire_unknown_fact then
+                    NONE
+                  else if s = waldmeister_conjecture then
+                    find_formula_in_problem problem (mk_anot phi)
+                  else
+                    SOME (s |> perhaps (try (unprefix tofof_fact_prefix)))),
+                 [])
+              | ["file", _] => ((num, find_formula_in_problem problem phi), [])
+              | _ => ((num, NONE), deps)
+          in
+            case role of
+              "definition" =>
+              (case phi of
+                 AConn (AIff, [phi1 as AAtom _, phi2]) =>
+                 Definition (name, phi1, phi2)
+               | AAtom (ATerm ("equal", _)) =>
+                 (* Vampire's equality proxy axiom *)
+                 Inference (name, phi, map (rpair NONE) deps)
+               | _ => raise UNRECOGNIZED_ATP_PROOF ())
+            | _ => Inference (name, phi, map (rpair NONE) deps)
+          end)
 
 (**** PARSING OF SPASS OUTPUT ****)
 
@@ -358,11 +443,11 @@ fun parse_decorated_atom x =
   (parse_atom --| Scan.repeat ($$ "*" || $$ "+" || $$ " ")) x
 
 fun mk_horn ([], []) = AAtom (ATerm ("c_False", []))
-  | mk_horn ([], pos_lits) = foldr1 (mk_aconn AOr) pos_lits
-  | mk_horn (neg_lits, []) = mk_anot (foldr1 (mk_aconn AAnd) neg_lits)
+  | mk_horn ([], pos_lits) = foldr1 (uncurry (mk_aconn AOr)) pos_lits
+  | mk_horn (neg_lits, []) = mk_anot (foldr1 (uncurry (mk_aconn AAnd)) neg_lits)
   | mk_horn (neg_lits, pos_lits) =
-    mk_aconn AImplies (foldr1 (mk_aconn AAnd) neg_lits,
-                       foldr1 (mk_aconn AOr) pos_lits)
+    mk_aconn AImplies (foldr1 (uncurry (mk_aconn AAnd)) neg_lits)
+                      (foldr1 (uncurry (mk_aconn AOr)) pos_lits)
 
 fun parse_horn_clause x =
   (Scan.repeat parse_decorated_atom --| $$ "|" --| $$ "|"
@@ -378,29 +463,31 @@ fun parse_spass_line x =
    >> (fn ((num, deps), u) =>
           Inference ((num, NONE), u, map (rpair NONE) deps))) x
 
-fun parse_line x = (parse_tstp_line || parse_spass_line) x
-fun parse_proof s =
+fun parse_line problem = parse_tstp_line problem || parse_spass_line
+fun parse_proof problem s =
   s |> strip_spaces_except_between_ident_chars
     |> raw_explode
     |> Scan.finite Symbol.stopper
-           (Scan.error (!! (fn _ => raise Fail "unrecognized ATP output")
-                           (Scan.repeat1 parse_line)))
+           (Scan.error (!! (fn _ => raise UNRECOGNIZED_ATP_PROOF ())
+                           (Scan.repeat1 (parse_line problem))))
     |> fst
 
-fun clean_up_dependency seen dep = find_first (curry is_same_step dep) seen
+fun atp_proof_from_tstplike_proof _ "" = []
+  | atp_proof_from_tstplike_proof problem s =
+    s ^ "$" (* the $ sign acts as a sentinel (FIXME: needed?) *)
+    |> parse_proof problem
+    |> sort (step_name_ord o pairself step_name)
+
 fun clean_up_dependencies _ [] = []
   | clean_up_dependencies seen ((step as Definition (name, _, _)) :: steps) =
     step :: clean_up_dependencies (name :: seen) steps
   | clean_up_dependencies seen (Inference (name, u, deps) :: steps) =
-    Inference (name, u, map_filter (clean_up_dependency seen) deps) ::
+    Inference (name, u,
+               map_filter (fn dep => find_first (is_same_atp_step dep) seen)
+                          deps) ::
     clean_up_dependencies (name :: seen) steps
 
-fun atp_proof_from_tstplike_proof "" = []
-  | atp_proof_from_tstplike_proof s =
-    s ^ "$" (* the $ sign acts as a sentinel (FIXME: needed?) *)
-    |> parse_proof
-    |> sort (step_name_ord o pairself step_name)
-    |> clean_up_dependencies []
+fun clean_up_atp_proof_dependencies proof = clean_up_dependencies [] proof
 
 fun map_term_names_in_term f (ATerm (s, ts)) =
   ATerm (f s, map (map_term_names_in_term f) ts)

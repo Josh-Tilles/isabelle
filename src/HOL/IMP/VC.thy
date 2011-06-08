@@ -1,137 +1,146 @@
-(*  Title:      HOL/IMP/VC.thy
-    Author:     Tobias Nipkow
-
-acom: annotated commands
-vc:   verification-conditions
-awp:   weakest (liberal) precondition
-*)
-
 header "Verification Conditions"
 
-theory VC imports Hoare_Op begin
+theory VC imports Hoare begin
 
-datatype  acom = Askip
-               | Aass   loc aexp
-               | Asemi  acom acom
-               | Aif    bexp acom acom
-               | Awhile bexp assn acom
+subsection "VCG via Weakest Preconditions"
 
-primrec awp :: "acom => assn => assn"
-where
-  "awp Askip Q = Q"
-| "awp (Aass x a) Q = (\<lambda>s. Q(s[x\<mapsto>a s]))"
-| "awp (Asemi c d) Q = awp c (awp d Q)"
-| "awp (Aif b c d) Q = (\<lambda>s. (b s-->awp c Q s) & (~b s-->awp d Q s))"
-| "awp (Awhile b I c) Q = I"
+text{* Annotated commands: commands where loops are annotated with
+invariants. *}
 
-primrec vc :: "acom => assn => assn"
-where
-  "vc Askip Q = (\<lambda>s. True)"
-| "vc (Aass x a) Q = (\<lambda>s. True)"
-| "vc (Asemi c d) Q = (\<lambda>s. vc c (awp d Q) s & vc d Q s)"
-| "vc (Aif b c d) Q = (\<lambda>s. vc c Q s & vc d Q s)"
-| "vc (Awhile b I c) Q = (\<lambda>s. (I s & ~b s --> Q s) &
-                              (I s & b s --> awp c I s) & vc c I s)"
+datatype acom = Askip
+              | Aassign name aexp
+              | Asemi   acom acom
+              | Aif     bexp acom acom
+              | Awhile  bexp assn acom
 
-primrec astrip :: "acom => com"
-where
-  "astrip Askip = SKIP"
-| "astrip (Aass x a) = (x:==a)"
-| "astrip (Asemi c d) = (astrip c;astrip d)"
-| "astrip (Aif b c d) = (\<IF> b \<THEN> astrip c \<ELSE> astrip d)"
-| "astrip (Awhile b I c) = (\<WHILE> b \<DO> astrip c)"
+text{* Weakest precondition from annotated commands: *}
 
-(* simultaneous computation of vc and awp: *)
-primrec vcawp :: "acom => assn => assn \<times> assn"
-where
-  "vcawp Askip Q = (\<lambda>s. True, Q)"
-| "vcawp (Aass x a) Q = (\<lambda>s. True, \<lambda>s. Q(s[x\<mapsto>a s]))"
-| "vcawp (Asemi c d) Q = (let (vcd,wpd) = vcawp d Q;
-                              (vcc,wpc) = vcawp c wpd
-                          in (\<lambda>s. vcc s & vcd s, wpc))"
-| "vcawp (Aif b c d) Q = (let (vcd,wpd) = vcawp d Q;
-                              (vcc,wpc) = vcawp c Q
-                          in (\<lambda>s. vcc s & vcd s,
-                              \<lambda>s.(b s --> wpc s) & (~b s --> wpd s)))"
-| "vcawp (Awhile b I c) Q = (let (vcc,wpc) = vcawp c I
-                             in (\<lambda>s. (I s & ~b s --> Q s) &
-                                     (I s & b s --> wpc s) & vcc s, I))"
+fun pre :: "acom \<Rightarrow> assn \<Rightarrow> assn" where
+"pre Askip Q = Q" |
+"pre (Aassign x a) Q = (\<lambda>s. Q(s(x := aval a s)))" |
+"pre (Asemi c\<^isub>1 c\<^isub>2) Q = pre c\<^isub>1 (pre c\<^isub>2 Q)" |
+"pre (Aif b c\<^isub>1 c\<^isub>2) Q =
+  (\<lambda>s. (bval b s \<longrightarrow> pre c\<^isub>1 Q s) \<and>
+       (\<not> bval b s \<longrightarrow> pre c\<^isub>2 Q s))" |
+"pre (Awhile b I c) Q = I"
 
-(*
-Soundness and completeness of vc
-*)
+text{* Verification condition: *}
 
-declare hoare.conseq [intro]
+fun vc :: "acom \<Rightarrow> assn \<Rightarrow> assn" where
+"vc Askip Q = (\<lambda>s. True)" |
+"vc (Aassign x a) Q = (\<lambda>s. True)" |
+"vc (Asemi c\<^isub>1 c\<^isub>2) Q = (\<lambda>s. vc c\<^isub>1 (pre c\<^isub>2 Q) s \<and> vc c\<^isub>2 Q s)" |
+"vc (Aif b c\<^isub>1 c\<^isub>2) Q = (\<lambda>s. vc c\<^isub>1 Q s \<and> vc c\<^isub>2 Q s)" |
+"vc (Awhile b I c) Q =
+  (\<lambda>s. (I s \<and> \<not> bval b s \<longrightarrow> Q s) \<and>
+       (I s \<and> bval b s \<longrightarrow> pre c I s) \<and>
+       vc c I s)"
+
+text{* Strip annotations: *}
+
+fun astrip :: "acom \<Rightarrow> com" where
+"astrip Askip = SKIP" |
+"astrip (Aassign x a) = (x::=a)" |
+"astrip (Asemi c\<^isub>1 c\<^isub>2) = (astrip c\<^isub>1; astrip c\<^isub>2)" |
+"astrip (Aif b c\<^isub>1 c\<^isub>2) = (IF b THEN astrip c\<^isub>1 ELSE astrip c\<^isub>2)" |
+"astrip (Awhile b I c) = (WHILE b DO astrip c)"
 
 
-lemma vc_sound: "(ALL s. vc c Q s) \<Longrightarrow> |- {awp c Q} astrip c {Q}"
+subsection "Soundness"
+
+lemma vc_sound: "\<forall>s. vc c Q s \<Longrightarrow> \<turnstile> {pre c Q} astrip c {Q}"
 proof(induct c arbitrary: Q)
   case (Awhile b I c)
   show ?case
   proof(simp, rule While')
     from `\<forall>s. vc (Awhile b I c) Q s`
-    have vc: "ALL s. vc c I s" and IQ: "ALL s. I s \<and> \<not> b s \<longrightarrow> Q s" and
-         awp: "ALL s. I s & b s --> awp c I s" by simp_all
-    from vc have "|- {awp c I} astrip c {I}" using Awhile.hyps by blast
-    with awp show "|- {\<lambda>s. I s \<and> b s} astrip c {I}"
+    have vc: "\<forall>s. vc c I s" and IQ: "\<forall>s. I s \<and> \<not> bval b s \<longrightarrow> Q s" and
+         pre: "\<forall>s. I s \<and> bval b s \<longrightarrow> pre c I s" by simp_all
+    have "\<turnstile> {pre c I} astrip c {I}" by(rule Awhile.hyps[OF vc])
+    with pre show "\<turnstile> {\<lambda>s. I s \<and> bval b s} astrip c {I}"
       by(rule strengthen_pre)
-    show "\<forall>s. I s \<and> \<not> b s \<longrightarrow> Q s" by(rule IQ)
+    show "\<forall>s. I s \<and> \<not>bval b s \<longrightarrow> Q s" by(rule IQ)
   qed
-qed auto
+qed (auto intro: hoare.conseq)
+
+corollary vc_sound':
+  "(\<forall>s. vc c Q s) \<and> (\<forall>s. P s \<longrightarrow> pre c Q s) \<Longrightarrow> \<turnstile> {P} astrip c {Q}"
+by (metis strengthen_pre vc_sound)
 
 
-lemma awp_mono:
-  "(!s. P s --> Q s) ==> awp c P s ==> awp c Q s"
-proof (induct c arbitrary: P Q s)
+subsection "Completeness"
+
+lemma pre_mono:
+  "\<forall>s. P s \<longrightarrow> P' s \<Longrightarrow> pre c P s \<Longrightarrow> pre c P' s"
+proof (induct c arbitrary: P P' s)
   case Asemi thus ?case by simp metis
 qed simp_all
 
 lemma vc_mono:
-  "(!s. P s --> Q s) ==> vc c P s ==> vc c Q s"
-proof(induct c arbitrary: P Q)
-  case Asemi thus ?case by simp (metis awp_mono)
+  "\<forall>s. P s \<longrightarrow> P' s \<Longrightarrow> vc c P s \<Longrightarrow> vc c P' s"
+proof(induct c arbitrary: P P')
+  case Asemi thus ?case by simp (metis pre_mono)
 qed simp_all
 
-lemma vc_complete: assumes der: "|- {P}c{Q}"
-  shows "(\<exists>ac. astrip ac = c & (\<forall>s. vc ac Q s) & (\<forall>s. P s --> awp ac Q s))"
-  (is "? ac. ?Eq P c Q ac")
-using der
-proof induct
-  case skip
-  show ?case (is "? ac. ?C ac")
+lemma vc_complete:
+ "\<turnstile> {P}c{Q} \<Longrightarrow> \<exists>c'. astrip c' = c \<and> (\<forall>s. vc c' Q s) \<and> (\<forall>s. P s \<longrightarrow> pre c' Q s)"
+  (is "_ \<Longrightarrow> \<exists>c'. ?G P c Q c'")
+proof (induct rule: hoare.induct)
+  case Skip
+  show ?case (is "\<exists>ac. ?C ac")
   proof show "?C Askip" by simp qed
 next
-  case (ass P x a)
-  show ?case (is "? ac. ?C ac")
-  proof show "?C(Aass x a)" by simp qed
+  case (Assign P a x)
+  show ?case (is "\<exists>ac. ?C ac")
+  proof show "?C(Aassign x a)" by simp qed
 next
-  case (semi P c1 Q c2 R)
-  from semi.hyps obtain ac1 where ih1: "?Eq P c1 Q ac1" by fast
-  from semi.hyps obtain ac2 where ih2: "?Eq Q c2 R ac2" by fast
-  show ?case (is "? ac. ?C ac")
+  case (Semi P c1 Q c2 R)
+  from Semi.hyps obtain ac1 where ih1: "?G P c1 Q ac1" by blast
+  from Semi.hyps obtain ac2 where ih2: "?G Q c2 R ac2" by blast
+  show ?case (is "\<exists>ac. ?C ac")
   proof
     show "?C(Asemi ac1 ac2)"
-      using ih1 ih2 by simp (fast elim!: awp_mono vc_mono)
+      using ih1 ih2 by (fastsimp elim!: pre_mono vc_mono)
   qed
 next
   case (If P b c1 Q c2)
-  from If.hyps obtain ac1 where ih1: "?Eq (%s. P s & b s) c1 Q ac1" by fast
-  from If.hyps obtain ac2 where ih2: "?Eq (%s. P s & ~b s) c2 Q ac2" by fast
-  show ?case (is "? ac. ?C ac")
+  from If.hyps obtain ac1 where ih1: "?G (\<lambda>s. P s \<and> bval b s) c1 Q ac1"
+    by blast
+  from If.hyps obtain ac2 where ih2: "?G (\<lambda>s. P s \<and> \<not>bval b s) c2 Q ac2"
+    by blast
+  show ?case (is "\<exists>ac. ?C ac")
   proof
-    show "?C(Aif b ac1 ac2)"
-      using ih1 ih2 by simp
+    show "?C(Aif b ac1 ac2)" using ih1 ih2 by simp
   qed
 next
   case (While P b c)
-  from While.hyps obtain ac where ih: "?Eq (%s. P s & b s) c P ac" by fast
-  show ?case (is "? ac. ?C ac")
+  from While.hyps obtain ac where ih: "?G (\<lambda>s. P s \<and> bval b s) c P ac" by blast
+  show ?case (is "\<exists>ac. ?C ac")
   proof show "?C(Awhile b P ac)" using ih by simp qed
 next
-  case conseq thus ?case by(fast elim!: awp_mono vc_mono)
+  case conseq thus ?case by(fast elim!: pre_mono vc_mono)
 qed
 
-lemma vcawp_vc_awp: "vcawp c Q = (vc c Q, awp c Q)"
-  by (induct c arbitrary: Q) (simp_all add: Let_def)
+
+subsection "An Optimization"
+
+fun vcpre :: "acom \<Rightarrow> assn \<Rightarrow> assn \<times> assn" where
+"vcpre Askip Q = (\<lambda>s. True, Q)" |
+"vcpre (Aassign x a) Q = (\<lambda>s. True, \<lambda>s. Q(s[a/x]))" |
+"vcpre (Asemi c\<^isub>1 c\<^isub>2) Q =
+  (let (vc\<^isub>2,wp\<^isub>2) = vcpre c\<^isub>2 Q;
+       (vc\<^isub>1,wp\<^isub>1) = vcpre c\<^isub>1 wp\<^isub>2
+   in (\<lambda>s. vc\<^isub>1 s \<and> vc\<^isub>2 s, wp\<^isub>1))" |
+"vcpre (Aif b c\<^isub>1 c\<^isub>2) Q =
+  (let (vc\<^isub>2,wp\<^isub>2) = vcpre c\<^isub>2 Q;
+       (vc\<^isub>1,wp\<^isub>1) = vcpre c\<^isub>1 Q
+   in (\<lambda>s. vc\<^isub>1 s \<and> vc\<^isub>2 s, \<lambda>s. (bval b s \<longrightarrow> wp\<^isub>1 s) \<and> (\<not>bval b s \<longrightarrow> wp\<^isub>2 s)))" |
+"vcpre (Awhile b I c) Q =
+  (let (vcc,wpc) = vcpre c I
+   in (\<lambda>s. (I s \<and> \<not> bval b s \<longrightarrow> Q s) \<and>
+           (I s \<and> bval b s \<longrightarrow> wpc s) \<and> vcc s, I))"
+
+lemma vcpre_vc_pre: "vcpre c Q = (vc c Q, pre c Q)"
+by (induct c arbitrary: Q) (simp_all add: Let_def)
 
 end

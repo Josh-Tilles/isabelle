@@ -7,7 +7,7 @@ Partial function definitions based on least fixed points in ccpos.
 signature PARTIAL_FUNCTION =
 sig
   val setup: theory -> theory
-  val init: term -> term -> thm -> declaration
+  val init: string -> term -> term -> thm -> thm option -> declaration
 
   val add_partial_function: string -> (binding * typ option * mixfix) list ->
     Attrib.binding * term -> local_theory -> local_theory
@@ -22,24 +22,29 @@ struct
 
 (*** Context Data ***)
 
+datatype setup_data = Setup_Data of 
+ {fixp: term,
+  mono: term,
+  fixp_eq: thm,
+  fixp_induct: thm option};
+
 structure Modes = Generic_Data
 (
-  type T = ((term * term) * thm) Symtab.table;
+  type T = setup_data Symtab.table;
   val empty = Symtab.empty;
   val extend = I;
   fun merge data = Symtab.merge (K true) data;
 )
 
-fun init fixp mono fixp_eq phi =
+fun init mode fixp mono fixp_eq fixp_induct phi =
   let
     val term = Morphism.term phi;
-    val data' = ((term fixp, term mono), Morphism.thm phi fixp_eq);
-    val mode = (* extract mode identifier from morphism prefix! *)
-      Binding.prefix_of (Morphism.binding phi (Binding.empty))
-      |> map fst |> space_implode ".";
+    val thm = Morphism.thm phi;
+    val data' = Setup_Data 
+      {fixp=term fixp, mono=term mono, fixp_eq=thm fixp_eq,
+       fixp_induct=Option.map thm fixp_induct};
   in
-    if mode = "" then I
-    else Modes.map (Symtab.update (mode, data'))
+    Modes.map (Symtab.update (mode, data'))
   end
 
 val known_modes = Symtab.keys o Modes.get o Context.Proof;
@@ -155,17 +160,56 @@ fun uncurry_n arity = funpow (arity - 1) HOLogic.mk_split;
 val curry_uncurry_ss = HOL_basic_ss addsimps
   [@{thm Product_Type.curry_split}, @{thm Product_Type.split_curry}]
 
+val split_conv_ss = HOL_basic_ss addsimps
+  [@{thm Product_Type.split_conv}];
+
+fun mk_curried_induct args ctxt ccurry cuncurry rule =
+  let
+    val cert = Thm.cterm_of (Proof_Context.theory_of ctxt)
+    val ([P], ctxt') = Variable.variant_fixes ["P"] ctxt
+
+    val split_paired_all_conv =
+      Conv.every_conv (replicate (length args - 1) (Conv.rewr_conv @{thm split_paired_all}))
+
+    val split_params_conv = 
+      Conv.params_conv ~1 (fn ctxt' =>
+        Conv.implies_conv split_paired_all_conv Conv.all_conv)
+
+    val inst_rule =
+      cterm_instantiate' [SOME cuncurry, NONE, SOME ccurry] rule
+
+    val plain_resultT = 
+      Thm.prop_of inst_rule |> Logic.strip_imp_concl |> HOLogic.dest_Trueprop
+      |> Term.head_of |> Term.dest_Var |> snd |> range_type |> domain_type
+    val PT = map (snd o dest_Free) args ---> plain_resultT --> HOLogic.boolT
+    val x_inst = cert (foldl1 HOLogic.mk_prod args)
+    val P_inst = cert (uncurry_n (length args) (Free (P, PT)))
+
+    val inst_rule' = inst_rule
+      |> Tactic.rule_by_tactic ctxt
+        (Simplifier.simp_tac curry_uncurry_ss 4
+         THEN Simplifier.simp_tac curry_uncurry_ss 3
+         THEN CONVERSION (split_params_conv ctxt
+           then_conv (Conv.forall_conv (K split_paired_all_conv) ctxt)) 3)
+      |> Drule.instantiate' [] [NONE, NONE, SOME P_inst, SOME x_inst]
+      |> Simplifier.full_simplify split_conv_ss
+      |> singleton (Variable.export ctxt' ctxt)
+  in
+    inst_rule'
+  end;
+    
 
 (*** partial_function definition ***)
 
 fun gen_add_partial_function prep mode fixes_raw eqn_raw lthy =
   let
-    val ((fixp, mono), fixp_eq) = the (lookup_mode lthy mode)
+    val setup_data = the (lookup_mode lthy mode)
       handle Option.Option => error (cat_lines ["Unknown mode " ^ quote mode ^ ".",
         "Known modes are " ^ commas_quote (known_modes lthy) ^ "."]);
+    val Setup_Data {fixp, mono, fixp_eq, fixp_induct} = setup_data;
 
     val ((fixes, [(eq_abinding, eqn)]), _) = prep fixes_raw [eqn_raw] lthy;
-    val ((_, plain_eqn), _) = Variable.focus eqn lthy;
+    val ((_, plain_eqn), args_ctxt) = Variable.focus eqn lthy;
 
     val ((f_binding, fT), mixfix) = the_single fixes;
     val fname = Binding.name_of f_binding;
@@ -173,6 +217,7 @@ fun gen_add_partial_function prep mode fixes_raw eqn_raw lthy =
     val cert = cterm_of (Proof_Context.theory_of lthy);
     val (lhs, rhs) = HOLogic.dest_eq (HOLogic.dest_Trueprop plain_eqn);
     val (head, args) = strip_comb lhs;
+    val argnames = map (fst o dest_Free) args;
     val F = fold_rev lambda (head :: args) rhs;
 
     val arity = length args;
@@ -210,6 +255,13 @@ fun gen_add_partial_function prep mode fixes_raw eqn_raw lthy =
         OF [mono_thm, f_def])
       |> Tactic.rule_by_tactic lthy (Simplifier.simp_tac curry_uncurry_ss 1);
 
+    val mk_raw_induct =
+      mk_curried_induct args args_ctxt (cert curry) (cert uncurry)
+      #> singleton (Variable.export args_ctxt lthy)
+      #> (fn thm => Drule.instantiate' [] [SOME (cert F)] thm OF [mono_thm, f_def])
+      #> Drule.rename_bvars' (map SOME (fname :: argnames @ argnames))
+
+    val raw_induct = Option.map mk_raw_induct fixp_induct
     val rec_rule = let open Conv in
       Goal.prove lthy' (map (fst o dest_Free) args) [] eqn (fn _ =>
         CONVERSION ((arg_conv o arg1_conv o head_conv o rewr_conv) (mk_meta_eq unfold)) 1
@@ -220,6 +272,8 @@ fun gen_add_partial_function prep mode fixes_raw eqn_raw lthy =
     |-> (fn (_, rec') =>
       Spec_Rules.add Spec_Rules.Equational ([f], rec')
       #> Local_Theory.note ((Binding.qualify true fname (Binding.name "simps"), []), rec') #> snd)
+    |> (case raw_induct of NONE => I | SOME thm =>
+         Local_Theory.note ((Binding.qualify true fname (Binding.name "raw_induct"), []), [thm]) #> snd)
   end;
 
 val add_partial_function = gen_add_partial_function Specification.check_spec;

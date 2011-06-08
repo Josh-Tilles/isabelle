@@ -9,23 +9,6 @@ theory Probability_Measure
 imports Lebesgue_Integration Radon_Nikodym Finite_Product_Measure Lebesgue_Measure
 begin
 
-lemma real_of_extreal_inverse[simp]:
-  fixes X :: extreal
-  shows "real (inverse X) = 1 / real X"
-  by (cases X) (auto simp: inverse_eq_divide)
-
-lemma real_of_extreal_le_0[simp]: "real (X :: extreal) \<le> 0 \<longleftrightarrow> (X \<le> 0 \<or> X = \<infinity>)"
-  by (cases X) auto
-
-lemma abs_real_of_extreal[simp]: "\<bar>real (X :: extreal)\<bar> = real \<bar>X\<bar>"
-  by (cases X) auto
-
-lemma zero_less_real_of_extreal: "0 < real X \<longleftrightarrow> (0 < X \<and> X \<noteq> \<infinity>)"
-  by (cases X) auto
-
-lemma real_of_extreal_le_1: fixes X :: extreal shows "X \<le> 1 \<Longrightarrow> real X \<le> 1"
-  by (cases X) (auto simp: one_extreal_def)
-
 locale prob_space = measure_space +
   assumes measure_space_1: "measure M (space M) = 1"
 
@@ -40,18 +23,10 @@ abbreviation (in prob_space) "random_variable M' X \<equiv> sigma_algebra M' \<a
 abbreviation (in prob_space) "expectation \<equiv> integral\<^isup>L M"
 
 definition (in prob_space)
-  "indep A B \<longleftrightarrow> A \<in> events \<and> B \<in> events \<and> prob (A \<inter> B) = prob A * prob B"
-
-definition (in prob_space)
-  "indep_families F G \<longleftrightarrow> (\<forall> A \<in> F. \<forall> B \<in> G. indep A B)"
-
-definition (in prob_space)
   "distribution X A = \<mu>' (X -` A \<inter> space M)"
 
 abbreviation (in prob_space)
   "joint_distribution X Y \<equiv> distribution (\<lambda>x. (X x, Y x))"
-
-declare (in finite_measure) positive_measure'[intro, simp]
 
 lemma (in prob_space) distribution_cong:
   assumes "\<And>x. x \<in> space M \<Longrightarrow> X x = Y x"
@@ -83,6 +58,11 @@ lemma (in prob_space) joint_distribution_remove[simp]:
     "joint_distribution X X {(x, x)} = distribution X {x}"
   unfolding distribution_def by (auto intro!: arg_cong[where f=\<mu>'])
 
+lemma (in prob_space) measure_le_1: "X \<in> sets M \<Longrightarrow> \<mu> X \<le> 1"
+  unfolding measure_space_1[symmetric]
+  using sets_into_space
+  by (intro measure_mono) auto
+
 lemma (in prob_space) distribution_1:
   "distribution X A \<le> 1"
   unfolding distribution_def by simp
@@ -91,9 +71,6 @@ lemma (in prob_space) prob_compl:
   assumes A: "A \<in> events"
   shows "prob (space M - A) = 1 - prob A"
   using finite_measure_compl[OF A] by (simp add: prob_space)
-
-lemma (in prob_space) indep_space: "s \<in> events \<Longrightarrow> indep (space M) s"
-  by (simp add: indep_def prob_space)
 
 lemma (in prob_space) prob_space_increasing: "increasing M prob"
   by (auto intro!: finite_measure_mono simp: increasing_def)
@@ -153,15 +130,6 @@ proof (rule antisym)
     by (simp add: assms(2) suminf_zero summable_zero)
 qed simp
 
-lemma (in prob_space) indep_sym:
-   "indep a b \<Longrightarrow> indep b a"
-unfolding indep_def using Int_commute[of a b] by auto
-
-lemma (in prob_space) indep_refl:
-  assumes "a \<in> events"
-  shows "indep a a = (prob a = 0) \<or> (prob a = 1)"
-using assms unfolding indep_def by auto
-
 lemma (in prob_space) prob_equiprobable_finite_unions:
   assumes "s \<in> events"
   assumes s_finite: "finite s" "\<And>x. x \<in> s \<Longrightarrow> {x} \<in> events"
@@ -216,6 +184,37 @@ proof -
     show  "measure S (space S) = 1"
       using measure_space_1 by simp
   qed
+qed
+
+lemma prob_space_unique_Int_stable:
+  fixes E :: "('a, 'b) algebra_scheme" and A :: "nat \<Rightarrow> 'a set"
+  assumes E: "Int_stable E" "space E \<in> sets E"
+  and M: "prob_space M" "space M = space E" "sets M = sets (sigma E)"
+  and N: "prob_space N" "space N = space E" "sets N = sets (sigma E)"
+  and eq: "\<And>X. X \<in> sets E \<Longrightarrow> finite_measure.\<mu>' M X = finite_measure.\<mu>' N X"
+  assumes "X \<in> sets (sigma E)"
+  shows "finite_measure.\<mu>' M X = finite_measure.\<mu>' N X"
+proof -
+  interpret M!: prob_space M by fact
+  interpret N!: prob_space N by fact
+  have "measure M X = measure N X"
+  proof (rule measure_unique_Int_stable[OF `Int_stable E`])
+    show "range (\<lambda>i. space M) \<subseteq> sets E" "incseq (\<lambda>i. space M)" "(\<Union>i. space M) = space E"
+      using E M N by auto
+    show "\<And>i. M.\<mu> (space M) \<noteq> \<infinity>"
+      using M.measure_space_1 by simp
+    show "measure_space \<lparr>space = space E, sets = sets (sigma E), measure_space.measure = M.\<mu>\<rparr>"
+      using E M N by (auto intro!: M.measure_space_cong)
+    show "measure_space \<lparr>space = space E, sets = sets (sigma E), measure_space.measure = N.\<mu>\<rparr>"
+      using E M N by (auto intro!: N.measure_space_cong)
+    { fix X assume "X \<in> sets E"
+      then have "X \<in> sets (sigma E)"
+        by (auto simp: sets_sigma sigma_sets.Basic)
+      with eq[OF `X \<in> sets E`] M N show "M.\<mu> X = N.\<mu> X"
+        by (simp add: M.finite_measure_eq N.finite_measure_eq) }
+  qed fact
+  with `X \<in> sets (sigma E)` M N show ?thesis
+    by (simp add: M.finite_measure_eq N.finite_measure_eq)
 qed
 
 lemma (in prob_space) distribution_prob_space:
@@ -388,6 +387,50 @@ lemma (in prob_space) joint_distribution_prob_space:
   assumes "random_variable MX X" "random_variable MY Y"
   shows "prob_space ((MX \<Otimes>\<^isub>M MY) \<lparr> measure := extreal \<circ> joint_distribution X Y\<rparr>)"
   using random_variable_pairI[OF assms] by (rule distribution_prob_space)
+
+
+locale finite_product_prob_space =
+  fixes M :: "'i \<Rightarrow> ('a,'b) measure_space_scheme"
+    and I :: "'i set"
+  assumes prob_space: "\<And>i. prob_space (M i)" and finite_index: "finite I"
+
+sublocale finite_product_prob_space \<subseteq> M: prob_space "M i" for i
+  by (rule prob_space)
+
+sublocale finite_product_prob_space \<subseteq> finite_product_sigma_finite M I
+  by default (rule finite_index)
+
+sublocale finite_product_prob_space \<subseteq> prob_space "\<Pi>\<^isub>M i\<in>I. M i"
+  proof qed (simp add: measure_times M.measure_space_1 setprod_1)
+
+lemma (in finite_product_prob_space) prob_times:
+  assumes X: "\<And>i. i \<in> I \<Longrightarrow> X i \<in> sets (M i)"
+  shows "prob (\<Pi>\<^isub>E i\<in>I. X i) = (\<Prod>i\<in>I. M.prob i (X i))"
+proof -
+  have "extreal (\<mu>' (\<Pi>\<^isub>E i\<in>I. X i)) = \<mu> (\<Pi>\<^isub>E i\<in>I. X i)"
+    using X by (intro finite_measure_eq[symmetric] in_P) auto
+  also have "\<dots> = (\<Prod>i\<in>I. M.\<mu> i (X i))"
+    using measure_times X by simp
+  also have "\<dots> = extreal (\<Prod>i\<in>I. M.\<mu>' i (X i))"
+    using X by (simp add: M.finite_measure_eq setprod_extreal)
+  finally show ?thesis by simp
+qed
+
+lemma (in prob_space) random_variable_restrict:
+  assumes I: "finite I"
+  assumes X: "\<And>i. i \<in> I \<Longrightarrow> random_variable (N i) (X i)"
+  shows "random_variable (Pi\<^isub>M I N) (\<lambda>x. \<lambda>i\<in>I. X i x)"
+proof
+  { fix i assume "i \<in> I"
+    with X interpret N: sigma_algebra "N i" by simp
+    have "sets (N i) \<subseteq> Pow (space (N i))" by (rule N.space_closed) }
+  note N_closed = this
+  then show "sigma_algebra (Pi\<^isub>M I N)"
+    by (simp add: product_algebra_def)
+       (intro sigma_algebra_sigma product_algebra_generator_sets_into_space)
+  show "(\<lambda>x. \<lambda>i\<in>I. X i x) \<in> measurable M (Pi\<^isub>M I N)"
+    using X by (intro measurable_restrict[OF I N_closed]) auto
+qed
 
 section "Probability spaces on finite sets"
 
@@ -1016,10 +1059,6 @@ proof -
     finally show "max 0 (Z x) = (SUP i. g i (Y x))" .
   qed
 qed
-
-lemma extreal_0_le_iff_le_0[simp]:
-  fixes a :: extreal shows "0 \<le> -a \<longleftrightarrow> a \<le> 0"
-  by (cases rule: extreal2_cases[of a]) auto
 
 lemma (in sigma_algebra) factorize_measurable_function:
   fixes Z :: "'a \<Rightarrow> extreal" and Y :: "'a \<Rightarrow> 'c"

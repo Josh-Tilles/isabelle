@@ -8,6 +8,7 @@ signature SLEDGEHAMMER_ISAR =
 sig
   type params = Sledgehammer_Provers.params
 
+  val sledgehammerN : string
   val auto : bool Unsynchronized.ref
   val provers : string Unsynchronized.ref
   val timeout : int Unsynchronized.ref
@@ -20,11 +21,22 @@ structure Sledgehammer_Isar : SLEDGEHAMMER_ISAR =
 struct
 
 open ATP_Systems
+open ATP_Translate
 open Sledgehammer_Util
-open Sledgehammer_ATP_Translate
 open Sledgehammer_Provers
 open Sledgehammer_Minimize
 open Sledgehammer_Run
+
+val sledgehammerN = "sledgehammer"
+val sledgehammer_paramsN = "sledgehammer_params"
+
+val runN = "run"
+val minN = "min"
+val messagesN = "messages"
+val supported_proversN = "supported_provers"
+val running_proversN = "running_provers"
+val kill_proversN = "kill_provers"
+val refresh_tptpN = "refresh_tptp"
 
 val auto = Unsynchronized.ref false
 
@@ -84,10 +96,10 @@ val default_default_params =
    ("max_relevant", "smart"),
    ("max_mono_iters", "3"),
    ("max_new_mono_instances", "400"),
-   ("explicit_apply", "false"),
    ("isar_proof", "false"),
    ("isar_shrink_factor", "1"),
-   ("slicing", "true")]
+   ("slicing", "true"),
+   ("preplay_timeout", "4")]
 
 val alias_params =
   [("prover", "provers"),
@@ -99,13 +111,13 @@ val negated_alias_params =
    ("no_overlord", "overlord"),
    ("non_blocking", "blocking"),
    ("partial_types", "full_types"),
-   ("implicit_apply", "explicit_apply"),
    ("no_isar_proof", "isar_proof"),
    ("no_slicing", "slicing")]
 
 val params_for_minimize =
   ["debug", "verbose", "overlord", "type_sys", "full_types", "max_mono_iters",
-   "max_new_mono_instances", "isar_proof", "isar_shrink_factor", "timeout"]
+   "max_new_mono_instances", "isar_proof", "isar_shrink_factor", "timeout",
+   "preplay_timeout"]
 
 val property_dependent_params = ["provers", "full_types", "timeout"]
 
@@ -143,6 +155,12 @@ fun unalias_raw_param (name, value) =
                             | _ => value)
     | NONE => (name, value)
 
+(* Ensure that type systems such as "simple!" and "mangled_preds?" are handled
+   correctly. *)
+fun implode_param [s, "?"] = s ^ "?"
+  | implode_param [s, "!"] = s ^ "!"
+  | implode_param ss = space_implode " " ss
+
 structure Data = Theory_Data
 (
   type T = raw_param list
@@ -165,27 +183,33 @@ fun remotify_prover_if_not_installed ctxt name =
   else
     remotify_prover_if_supported_and_not_already_remote ctxt name
 
-fun avoid_too_many_local_threads _ _ [] = []
-  | avoid_too_many_local_threads ctxt 0 provers =
-    map_filter (remotify_prover_if_supported_and_not_already_remote ctxt)
-               provers
-  | avoid_too_many_local_threads ctxt n (prover :: provers) =
-    let val n = if String.isPrefix remote_prefix prover then n else n - 1 in
-      prover :: avoid_too_many_local_threads ctxt n provers
-    end
+fun avoid_too_many_threads _ _ [] = []
+  | avoid_too_many_threads _ (0, 0) _ = []
+  | avoid_too_many_threads ctxt (0, max_remote) provers =
+    provers
+    |> map_filter (remotify_prover_if_supported_and_not_already_remote ctxt)
+    |> take max_remote
+  | avoid_too_many_threads _ (max_local, 0) provers =
+    provers
+    |> filter_out (String.isPrefix remote_prefix)
+    |> take max_local
+  | avoid_too_many_threads ctxt max_local_and_remote (prover :: provers) =
+    let
+      val max_local_and_remote =
+        max_local_and_remote
+        |> (if String.isPrefix remote_prefix prover then apsnd else apfst)
+              (Integer.add ~1)
+    in prover :: avoid_too_many_threads ctxt max_local_and_remote provers end
 
-(* Ensure that type systems such as "simple!" and "mangled_preds?" are handled
-   correctly. *)
-fun implode_param [s, "?"] = s ^ "?"
-  | implode_param [s, "!"] = s ^ "!"
-  | implode_param ss = space_implode " " ss
+val max_default_remote_threads = 4
 
 (* The first ATP of the list is used by Auto Sledgehammer. Because of the low
    timeout, it makes sense to put SPASS first. *)
 fun default_provers_param_value ctxt =
-  [spassN, eN, vampireN, sine_eN, SMT_Solver.solver_name_of ctxt]
+  [spassN, eN, vampireN, SMT_Solver.solver_name_of ctxt, sine_eN, waldmeisterN]
   |> map_filter (remotify_prover_if_not_installed ctxt)
-  |> avoid_too_many_local_threads ctxt (Multithreading.max_threads_value ())
+  |> avoid_too_many_threads ctxt (Multithreading.max_threads_value (),
+                                  max_default_remote_threads)
   |> implode_param
 
 val set_default_raw_param = Data.map o AList.update (op =) o unalias_raw_param
@@ -206,7 +230,7 @@ fun default_raw_params ctxt =
 val infinity_time_in_secs = 60 * 60 * 24 * 365
 val the_timeout = the_default (Time.fromSeconds infinity_time_in_secs)
 
-fun extract_params auto default_params override_params =
+fun extract_params mode default_params override_params =
   let
     val override_params = map unalias_raw_param override_params
     val raw_params = rev override_params @ rev default_params
@@ -236,57 +260,53 @@ fun extract_params auto default_params override_params =
                   | _ => error ("Parameter " ^ quote name ^
                                 "must be assigned a pair of floating-point \
                                 \values (e.g., \"0.6 0.95\")")
-    fun lookup_int_option name =
+    fun lookup_option lookup' name =
       case lookup name of
         SOME "smart" => NONE
-      | _ => SOME (lookup_int name)
-    val debug = not auto andalso lookup_bool "debug"
-    val verbose = debug orelse (not auto andalso lookup_bool "verbose")
+      | _ => SOME (lookup' name)
+    val debug = mode <> Auto_Try andalso lookup_bool "debug"
+    val verbose = debug orelse (mode <> Auto_Try andalso lookup_bool "verbose")
     val overlord = lookup_bool "overlord"
-    val blocking = auto orelse debug orelse lookup_bool "blocking"
+    val blocking =
+      Isabelle_Process.is_active () orelse mode <> Normal orelse debug orelse
+      lookup_bool "blocking"
     val provers = lookup_string "provers" |> space_explode " "
-                  |> auto ? single o hd
+                  |> mode = Auto_Try ? single o hd
     val type_sys =
-      if auto then
+      if mode = Auto_Try then
         Smart_Type_Sys true
       else case lookup_string "type_sys" of
-        "smart" => Smart_Type_Sys (lookup_bool "full_types")
+        "smart" => Smart_Type_Sys (mode = Try orelse lookup_bool "full_types")
       | s => Dumb_Type_Sys (type_sys_from_string s)
     val relevance_thresholds = lookup_real_pair "relevance_thresholds"
-    val max_relevant = lookup_int_option "max_relevant"
+    val max_relevant = lookup_option lookup_int "max_relevant"
     val max_mono_iters = lookup_int "max_mono_iters"
     val max_new_mono_instances = lookup_int "max_new_mono_instances"
-    val explicit_apply = lookup_bool "explicit_apply"
     val isar_proof = lookup_bool "isar_proof"
     val isar_shrink_factor = Int.max (1, lookup_int "isar_shrink_factor")
-    val slicing = not auto andalso lookup_bool "slicing"
-    val timeout = (if auto then NONE else lookup_time "timeout") |> the_timeout
+    val slicing = mode <> Auto_Try andalso lookup_bool "slicing"
+    val timeout =
+      (if mode = Auto_Try then NONE else lookup_time "timeout") |> the_timeout
+    val preplay_timeout =
+      if mode = Auto_Try then Time.zeroTime
+      else lookup_time "preplay_timeout" |> the_timeout
     val expect = lookup_string "expect"
   in
     {debug = debug, verbose = verbose, overlord = overlord, blocking = blocking,
      provers = provers, relevance_thresholds = relevance_thresholds,
      max_relevant = max_relevant, max_mono_iters = max_mono_iters,
      max_new_mono_instances = max_new_mono_instances, type_sys = type_sys,
-     explicit_apply = explicit_apply, isar_proof = isar_proof,
-     isar_shrink_factor = isar_shrink_factor, slicing = slicing,
-     timeout = timeout, expect = expect}
+     isar_proof = isar_proof, isar_shrink_factor = isar_shrink_factor,
+     slicing = slicing, timeout = timeout, preplay_timeout = preplay_timeout,
+     expect = expect}
   end
 
-fun get_params auto ctxt = extract_params auto (default_raw_params ctxt)
-fun default_params thy = get_params false thy o map (apsnd single)
+fun get_params mode ctxt = extract_params mode (default_raw_params ctxt)
+fun default_params thy = get_params Normal thy o map (apsnd single)
 
 (* Sledgehammer the given subgoal *)
 
-val sledgehammerN = "sledgehammer"
-val sledgehammer_paramsN = "sledgehammer_params"
-
-val runN = "run"
-val minimizeN = "minimize"
-val messagesN = "messages"
-val supported_proversN = "supported_provers"
-val running_proversN = "running_provers"
-val kill_proversN = "kill_provers"
-val refresh_tptpN = "refresh_tptp"
+val default_minimize_prover = Metis_Tactics.metisN
 
 val is_raw_param_relevant_for_minimize =
   member (op =) params_for_minimize o fst o unalias_raw_param
@@ -294,11 +314,19 @@ fun string_for_raw_param (key, values) =
   key ^ (case implode_param values of "" => "" | value => " = " ^ value)
 
 fun minimize_command override_params i prover_name fact_names =
-  sledgehammerN ^ " " ^ minimizeN ^ " [prover = " ^ prover_name ^
-  (override_params |> filter is_raw_param_relevant_for_minimize
-                   |> implode o map (prefix ", " o string_for_raw_param)) ^
-  "] (" ^ space_implode " " fact_names ^ ")" ^
-  (if i = 1 then "" else " " ^ string_of_int i)
+  let
+    val params =
+      override_params
+      |> filter is_raw_param_relevant_for_minimize
+      |> map string_for_raw_param
+      |> (if prover_name = default_minimize_prover then I else cons prover_name)
+      |> space_implode ", "
+  in
+    sledgehammerN ^ " " ^ minN ^
+    (if params = "" then "" else enclose " [" "]" params) ^
+    " (" ^ space_implode " " fact_names ^ ")" ^
+    (if i = 1 then "" else " " ^ string_of_int i)
+  end
 
 fun hammer_away override_params subcommand opt_i relevance_override state =
   let
@@ -308,14 +336,16 @@ fun hammer_away override_params subcommand opt_i relevance_override state =
   in
     if subcommand = runN then
       let val i = the_default 1 opt_i in
-        run_sledgehammer (get_params false ctxt override_params) false i
+        run_sledgehammer (get_params Normal ctxt override_params) Normal i
                          relevance_override (minimize_command override_params i)
                          state
         |> K ()
       end
-    else if subcommand = minimizeN then
-      run_minimize (get_params false ctxt override_params) (the_default 1 opt_i)
-                   (#add relevance_override) state
+    else if subcommand = minN then
+      run_minimize (get_params Minimize ctxt
+                               (("provers", [default_minimize_prover]) ::
+                                override_params))
+                   (the_default 1 opt_i) (#add relevance_override) state
     else if subcommand = messagesN then
       messages opt_i
     else if subcommand = supported_proversN then
@@ -352,7 +382,7 @@ fun sledgehammer_params_trans params =
 
 val parse_key =
   Scan.repeat1 (Parse.typ_group || Parse.$$$ "?" || Parse.$$$ "!")
-               >> implode_param
+  >> implode_param
 val parse_value =
   Scan.repeat1 (Parse.xname || Parse.float_number || Parse.$$$ "?"
                 || Parse.$$$ "!")
@@ -383,12 +413,16 @@ val _ =
       "set and display the default parameters for Sledgehammer" Keyword.thy_decl
       parse_sledgehammer_params_command
 
-fun auto_sledgehammer state =
-  let val ctxt = Proof.context_of state in
-    run_sledgehammer (get_params true ctxt []) true 1 no_relevance_override
-                     (minimize_command [] 1) state
+fun try_sledgehammer auto state =
+  let
+    val ctxt = Proof.context_of state
+    val mode = if auto then Auto_Try else Try
+    val i = 1
+  in
+    run_sledgehammer (get_params mode ctxt []) mode i no_relevance_override
+                     (minimize_command [] i) state
   end
 
-val setup = Auto_Tools.register_tool (auto, auto_sledgehammer)
+val setup = Try.register_tool (sledgehammerN, (40, auto, try_sledgehammer))
 
 end;

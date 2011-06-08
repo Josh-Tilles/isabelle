@@ -1317,14 +1317,19 @@ text {*
   \begin{matharray}{rcl}
     @{command_def (HOL) "solve_direct"}@{text "\<^sup>*"} & : & @{text "proof \<rightarrow>"} \\
     @{command_def (HOL) "try"}@{text "\<^sup>*"} & : & @{text "proof \<rightarrow>"} \\
+    @{command_def (HOL) "try_methods"}@{text "\<^sup>*"} & : & @{text "proof \<rightarrow>"} \\
     @{command_def (HOL) "sledgehammer"}@{text "\<^sup>*"} & : & @{text "proof \<rightarrow>"} \\
     @{command_def (HOL) "sledgehammer_params"} & : & @{text "theory \<rightarrow> theory"}
   \end{matharray}
 
   @{rail "
-    @@{command (HOL) try} ( ( ( 'simp' | 'intro' | 'elim' | 'dest' ) ':' @{syntax thmrefs} ) + ) ?
+    @@{command (HOL) try}
+    ;
+
+    @@{command (HOL) try_methods} ( ( ( 'simp' | 'intro' | 'elim' | 'dest' ) ':' @{syntax thmrefs} ) + ) ?
       @{syntax nat}?
     ;
+
     @@{command (HOL) sledgehammer} ( '[' args ']' )? facts? @{syntax nat}?
     ;
 
@@ -1336,8 +1341,7 @@ text {*
 
     facts: '(' ( ( ( ( 'add' | 'del' ) ':' ) ? @{syntax thmrefs} ) + ) ? ')'
     ;
-  "} % FIXME try: proper clasimpmod!?
-  % FIXME check args "value"
+  "} % FIXME check args "value"
 
   \begin{description}
 
@@ -1345,7 +1349,7 @@ text {*
     be solved directly by an existing theorem. Duplicate lemmas can be detected
     in this way.
 
-  \item @{command (HOL) "try"} attempts to prove a subgoal using a combination
+  \item @{command (HOL) "try_methods"} attempts to prove a subgoal using a combination
     of standard proof methods (@{text auto}, @{text simp}, @{text blast}, etc.).
     Additional facts supplied via @{text "simp:"}, @{text "intro:"},
     @{text "elim:"}, and @{text "dest:"} are passed to the appropriate proof

@@ -10,20 +10,20 @@ type Pos = [Int];
 
 -- Term refinement
 
-new :: Pos -> [[Type]] -> [Terma];
+new :: Pos -> [[Narrowing_type]] -> [Narrowing_term];
 new p ps = [ Ctr c (zipWith (\i t -> Var (p++[i]) t) [0..] ts)
            | (c, ts) <- zip [0..] ps ];
 
-refine :: Terma -> Pos -> [Terma];
+refine :: Narrowing_term -> Pos -> [Narrowing_term];
 refine (Var p (SumOfProd ss)) [] = new p ss;
 refine (Ctr c xs) p = map (Ctr c) (refineList xs p);
 
-refineList :: [Terma] -> Pos -> [[Terma]];
+refineList :: [Narrowing_term] -> Pos -> [[Narrowing_term]];
 refineList xs (i:is) = let (ls, x:rs) = splitAt i xs in [ls ++ y:rs | y <- refine x is];
 
 -- Find total instantiations of a partial value
 
-total :: Terma -> [Terma];
+total :: Narrowing_term -> [Narrowing_term];
 total (Ctr c xs) = [Ctr c ys | ys <- mapM total xs];
 total (Var p (SumOfProd ss)) = [y | x <- new p ss, y <- total x];
 
@@ -42,13 +42,13 @@ answer a known unknown =
 str_of_list [] = "[]";
 str_of_list (x:xs) = "(" ++ x ++ " :: " ++ str_of_list xs ++ ")";
 
-report :: Result -> [Terma] -> IO Int;
-report r xs = putStrLn ("SOME (" ++ (str_of_list $ zipWith ($) (showArgs r) $ head [ys | ys <- mapM total xs]) ++ ")") >> hFlush stdout >> exitWith ExitSuccess;
+report :: Result -> [Narrowing_term] -> IO Int;
+report r xs = putStrLn ("SOME (" ++ (str_of_list $ zipWith ($) (showArgs r) xs) ++ ")") >> hFlush stdout >> exitWith ExitSuccess;
 
 eval :: Bool -> (Bool -> IO a) -> (Pos -> IO a) -> IO a;
 eval p k u = answer p (\p -> answer p k u) u;
 
-ref :: Result -> [Terma] -> IO Int;
+ref :: Result -> [Narrowing_term] -> IO Int;
 ref r xs = eval (apply_fun r xs) (\res -> if res then return 1 else report r xs) (\p -> sumMapM (ref r) 1 (refineList xs p));
           
 refute :: Result -> IO Int;
@@ -67,34 +67,35 @@ instance Show Typerep where {
 instance Show Term where {
   show (Const c t) = "Const (\"" ++ c ++ "\", " ++ show t ++ ")";
   show (App s t) = "(" ++ show s ++ ") $ (" ++ show t ++ ")";
-  show (Abs s ty t) = "Abs (\"" ++ s ++ "\", " ++ show ty ++ ", " ++ show t ++ ")";  
+  show (Abs s ty t) = "Abs (\"" ++ s ++ "\", " ++ show ty ++ ", " ++ show t ++ ")";
+  show (Free s ty) = "Free (\"" ++ s ++  "\", " ++ show ty ++ ")";
 };
 
 data Result =
-  Result { args     :: [Terma]
-         , showArgs :: [Terma -> String]
-         , apply_fun    :: [Terma] -> Bool
+  Result { args     :: [Narrowing_term]
+         , showArgs :: [Narrowing_term -> String]
+         , apply_fun    :: [Narrowing_term] -> Bool
          };
 
 data P = P (Int -> Int -> Result);
 
-run :: Testable a => ([Terma] -> a) -> Int -> Int -> Result;
+run :: Testable a => ([Narrowing_term] -> a) -> Int -> Int -> Result;
 run a = let P f = property a in f;
 
 class Testable a where {
-  property :: ([Terma] -> a) -> P;
+  property :: ([Narrowing_term] -> a) -> P;
 };
 
 instance Testable Bool where {
   property app = P $ \n d -> Result [] [] (app . reverse);
 };
 
-instance (Term_of a, Narrowing a, Testable b) => Testable (a -> b) where {
+instance (Partial_term_of a, Narrowing a, Testable b) => Testable (a -> b) where {
   property f = P $ \n d ->
     let C t c = narrowing d
         c' = conv c
         r = run (\(x:xs) -> f xs (c' x)) (n+1) d
-    in  r { args = Var [n] t : args r, showArgs = (show . term_of . c') : showArgs r };
+    in  r { args = Var [n] t : args r, showArgs = (show . partial_term_of (Type :: Itself a)) : showArgs r };
 };
 
 -- Top-level interface

@@ -9,441 +9,53 @@ Translation of HOL to FOL for Metis.
 
 signature METIS_TRANSLATE =
 sig
-  type name = string * string
+  type type_literal = ATP_Translate.type_literal
 
-  datatype type_literal =
-    TyLitVar of name * name |
-    TyLitFree of name * name
-  datatype arity_literal =
-    TConsLit of name * name * name list |
-    TVarLit of name * name
-  datatype arity_clause =
-    ArityClause of
-      {name: string,
-       prem_lits: arity_literal list,
-       concl_lits: arity_literal}
-  datatype class_rel_clause =
-    ClassRelClause of {name: string, subclass: name, superclass: name}
-  datatype combterm =
-    CombConst of name * typ * typ list (* Const and Free *) |
-    CombVar of name * typ |
-    CombApp of combterm * combterm
-  datatype fol_literal = FOLLiteral of bool * combterm
+  datatype isa_thm =
+    Isa_Reflexive_or_Trivial |
+    Isa_Raw of thm
 
-  datatype mode = FO | HO | FT
-  type metis_problem =
-    {axioms: (Metis_Thm.thm * thm) list,
-     tfrees: type_literal list,
-     old_skolems: (string * term) list}
-
+  val metis_equal : string
+  val metis_predicator : string
+  val metis_app_op : string
+  val metis_type_tag : string
   val metis_generated_var_prefix : string
-  val type_tag_name : string
-  val bound_var_prefix : string
-  val schematic_var_prefix: string
-  val fixed_var_prefix: string
-  val tvar_prefix: string
-  val tfree_prefix: string
-  val const_prefix: string
-  val type_const_prefix: string
-  val class_prefix: string
-  val new_skolem_const_prefix : string
-  val proxify_const : string -> (string * string) option
-  val invert_const: string -> string
-  val unproxify_const: string -> string
-  val ascii_of: string -> string
-  val unascii_of: string -> string
-  val strip_prefix_and_unascii: string -> string -> string option
-  val make_bound_var : string -> string
-  val make_schematic_var : string * int -> string
-  val make_fixed_var : string -> string
-  val make_schematic_type_var : string * int -> string
-  val make_fixed_type_var : string -> string
-  val make_fixed_const : string -> string
-  val make_fixed_type_const : string -> string
-  val make_type_class : string -> string
-  val num_type_args: theory -> string -> int
-  val new_skolem_var_name_from_const : string -> string
-  val type_literals_for_types : typ list -> type_literal list
-  val make_class_rel_clauses :
-    theory -> class list -> class list -> class_rel_clause list
-  val make_arity_clauses :
-    theory -> string list -> class list -> class list * arity_clause list
-  val combtyp_of : combterm -> typ
-  val strip_combterm_comb : combterm -> combterm * combterm list
-  val atyps_of : typ -> typ list
-  val combterm_from_term :
-    theory -> (string * typ) list -> term -> combterm * typ list
+  val trace : bool Config.T
+  val verbose : bool Config.T
+  val trace_msg : Proof.context -> (unit -> string) -> unit
+  val verbose_warning : Proof.context -> string -> unit
+  val metis_name_table : ((string * int) * (string * bool)) list
   val reveal_old_skolem_terms : (string * term) list -> term -> term
-  val tfree_classes_of_terms : term list -> string list
-  val tvar_classes_of_terms : term list -> string list
-  val type_consts_of_terms : theory -> term list -> string list
-  val string_of_mode : mode -> string
-  val metis_helpers : (string * (bool * thm list)) list
   val prepare_metis_problem :
-    mode -> Proof.context -> bool -> thm list -> thm list list
-    -> mode * metis_problem
+    Proof.context -> string -> thm list -> thm list
+    -> int Symtab.table * (Metis_Thm.thm * isa_thm) list * (string * term) list
 end
 
 structure Metis_Translate : METIS_TRANSLATE =
 struct
 
+open ATP_Problem
+open ATP_Translate
+
+val metis_equal = "="
+val metis_predicator = "{}"
+val metis_app_op = "."
+val metis_type_tag = ":"
 val metis_generated_var_prefix = "_"
 
-val type_tag_name = "ti"
-
-val bound_var_prefix = "B_"
-val schematic_var_prefix = "V_"
-val fixed_var_prefix = "v_"
-
-val tvar_prefix = "T_";
-val tfree_prefix = "t_";
-
-val const_prefix = "c_";
-val type_const_prefix = "tc_";
-val class_prefix = "class_";
-
-val skolem_const_prefix = "Sledgehammer" ^ Long_Name.separator ^ "Sko"
-val old_skolem_const_prefix = skolem_const_prefix ^ "o"
-val new_skolem_const_prefix = skolem_const_prefix ^ "n"
-
-fun union_all xss = fold (union (op =)) xss []
-
-val metis_proxies =
-  [("c_False", (@{const_name False}, ("fFalse", @{const_name Metis.fFalse}))),
-   ("c_True", (@{const_name True}, ("fTrue", @{const_name Metis.fTrue}))),
-   ("c_Not", (@{const_name Not}, ("fNot", @{const_name Metis.fNot}))),
-   ("c_conj", (@{const_name conj}, ("fconj", @{const_name Metis.fconj}))),
-   ("c_disj", (@{const_name disj}, ("fdisj", @{const_name Metis.fdisj}))),
-   ("c_implies", (@{const_name implies},
-                  ("fimplies", @{const_name Metis.fimplies}))),
-   ("equal", (@{const_name HOL.eq}, ("fequal", @{const_name Metis.fequal})))]
-
-val proxify_const = AList.lookup (op =) metis_proxies #> Option.map snd
-
-(* Readable names for the more common symbolic functions. Do not mess with the
-   table unless you know what you are doing. *)
-val const_trans_table =
-  [(@{type_name Product_Type.prod}, "prod"),
-   (@{type_name Sum_Type.sum}, "sum"),
-   (@{const_name False}, "False"),
-   (@{const_name True}, "True"),
-   (@{const_name Not}, "Not"),
-   (@{const_name conj}, "conj"),
-   (@{const_name disj}, "disj"),
-   (@{const_name implies}, "implies"),
-   (@{const_name HOL.eq}, "equal"),
-   (@{const_name If}, "If"),
-   (@{const_name Set.member}, "member"),
-   (@{const_name Meson.COMBI}, "COMBI"),
-   (@{const_name Meson.COMBK}, "COMBK"),
-   (@{const_name Meson.COMBB}, "COMBB"),
-   (@{const_name Meson.COMBC}, "COMBC"),
-   (@{const_name Meson.COMBS}, "COMBS")]
-  |> Symtab.make
-  |> fold (Symtab.update o swap o snd o snd) metis_proxies
-
-(* Invert the table of translations between Isabelle and Metis. *)
-val const_trans_table_inv =
-  const_trans_table |> Symtab.dest |> map swap |> Symtab.make
-val const_trans_table_unprox =
-  Symtab.empty
-  |> fold (fn (_, (isa, (_, metis))) => Symtab.update (metis, isa))
-          metis_proxies
-
-val invert_const = perhaps (Symtab.lookup const_trans_table_inv)
-val unproxify_const = perhaps (Symtab.lookup const_trans_table_unprox)
-
-(*Escaping of special characters.
-  Alphanumeric characters are left unchanged.
-  The character _ goes to __
-  Characters in the range ASCII space to / go to _A to _P, respectively.
-  Other characters go to _nnn where nnn is the decimal ASCII code.*)
-val A_minus_space = Char.ord #"A" - Char.ord #" ";
-
-fun stringN_of_int 0 _ = ""
-  | stringN_of_int k n = stringN_of_int (k-1) (n div 10) ^ string_of_int (n mod 10);
-
-fun ascii_of_c c =
-  if Char.isAlphaNum c then String.str c
-  else if c = #"_" then "__"
-  else if #" " <= c andalso c <= #"/"
-       then "_" ^ String.str (Char.chr (Char.ord c + A_minus_space))
-  else ("_" ^ stringN_of_int 3 (Char.ord c))  (*fixed width, in case more digits follow*)
-
-val ascii_of = String.translate ascii_of_c;
-
-(** Remove ASCII armouring from names in proof files **)
-
-(*We don't raise error exceptions because this code can run inside the watcher.
-  Also, the errors are "impossible" (hah!)*)
-fun unascii_aux rcs [] = String.implode(rev rcs)
-  | unascii_aux rcs [#"_"] = unascii_aux (#"_"::rcs) []  (*ERROR*)
-      (*Three types of _ escapes: __, _A to _P, _nnn*)
-  | unascii_aux rcs (#"_" :: #"_" :: cs) = unascii_aux (#"_"::rcs) cs
-  | unascii_aux rcs (#"_" :: c :: cs) =
-      if #"A" <= c andalso c<= #"P"  (*translation of #" " to #"/"*)
-      then unascii_aux (Char.chr(Char.ord c - A_minus_space) :: rcs) cs
-      else
-        let val digits = List.take (c::cs, 3) handle Subscript => []
-        in
-            case Int.fromString (String.implode digits) of
-                NONE => unascii_aux (c:: #"_"::rcs) cs  (*ERROR*)
-              | SOME n => unascii_aux (Char.chr n :: rcs) (List.drop (cs, 2))
-        end
-  | unascii_aux rcs (c::cs) = unascii_aux (c::rcs) cs
-val unascii_of = unascii_aux [] o String.explode
-
-(* If string s has the prefix s1, return the result of deleting it,
-   un-ASCII'd. *)
-fun strip_prefix_and_unascii s1 s =
-  if String.isPrefix s1 s then
-    SOME (unascii_of (String.extract (s, size s1, NONE)))
-  else
-    NONE
-
-(*Remove the initial ' character from a type variable, if it is present*)
-fun trim_type_var s =
-  if s <> "" andalso String.sub(s,0) = #"'" then String.extract(s,1,NONE)
-  else raise Fail ("trim_type: Malformed type variable encountered: " ^ s)
-
-fun ascii_of_indexname (v,0) = ascii_of v
-  | ascii_of_indexname (v,i) = ascii_of v ^ "_" ^ string_of_int i;
-
-fun make_bound_var x = bound_var_prefix ^ ascii_of x
-fun make_schematic_var v = schematic_var_prefix ^ ascii_of_indexname v
-fun make_fixed_var x = fixed_var_prefix ^ ascii_of x
-
-fun make_schematic_type_var (x,i) =
-      tvar_prefix ^ (ascii_of_indexname (trim_type_var x,i));
-fun make_fixed_type_var x = tfree_prefix ^ (ascii_of (trim_type_var x));
-
-fun lookup_const c =
-  case Symtab.lookup const_trans_table c of
-    SOME c' => c'
-  | NONE => ascii_of c
-
-(* HOL.eq MUST BE "equal" because it's built into ATPs. *)
-fun make_fixed_const @{const_name HOL.eq} = "equal"
-  | make_fixed_const c = const_prefix ^ lookup_const c
-
-fun make_fixed_type_const c = type_const_prefix ^ lookup_const c
-
-fun make_type_class clas = class_prefix ^ ascii_of clas;
-
-(* The number of type arguments of a constant, zero if it's monomorphic. For
-   (instances of) Skolem pseudoconstants, this information is encoded in the
-   constant name. *)
-fun num_type_args thy s =
-  if String.isPrefix skolem_const_prefix s then
-    s |> space_explode Long_Name.separator |> List.last |> Int.fromString |> the
-  else
-    (s, Sign.the_const_type thy s) |> Sign.const_typargs thy |> length
-
-fun new_skolem_var_name_from_const s =
-  let val ss = s |> space_explode Long_Name.separator in
-    nth ss (length ss - 2)
-  end
-
-
-(**** Definitions and functions for FOL clauses for TPTP format output ****)
-
-type name = string * string
-
-(**** Isabelle FOL clauses ****)
-
-(* The first component is the type class; the second is a TVar or TFree. *)
-datatype type_literal =
-  TyLitVar of name * name |
-  TyLitFree of name * name
-
-(*Make literals for sorted type variables*)
-fun sorts_on_typs_aux (_, [])   = []
-  | sorts_on_typs_aux ((x,i),  s::ss) =
-      let val sorts = sorts_on_typs_aux ((x,i), ss)
-      in
-          if s = the_single @{sort HOL.type} then sorts
-          else if i = ~1 then TyLitFree (`make_type_class s, `make_fixed_type_var x) :: sorts
-          else TyLitVar (`make_type_class s, (make_schematic_type_var (x,i), x)) :: sorts
-      end;
-
-fun sorts_on_typs (TFree (a,s)) = sorts_on_typs_aux ((a,~1),s)
-  | sorts_on_typs (TVar (v,s))  = sorts_on_typs_aux (v,s);
-
-(*Given a list of sorted type variables, return a list of type literals.*)
-fun type_literals_for_types Ts =
-  fold (union (op =)) (map sorts_on_typs Ts) []
-
-(** make axiom and conjecture clauses. **)
-
-(**** Isabelle arities ****)
-
-datatype arity_literal =
-  TConsLit of name * name * name list |
-  TVarLit of name * name
-
-datatype arity_clause =
-  ArityClause of
-    {name: string,
-     prem_lits: arity_literal list,
-     concl_lits: arity_literal}
-
-fun gen_TVars 0 = []
-  | gen_TVars n = ("T_" ^ string_of_int n) :: gen_TVars (n-1);
-
-fun pack_sort(_,[])  = []
-  | pack_sort(tvar, "HOL.type"::srt) = pack_sort (tvar, srt)   (*IGNORE sort "type"*)
-  | pack_sort(tvar, cls::srt) =
-    (`make_type_class cls, `I tvar) :: pack_sort (tvar, srt)
-
-(*Arity of type constructor tcon :: (arg1,...,argN)res*)
-fun make_axiom_arity_clause (tcons, name, (cls,args)) =
-  let
-    val tvars = gen_TVars (length args)
-    val tvars_srts = ListPair.zip (tvars, args)
-  in
-    ArityClause {name = name,
-                 prem_lits = map TVarLit (union_all (map pack_sort tvars_srts)),
-                 concl_lits = TConsLit (`make_type_class cls,
-                                        `make_fixed_type_const tcons,
-                                        tvars ~~ tvars)}
-  end
-
-
-(**** Isabelle class relations ****)
-
-datatype class_rel_clause =
-  ClassRelClause of {name: string, subclass: name, superclass: name}
-
-(*Generate all pairs (sub,super) such that sub is a proper subclass of super in theory thy.*)
-fun class_pairs _ [] _ = []
-  | class_pairs thy subs supers =
-      let
-        val class_less = Sorts.class_less (Sign.classes_of thy)
-        fun add_super sub super = class_less (sub, super) ? cons (sub, super)
-        fun add_supers sub = fold (add_super sub) supers
-      in fold add_supers subs [] end
-
-fun make_class_rel_clause (sub,super) =
-  ClassRelClause {name = sub ^ "_" ^ super,
-                  subclass = `make_type_class sub,
-                  superclass = `make_type_class super}
-
-fun make_class_rel_clauses thy subs supers =
-  map make_class_rel_clause (class_pairs thy subs supers);
-
-
-(** Isabelle arities **)
-
-fun arity_clause _ _ (_, []) = []
-  | arity_clause seen n (tcons, ("HOL.type",_)::ars) =  (*ignore*)
-      arity_clause seen n (tcons,ars)
-  | arity_clause seen n (tcons, (ar as (class,_)) :: ars) =
-      if member (op =) seen class then (*multiple arities for the same tycon, class pair*)
-          make_axiom_arity_clause (tcons, lookup_const tcons ^ "_" ^ class ^ "_" ^ string_of_int n, ar) ::
-          arity_clause seen (n+1) (tcons,ars)
-      else
-          make_axiom_arity_clause (tcons, lookup_const tcons ^ "_" ^ class, ar) ::
-          arity_clause (class::seen) n (tcons,ars)
-
-fun multi_arity_clause [] = []
-  | multi_arity_clause ((tcons, ars) :: tc_arlists) =
-      arity_clause [] 1 (tcons, ars) @ multi_arity_clause tc_arlists
-
-(*Generate all pairs (tycon,class,sorts) such that tycon belongs to class in theory thy
-  provided its arguments have the corresponding sorts.*)
-fun type_class_pairs thy tycons classes =
-  let val alg = Sign.classes_of thy
-      fun domain_sorts tycon = Sorts.mg_domain alg tycon o single
-      fun add_class tycon class =
-        cons (class, domain_sorts tycon class)
-        handle Sorts.CLASS_ERROR _ => I
-      fun try_classes tycon = (tycon, fold (add_class tycon) classes [])
-  in  map try_classes tycons  end;
-
-(*Proving one (tycon, class) membership may require proving others, so iterate.*)
-fun iter_type_class_pairs _ _ [] = ([], [])
-  | iter_type_class_pairs thy tycons classes =
-      let val cpairs = type_class_pairs thy tycons classes
-          val newclasses = union_all (union_all (union_all (map (map #2 o #2) cpairs)))
-            |> subtract (op =) classes |> subtract (op =) HOLogic.typeS
-          val (classes', cpairs') = iter_type_class_pairs thy tycons newclasses
-      in (union (op =) classes' classes, union (op =) cpairs' cpairs) end;
-
-fun make_arity_clauses thy tycons classes =
-  let val (classes', cpairs) = iter_type_class_pairs thy tycons classes
-  in  (classes', multi_arity_clause cpairs)  end;
-
-datatype combterm =
-  CombConst of name * typ * typ list (* Const and Free *) |
-  CombVar of name * typ |
-  CombApp of combterm * combterm
-
-datatype fol_literal = FOLLiteral of bool * combterm
-
-(*********************************************************************)
-(* convert a clause with type Term.term to a clause with type clause *)
-(*********************************************************************)
-
-fun combtyp_of (CombConst (_, T, _)) = T
-  | combtyp_of (CombVar (_, T)) = T
-  | combtyp_of (CombApp (t1, _)) = snd (dest_funT (combtyp_of t1))
-
-(*gets the head of a combinator application, along with the list of arguments*)
-fun strip_combterm_comb u =
-    let fun stripc (CombApp(t,u), ts) = stripc (t, u::ts)
-        |   stripc  x =  x
-    in stripc(u,[]) end
-
-fun atyps_of T = fold_atyps (insert (op =)) T []
-
-fun new_skolem_const_name s num_T_args =
-  [new_skolem_const_prefix, s, string_of_int num_T_args]
-  |> space_implode Long_Name.separator
-
-(* Converts a term (with combinators) into a combterm. Also accumulates sort
-   infomation. *)
-fun combterm_from_term thy bs (P $ Q) =
-    let
-      val (P', P_atomics_Ts) = combterm_from_term thy bs P
-      val (Q', Q_atomics_Ts) = combterm_from_term thy bs Q
-    in (CombApp (P', Q'), union (op =) P_atomics_Ts Q_atomics_Ts) end
-  | combterm_from_term thy _ (Const (c, T)) =
-    let
-      val tvar_list =
-        (if String.isPrefix old_skolem_const_prefix c then
-           [] |> Term.add_tvarsT T |> map TVar
-         else
-           (c, T) |> Sign.const_typargs thy)
-      val c' = CombConst (`make_fixed_const c, T, tvar_list)
-    in (c', atyps_of T) end
-  | combterm_from_term _ _ (Free (v, T)) =
-    (CombConst (`make_fixed_var v, T, []), atyps_of T)
-  | combterm_from_term _ _ (Var (v as (s, _), T)) =
-    (if String.isPrefix Meson_Clausify.new_skolem_var_prefix s then
-       let
-         val Ts = T |> strip_type |> swap |> op ::
-         val s' = new_skolem_const_name s (length Ts)
-       in CombConst (`make_fixed_const s', T, Ts) end
-     else
-       CombVar ((make_schematic_var v, s), T), atyps_of T)
-  | combterm_from_term _ bs (Bound j) =
-    nth bs j
-    |> (fn (s, T) => (CombConst (`make_bound_var s, T, []), atyps_of T))
-  | combterm_from_term _ _ (Abs _) = raise Fail "HOL clause: Abs"
-
-fun predicate_of thy ((@{const Not} $ P), pos) = predicate_of thy (P, not pos)
-  | predicate_of thy (t, pos) =
-    (combterm_from_term thy [] (Envir.eta_contract t), pos)
-
-fun literals_of_term1 args thy (@{const Trueprop} $ P) =
-    literals_of_term1 args thy P
-  | literals_of_term1 args thy (@{const HOL.disj} $ P $ Q) =
-    literals_of_term1 (literals_of_term1 args thy P) thy Q
-  | literals_of_term1 (lits, ts) thy P =
-    let val ((pred, ts'), pol) = predicate_of thy (P, true) in
-      (FOLLiteral (pol, pred) :: lits, union (op =) ts ts')
-    end
-val literals_of_term = literals_of_term1 ([], [])
+val trace = Attrib.setup_config_bool @{binding metis_trace} (K false)
+val verbose = Attrib.setup_config_bool @{binding metis_verbose} (K true)
+
+fun trace_msg ctxt msg = if Config.get ctxt trace then tracing (msg ()) else ()
+fun verbose_warning ctxt msg =
+  if Config.get ctxt verbose then warning ("Metis: " ^ msg) else ()
+
+val metis_name_table =
+  [((tptp_equal, 2), (metis_equal, false)),
+   ((tptp_old_equal, 2), (metis_equal, false)),
+   ((prefixed_predicator_name, 1), (metis_predicator, false)),
+   ((prefixed_app_op_name, 2), (metis_app_op, false)),
+   ((prefixed_type_tag_name, 2), (metis_type_tag, true))]
 
 fun old_skolem_const_name i j num_T_args =
   old_skolem_const_prefix ^ Long_Name.separator ^
@@ -490,308 +102,102 @@ fun reveal_old_skolem_terms old_skolems =
                | t => t)
 
 
-(***************************************************************)
-(* Type Classes Present in the Axiom or Conjecture Clauses     *)
-(***************************************************************)
-
-fun set_insert (x, s) = Symtab.update (x, ()) s
-
-fun add_classes (sorts, cset) = List.foldl set_insert cset (flat sorts)
-
-(*Remove this trivial type class*)
-fun delete_type cset = Symtab.delete_safe (the_single @{sort HOL.type}) cset;
-
-fun tfree_classes_of_terms ts =
-  let val sorts_list = map (map #2 o OldTerm.term_tfrees) ts
-  in  Symtab.keys (delete_type (List.foldl add_classes Symtab.empty sorts_list))  end;
-
-fun tvar_classes_of_terms ts =
-  let val sorts_list = map (map #2 o OldTerm.term_tvars) ts
-  in  Symtab.keys (delete_type (List.foldl add_classes Symtab.empty sorts_list))  end;
-
-(*fold type constructors*)
-fun fold_type_consts f (Type (a, Ts)) x = fold (fold_type_consts f) Ts (f (a,x))
-  | fold_type_consts _ _ x = x;
-
-(*Type constructors used to instantiate overloaded constants are the only ones needed.*)
-fun add_type_consts_in_term thy =
-  let
-    fun aux (Const x) =
-        fold (fold_type_consts set_insert) (Sign.const_typargs thy x)
-      | aux (Abs (_, _, u)) = aux u
-      | aux (Const (@{const_name Meson.skolem}, _) $ _) = I
-      | aux (t $ u) = aux t #> aux u
-      | aux _ = I
-  in aux end
-
-fun type_consts_of_terms thy ts =
-  Symtab.keys (fold (add_type_consts_in_term thy) ts Symtab.empty);
-
-(* ------------------------------------------------------------------------- *)
-(* HOL to FOL  (Isabelle to Metis)                                           *)
-(* ------------------------------------------------------------------------- *)
-
-datatype mode = FO | HO | FT  (* first-order, higher-order, fully-typed *)
-
-fun string_of_mode FO = "FO"
-  | string_of_mode HO = "HO"
-  | string_of_mode FT = "FT"
-
-fun fn_isa_to_met_sublevel "equal" = "c_fequal"
-  | fn_isa_to_met_sublevel "c_False" = "c_fFalse"
-  | fn_isa_to_met_sublevel "c_True" = "c_fTrue"
-  | fn_isa_to_met_sublevel "c_Not" = "c_fNot"
-  | fn_isa_to_met_sublevel "c_conj" = "c_fconj"
-  | fn_isa_to_met_sublevel "c_disj" = "c_fdisj"
-  | fn_isa_to_met_sublevel "c_implies" = "c_fimplies"
-  | fn_isa_to_met_sublevel x = x
-
-fun fn_isa_to_met_toplevel "equal" = "="
-  | fn_isa_to_met_toplevel x = x
-
-fun metis_lit b c args = (b, (c, args));
-
-fun metis_term_from_typ (Type (s, Ts)) =
-    Metis_Term.Fn (make_fixed_type_const s, map metis_term_from_typ Ts)
-  | metis_term_from_typ (TFree (s, _)) =
-    Metis_Term.Fn (make_fixed_type_var s, [])
-  | metis_term_from_typ (TVar (x, _)) =
-    Metis_Term.Var (make_schematic_type_var x)
-
-(*These two functions insert type literals before the real literals. That is the
-  opposite order from TPTP linkup, but maybe OK.*)
-
-fun hol_term_to_fol_FO tm =
-  case strip_combterm_comb tm of
-      (CombConst ((c, _), _, Ts), tms) =>
-        let val tyargs = map metis_term_from_typ Ts
-            val args = map hol_term_to_fol_FO tms
-        in Metis_Term.Fn (c, tyargs @ args) end
-    | (CombVar ((v, _), _), []) => Metis_Term.Var v
-    | _ => raise Fail "non-first-order combterm"
-
-fun hol_term_to_fol_HO (CombConst ((a, _), _, Ts)) =
-      Metis_Term.Fn (fn_isa_to_met_sublevel a, map metis_term_from_typ Ts)
-  | hol_term_to_fol_HO (CombVar ((s, _), _)) = Metis_Term.Var s
-  | hol_term_to_fol_HO (CombApp (tm1, tm2)) =
-       Metis_Term.Fn (".", map hol_term_to_fol_HO [tm1, tm2]);
-
-(*The fully-typed translation, to avoid type errors*)
-fun tag_with_type tm T =
-  Metis_Term.Fn (type_tag_name, [tm, metis_term_from_typ T])
-
-fun hol_term_to_fol_FT (CombVar ((s, _), ty)) =
-    tag_with_type (Metis_Term.Var s) ty
-  | hol_term_to_fol_FT (CombConst ((a, _), ty, _)) =
-    tag_with_type (Metis_Term.Fn (fn_isa_to_met_sublevel a, [])) ty
-  | hol_term_to_fol_FT (tm as CombApp (tm1,tm2)) =
-    tag_with_type (Metis_Term.Fn (".", map hol_term_to_fol_FT [tm1, tm2]))
-                  (combtyp_of tm)
-
-fun hol_literal_to_fol FO (FOLLiteral (pos, tm)) =
-      let
-        val (CombConst((p, _), _, Ts), tms) = strip_combterm_comb tm
-        val tylits = if p = "equal" then [] else map metis_term_from_typ Ts
-        val lits = map hol_term_to_fol_FO tms
-      in metis_lit pos (fn_isa_to_met_toplevel p) (tylits @ lits) end
-  | hol_literal_to_fol HO (FOLLiteral (pos, tm)) =
-     (case strip_combterm_comb tm of
-          (CombConst(("equal", _), _, _), tms) =>
-            metis_lit pos "=" (map hol_term_to_fol_HO tms)
-        | _ => metis_lit pos "{}" [hol_term_to_fol_HO tm])   (*hBOOL*)
-  | hol_literal_to_fol FT (FOLLiteral (pos, tm)) =
-     (case strip_combterm_comb tm of
-          (CombConst(("equal", _), _, _), tms) =>
-            metis_lit pos "=" (map hol_term_to_fol_FT tms)
-        | _ => metis_lit pos "{}" [hol_term_to_fol_FT tm])   (*hBOOL*);
-
-fun literals_of_hol_term thy mode t =
-  let val (lits, types_sorts) = literals_of_term thy t in
-    (map (hol_literal_to_fol mode) lits, types_sorts)
-  end
-
-(*Sign should be "true" for conjecture type constraints, "false" for type lits in clauses.*)
-fun metis_of_type_literals pos (TyLitVar ((s, _), (s', _))) =
-    metis_lit pos s [Metis_Term.Var s']
-  | metis_of_type_literals pos (TyLitFree ((s, _), (s', _))) =
-    metis_lit pos s [Metis_Term.Fn (s',[])]
-
-fun has_default_sort _ (TVar _) = false
-  | has_default_sort ctxt (TFree (x, s)) =
-    (s = the_default [] (Variable.def_sort ctxt (x, ~1)));
-
-fun metis_of_tfree tf =
-  Metis_Thm.axiom (Metis_LiteralSet.singleton (metis_of_type_literals true tf));
-
-fun hol_thm_to_fol is_conjecture ctxt type_lits mode j old_skolems th =
-  let
-    val thy = Proof_Context.theory_of ctxt
-    val (old_skolems, (mlits, types_sorts)) =
-     th |> prop_of |> Logic.strip_imp_concl
-        |> conceal_old_skolem_terms j old_skolems
-        ||> (HOLogic.dest_Trueprop #> literals_of_hol_term thy mode)
-  in
-    if is_conjecture then
-      (Metis_Thm.axiom (Metis_LiteralSet.fromList mlits),
-       type_literals_for_types types_sorts, old_skolems)
-    else
-      let
-        val tylits = types_sorts |> filter_out (has_default_sort ctxt)
-                                 |> type_literals_for_types
-        val mtylits =
-          if type_lits then map (metis_of_type_literals false) tylits else []
-      in
-        (Metis_Thm.axiom (Metis_LiteralSet.fromList(mtylits @ mlits)), [],
-         old_skolems)
-      end
-  end;
-
-(* The Boolean indicates that a fairly sound type encoding is needed. *)
-val metis_helpers =
-  [("COMBI", (false, @{thms Meson.COMBI_def})),
-   ("COMBK", (false, @{thms Meson.COMBK_def})),
-   ("COMBB", (false, @{thms Meson.COMBB_def})),
-   ("COMBC", (false, @{thms Meson.COMBC_def})),
-   ("COMBS", (false, @{thms Meson.COMBS_def})),
-   ("fequal",
-    (* This is a lie: Higher-order equality doesn't need a sound type encoding.
-       However, this is done so for backward compatibility: Including the
-       equality helpers by default in Metis breaks a few existing proofs. *)
-    (true, @{thms fequal_def [THEN Meson.iff_to_disjD, THEN conjunct1]
-                  fequal_def [THEN Meson.iff_to_disjD, THEN conjunct2]})),
-   ("fFalse", (true, @{thms True_or_False})),
-   ("fFalse", (false, [@{lemma "~ fFalse" by (unfold fFalse_def) fast}])),
-   ("fTrue", (true, @{thms True_or_False})),
-   ("fTrue", (false, [@{lemma "fTrue" by (unfold fTrue_def) fast}])),
-   ("fNot",
-    (false, @{thms fNot_def [THEN Meson.iff_to_disjD, THEN conjunct1]
-                   fNot_def [THEN Meson.iff_to_disjD, THEN conjunct2]})),
-   ("fconj",
-    (false,
-     @{lemma "~ P | ~ Q | fconj P Q" "~ fconj P Q | P" "~ fconj P Q | Q"
-         by (unfold fconj_def) fast+})),
-   ("fdisj",
-    (false,
-     @{lemma "~ P | fdisj P Q" "~ Q | fdisj P Q" "~ fdisj P Q | P | Q"
-         by (unfold fdisj_def) fast+})),
-   ("fimplies",
-    (false, @{lemma "P | fimplies P Q" "~ Q | fimplies P Q"
-                    "~ fimplies P Q | ~ P | Q"
-                by (unfold fimplies_def) fast+})),
-   ("If", (true, @{thms if_True if_False True_or_False}))]
-
 (* ------------------------------------------------------------------------- *)
 (* Logic maps manage the interface between HOL and first-order logic.        *)
 (* ------------------------------------------------------------------------- *)
 
-type metis_problem =
-  {axioms: (Metis_Thm.thm * thm) list,
-   tfrees: type_literal list,
-   old_skolems: (string * term) list}
+datatype isa_thm =
+  Isa_Reflexive_or_Trivial |
+  Isa_Raw of thm
 
-fun is_quasi_fol_clause thy =
-  Meson.is_fol_term thy o snd o conceal_old_skolem_terms ~1 [] o prop_of
+val proxy_defs = map (fst o snd o snd) proxy_table
+val prepare_helper =
+  Meson.make_meta_clause #> rewrite_rule (map safe_mk_meta_eq proxy_defs)
 
-(*Extract TFree constraints from context to include as conjecture clauses*)
-fun init_tfrees ctxt =
-  let fun add ((a,i),s) Ts = if i = ~1 then TFree(a,s) :: Ts else Ts in
-    Vartab.fold add (#2 (Variable.constraints_of ctxt)) []
-    |> type_literals_for_types
-  end;
-
-(*Insert non-logical axioms corresponding to all accumulated TFrees*)
-fun add_tfrees {axioms, tfrees, old_skolems} : metis_problem =
-     {axioms = map (rpair TrueI o metis_of_tfree) (distinct (op =) tfrees) @
-               axioms,
-      tfrees = tfrees, old_skolems = old_skolems}
-
-(*transform isabelle type / arity clause to metis clause *)
-fun add_type_thm [] lmap = lmap
-  | add_type_thm ((ith, mth) :: cls) {axioms, tfrees, old_skolems} =
-      add_type_thm cls {axioms = (mth, ith) :: axioms, tfrees = tfrees,
-                        old_skolems = old_skolems}
-
-fun const_in_metis c (pred, tm_list) =
-  let
-    fun in_mterm (Metis_Term.Var _) = false
-      | in_mterm (Metis_Term.Fn (nm, tm_list)) =
-        c = nm orelse exists in_mterm tm_list
-  in c = pred orelse exists in_mterm tm_list end
-
-(* ARITY CLAUSE *)
-fun m_arity_cls (TConsLit ((c, _), (t, _), args)) =
-    metis_lit true c [Metis_Term.Fn(t, map (Metis_Term.Var o fst) args)]
-  | m_arity_cls (TVarLit ((c, _), (s, _))) =
-    metis_lit false c [Metis_Term.Var s]
-(*TrueI is returned as the Isabelle counterpart because there isn't any.*)
-fun arity_cls (ArityClause {prem_lits, concl_lits, ...}) =
-  (TrueI,
-   Metis_Thm.axiom (Metis_LiteralSet.fromList
-                        (map m_arity_cls (concl_lits :: prem_lits))));
-
-(* CLASSREL CLAUSE *)
-fun m_class_rel_cls (subclass, _) (superclass, _) =
-  [metis_lit false subclass [Metis_Term.Var "T"], metis_lit true superclass [Metis_Term.Var "T"]];
-fun class_rel_cls (ClassRelClause {subclass, superclass, ...}) =
-  (TrueI, Metis_Thm.axiom (Metis_LiteralSet.fromList (m_class_rel_cls subclass superclass)));
-
-fun type_ext thy tms =
-  let val subs = tfree_classes_of_terms tms
-      val supers = tvar_classes_of_terms tms
-      and tycons = type_consts_of_terms thy tms
-      val (supers', arity_clauses) = make_arity_clauses thy tycons supers
-      val class_rel_clauses = make_class_rel_clauses thy subs supers'
-  in  map class_rel_cls class_rel_clauses @ map arity_cls arity_clauses
-  end;
+fun metis_term_from_atp (ATerm (s, tms)) =
+  if is_tptp_variable s then
+    Metis_Term.Var (Metis_Name.fromString s)
+  else
+    let
+      val (s, swap) = AList.lookup (op =) metis_name_table (s, length tms)
+                      |> the_default (s, false)
+    in
+      Metis_Term.Fn (Metis_Name.fromString s,
+                     tms |> map metis_term_from_atp |> swap ? rev)
+    end
+fun metis_atom_from_atp (AAtom tm) =
+    (case metis_term_from_atp tm of
+       Metis_Term.Fn x => x
+     | _ => raise Fail "non CNF -- expected function")
+  | metis_atom_from_atp _ = raise Fail "not CNF -- expected atom"
+fun metis_literal_from_atp (AConn (ANot, [phi])) =
+    (false, metis_atom_from_atp phi)
+  | metis_literal_from_atp phi = (true, metis_atom_from_atp phi)
+fun metis_literals_from_atp (AConn (AOr, phis)) =
+    maps metis_literals_from_atp phis
+  | metis_literals_from_atp phi = [metis_literal_from_atp phi]
+fun metis_axiom_from_atp clauses (Formula (ident, _, phi, _, _)) =
+    let
+      fun some isa =
+        SOME (phi |> metis_literals_from_atp |> Metis_LiteralSet.fromList
+                  |> Metis_Thm.axiom, isa)
+    in
+      if ident = type_tag_idempotence_helper_name orelse
+         String.isPrefix lightweight_tags_sym_formula_prefix ident then
+        Isa_Reflexive_or_Trivial |> some
+      else if String.isPrefix helper_prefix ident then
+        case (String.isSuffix typed_helper_suffix ident,
+              space_explode "_" ident) of
+          (needs_fairly_sound, _ :: const :: j :: _) =>
+          nth ((const, needs_fairly_sound)
+               |> AList.lookup (op =) helper_table |> the)
+              (the (Int.fromString j) - 1)
+          |> prepare_helper
+          |> Isa_Raw |> some
+        | _ => raise Fail ("malformed helper identifier " ^ quote ident)
+      else case try (unprefix conjecture_prefix) ident of
+        SOME s =>
+        let val j = the (Int.fromString s) in
+          if j = length clauses then NONE
+          else Meson.make_meta_clause (nth clauses j) |> Isa_Raw |> some
+        end
+      | NONE => TrueI |> Isa_Raw |> some
+    end
+  | metis_axiom_from_atp _ _ = raise Fail "not CNF -- expected formula"
 
 (* Function to generate metis clauses, including comb and type clauses *)
-fun prepare_metis_problem mode0 ctxt type_lits cls thss =
-  let val thy = Proof_Context.theory_of ctxt
-      (*The modes FO and FT are sticky. HO can be downgraded to FO.*)
-      fun set_mode FO = FO
-        | set_mode HO =
-          if forall (forall (is_quasi_fol_clause thy)) (cls :: thss) then FO
-          else HO
-        | set_mode FT = FT
-      val mode = set_mode mode0
-      (*transform isabelle clause to metis clause *)
-      fun add_thm is_conjecture (isa_ith, metis_ith)
-                  {axioms, tfrees, old_skolems} : metis_problem =
-        let
-          val (mth, tfree_lits, old_skolems) =
-            hol_thm_to_fol is_conjecture ctxt type_lits mode (length axioms)
-                           old_skolems metis_ith
-        in
-           {axioms = (mth, isa_ith) :: axioms,
-            tfrees = union (op =) tfree_lits tfrees, old_skolems = old_skolems}
-        end;
-      val lmap = {axioms = [], tfrees = init_tfrees ctxt, old_skolems = []}
-                 |> fold (add_thm true o `Meson.make_meta_clause) cls
-                 |> add_tfrees
-                 |> fold (fold (add_thm false o `Meson.make_meta_clause)) thss
-      val clause_lists = map (Metis_Thm.clause o #1) (#axioms lmap)
-      fun is_used c =
-        exists (Metis_LiteralSet.exists (const_in_metis c o #2)) clause_lists
-      val lmap =
-        if mode = FO then
-          lmap
-        else
-          let
-            val fdefs = @{thms fFalse_def fTrue_def fNot_def fconj_def fdisj_def
-                               fimplies_def fequal_def}
-            val prepare_helper =
-              zero_var_indexes
-              #> `(Meson.make_meta_clause
-                   #> rewrite_rule (map safe_mk_meta_eq fdefs))
-            val helper_ths =
-              metis_helpers
-              |> filter (is_used o prefix const_prefix o fst)
-              |> maps (fn (_, (needs_full_types, thms)) =>
-                          if needs_full_types andalso mode <> FT then []
-                          else map prepare_helper thms)
-          in lmap |> fold (add_thm false) helper_ths end
-  in
-    (mode, add_type_thm (type_ext thy (maps (map prop_of) (cls :: thss))) lmap)
-  end
+fun prepare_metis_problem ctxt type_sys conj_clauses fact_clauses =
+  let
+    val type_sys = type_sys_from_string type_sys
+    val clauses =
+      conj_clauses @ fact_clauses
+      |> (if polymorphism_of_type_sys type_sys = Polymorphic then
+            I
+          else
+            map (pair 0)
+            #> rpair ctxt
+            #-> Monomorph.monomorph atp_schematic_consts_of
+            #> fst #> maps (map (zero_var_indexes o snd)))
+    val (old_skolems, props) =
+      fold_rev (fn clause => fn (old_skolems, props) =>
+                   clause |> prop_of |> Logic.strip_imp_concl
+                          |> conceal_old_skolem_terms (length clauses)
+                                                      old_skolems
+                          ||> (fn prop => prop :: props))
+           clauses ([], [])
+(*
+val _ = tracing ("PROPS:\n" ^ cat_lines (map (Syntax.string_of_term ctxt) props))
+*)
+    val (atp_problem, _, _, _, _, _, sym_tab) =
+      prepare_atp_problem ctxt CNF Hypothesis Axiom type_sys false false props
+                          @{prop False} []
+(*
+val _ = tracing ("ATP PROBLEM: " ^ cat_lines (tptp_lines_for_atp_problem CNF atp_problem))
+*)
+    (* "rev" is for compatibility *)
+    val axioms =
+      atp_problem |> maps (map_filter (metis_axiom_from_atp clauses) o snd)
+                  |> rev
+  in (sym_tab, axioms, old_skolems) end
 
 end;

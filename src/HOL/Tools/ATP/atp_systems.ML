@@ -36,9 +36,12 @@ sig
   val eN : string
   val spassN : string
   val vampireN : string
-  val tofof_eN : string
+  val leo2N : string
+  val satallaxN : string
   val sine_eN : string
   val snarkN : string
+  val tofof_eN : string
+  val waldmeisterN : string
   val z3_atpN : string
   val remote_prefix : string
   val remote_atp :
@@ -97,9 +100,12 @@ val eN = "e"
 val spassN = "spass"
 val vampireN = "vampire"
 val z3_atpN = "z3_atp"
-val tofof_eN = "tofof_e"
+val leo2N = "leo2"
+val satallaxN = "satallax"
 val sine_eN = "sine_e"
 val snarkN = "snark"
+val tofof_eN = "tofof_e"
+val waldmeisterN = "waldmeister"
 val remote_prefix = "remote_"
 
 structure Data = Theory_Data
@@ -111,20 +117,14 @@ structure Data = Theory_Data
     handle Symtab.DUP name => error ("Duplicate ATP: " ^ quote name ^ ".")
 )
 
-fun to_secs bonus time = (Time.toMilliseconds time + bonus + 999) div 1000
+fun to_secs time = (Time.toMilliseconds time + 999) div 1000
 
 
 (* E *)
 
-(* Give E an extra second to reconstruct the proof. Older versions even get two
-   seconds, because the "eproof" script wrongly subtracted an entire second to
-   account for the overhead of the script itself, which is in fact much
-   lower. *)
-fun e_bonus () =
-  if string_ord (getenv "E_VERSION", "1.1") = LESS then 2000 else 1000
-
 val tstp_proof_delims =
-  ("# SZS output start CNFRefutation.", "# SZS output end CNFRefutation")
+  [("# SZS output start CNFRefutation.", "# SZS output end CNFRefutation"),
+   ("% SZS output start CNFRefutation", "% SZS output end CNFRefutation")]
 
 val e_slicesN = "slices"
 val e_autoN = "auto"
@@ -203,9 +203,8 @@ val e_config : atp_config =
    arguments = fn ctxt => fn slice => fn timeout => fn weights =>
      "--tstp-in --tstp-out -l5 " ^
      e_weight_arguments ctxt (method_for_slice ctxt slice) weights ^
-     " -tAutoDev --silent --cpu-limit=" ^
-     string_of_int (to_secs (e_bonus ()) timeout),
-   proof_delims = [tstp_proof_delims],
+     " -tAutoDev --silent --cpu-limit=" ^ string_of_int (to_secs timeout),
+   proof_delims = tstp_proof_delims,
    known_failures =
      [(Unprovable, "SZS status: CounterSatisfiable"),
       (Unprovable, "SZS status CounterSatisfiable"),
@@ -218,12 +217,12 @@ val e_config : atp_config =
       (OutOfResources, "SZS status ResourceOut")],
    conj_sym_kind = Conjecture, (* FIXME: try out Hypothesis *)
    prem_kind = Conjecture,
-   formats = [Fof],
+   formats = [FOF],
    best_slices = fn ctxt =>
      (* FUDGE *)
      if effective_e_weight_method ctxt = e_slicesN then
-       [(0.333, (true, (100, ["poly_preds"]))) (* sym_offset_weight *),
-        (0.333, (true, (800, ["mangled_preds_heavy"]))) (* auto *),
+       [(0.333, (true, (100, ["mangled_preds_heavy"]))) (* sym_offset_weight *),
+        (0.333, (true, (800, ["poly_preds?"]))) (* auto *),
         (0.334, (true, (200, ["mangled_tags!", "mangled_tags?"])))
                                                                (* fun_weight *)]
      else
@@ -244,12 +243,12 @@ val spass_config : atp_config =
    required_execs = [("SPASS_HOME", "SPASS"), ("SPASS_HOME", "tptp2dfg")],
    arguments = fn ctxt => fn slice => fn timeout => fn _ =>
      ("-Auto -PGiven=0 -PProblem=0 -Splits=0 -FullRed=0 -DocProof \
-      \-VarWeight=3 -TimeLimit=" ^ string_of_int (to_secs 0 timeout))
+      \-VarWeight=3 -TimeLimit=" ^ string_of_int (to_secs timeout))
      |> (slice < 2 orelse Config.get ctxt spass_force_sos) ? prefix "-SOS=1 ",
    proof_delims = [("Here is a proof", "Formulae used in the proof")],
    known_failures =
      known_perl_failures @
-     [(IncompleteUnprovable, "SPASS beiseite: Completion found"),
+     [(GaveUp, "SPASS beiseite: Completion found"),
       (TimedOut, "SPASS beiseite: Ran out of time"),
       (OutOfResources, "SPASS beiseite: Maximal number of loops exceeded"),
       (MalformedInput, "Undefined symbol"),
@@ -258,7 +257,7 @@ val spass_config : atp_config =
       (InternalError, "Please report this error")],
    conj_sym_kind = Axiom, (* FIXME: try out Hypothesis *)
    prem_kind = Conjecture,
-   formats = [Fof],
+   formats = [FOF],
    best_slices = fn ctxt =>
      (* FUDGE *)
      [(0.333, (false, (150, ["mangled_preds_heavy"]))) (* SOS *),
@@ -279,7 +278,7 @@ val vampire_config : atp_config =
   {exec = ("VAMPIRE_HOME", "vampire"),
    required_execs = [],
    arguments = fn ctxt => fn slice => fn timeout => fn _ =>
-     "--proof tptp --mode casc -t " ^ string_of_int (to_secs 0 timeout) ^
+     "--proof tptp --mode casc -t " ^ string_of_int (to_secs timeout) ^
      " --thanks \"Andrei and Krystof\" --input_file"
      |> (slice < 2 orelse Config.get ctxt vampire_force_sos)
         ? prefix "--sos on ",
@@ -289,9 +288,9 @@ val vampire_config : atp_config =
       ("% SZS output start Refutation", "% SZS output end Refutation"),
       ("% SZS output start Proof", "% SZS output end Proof")],
    known_failures =
-     [(Unprovable, "UNPROVABLE"),
-      (IncompleteUnprovable, "CANNOT PROVE"),
-      (IncompleteUnprovable, "SZS status GaveUp"),
+     [(GaveUp, "UNPROVABLE"),
+      (GaveUp, "CANNOT PROVE"),
+      (GaveUp, "SZS status GaveUp"),
       (ProofIncomplete, "predicate_definition_introduction,[]"),
       (TimedOut, "SZS status Timeout"),
       (Unprovable, "Satisfiability detected"),
@@ -300,11 +299,11 @@ val vampire_config : atp_config =
       (Interrupted, "Aborted by signal SIGINT")],
    conj_sym_kind = Conjecture, (* FIXME: try out Hypothesis *)
    prem_kind = Conjecture,
-   formats = [Fof],
+   formats = [FOF],
    best_slices = fn ctxt =>
      (* FUDGE *)
-     [(0.333, (false, (400, ["mangled_preds_heavy"]))) (* SOS *),
-      (0.333, (false, (400, ["mangled_tags?"]))) (* SOS *),
+     [(0.333, (false, (200, ["mangled_preds_heavy"]))) (* SOS *),
+      (0.333, (false, (300, ["mangled_tags?"]))) (* SOS *),
       (0.334, (true, (400, ["poly_preds"]))) (* ~SOS *)]
      |> (if Config.get ctxt vampire_force_sos then hd #> apfst (K 1.0) #> single
          else I)}
@@ -318,17 +317,17 @@ val z3_atp_config : atp_config =
   {exec = ("Z3_HOME", "z3"),
    required_execs = [],
    arguments = fn _ => fn _ => fn timeout => fn _ =>
-     "MBQI=true -p -t:" ^ string_of_int (to_secs 0 timeout),
+     "MBQI=true -p -t:" ^ string_of_int (to_secs timeout),
    proof_delims = [],
    known_failures =
      [(Unprovable, "\nsat"),
-      (IncompleteUnprovable, "\nunknown"),
-      (IncompleteUnprovable, "SZS status Satisfiable"),
+      (GaveUp, "\nunknown"),
+      (GaveUp, "SZS status Satisfiable"),
       (ProofMissing, "\nunsat"),
       (ProofMissing, "SZS status Unsatisfiable")],
    conj_sym_kind = Hypothesis,
    prem_kind = Hypothesis,
-   formats = [Fof],
+   formats = [FOF],
    best_slices =
      (* FUDGE (FIXME) *)
      K [(1.0, (false, (250, [])))]}
@@ -358,13 +357,15 @@ fun find_system name [] systems =
 fun get_system name versions =
   Synchronized.change_result systems
       (fn systems => (if null systems then get_systems () else systems)
-                     |> `(find_system name versions))
+                     |> `(`(find_system name versions)))
 
 fun the_system name versions =
   case get_system name versions of
-    SOME sys => sys
-  | NONE => error ("System " ^ quote name ^
-                   " is not available at SystemOnTPTP.")
+    (SOME sys, _) => sys
+  | (NONE, []) => error ("SystemOnTPTP is currently not available.")
+  | (NONE, syss) =>
+    error ("System " ^ quote name ^ " is not available at SystemOnTPTP.\n" ^
+           "(Available systems: " ^ commas_quote syss ^ ".)")
 
 val max_remote_secs = 240 (* give Geoff Sutcliffe's servers a break *)
 
@@ -373,14 +374,18 @@ fun remote_config system_name system_versions proof_delims known_failures
   {exec = ("ISABELLE_ATP", "scripts/remote_atp"),
    required_execs = [],
    arguments = fn _ => fn _ => fn timeout => fn _ =>
-     " -t " ^ string_of_int (Int.min (max_remote_secs, (to_secs 0 timeout)))
+     "-t " ^ string_of_int (Int.min (max_remote_secs, to_secs timeout))
      ^ " -s " ^ the_system system_name system_versions,
-   proof_delims = insert (op =) tstp_proof_delims proof_delims,
-   known_failures =
-     known_failures @ known_perl_failures @
-     [(IncompleteUnprovable, "says Unknown"),
-      (IncompleteUnprovable, "says GaveUp"),
-      (TimedOut, "says Timeout")],
+   proof_delims = union (op =) tstp_proof_delims proof_delims,
+   known_failures = known_failures @ known_perl_failures @
+     [(Unprovable, "says Satisfiable"),
+      (Unprovable, "says CounterSatisfiable"),
+      (GaveUp, "says Unknown"),
+      (GaveUp, "says GaveUp"),
+      (ProofMissing, "says Theorem"),
+      (ProofMissing, "says Unsatisfiable"),
+      (TimedOut, "says Timeout"),
+      (Inappropriate, "says Inappropriate")],
    conj_sym_kind = conj_sym_kind,
    prem_kind = prem_kind,
    formats = formats,
@@ -404,16 +409,30 @@ fun remotify_atp (name, config) system_name system_versions =
 val remote_e = remotify_atp e "EP" ["1.0", "1.1", "1.2"]
 val remote_vampire = remotify_atp vampire "Vampire" ["0.6", "9.0", "1.0"]
 val remote_z3_atp = remotify_atp z3_atp "Z3" ["2.18"]
-val remote_tofof_e =
-  remote_atp tofof_eN "ToFoF" ["0.1"] [] (#known_failures e_config)
-             Axiom Conjecture [Tff] (K (200, ["simple"]) (* FUDGE *))
+val remote_leo2 =
+  remote_atp leo2N "LEO-II" ["1.2.6"] [] [] Axiom Hypothesis [THF]
+             (K (100, ["simple"]) (* FUDGE *))
+val remote_satallax =
+  remote_atp satallaxN "Satallax" ["2.0"] [] [] Axiom Hypothesis [THF]
+             (K (64, ["simple"]) (* FUDGE *))
 val remote_sine_e =
-  remote_atp sine_eN "SInE" ["0.4"] [] [] Axiom Conjecture [Fof]
+  remote_atp sine_eN "SInE" ["0.4"] [] (#known_failures e_config)
+             Axiom Conjecture [FOF]
              (K (500, ["poly_tags_heavy!", "poly_tags_heavy"]) (* FUDGE *))
 val remote_snark =
-  remote_atp snarkN "SNARK" ["20080805r024"]
-             [("refutation.", "end_refutation.")] [] Hypothesis Conjecture
-             [Tff, Fof] (K (250, ["simple"]) (* FUDGE *))
+  remote_atp snarkN "SNARK" ["20080805r029", "20080805r024"]
+             [("refutation.", "end_refutation.")] [] Hypothesis Hypothesis
+             [TFF, FOF] (K (100, ["simple"]) (* FUDGE *))
+val remote_tofof_e =
+  remote_atp tofof_eN "ToFoF" ["0.1"] [] (#known_failures e_config)
+             Axiom Hypothesis [TFF] (K (150, ["simple"]) (* FUDGE *))
+val remote_waldmeister =
+  remote_atp waldmeisterN "Waldmeister" ["710"]
+             [("#START OF PROOF", "Proved Goals:")]
+             [(OutOfResources, "Too many function symbols"),
+              (Crashed, "Unrecoverable Segmentation Fault")]
+             Hypothesis Hypothesis [CNF_UEQ]
+             (K (50, ["poly_args"]) (* FUDGE *))
 
 (* Setup *)
 
@@ -435,8 +454,10 @@ fun is_atp_installed thy name =
 fun refresh_systems_on_tptp () =
   Synchronized.change systems (fn _ => get_systems ())
 
-val atps = [e, spass, vampire, z3_atp, remote_e, remote_vampire, remote_z3_atp,
-            remote_tofof_e, remote_sine_e, remote_snark]
+val atps =
+  [e, spass, vampire, z3_atp, remote_e, remote_vampire, remote_z3_atp,
+   remote_leo2, remote_satallax, remote_sine_e, remote_snark, remote_tofof_e,
+   remote_waldmeister]
 val setup = fold add_atp atps
 
 end;

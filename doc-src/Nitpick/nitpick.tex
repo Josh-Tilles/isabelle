@@ -346,7 +346,7 @@ cardinalities up to 50:
 \prew
 \textbf{nitpick} [\textit{card} $'a$~= 1--50]\footnote{The symbol `--'
 can be entered as \texttt{-} (hyphen) or
-\texttt{\char`\\\char`\<midarrow\char`\>}.} \\[2\smallskipamount]
+\texttt{\char`\\\char`\<emdash\char`\>}.} \\[2\smallskipamount]
 \slshape Nitpick found no counterexample.
 \postw
 
@@ -354,10 +354,10 @@ Let's see if Sledgehammer can find a proof:
 
 \prew
 \textbf{sledgehammer} \\[2\smallskipamount]
-{\slshape Sledgehammer: external prover ``$e$'' for subgoal 1: \\
+{\slshape Sledgehammer: ``$e$'' on goal: \\
 $\exists{!}x.\; P~x\,\Longrightarrow\, P~(\hbox{\slshape THE}~y.\; P~y)$ \\
-Try this command: \textrm{apply}~(\textit{metis~the\_equality})} \\[2\smallskipamount]
-\textbf{apply}~(\textit{metis~the\_equality\/}) \nopagebreak \\[2\smallskipamount]
+Try this: \textrm{apply}~(\textit{metis~theI}) (21 ms).} \\[2\smallskipamount]
+\textbf{by}~(\textit{metis~theI\/}) \nopagebreak \\[2\smallskipamount]
 {\slshape No subgoals!}% \\[2\smallskipamount]
 %\textbf{done}
 \postw
@@ -1836,17 +1836,20 @@ earlier in the process.
 \section{Option Reference}
 \label{option-reference}
 
+\def\defl{\{}
+\def\defr{\}}
+
 \def\flushitem#1{\item[]\noindent\kern-\leftmargin \textbf{#1}}
 \def\qty#1{$\left<\textit{#1}\right>$}
 \def\qtybf#1{$\mathbf{\left<\textbf{\textit{#1}}\right>}$}
-\def\optrue#1#2{\flushitem{\textit{#1} $\bigl[$= \qtybf{bool}$\bigr]$\quad [\textit{true}]\hfill (neg.: \textit{#2})}\nopagebreak\\[\parskip]}
-\def\opfalse#1#2{\flushitem{\textit{#1} $\bigl[$= \qtybf{bool}$\bigr]$\quad [\textit{false}]\hfill (neg.: \textit{#2})}\nopagebreak\\[\parskip]}
-\def\opsmart#1#2{\flushitem{\textit{#1} $\bigl[$= \qtybf{bool\_or\_smart}$\bigr]$\quad [\textit{smart}]\hfill (neg.: \textit{#2})}\nopagebreak\\[\parskip]}
+\def\optrue#1#2{\flushitem{\textit{#1} $\bigl[$= \qtybf{bool}$\bigr]$\enskip \defl\textit{true}\defr\hfill (neg.: \textit{#2})}\nopagebreak\\[\parskip]}
+\def\opfalse#1#2{\flushitem{\textit{#1} $\bigl[$= \qtybf{bool}$\bigr]$\enskip \defl\textit{false}\defr\hfill (neg.: \textit{#2})}\nopagebreak\\[\parskip]}
+\def\opsmart#1#2{\flushitem{\textit{#1} $\bigl[$= \qtybf{smart\_bool}$\bigr]$\enskip \defl\textit{smart}\defr\hfill (neg.: \textit{#2})}\nopagebreak\\[\parskip]}
 \def\opnodefault#1#2{\flushitem{\textit{#1} = \qtybf{#2}} \nopagebreak\\[\parskip]}
-\def\opdefault#1#2#3{\flushitem{\textit{#1} = \qtybf{#2}\quad [\textit{#3}]} \nopagebreak\\[\parskip]}
+\def\opdefault#1#2#3{\flushitem{\textit{#1} = \qtybf{#2}\enskip \defl\textit{#3}\defr} \nopagebreak\\[\parskip]}
 \def\oparg#1#2#3{\flushitem{\textit{#1} \qtybf{#2} = \qtybf{#3}} \nopagebreak\\[\parskip]}
 \def\opargbool#1#2#3{\flushitem{\textit{#1} \qtybf{#2} $\bigl[$= \qtybf{bool}$\bigr]$\hfill (neg.: \textit{#3})}\nopagebreak\\[\parskip]}
-\def\opargboolorsmart#1#2#3{\flushitem{\textit{#1} \qtybf{#2} $\bigl[$= \qtybf{bool\_or\_smart}$\bigr]$\hfill (neg.: \textit{#3})}\nopagebreak\\[\parskip]}
+\def\opargboolorsmart#1#2#3{\flushitem{\textit{#1} \qtybf{#2} $\bigl[$= \qtybf{smart\_bool}$\bigr]$\hfill (neg.: \textit{#3})}\nopagebreak\\[\parskip]}
 
 Nitpick's behavior can be influenced by various options, which can be specified
 in brackets after the \textbf{nitpick} command. Default values can be set
@@ -1886,11 +1889,11 @@ The descriptions below refer to the following syntactic quantities:
 \item[$\bullet$] \qtybf{string\_list\/}: A space-separated list of strings
 (e.g., ``\textit{ichi ni san}'').
 \item[$\bullet$] \qtybf{bool\/}: \textit{true} or \textit{false}.
-\item[$\bullet$] \qtybf{bool\_or\_smart\/}: \textit{true}, \textit{false}, or \textit{smart}.
+\item[$\bullet$] \qtybf{smart\_bool\/}: \textit{true}, \textit{false}, or \textit{smart}.
 \item[$\bullet$] \qtybf{int\/}: An integer. Negative integers are prefixed with a hyphen.
-\item[$\bullet$] \qtybf{int\_or\_smart\/}: An integer or \textit{smart}.
+\item[$\bullet$] \qtybf{smart\_int\/}: An integer or \textit{smart}.
 \item[$\bullet$] \qtybf{int\_range}: An integer (e.g., 3) or a range
-of nonnegative integers (e.g., $1$--$4$). The range symbol `--' can be entered as \texttt{-} (hyphen) or \texttt{\char`\\\char`\<midarrow\char`\>}.
+of nonnegative integers (e.g., $1$--$4$). The range symbol `--' can be entered as \texttt{-} (hyphen) or \texttt{\char`\\\char`\<emdash\char`\>}.
 \item[$\bullet$] \qtybf{int\_seq}: A comma-separated sequence of ranges of integers (e.g.,~1{,}3{,}\allowbreak6--8).
 \item[$\bullet$] \qtybf{float\_or\_none}: An integer (e.g., 60) or floating-point number
 (e.g., 0.5) expressing a number of seconds, or the keyword \textit{none}
@@ -1902,9 +1905,9 @@ of nonnegative integers (e.g., $1$--$4$). The range symbol `--' can be entered a
 \item[$\bullet$] \qtybf{type}: A HOL type.
 \end{enum}
 
-Default values are indicated in square brackets. Boolean options have a negated
-counterpart (e.g., \textit{blocking} vs.\ \textit{non\_blocking}). When setting
-Boolean options, ``= \textit{true}'' may be omitted.
+Default values are indicated in curly brackets (\textrm{\{\}}). Boolean options
+have a negated counterpart (e.g., \textit{blocking} vs.\
+\textit{non\_blocking}). When setting them, ``= \textit{true}'' may be omitted.
 
 \subsection{Mode of Operation}
 \label{mode-of-operation}
@@ -2188,7 +2191,7 @@ option is implicitly disabled for automatic runs.
 \textit{batch\_size} (\S\ref{optimizations}).}
 
 \opfalse{show\_datatypes}{hide\_datatypes}
-Specifies whether the subsets used to approximate (co)in\-duc\-tive datatypes should
+Specifies whether the subsets used to approximate (co)in\-duc\-tive data\-types should
 be displayed as part of counterexamples. Such subsets are sometimes helpful when
 investigating whether a potentially spurious counterexample is genuine, but
 their potential for clutter is real.
@@ -2428,7 +2431,7 @@ Nitpick displays which SAT solver was chosen.
 \end{enum}
 \fussy
 
-\opdefault{batch\_size}{int\_or\_smart}{smart}
+\opdefault{batch\_size}{smart\_int}{smart}
 Specifies the maximum number of Kodkod problems that should be lumped together
 when invoking Kodkodi. Each problem corresponds to one scope. Lumping problems
 together ensures that Kodkodi is launched less often, but it makes the verbose
@@ -2464,8 +2467,6 @@ domain, but it is usually more efficient.
 
 {\small See also \textit{wf} (\S\ref{scope-of-search}), \textit{debug}
 (\S\ref{output-format}), and \textit{iter} (\S\ref{scope-of-search}).}
-
-{\small See also \textit{debug} (\S\ref{output-format}).}
 
 \opnodefault{whack}{term\_list}
 Specifies a list of atomic terms (usually constants, but also free and schematic
@@ -2741,10 +2742,12 @@ favorite counterexample generator:
 
 \prew
 $\textbf{val}\,~\textit{pick\_nits\_in\_term} : \\
-\hbox{}\quad\textit{Proof.state} \rightarrow \textit{params} \rightarrow \textit{bool} \rightarrow \textit{term~list} \rightarrow \textit{term} \\
-\hbox{}\quad{\rightarrow}\; \textit{string} * \textit{Proof.state}$ \\
+\hbox{}\quad\textit{Proof.state} \rightarrow \textit{params} \rightarrow \textit{mode}
+\rightarrow \textit{int} \rightarrow \textit{int} \rightarrow \textit{int}$ \\
+$\hbox{}\quad{\rightarrow}\; (\textit{term} * \textit{term})~\textit{list}
+\rightarrow \textit{term~list} \rightarrow \textit{term} \rightarrow \textit{string} * \textit{Proof.state}$ \\
 $\textbf{val}\,~\textit{pick\_nits\_in\_subgoal} : \\
-\hbox{}\quad\textit{Proof.state} \rightarrow \textit{params} \rightarrow \textit{bool} \rightarrow \textit{int} \rightarrow \textit{string} * \textit{Proof.state}$
+\hbox{}\quad\textit{Proof.state} \rightarrow \textit{params} \rightarrow \textit{mode} \rightarrow \textit{int} \rightarrow \textit{int} \rightarrow \textit{string} * \textit{Proof.state}$
 \postw
 
 The return value is a new proof state paired with an outcome string
@@ -2759,13 +2762,13 @@ $\textbf{val}\,~\textit{default\_params} :\,
 \postw
 
 The second argument lets you override option values before they are parsed and
-put into a \textit{params} record. Here is an example:
+put into a \textit{params} record. Here is an example where Nitpick is invoked
+on subgoal $i$ of $n$ with no time limit:
 
 \prew
 $\textbf{val}\,~\textit{params} = \textit{Nitpick\_Isar.default\_params}~\textit{thy}~[(\textrm{``}\textrm{timeout\/}\textrm{''},\, \textrm{``}\textrm{none}\textrm{''})]$ \\
-$\textbf{val}\,~(\textit{outcome},\, \textit{state}') = \textit{Nitpick.pick\_nits\_in\_subgoal}~\begin{aligned}[t]
-& \textit{state}~\textit{params}~\textit{false} \\[-2pt]
-& \textit{subgoal}\end{aligned}$
+$\textbf{val}\,~(\textit{outcome},\, \textit{state}') = {}$ \\
+$\hbox{}\quad\textit{Nitpick.pick\_nits\_in\_subgoal}~\textit{state}~\textit{params}~\textit{Nitpick.Normal}~\textit{i}~\textit{n}$
 \postw
 
 \let\antiq=\textrm

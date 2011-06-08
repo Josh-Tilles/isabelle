@@ -51,7 +51,8 @@ fun isabellep_tac ctxt max_secs =
    SOLVE_TIMEOUT (max_secs div 10) "auto" (auto_tac ctxt
        THEN ALLGOALS (Sledgehammer_Tactics.sledgehammer_as_oracle_tac ctxt))
    ORELSE
-   SOLVE_TIMEOUT (max_secs div 10) "metis" (ALLGOALS (Metis_Tactics.metis_tac ctxt []))
+   SOLVE_TIMEOUT (max_secs div 10) "metis"
+       (ALLGOALS (Metis_Tactics.metis_tac [] ctxt []))
    ORELSE
    SOLVE_TIMEOUT (max_secs div 10) "fast" (ALLGOALS (fast_tac ctxt))
    ORELSE
@@ -63,8 +64,8 @@ fun isabellep_tac ctxt max_secs =
 *}
 
 method_setup isabellep = {*
-  Scan.lift Parse.nat >>
+  Scan.lift (Scan.optional Parse.nat 1) >>
     (fn m => fn ctxt => SIMPLE_METHOD (isabellep_tac ctxt m))
-*} ""
+*} "combination of Isabelle provers and oracles for CASC"
 
 end

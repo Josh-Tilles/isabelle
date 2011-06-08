@@ -13,7 +13,7 @@ imports
   Convex
   Countable
   Diagonalize
-  Dlist
+  Dlist_Cset
   Eval_Witness
   Float
   Formal_Power_Series
@@ -29,6 +29,7 @@ imports
   Lattice_Algebras
   Lattice_Syntax
   ListVector
+  List_Cset
   Kleene_Algebra
   Mapping
   Monad_Syntax
@@ -52,7 +53,7 @@ imports
   Quotient_Type
   Ramsey
   Reflection
-  RBT
+  RBT_Mapping
   Set_Algebras
   SML_Quickcheck
   State_Monad
