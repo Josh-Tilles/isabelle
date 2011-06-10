@@ -95,16 +95,14 @@ val default_default_params =
    ("relevance_thresholds", "0.45 0.85"),
    ("max_relevant", "smart"),
    ("max_mono_iters", "3"),
-   ("max_new_mono_instances", "400"),
+   ("max_new_mono_instances", "200"),
    ("isar_proof", "false"),
    ("isar_shrink_factor", "1"),
    ("slicing", "true"),
    ("preplay_timeout", "4")]
 
 val alias_params =
-  [("prover", "provers"),
-   ("atps", "provers"), (* FIXME: legacy *)
-   ("atp", "provers")]  (* FIXME: legacy *)
+  [("prover", "provers")]
 val negated_alias_params =
   [("no_debug", "debug"),
    ("quiet", "verbose"),
