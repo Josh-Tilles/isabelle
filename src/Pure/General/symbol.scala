@@ -230,7 +230,7 @@ object Symbol
 
     val names: Map[String, String] =
     {
-      val name = new Regex("""\\<([A-Za-z][A-Za-z0-9_']*)>""")
+      val name = new Regex("""\\<\^?([A-Za-z][A-Za-z0-9_']*)>""")
       Map((for ((sym @ name(a), _) <- symbols) yield (sym -> a)): _*)
     }
 
@@ -326,7 +326,19 @@ object Symbol
     def is_symbolic_char(sym: String): Boolean = sym_chars.contains(sym)
     def is_symbolic(sym: String): Boolean =
       sym.startsWith("\\<") && sym.endsWith(">") && !sym.startsWith("\\<^")
+
+
+    /* special control symbols */
+
     def is_controllable(sym: String): Boolean =
       !is_blank(sym) && !sym.startsWith("\\<^") && !is_malformed(sym)
+
+    private val subscript_decoded = Set(decode("\\<^sub>"), decode("\\<^isub>"))
+    private val superscript_decoded = Set(decode("\\<^sup>"), decode("\\<^isup>"))
+    val bold_decoded = decode("\\<^bold>")
+
+    def is_subscript_decoded(sym: String): Boolean = subscript_decoded.contains(sym)
+    def is_superscript_decoded(sym: String): Boolean = superscript_decoded.contains(sym)
+    def is_bold_decoded(sym: String): Boolean = sym == bold_decoded
   }
 }
