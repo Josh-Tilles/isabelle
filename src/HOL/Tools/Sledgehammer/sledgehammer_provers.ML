@@ -18,17 +18,14 @@ sig
 
   datatype mode = Auto_Try | Try | Normal | Minimize
 
-  datatype rich_type_sys =
-    Dumb_Type_Sys of type_sys |
-    Smart_Type_Sys of bool
-
   type params =
     {debug: bool,
      verbose: bool,
      overlord: bool,
      blocking: bool,
      provers: string list,
-     type_sys: rich_type_sys,
+     type_sys: type_sys option,
+     sound: bool,
      relevance_thresholds: real * real,
      max_relevant: int option,
      max_mono_iters: int,
@@ -286,17 +283,14 @@ val messages = Async_Manager.thread_messages das_tool "prover"
 
 (** problems, results, ATPs, etc. **)
 
-datatype rich_type_sys =
-  Dumb_Type_Sys of type_sys |
-  Smart_Type_Sys of bool
-
 type params =
   {debug: bool,
    verbose: bool,
    overlord: bool,
    blocking: bool,
    provers: string list,
-   type_sys: rich_type_sys,
+   type_sys: type_sys option,
+   sound: bool,
    relevance_thresholds: real * real,
    max_relevant: int option,
    max_mono_iters: int,
@@ -500,7 +494,7 @@ fun has_bound_or_var_of_type pred =
    are omitted. *)
 fun is_dangerous_prop ctxt =
   transform_elim_prop
-  #> (has_bound_or_var_of_type (is_type_surely_finite ctxt) orf
+  #> (has_bound_or_var_of_type (is_type_surely_finite ctxt false) orf
       is_exhaustive_finite)
 
 fun int_opt_add (SOME m) (SOME n) = SOME (m + n)
@@ -510,16 +504,11 @@ fun int_opt_add (SOME m) (SOME n) = SOME (m + n)
    them each time. *)
 val atp_important_message_keep_quotient = 10
 
-val fallback_best_type_syss =
-  [Preds (Mangled_Monomorphic, Noninf_Nonmono_Types, Lightweight)]
-
-fun choose_format_and_type_sys _ formats (Dumb_Type_Sys type_sys) =
-    choose_format formats type_sys
-  | choose_format_and_type_sys best_type_syss formats
-                               (Smart_Type_Sys full_types) =
-    map type_sys_from_string best_type_syss @ fallback_best_type_syss
-    |> find_first (if full_types then is_type_sys_virtually_sound else K true)
-    |> the |> choose_format formats
+fun choose_format_and_type_sys best_type_sys formats type_sys_opt =
+  (case type_sys_opt of
+     SOME ts => ts
+   | NONE => type_sys_from_string best_type_sys)
+  |> choose_format formats
 
 val metis_minimize_max_time = seconds 2.0
 
@@ -541,9 +530,9 @@ fun repair_monomorph_context max_iters max_new_instances =
 fun run_atp mode name
         ({exec, required_execs, arguments, proof_delims, known_failures,
           conj_sym_kind, prem_kind, formats, best_slices, ...} : atp_config)
-        ({debug, verbose, overlord, type_sys, max_relevant, max_mono_iters,
-          max_new_mono_instances, isar_proof, isar_shrink_factor, slicing,
-          timeout, preplay_timeout, ...} : params)
+        ({debug, verbose, overlord, type_sys, sound, max_relevant,
+          max_mono_iters, max_new_mono_instances, isar_proof,
+          isar_shrink_factor, slicing, timeout, preplay_timeout, ...} : params)
         minimize_command
         ({state, goal, subgoal, subgoal_count, facts, ...} : prover_problem) =
   let
@@ -609,14 +598,14 @@ fun run_atp mode name
                 |> maps (fn (name, rths) => map (pair name o snd) rths)
               end
             fun run_slice (slice, (time_frac, (complete,
-                                   (best_max_relevant, best_type_syss, extra))))
+                                    (best_max_relevant, best_type_sys, extra))))
                           time_left =
               let
                 val num_facts =
                   length facts |> is_none max_relevant
                                   ? Integer.min best_max_relevant
                 val (format, type_sys) =
-                  choose_format_and_type_sys best_type_syss formats type_sys
+                  choose_format_and_type_sys best_type_sys formats type_sys
                 val fairly_sound = is_type_sys_fairly_sound type_sys
                 val facts =
                   facts |> map untranslated_fact
@@ -646,8 +635,8 @@ fun run_atp mode name
                 val (atp_problem, pool, conjecture_offset, facts_offset,
                      fact_names, typed_helpers, sym_tab) =
                   prepare_atp_problem ctxt format conj_sym_kind prem_kind
-                      type_sys false (Config.get ctxt atp_readable_names) true
-                      hyp_ts concl_t facts
+                      type_sys sound false (Config.get ctxt atp_readable_names)
+                      true hyp_ts concl_t facts
                 fun weights () = atp_problem_weights atp_problem
                 val full_proof = debug orelse isar_proof
                 val core =
@@ -749,6 +738,10 @@ fun run_atp mode name
                   facts |> map untranslated_fact |> filter_used_facts used_facts
                         |> map snd
               in
+                (if mode = Minimize then
+                   Output.urgent_message "Preplaying proof..."
+                 else
+                   ());
                 play_one_line_proof debug preplay_timeout used_ths state subgoal
                                     metis_reconstructors
               end,

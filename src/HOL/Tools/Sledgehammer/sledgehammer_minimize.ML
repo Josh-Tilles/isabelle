@@ -59,7 +59,7 @@ fun test_facts ({debug, verbose, overlord, provers, max_mono_iters,
     val {goal, ...} = Proof.goal state
     val params =
       {debug = debug, verbose = verbose, overlord = overlord, blocking = true,
-       provers = provers, type_sys = type_sys,
+       provers = provers, type_sys = type_sys, sound = true,
        relevance_thresholds = (1.01, 1.01), max_relevant = NONE,
        max_mono_iters = max_mono_iters,
        max_new_mono_instances = max_new_mono_instances, isar_proof = isar_proof,
@@ -167,18 +167,17 @@ fun minimize_facts prover_name (params as {timeout, ...}) silent i n state
            Int.min (msecs, Time.toMilliseconds time + slack_msecs)
            |> Time.fromMilliseconds
          val facts = filter_used_facts used_facts facts
-         val (min_thms, {preplay, message, message_tail, ...}) =
+         val (min_facts, {preplay, message, message_tail, ...}) =
            if length facts >= Config.get ctxt binary_min_facts then
              binary_minimize (do_test new_timeout) facts
            else
              sublinear_minimize (do_test new_timeout) facts ([], result)
-         val n = length min_thms
          val _ = print silent (fn () => cat_lines
-           ["Minimized: " ^ string_of_int n ^ " fact" ^ plural_s n] ^
-            (case length (filter (curry (op =) Chained o snd o fst) min_thms) of
+           ["Minimized to " ^ n_facts used_facts] ^
+            (case length (filter (curry (op =) Chained o snd o fst) min_facts) of
                0 => ""
-             | n => " (including " ^ string_of_int n ^ " chained)") ^ ".")
-       in (SOME min_thms, (preplay, message, message_tail)) end
+             | n => "\n(including " ^ string_of_int n ^ " chained)") ^ ".")
+       in (SOME min_facts, (preplay, message, message_tail)) end
      | {outcome = SOME TimedOut, preplay, ...} =>
        (NONE,
         (preplay,
