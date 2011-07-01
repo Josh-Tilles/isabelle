@@ -172,6 +172,7 @@ fun e_weight_arguments ctxt method weights =
   if method = e_autoN then
     "-xAutoDev"
   else
+    (* supplied by Stephan Schulz *)
     "--split-clauses=4 --split-reuse-defs --simul-paramod --forward-context-sr \
     \--destructive-er-aggressive --destructive-er --presat-simplify \
     \--prefer-initial-clauses -tKBO6 -winvfreqrank -c1 -Ginvfreqconjmax -F1 \
@@ -385,8 +386,8 @@ fun remote_config system_name system_versions proof_delims known_failures
    prem_kind = prem_kind,
    formats = formats,
    best_slices = fn ctxt =>
-     let val (max_relevant, type_sys) = best_slice ctxt in
-       [(1.0, (false, (max_relevant, type_sys, "")))]
+     let val (max_relevant, type_enc) = best_slice ctxt in
+       [(1.0, (false, (max_relevant, type_enc, "")))]
      end}
 
 fun remotify_config system_name system_versions best_slice
@@ -414,10 +415,10 @@ val remote_z3_atp =
   remotify_atp z3_atp "Z3" ["2.18"] (K (250, "mangled_preds?") (* FUDGE *))
 val remote_leo2 =
   remote_atp leo2N "LEO-II" ["1.2.6"] [] [] Axiom Hypothesis [THF]
-             (K (100, "simple") (* FUDGE *))
+             (K (100, "simple_higher") (* FUDGE *))
 val remote_satallax =
   remote_atp satallaxN "Satallax" ["2.0"] [] [] Axiom Hypothesis [THF]
-             (K (64, "simple") (* FUDGE *))
+             (K (64, "simple_higher") (* FUDGE *))
 val remote_sine_e =
   remote_atp sine_eN "SInE" ["0.4"] [] (#known_failures e_config) Axiom
              Conjecture [FOF] (K (500, "mangled_preds?") (* FUDGE *))
