@@ -35,10 +35,13 @@ fun parse_include x =
     val (file_name, rest) =
       (parse_keyword "include" |-- $$ "(" |-- parse_file_path --| $$ ")"
        --| $$ ".") x
+    val path = file_name |> Path.explode
+    val path =
+      path |> not (Path.is_absolute path) ? Path.append (Path.explode "$TPTP")
   in
-    ((), (file_name |> Path.explode |> File.read
-                    |> strip_spaces true (K true)
-                    |> raw_explode) @ rest)
+    ((), (path |> File.read
+               |> strip_spaces true (K true)
+               |> raw_explode) @ rest)
   end
 
 val parse_fof_or_cnf =
@@ -115,7 +118,8 @@ fun pick_nits_in_fof_file file_name =
 *)
       val state = Proof.init @{context}
       val params =
-        [("card", "1\<emdash>8"),
+        [("card iota", "1\<emdash>100"),
+         ("card", "1\<emdash>8"),
          ("box", "false"),
          ("sat_solver", "smart"),
          ("max_threads", "1"),
@@ -126,7 +130,7 @@ fun pick_nits_in_fof_file file_name =
          ("show_consts", "true"),
          ("format", "1000"),
          ("max_potential", "0"),
-         (* ("timeout", "240 s"), *)
+         ("timeout", "none"),
          ("expect", genuineN)]
         |> default_params @{theory}
       val i = 1
