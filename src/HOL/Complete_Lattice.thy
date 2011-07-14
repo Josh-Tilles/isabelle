@@ -76,11 +76,11 @@ lemma Sup_singleton [simp]:
 
 lemma Inf_binary:
   "\<Sqinter>{a, b} = a \<sqinter> b"
-  by (simp add: Inf_empty Inf_insert)
+  by (simp add: Inf_insert)
 
 lemma Sup_binary:
   "\<Squnion>{a, b} = a \<squnion> b"
-  by (simp add: Sup_empty Sup_insert)
+  by (simp add: Sup_insert)
 
 lemma le_Inf_iff: "b \<sqsubseteq> \<Sqinter>A \<longleftrightarrow> (\<forall>a\<in>A. b \<sqsubseteq> a)"
   by (auto intro: Inf_greatest dest: Inf_lower)
@@ -116,11 +116,11 @@ lemma le_bot:
   "x \<sqsubseteq> \<bottom> \<Longrightarrow> x = \<bottom>"
   by (rule antisym) auto
 
-lemma not_less_bot[simp]: "\<not> (x \<sqsubset> \<bottom>)"
-  using bot_least[of x] by (auto simp: le_less)
+lemma not_less_bot [simp]: "\<not> (x \<sqsubset> \<bottom>)"
+  using bot_least [of x] by (auto simp: le_less)
 
-lemma not_top_less[simp]: "\<not> (\<top> \<sqsubset> x)"
-  using top_greatest[of x] by (auto simp: le_less)
+lemma not_top_less [simp]: "\<not> (\<top> \<sqsubset> x)"
+  using top_greatest [of x] by (auto simp: le_less)
 
 lemma Sup_upper2: "u \<in> A \<Longrightarrow> v \<sqsubseteq> u \<Longrightarrow> v \<sqsubseteq> \<Squnion>A"
   using Sup_upper[of u A] by auto
@@ -392,13 +392,32 @@ lemma (in complete_lattice) Inf_union_distrib: "\<Sqinter>(A \<union> B) = \<Sqi
 lemma Inter_Un_distrib: "\<Inter>(A \<union> B) = \<Inter>A \<inter> \<Inter>B"
   by (fact Inf_union_distrib)
 
-(*lemma (in complete_lattice) Inf_top_conv [no_atp]:
-  "\<Sqinter>A = \<top> \<longleftrightarrow> (\<forall>x\<in>A. x = \<top>)"*)
+lemma (in complete_lattice) Inf_top_conv [no_atp]:
+  "\<Sqinter>A = \<top> \<longleftrightarrow> (\<forall>x\<in>A. x = \<top>)"
+  "\<top> = \<Sqinter>A \<longleftrightarrow> (\<forall>x\<in>A. x = \<top>)"
+proof -
+  show "\<Sqinter>A = \<top> \<longleftrightarrow> (\<forall>x\<in>A. x = \<top>)"
+  proof
+    assume "\<forall>x\<in>A. x = \<top>"
+    then have "A = {} \<or> A = {\<top>}" by auto
+    then show "\<Sqinter>A = \<top>" by auto
+  next
+    assume "\<Sqinter>A = \<top>"
+    show "\<forall>x\<in>A. x = \<top>"
+    proof (rule ccontr)
+      assume "\<not> (\<forall>x\<in>A. x = \<top>)"
+      then obtain x where "x \<in> A" and "x \<noteq> \<top>" by blast
+      then obtain B where "A = insert x B" by blast
+      with `\<Sqinter>A = \<top>` `x \<noteq> \<top>` show False by (simp add: Inf_insert)
+    qed
+  qed
+  then show "\<top> = \<Sqinter>A \<longleftrightarrow> (\<forall>x\<in>A. x = \<top>)" by auto
+qed
 
 lemma Inter_UNIV_conv [simp,no_atp]:
   "\<Inter>A = UNIV \<longleftrightarrow> (\<forall>x\<in>A. x = UNIV)"
   "UNIV = \<Inter>A \<longleftrightarrow> (\<forall>x\<in>A. x = UNIV)"
-  by blast+
+  by (fact Inf_top_conv)+
 
 lemma (in complete_lattice) Inf_anti_mono: "B \<subseteq> A \<Longrightarrow> \<Sqinter>A \<sqsubseteq> \<Sqinter>B"
   by (auto intro: Inf_greatest Inf_lower)
@@ -448,23 +467,23 @@ lemma INTER_def:
 
 lemma Inter_image_eq [simp]:
   "\<Inter>(B`A) = (\<Inter>x\<in>A. B x)"
-  by (rule sym) (fact INTER_eq_Inter_image)
+  by (rule sym) (fact INFI_def)
 
-lemma INT_iff [simp]: "(b: (INT x:A. B x)) = (ALL x:A. b: B x)"
+lemma INT_iff [simp]: "b \<in> (\<Inter>x\<in>A. B x) \<longleftrightarrow> (\<forall>x\<in>A. b \<in> B x)"
   by (unfold INTER_def) blast
 
-lemma INT_I [intro!]: "(!!x. x:A ==> b: B x) ==> b : (INT x:A. B x)"
+lemma INT_I [intro!]: "(\<And>x. x \<in> A \<Longrightarrow> b \<in> B x) \<Longrightarrow> b \<in> (\<Inter>x\<in>A. B x)"
   by (unfold INTER_def) blast
 
-lemma INT_D [elim, Pure.elim]: "b : (INT x:A. B x) ==> a:A ==> b: B a"
+lemma INT_D [elim, Pure.elim]: "b : (\<Inter>x\<in>A. B x) \<Longrightarrow> a:A \<Longrightarrow> b: B a"
   by auto
 
-lemma INT_E [elim]: "b : (INT x:A. B x) ==> (b: B a ==> R) ==> (a~:A ==> R) ==> R"
+lemma INT_E [elim]: "b : (\<Inter>x\<in>A. B x) \<Longrightarrow> (b: B a \<Longrightarrow> R) \<Longrightarrow> (a~:A \<Longrightarrow> R) \<Longrightarrow> R"
   -- {* "Classical" elimination -- by the Excluded Middle on @{prop "a:A"}. *}
   by (unfold INTER_def) blast
 
 lemma INT_cong [cong]:
-    "A = B ==> (!!x. x:B ==> C x = D x) ==> (INT x:A. C x) = (INT x:B. D x)"
+    "A = B \<Longrightarrow> (\<And>x. x:B \<Longrightarrow> C x = D x) \<Longrightarrow> (\<Inter>x\<in>A. C x) = (\<Inter>x\<in>B. D x)"
   by (simp add: INTER_def)
 
 lemma Collect_ball_eq: "{x. \<forall>y\<in>A. P x y} = (\<Inter>y\<in>A. {x. P x y})"
@@ -473,16 +492,16 @@ lemma Collect_ball_eq: "{x. \<forall>y\<in>A. P x y} = (\<Inter>y\<in>A. {x. P x
 lemma Collect_all_eq: "{x. \<forall>y. P x y} = (\<Inter>y. {x. P x y})"
   by blast
 
-lemma INT_lower: "a \<in> A ==> (\<Inter>x\<in>A. B x) \<subseteq> B a"
+lemma INT_lower: "a \<in> A \<Longrightarrow> (\<Inter>x\<in>A. B x) \<subseteq> B a"
   by (fact INF_leI)
 
-lemma INT_greatest: "(!!x. x \<in> A ==> C \<subseteq> B x) ==> C \<subseteq> (\<Inter>x\<in>A. B x)"
+lemma INT_greatest: "(\<And>x. x \<in> A \<Longrightarrow> C \<subseteq> B x) \<Longrightarrow> C \<subseteq> (\<Inter>x\<in>A. B x)"
   by (fact le_INFI)
 
 lemma INT_empty [simp]: "(\<Inter>x\<in>{}. B x) = UNIV"
   by blast
 
-lemma INT_absorb: "k \<in> I ==> A k \<inter> (\<Inter>i\<in>I. A i) = (\<Inter>i\<in>I. A i)"
+lemma INT_absorb: "k \<in> I \<Longrightarrow> A k \<inter> (\<Inter>i\<in>I. A i) = (\<Inter>i\<in>I. A i)"
   by blast
 
 lemma INT_subset_iff: "(B \<subseteq> (\<Inter>i\<in>I. A i)) = (\<forall>i\<in>I. B \<subseteq> A i)"
@@ -495,7 +514,7 @@ lemma INT_Un: "(\<Inter>i \<in> A \<union> B. M i) = (\<Inter>i \<in> A. M i) \<
   by blast
 
 lemma INT_insert_distrib:
-    "u \<in> A ==> (\<Inter>x\<in>A. insert a (B x)) = insert a (\<Inter>x\<in>A. B x)"
+    "u \<in> A \<Longrightarrow> (\<Inter>x\<in>A. insert a (B x)) = insert a (\<Inter>x\<in>A. B x)"
   by blast
 
 lemma INT_constant [simp]: "(\<Inter>y\<in>A. c) = (if A = {} then UNIV else c)"
@@ -506,23 +525,23 @@ lemma INT_eq: "(\<Inter>x\<in>A. B x) = \<Inter>({Y. \<exists>x\<in>A. Y = B x})
   by blast
 
 lemma INTER_UNIV_conv[simp]:
- "(UNIV = (INT x:A. B x)) = (\<forall>x\<in>A. B x = UNIV)"
- "((INT x:A. B x) = UNIV) = (\<forall>x\<in>A. B x = UNIV)"
+ "(UNIV = (\<Inter>x\<in>A. B x)) = (\<forall>x\<in>A. B x = UNIV)"
+ "((\<Inter>x\<in>A. B x) = UNIV) = (\<forall>x\<in>A. B x = UNIV)"
 by blast+
 
-lemma INT_bool_eq: "(\<Inter>b::bool. A b) = (A True \<inter> A False)"
+lemma INT_bool_eq: "(\<Inter>b. A b) = (A True \<inter> A False)"
   by (auto intro: bool_induct)
 
 lemma Pow_INT_eq: "Pow (\<Inter>x\<in>A. B x) = (\<Inter>x\<in>A. Pow (B x))"
   by blast
 
 lemma INT_anti_mono:
-  "B \<subseteq> A ==> (!!x. x \<in> A ==> f x \<subseteq> g x) ==>
+  "B \<subseteq> A \<Longrightarrow> (\<And>x. x \<in> A \<Longrightarrow> f x \<subseteq> g x) \<Longrightarrow>
     (\<Inter>x\<in>A. f x) \<subseteq> (\<Inter>x\<in>A. g x)"
   -- {* The last inclusion is POSITIVE! *}
   by (blast dest: subsetD)
 
-lemma vimage_INT: "f-`(INT x:A. B x) = (INT x:A. f -` B x)"
+lemma vimage_INT: "f -` (\<Inter>x\<in>A. B x) = (\<Inter>x\<in>A. f -` B x)"
   by blast
 
 
@@ -555,40 +574,40 @@ lemma UnionI [intro]:
   by auto
 
 lemma UnionE [elim!]:
-  "A \<in> \<Union>C \<Longrightarrow> (\<And>X. A\<in>X \<Longrightarrow> X\<in>C \<Longrightarrow> R) \<Longrightarrow> R"
+  "A \<in> \<Union>C \<Longrightarrow> (\<And>X. A \<in> X \<Longrightarrow> X \<in> C \<Longrightarrow> R) \<Longrightarrow> R"
   by auto
 
-lemma Union_upper: "B \<in> A ==> B \<subseteq> Union A"
+lemma Union_upper: "B \<in> A \<Longrightarrow> B \<subseteq> \<Union>A"
   by (iprover intro: subsetI UnionI)
 
-lemma Union_least: "(!!X. X \<in> A ==> X \<subseteq> C) ==> Union A \<subseteq> C"
+lemma Union_least: "(\<And>X. X \<in> A \<Longrightarrow> X \<subseteq> C) \<Longrightarrow> \<Union>A \<subseteq> C"
   by (iprover intro: subsetI elim: UnionE dest: subsetD)
 
 lemma Un_eq_Union: "A \<union> B = \<Union>{A, B}"
   by blast
 
-lemma Union_empty [simp]: "Union({}) = {}"
+lemma Union_empty [simp]: "\<Union>{} = {}"
   by blast
 
-lemma Union_UNIV [simp]: "Union UNIV = UNIV"
+lemma Union_UNIV [simp]: "\<Union>UNIV = UNIV"
   by blast
 
-lemma Union_insert [simp]: "Union (insert a B) = a \<union> \<Union>B"
+lemma Union_insert [simp]: "\<Union>insert a B = a \<union> \<Union>B"
   by blast
 
-lemma Union_Un_distrib [simp]: "\<Union>(A Un B) = \<Union>A \<union> \<Union>B"
+lemma Union_Un_distrib [simp]: "\<Union>(A \<union> B) = \<Union>A \<union> \<Union>B"
   by blast
 
 lemma Union_Int_subset: "\<Union>(A \<inter> B) \<subseteq> \<Union>A \<inter> \<Union>B"
   by blast
 
-lemma Union_empty_conv [simp,no_atp]: "(\<Union>A = {}) = (\<forall>x\<in>A. x = {})"
+lemma Union_empty_conv [simp,no_atp]: "(\<Union>A = {}) \<longleftrightarrow> (\<forall>x\<in>A. x = {})"
   by blast
 
-lemma empty_Union_conv [simp,no_atp]: "({} = \<Union>A) = (\<forall>x\<in>A. x = {})"
+lemma empty_Union_conv [simp,no_atp]: "({} = \<Union>A) \<longleftrightarrow> (\<forall>x\<in>A. x = {})"
   by blast
 
-lemma Union_disjoint: "(\<Union>C \<inter> A = {}) = (\<forall>B\<in>C. B \<inter> A = {})"
+lemma Union_disjoint: "(\<Union>C \<inter> A = {}) \<longleftrightarrow> (\<forall>B\<in>C. B \<inter> A = {})"
   by blast
 
 lemma subset_Pow_Union: "A \<subseteq> Pow (\<Union>A)"
@@ -597,7 +616,7 @@ lemma subset_Pow_Union: "A \<subseteq> Pow (\<Union>A)"
 lemma Union_Pow_eq [simp]: "\<Union>(Pow A) = A"
   by blast
 
-lemma Union_mono: "A \<subseteq> B ==> \<Union>A \<subseteq> \<Union>B"
+lemma Union_mono: "A \<subseteq> B \<Longrightarrow> \<Union>A \<subseteq> \<Union>B"
   by blast
 
 
@@ -638,7 +657,7 @@ print_translation {*
 *} -- {* to avoid eta-contraction of body *}
 
 lemma UNION_eq_Union_image:
-  "(\<Union>x\<in>A. B x) = \<Union>(B`A)"
+  "(\<Union>x\<in>A. B x) = \<Union>(B ` A)"
   by (fact SUPR_def)
 
 lemma Union_def:
@@ -650,41 +669,41 @@ lemma UNION_def [no_atp]:
   by (auto simp add: UNION_eq_Union_image Union_eq)
   
 lemma Union_image_eq [simp]:
-  "\<Union>(B`A) = (\<Union>x\<in>A. B x)"
+  "\<Union>(B ` A) = (\<Union>x\<in>A. B x)"
   by (rule sym) (fact UNION_eq_Union_image)
   
-lemma UN_iff [simp]: "(b: (UN x:A. B x)) = (EX x:A. b: B x)"
+lemma UN_iff [simp]: "(b: (\<Union>x\<in>A. B x)) = (\<exists>x\<in>A. b: B x)"
   by (unfold UNION_def) blast
 
-lemma UN_I [intro]: "a:A ==> b: B a ==> b: (UN x:A. B x)"
+lemma UN_I [intro]: "a:A \<Longrightarrow> b: B a \<Longrightarrow> b: (\<Union>x\<in>A. B x)"
   -- {* The order of the premises presupposes that @{term A} is rigid;
     @{term b} may be flexible. *}
   by auto
 
-lemma UN_E [elim!]: "b : (UN x:A. B x) ==> (!!x. x:A ==> b: B x ==> R) ==> R"
+lemma UN_E [elim!]: "b : (\<Union>x\<in>A. B x) \<Longrightarrow> (\<And>x. x:A \<Longrightarrow> b: B x \<Longrightarrow> R) \<Longrightarrow> R"
   by (unfold UNION_def) blast
 
 lemma UN_cong [cong]:
-    "A = B ==> (!!x. x:B ==> C x = D x) ==> (UN x:A. C x) = (UN x:B. D x)"
+    "A = B \<Longrightarrow> (\<And>x. x:B \<Longrightarrow> C x = D x) \<Longrightarrow> (\<Union>x\<in>A. C x) = (\<Union>x\<in>B. D x)"
   by (simp add: UNION_def)
 
 lemma strong_UN_cong:
-    "A = B ==> (!!x. x:B =simp=> C x = D x) ==> (UN x:A. C x) = (UN x:B. D x)"
+    "A = B \<Longrightarrow> (\<And>x. x:B =simp=> C x = D x) \<Longrightarrow> (\<Union>x\<in>A. C x) = (\<Union>x\<in>B. D x)"
   by (simp add: UNION_def simp_implies_def)
 
-lemma image_eq_UN: "f`A = (UN x:A. {f x})"
+lemma image_eq_UN: "f ` A = (\<Union>x\<in>A. {f x})"
   by blast
 
-lemma UN_upper: "a \<in> A ==> B a \<subseteq> (\<Union>x\<in>A. B x)"
+lemma UN_upper: "a \<in> A \<Longrightarrow> B a \<subseteq> (\<Union>x\<in>A. B x)"
   by (fact le_SUPI)
 
-lemma UN_least: "(!!x. x \<in> A ==> B x \<subseteq> C) ==> (\<Union>x\<in>A. B x) \<subseteq> C"
+lemma UN_least: "(\<And>x. x \<in> A \<Longrightarrow> B x \<subseteq> C) \<Longrightarrow> (\<Union>x\<in>A. B x) \<subseteq> C"
   by (iprover intro: subsetI elim: UN_E dest: subsetD)
 
 lemma Collect_bex_eq [no_atp]: "{x. \<exists>y\<in>A. P x y} = (\<Union>y\<in>A. {x. P x y})"
   by blast
 
-lemma UN_insert_distrib: "u \<in> A ==> (\<Union>x\<in>A. insert a (B x)) = insert a (\<Union>x\<in>A. B x)"
+lemma UN_insert_distrib: "u \<in> A \<Longrightarrow> (\<Union>x\<in>A. insert a (B x)) = insert a (\<Union>x\<in>A. B x)"
   by blast
 
 lemma UN_empty [simp,no_atp]: "(\<Union>x\<in>{}. B x) = {}"
@@ -696,7 +715,7 @@ lemma UN_empty2 [simp]: "(\<Union>x\<in>A. {}) = {}"
 lemma UN_singleton [simp]: "(\<Union>x\<in>A. {x}) = A"
   by blast
 
-lemma UN_absorb: "k \<in> I ==> A k \<union> (\<Union>i\<in>I. A i) = (\<Union>i\<in>I. A i)"
+lemma UN_absorb: "k \<in> I \<Longrightarrow> A k \<union> (\<Union>i\<in>I. A i) = (\<Union>i\<in>I. A i)"
   by auto
 
 lemma UN_insert [simp]: "(\<Union>x\<in>insert a A. B x) = B a \<union> UNION A B"
@@ -721,8 +740,8 @@ lemma UN_eq: "(\<Union>x\<in>A. B x) = \<Union>({Y. \<exists>x\<in>A. Y = B x})"
   by blast
 
 lemma UNION_empty_conv[simp]:
-  "({} = (UN x:A. B x)) = (\<forall>x\<in>A. B x = {})"
-  "((UN x:A. B x) = {}) = (\<forall>x\<in>A. B x = {})"
+  "{} = (\<Union>x\<in>A. B x) \<longleftrightarrow> (\<forall>x\<in>A. B x = {})"
+  "(\<Union>x\<in>A. B x) = {} \<longleftrightarrow> (\<forall>x\<in>A. B x = {})"
 by blast+
 
 lemma Collect_ex_eq [no_atp]: "{x. \<exists>y. P x y} = (\<Union>y. {x. P x y})"
@@ -737,29 +756,29 @@ lemma bex_UN: "(\<exists>z \<in> UNION A B. P z) = (\<exists>x\<in>A. \<exists>z
 lemma Un_eq_UN: "A \<union> B = (\<Union>b. if b then A else B)"
   by (auto simp add: split_if_mem2)
 
-lemma UN_bool_eq: "(\<Union>b::bool. A b) = (A True \<union> A False)"
+lemma UN_bool_eq: "(\<Union>b. A b) = (A True \<union> A False)"
   by (auto intro: bool_contrapos)
 
 lemma UN_Pow_subset: "(\<Union>x\<in>A. Pow (B x)) \<subseteq> Pow (\<Union>x\<in>A. B x)"
   by blast
 
 lemma UN_mono:
-  "A \<subseteq> B ==> (!!x. x \<in> A ==> f x \<subseteq> g x) ==>
+  "A \<subseteq> B \<Longrightarrow> (\<And>x. x \<in> A \<Longrightarrow> f x \<subseteq> g x) \<Longrightarrow>
     (\<Union>x\<in>A. f x) \<subseteq> (\<Union>x\<in>B. g x)"
   by (blast dest: subsetD)
 
-lemma vimage_Union: "f -` (Union A) = (UN X:A. f -` X)"
+lemma vimage_Union: "f -` (\<Union>A) = (\<Union>X\<in>A. f -` X)"
   by blast
 
-lemma vimage_UN: "f-`(UN x:A. B x) = (UN x:A. f -` B x)"
+lemma vimage_UN: "f -` (\<Union>x\<in>A. B x) = (\<Union>x\<in>A. f -` B x)"
   by blast
 
-lemma vimage_eq_UN: "f-`B = (UN y: B. f-`{y})"
+lemma vimage_eq_UN: "f -` B = (\<Union>y\<in>B. f -` {y})"
   -- {* NOT suitable for rewriting *}
   by blast
 
-lemma image_UN: "(f ` (UNION A B)) = (UN x:A.(f ` (B x)))"
-by blast
+lemma image_UN: "f ` UNION A B = (\<Union>x\<in>A. f ` B x)"
+  by blast
 
 
 subsection {* Distributive laws *}
@@ -770,7 +789,7 @@ lemma Int_Union: "A \<inter> \<Union>B = (\<Union>C\<in>B. A \<inter> C)"
 lemma Int_Union2: "\<Union>B \<inter> A = (\<Union>C\<in>B. C \<inter> A)"
   by blast
 
-lemma Un_Union_image: "(\<Union>x\<in>C. A x \<union> B x) = \<Union>(A`C) \<union> \<Union>(B`C)"
+lemma Un_Union_image: "(\<Union>x\<in>C. A x \<union> B x) = \<Union>(A ` C) \<union> \<Union>(B ` C)"
   -- {* Devlin, Fundamentals of Contemporary Set Theory, page 12, exercise 5: *}
   -- {* Union of a family of unions *}
   by blast
@@ -782,7 +801,7 @@ lemma UN_Un_distrib: "(\<Union>i\<in>I. A i \<union> B i) = (\<Union>i\<in>I. A 
 lemma Un_Inter: "A \<union> \<Inter>B = (\<Inter>C\<in>B. A \<union> C)"
   by blast
 
-lemma Int_Inter_image: "(\<Inter>x\<in>C. A x \<inter> B x) = \<Inter>(A`C) \<inter> \<Inter>(B`C)"
+lemma Int_Inter_image: "(\<Inter>x\<in>C. A x \<inter> B x) = \<Inter>(A ` C) \<inter> \<Inter>(B ` C)"
   by blast
 
 lemma INT_Int_distrib: "(\<Inter>i\<in>I. A i \<inter> B i) = (\<Inter>i\<in>I. A i) \<inter> (\<Inter>i\<in>I. B i)"
@@ -805,10 +824,10 @@ lemma Un_INT_distrib2: "(\<Inter>i\<in>I. A i) \<union> (\<Inter>j\<in>J. B j) =
 
 subsection {* Complement *}
 
-lemma Compl_UN [simp]: "-(\<Union>x\<in>A. B x) = (\<Inter>x\<in>A. -B x)"
+lemma Compl_UN [simp]: "- (\<Union>x\<in>A. B x) = (\<Inter>x\<in>A. -B x)"
   by blast
 
-lemma Compl_INT [simp]: "-(\<Inter>x\<in>A. B x) = (\<Union>x\<in>A. -B x)"
+lemma Compl_INT [simp]: "- (\<Inter>x\<in>A. B x) = (\<Union>x\<in>A. -B x)"
   by blast
 
 
@@ -818,94 +837,85 @@ text {* \medskip Miniscoping: pushing in quantifiers and big Unions
            and Intersections. *}
 
 lemma UN_simps [simp]:
-  "!!a B C. (UN x:C. insert a (B x)) = (if C={} then {} else insert a (UN x:C. B x))"
-  "!!A B C. (UN x:C. A x Un B)   = ((if C={} then {} else (UN x:C. A x) Un B))"
-  "!!A B C. (UN x:C. A Un B x)   = ((if C={} then {} else A Un (UN x:C. B x)))"
-  "!!A B C. (UN x:C. A x Int B)  = ((UN x:C. A x) Int B)"
-  "!!A B C. (UN x:C. A Int B x)  = (A Int (UN x:C. B x))"
-  "!!A B C. (UN x:C. A x - B)    = ((UN x:C. A x) - B)"
-  "!!A B C. (UN x:C. A - B x)    = (A - (INT x:C. B x))"
-  "!!A B. (UN x: Union A. B x) = (UN y:A. UN x:y. B x)"
-  "!!A B C. (UN z: UNION A B. C z) = (UN  x:A. UN z: B(x). C z)"
-  "!!A B f. (UN x:f`A. B x)     = (UN a:A. B (f a))"
+  "\<And>a B C. (\<Union>x\<in>C. insert a (B x)) = (if C={} then {} else insert a (\<Union>x\<in>C. B x))"
+  "\<And>A B C. (\<Union>x\<in>C. A x \<union>  B)   = ((if C={} then {} else (\<Union>x\<in>C. A x) \<union>  B))"
+  "\<And>A B C. (\<Union>x\<in>C. A \<union> B x)   = ((if C={} then {} else A \<union> (\<Union>x\<in>C. B x)))"
+  "\<And>A B C. (\<Union>x\<in>C. A x \<inter> B)  = ((\<Union>x\<in>C. A x) \<inter>B)"
+  "\<And>A B C. (\<Union>x\<in>C. A \<inter> B x)  = (A \<inter>(\<Union>x\<in>C. B x))"
+  "\<And>A B C. (\<Union>x\<in>C. A x - B)    = ((\<Union>x\<in>C. A x) - B)"
+  "\<And>A B C. (\<Union>x\<in>C. A - B x)    = (A - (\<Inter>x\<in>C. B x))"
+  "\<And>A B. (UN x: \<Union>A. B x) = (\<Union>y\<in>A. UN x:y. B x)"
+  "\<And>A B C. (UN z: UNION A B. C z) = (\<Union>x\<in>A. UN z: B(x). C z)"
+  "\<And>A B f. (\<Union>x\<in>f`A. B x) = (\<Union>a\<in>A. B (f a))"
   by auto
 
 lemma INT_simps [simp]:
-  "!!A B C. (INT x:C. A x Int B) = (if C={} then UNIV else (INT x:C. A x) Int B)"
-  "!!A B C. (INT x:C. A Int B x) = (if C={} then UNIV else A Int (INT x:C. B x))"
-  "!!A B C. (INT x:C. A x - B)   = (if C={} then UNIV else (INT x:C. A x) - B)"
-  "!!A B C. (INT x:C. A - B x)   = (if C={} then UNIV else A - (UN x:C. B x))"
-  "!!a B C. (INT x:C. insert a (B x)) = insert a (INT x:C. B x)"
-  "!!A B C. (INT x:C. A x Un B)  = ((INT x:C. A x) Un B)"
-  "!!A B C. (INT x:C. A Un B x)  = (A Un (INT x:C. B x))"
-  "!!A B. (INT x: Union A. B x) = (INT y:A. INT x:y. B x)"
-  "!!A B C. (INT z: UNION A B. C z) = (INT x:A. INT z: B(x). C z)"
-  "!!A B f. (INT x:f`A. B x)    = (INT a:A. B (f a))"
+  "\<And>A B C. (\<Inter>x\<in>C. A x \<inter> B) = (if C={} then UNIV else (\<Inter>x\<in>C. A x) \<inter>B)"
+  "\<And>A B C. (\<Inter>x\<in>C. A \<inter> B x) = (if C={} then UNIV else A \<inter>(\<Inter>x\<in>C. B x))"
+  "\<And>A B C. (\<Inter>x\<in>C. A x - B)   = (if C={} then UNIV else (\<Inter>x\<in>C. A x) - B)"
+  "\<And>A B C. (\<Inter>x\<in>C. A - B x)   = (if C={} then UNIV else A - (\<Union>x\<in>C. B x))"
+  "\<And>a B C. (\<Inter>x\<in>C. insert a (B x)) = insert a (\<Inter>x\<in>C. B x)"
+  "\<And>A B C. (\<Inter>x\<in>C. A x \<union>  B)  = ((\<Inter>x\<in>C. A x) \<union>  B)"
+  "\<And>A B C. (\<Inter>x\<in>C. A \<union> B x)  = (A \<union>  (\<Inter>x\<in>C. B x))"
+  "\<And>A B. (INT x: \<Union>A. B x) = (\<Inter>y\<in>A. INT x:y. B x)"
+  "\<And>A B C. (INT z: UNION A B. C z) = (\<Inter>x\<in>A. INT z: B(x). C z)"
+  "\<And>A B f. (INT x:f`A. B x)    = (INT a:A. B (f a))"
   by auto
 
 lemma ball_simps [simp,no_atp]:
-  "!!A P Q. (ALL x:A. P x | Q) = ((ALL x:A. P x) | Q)"
-  "!!A P Q. (ALL x:A. P | Q x) = (P | (ALL x:A. Q x))"
-  "!!A P Q. (ALL x:A. P --> Q x) = (P --> (ALL x:A. Q x))"
-  "!!A P Q. (ALL x:A. P x --> Q) = ((EX x:A. P x) --> Q)"
-  "!!P. (ALL x:{}. P x) = True"
-  "!!P. (ALL x:UNIV. P x) = (ALL x. P x)"
-  "!!a B P. (ALL x:insert a B. P x) = (P a & (ALL x:B. P x))"
-  "!!A P. (ALL x:Union A. P x) = (ALL y:A. ALL x:y. P x)"
-  "!!A B P. (ALL x: UNION A B. P x) = (ALL a:A. ALL x: B a. P x)"
-  "!!P Q. (ALL x:Collect Q. P x) = (ALL x. Q x --> P x)"
-  "!!A P f. (ALL x:f`A. P x) = (ALL x:A. P (f x))"
-  "!!A P. (~(ALL x:A. P x)) = (EX x:A. ~P x)"
+  "\<And>A P Q. (\<forall>x\<in>A. P x | Q) = ((\<forall>x\<in>A. P x) | Q)"
+  "\<And>A P Q. (\<forall>x\<in>A. P | Q x) = (P | (\<forall>x\<in>A. Q x))"
+  "\<And>A P Q. (\<forall>x\<in>A. P --> Q x) = (P --> (\<forall>x\<in>A. Q x))"
+  "\<And>A P Q. (\<forall>x\<in>A. P x --> Q) = ((\<exists>x\<in>A. P x) --> Q)"
+  "\<And>P. (\<forall> x\<in>{}. P x) = True"
+  "\<And>P. (\<forall> x\<in>UNIV. P x) = (ALL x. P x)"
+  "\<And>a B P. (\<forall> x\<in>insert a B. P x) = (P a & (\<forall> x\<in>B. P x))"
+  "\<And>A P. (\<forall> x\<in>\<Union>A. P x) = (\<forall>y\<in>A. \<forall> x\<in>y. P x)"
+  "\<And>A B P. (\<forall> x\<in> UNION A B. P x) = (\<forall>a\<in>A. \<forall> x\<in> B a. P x)"
+  "\<And>P Q. (\<forall> x\<in>Collect Q. P x) = (ALL x. Q x --> P x)"
+  "\<And>A P f. (\<forall> x\<in>f`A. P x) = (\<forall>x\<in>A. P (f x))"
+  "\<And>A P. (~(\<forall>x\<in>A. P x)) = (\<exists>x\<in>A. ~P x)"
   by auto
 
 lemma bex_simps [simp,no_atp]:
-  "!!A P Q. (EX x:A. P x & Q) = ((EX x:A. P x) & Q)"
-  "!!A P Q. (EX x:A. P & Q x) = (P & (EX x:A. Q x))"
-  "!!P. (EX x:{}. P x) = False"
-  "!!P. (EX x:UNIV. P x) = (EX x. P x)"
-  "!!a B P. (EX x:insert a B. P x) = (P(a) | (EX x:B. P x))"
-  "!!A P. (EX x:Union A. P x) = (EX y:A. EX x:y. P x)"
-  "!!A B P. (EX x: UNION A B. P x) = (EX a:A. EX x:B a. P x)"
-  "!!P Q. (EX x:Collect Q. P x) = (EX x. Q x & P x)"
-  "!!A P f. (EX x:f`A. P x) = (EX x:A. P (f x))"
-  "!!A P. (~(EX x:A. P x)) = (ALL x:A. ~P x)"
+  "\<And>A P Q. (\<exists>x\<in>A. P x & Q) = ((\<exists>x\<in>A. P x) & Q)"
+  "\<And>A P Q. (\<exists>x\<in>A. P & Q x) = (P & (\<exists>x\<in>A. Q x))"
+  "\<And>P. (EX x:{}. P x) = False"
+  "\<And>P. (EX x:UNIV. P x) = (EX x. P x)"
+  "\<And>a B P. (EX x:insert a B. P x) = (P(a) | (EX x:B. P x))"
+  "\<And>A P. (EX x:\<Union>A. P x) = (EX y:A. EX x:y. P x)"
+  "\<And>A B P. (EX x: UNION A B. P x) = (EX a:A. EX x:B a. P x)"
+  "\<And>P Q. (EX x:Collect Q. P x) = (EX x. Q x & P x)"
+  "\<And>A P f. (EX x:f`A. P x) = (\<exists>x\<in>A. P (f x))"
+  "\<And>A P. (~(\<exists>x\<in>A. P x)) = (\<forall>x\<in>A. ~P x)"
   by auto
-
-lemma ball_conj_distrib:
-  "(ALL x:A. P x & Q x) = ((ALL x:A. P x) & (ALL x:A. Q x))"
-  by blast
-
-lemma bex_disj_distrib:
-  "(EX x:A. P x | Q x) = ((EX x:A. P x) | (EX x:A. Q x))"
-  by blast
-
 
 text {* \medskip Maxiscoping: pulling out big Unions and Intersections. *}
 
 lemma UN_extend_simps:
-  "!!a B C. insert a (UN x:C. B x) = (if C={} then {a} else (UN x:C. insert a (B x)))"
-  "!!A B C. (UN x:C. A x) Un B    = (if C={} then B else (UN x:C. A x Un B))"
-  "!!A B C. A Un (UN x:C. B x)   = (if C={} then A else (UN x:C. A Un B x))"
-  "!!A B C. ((UN x:C. A x) Int B) = (UN x:C. A x Int B)"
-  "!!A B C. (A Int (UN x:C. B x)) = (UN x:C. A Int B x)"
-  "!!A B C. ((UN x:C. A x) - B) = (UN x:C. A x - B)"
-  "!!A B C. (A - (INT x:C. B x)) = (UN x:C. A - B x)"
-  "!!A B. (UN y:A. UN x:y. B x) = (UN x: Union A. B x)"
-  "!!A B C. (UN  x:A. UN z: B(x). C z) = (UN z: UNION A B. C z)"
-  "!!A B f. (UN a:A. B (f a)) = (UN x:f`A. B x)"
+  "\<And>a B C. insert a (\<Union>x\<in>C. B x) = (if C={} then {a} else (\<Union>x\<in>C. insert a (B x)))"
+  "\<And>A B C. (\<Union>x\<in>C. A x) \<union>  B    = (if C={} then B else (\<Union>x\<in>C. A x \<union>  B))"
+  "\<And>A B C. A \<union>  (\<Union>x\<in>C. B x)   = (if C={} then A else (\<Union>x\<in>C. A \<union> B x))"
+  "\<And>A B C. ((\<Union>x\<in>C. A x) \<inter>B) = (\<Union>x\<in>C. A x \<inter> B)"
+  "\<And>A B C. (A \<inter>(\<Union>x\<in>C. B x)) = (\<Union>x\<in>C. A \<inter> B x)"
+  "\<And>A B C. ((\<Union>x\<in>C. A x) - B) = (\<Union>x\<in>C. A x - B)"
+  "\<And>A B C. (A - (\<Inter>x\<in>C. B x)) = (\<Union>x\<in>C. A - B x)"
+  "\<And>A B. (\<Union>y\<in>A. UN x:y. B x) = (UN x: \<Union>A. B x)"
+  "\<And>A B C. (\<Union>x\<in>A. UN z: B(x). C z) = (UN z: UNION A B. C z)"
+  "\<And>A B f. (\<Union>a\<in>A. B (f a)) = (\<Union>x\<in>f`A. B x)"
   by auto
 
 lemma INT_extend_simps:
-  "!!A B C. (INT x:C. A x) Int B = (if C={} then B else (INT x:C. A x Int B))"
-  "!!A B C. A Int (INT x:C. B x) = (if C={} then A else (INT x:C. A Int B x))"
-  "!!A B C. (INT x:C. A x) - B   = (if C={} then UNIV-B else (INT x:C. A x - B))"
-  "!!A B C. A - (UN x:C. B x)   = (if C={} then A else (INT x:C. A - B x))"
-  "!!a B C. insert a (INT x:C. B x) = (INT x:C. insert a (B x))"
-  "!!A B C. ((INT x:C. A x) Un B)  = (INT x:C. A x Un B)"
-  "!!A B C. A Un (INT x:C. B x)  = (INT x:C. A Un B x)"
-  "!!A B. (INT y:A. INT x:y. B x) = (INT x: Union A. B x)"
-  "!!A B C. (INT x:A. INT z: B(x). C z) = (INT z: UNION A B. C z)"
-  "!!A B f. (INT a:A. B (f a))    = (INT x:f`A. B x)"
+  "\<And>A B C. (\<Inter>x\<in>C. A x) \<inter>B = (if C={} then B else (\<Inter>x\<in>C. A x \<inter> B))"
+  "\<And>A B C. A \<inter>(\<Inter>x\<in>C. B x) = (if C={} then A else (\<Inter>x\<in>C. A \<inter> B x))"
+  "\<And>A B C. (\<Inter>x\<in>C. A x) - B   = (if C={} then UNIV - B else (\<Inter>x\<in>C. A x - B))"
+  "\<And>A B C. A - (\<Union>x\<in>C. B x)   = (if C={} then A else (\<Inter>x\<in>C. A - B x))"
+  "\<And>a B C. insert a (\<Inter>x\<in>C. B x) = (\<Inter>x\<in>C. insert a (B x))"
+  "\<And>A B C. ((\<Inter>x\<in>C. A x) \<union>  B)  = (\<Inter>x\<in>C. A x \<union>  B)"
+  "\<And>A B C. A \<union>  (\<Inter>x\<in>C. B x)  = (\<Inter>x\<in>C. A \<union> B x)"
+  "\<And>A B. (\<Inter>y\<in>A. INT x:y. B x) = (INT x: \<Union>A. B x)"
+  "\<And>A B C. (\<Inter>x\<in>A. INT z: B(x). C z) = (INT z: UNION A B. C z)"
+  "\<And>A B f. (INT a:A. B (f a))    = (INT x:f`A. B x)"
   by auto
 
 

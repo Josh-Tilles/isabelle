@@ -94,7 +94,7 @@ fun reveal_old_skolem_terms old_skolems =
   map_aterms (fn t as Const (s, _) =>
                  if String.isPrefix old_skolem_const_prefix s then
                    AList.lookup (op =) old_skolems s |> the
-                   |> map_types Type_Infer.paramify_vars
+                   |> map_types (map_type_tvar (K dummyT))
                  else
                    t
                | t => t)
@@ -196,8 +196,8 @@ fun prepare_metis_problem ctxt type_enc conj_clauses fact_clauses =
       tracing ("PROPS:\n" ^ cat_lines (map (Syntax.string_of_term ctxt) props))
     *)
     val (atp_problem, _, _, _, _, _, sym_tab) =
-      prepare_atp_problem ctxt CNF Hypothesis Axiom type_enc true false false
-                          false [] @{prop False} props
+      prepare_atp_problem ctxt CNF Hypothesis Axiom type_enc true false
+                          combinatorsN false false [] @{prop False} props
     (*
     val _ = tracing ("ATP PROBLEM: " ^
                      cat_lines (tptp_lines_for_atp_problem CNF atp_problem))

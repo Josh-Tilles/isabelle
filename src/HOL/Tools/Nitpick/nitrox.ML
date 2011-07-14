@@ -21,7 +21,8 @@ open Nitpick_Isar
 
 exception SYNTAX of string
 
-val parse_keyword = Scan.this_string
+fun is_ident_char c = Char.isAlphaNum c orelse c = #"_"
+val tptp_explode = raw_explode o strip_spaces true is_ident_char
 
 fun parse_file_path (c :: ss) =
     if c = "'" orelse c = "\"" then
@@ -33,21 +34,20 @@ fun parse_file_path (c :: ss) =
 fun parse_include x =
   let
     val (file_name, rest) =
-      (parse_keyword "include" |-- $$ "(" |-- parse_file_path --| $$ ")"
+      (Scan.this_string "include" |-- $$ "(" |-- parse_file_path --| $$ ")"
        --| $$ ".") x
-  in
-    ((), (file_name |> Path.explode |> File.read
-                    |> strip_spaces true (K true)
-                    |> raw_explode) @ rest)
-  end
+    val path = file_name |> Path.explode
+    val path =
+      path |> not (Path.is_absolute path) ? Path.append (Path.explode "$TPTP")
+  in ((), (path |> File.read |> tptp_explode) @ rest) end
 
 val parse_fof_or_cnf =
-  (parse_keyword "fof" || parse_keyword "cnf") |-- $$ "(" |--
+  (Scan.this_string "fof" || Scan.this_string "cnf") |-- $$ "(" |--
   Scan.many (not_equal ",") |-- $$ "," |--
-  (parse_keyword "axiom" || parse_keyword "definition"
-   || parse_keyword "theorem" || parse_keyword "lemma"
-   || parse_keyword "hypothesis" || parse_keyword "conjecture"
-   || parse_keyword "negated_conjecture") --| $$ "," -- parse_formula
+  (Scan.this_string "axiom" || Scan.this_string "definition"
+   || Scan.this_string "theorem" || Scan.this_string "lemma"
+   || Scan.this_string "hypothesis" || Scan.this_string "conjecture"
+   || Scan.this_string "negated_conjecture") --| $$ "," -- parse_formula
       --| $$ ")" --| $$ "."
   >> (fn ("conjecture", phi) => AConn (ANot, [phi]) | (_, phi) => phi)
 
@@ -59,7 +59,7 @@ val parse_tptp_problem =
   Scan.finite Symbol.stopper
       (Scan.error (!! (fn _ => raise SYNTAX "malformed TPTP input")
                   parse_problem))
-  o raw_explode o strip_spaces true (K true)
+  o tptp_explode
 
 val boolT = @{typ bool}
 val iotaT = @{typ iota}
@@ -115,7 +115,8 @@ fun pick_nits_in_fof_file file_name =
 *)
       val state = Proof.init @{context}
       val params =
-        [("card", "1\<emdash>8"),
+        [("card iota", "1\<emdash>100"),
+         ("card", "1\<emdash>8"),
          ("box", "false"),
          ("sat_solver", "smart"),
          ("max_threads", "1"),
@@ -126,7 +127,7 @@ fun pick_nits_in_fof_file file_name =
          ("show_consts", "true"),
          ("format", "1000"),
          ("max_potential", "0"),
-         (* ("timeout", "240 s"), *)
+         ("timeout", "none"),
          ("expect", genuineN)]
         |> default_params @{theory}
       val i = 1
