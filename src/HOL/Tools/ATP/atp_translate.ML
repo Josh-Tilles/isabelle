@@ -3,7 +3,7 @@
     Author:     Makarius
     Author:     Jasmin Blanchette, TU Muenchen
 
-Translation of HOL to FOL for Sledgehammer.
+Translation of HOL to FOL for Metis and Sledgehammer.
 *)
 
 signature ATP_TRANSLATE =
@@ -31,11 +31,6 @@ sig
     Preds of polymorphism * type_level * type_heaviness |
     Tags of polymorphism * type_level * type_heaviness
 
-  val concealed_lambdasN : string
-  val lambda_liftingN : string
-  val combinatorsN : string
-  val lambdasN : string
-  val smartN : string
   val bound_var_prefix : string
   val schematic_var_prefix : string
   val fixed_var_prefix : string
@@ -93,10 +88,12 @@ sig
   val unmangled_const_name : string -> string
   val helper_table : ((string * bool) * thm list) list
   val factsN : string
+  val conceal_lambdas : Proof.context -> term -> term
+  val introduce_combinators : Proof.context -> term -> term
   val prepare_atp_problem :
     Proof.context -> format -> formula_kind -> formula_kind -> type_enc -> bool
-    -> bool -> string -> bool -> bool -> term list -> term
-    -> ((string * locality) * term) list
+    -> bool -> (term list -> term list * term list) -> bool -> bool -> term list
+    -> term -> ((string * locality) * term) list
     -> string problem * string Symtab.table * int * int
        * (string * locality) list vector * int list * int Symtab.table
   val atp_problem_weights : string problem -> (string * real) list
@@ -109,12 +106,6 @@ open ATP_Util
 open ATP_Problem
 
 type name = string * string
-
-val concealed_lambdasN = "concealed_lambdas"
-val lambda_liftingN = "lambda_lifting"
-val combinatorsN = "combinators"
-val lambdasN = "lambdas"
-val smartN = "smart"
 
 val generate_info = false (* experimental *)
 
@@ -129,15 +120,13 @@ val simpN = "simp"
 val bound_var_prefix = "B_"
 val schematic_var_prefix = "V_"
 val fixed_var_prefix = "v_"
-
 val tvar_prefix = "T_"
 val tfree_prefix = "t_"
-
 val const_prefix = "c_"
 val type_const_prefix = "tc_"
 val class_prefix = "cl_"
 
-val skolem_const_prefix = "Sledgehammer" ^ Long_Name.separator ^ "Sko"
+val skolem_const_prefix = "ATP" ^ Long_Name.separator ^ "Sko"
 val old_skolem_const_prefix = skolem_const_prefix ^ "o"
 val new_skolem_const_prefix = skolem_const_prefix ^ "n"
 
@@ -152,6 +141,7 @@ val class_rel_clause_prefix = "clar_"
 val arity_clause_prefix = "arity_"
 val tfree_clause_prefix = "tfree_"
 
+val lambda_fact_prefix = "ATP.lambda_"
 val typed_helper_suffix = "_T"
 val untyped_helper_suffix = "_U"
 val type_tag_idempotence_helper_name = helper_prefix ^ "ti_idem"
@@ -167,9 +157,9 @@ val prefixed_app_op_name = const_prefix ^ app_op_name
 val prefixed_type_tag_name = const_prefix ^ type_tag_name
 
 (* Freshness almost guaranteed! *)
-val sledgehammer_weak_prefix = "Sledgehammer:"
+val atp_weak_prefix = "ATP:"
 
-val concealed_lambda_prefix = sledgehammer_weak_prefix ^ "lambda_"
+val concealed_lambda_prefix = atp_weak_prefix ^ "lambda_"
 
 (*Escaping of special characters.
   Alphanumeric characters are left unchanged.
@@ -456,21 +446,22 @@ fun make_class_rel_clause (sub, super) =
 fun make_class_rel_clauses thy subs supers =
   map make_class_rel_clause (class_pairs thy subs supers)
 
-datatype combterm =
-  CombConst of name * typ * typ list |
-  CombVar of name * typ |
-  CombApp of combterm * combterm |
-  CombAbs of (name * typ) * combterm
+(* intermediate terms *)
+datatype iterm =
+  IConst of name * typ * typ list |
+  IVar of name * typ |
+  IApp of iterm * iterm |
+  IAbs of (name * typ) * iterm
 
-fun combtyp_of (CombConst (_, T, _)) = T
-  | combtyp_of (CombVar (_, T)) = T
-  | combtyp_of (CombApp (t1, _)) = snd (dest_funT (combtyp_of t1))
-  | combtyp_of (CombAbs ((_, T), tm)) = T --> combtyp_of tm
+fun ityp_of (IConst (_, T, _)) = T
+  | ityp_of (IVar (_, T)) = T
+  | ityp_of (IApp (t1, _)) = snd (dest_funT (ityp_of t1))
+  | ityp_of (IAbs ((_, T), tm)) = T --> ityp_of tm
 
 (*gets the head of a combinator application, along with the list of arguments*)
-fun strip_combterm_comb u =
+fun strip_iterm_comb u =
   let
-    fun stripc (CombApp (t, u), ts) = stripc (t, u :: ts)
+    fun stripc (IApp (t, u), ts) = stripc (t, u :: ts)
       | stripc x = x
   in stripc (u, []) end
 
@@ -480,42 +471,41 @@ fun new_skolem_const_name s num_T_args =
   [new_skolem_const_prefix, s, string_of_int num_T_args]
   |> space_implode Long_Name.separator
 
-(* Converts a term (with combinators) into a combterm. Also accumulates sort
-   infomation. *)
-fun combterm_from_term thy bs (P $ Q) =
+(* Converts an Isabelle/HOL term (with combinators) into an intermediate term.
+   Also accumulates sort infomation. *)
+fun iterm_from_term thy bs (P $ Q) =
     let
-      val (P', P_atomics_Ts) = combterm_from_term thy bs P
-      val (Q', Q_atomics_Ts) = combterm_from_term thy bs Q
-    in (CombApp (P', Q'), union (op =) P_atomics_Ts Q_atomics_Ts) end
-  | combterm_from_term thy _ (Const (c, T)) =
+      val (P', P_atomics_Ts) = iterm_from_term thy bs P
+      val (Q', Q_atomics_Ts) = iterm_from_term thy bs Q
+    in (IApp (P', Q'), union (op =) P_atomics_Ts Q_atomics_Ts) end
+  | iterm_from_term thy _ (Const (c, T)) =
     let
       val tvar_list =
         (if String.isPrefix old_skolem_const_prefix c then
            [] |> Term.add_tvarsT T |> map TVar
          else
            (c, T) |> Sign.const_typargs thy)
-      val c' = CombConst (`make_fixed_const c, T, tvar_list)
+      val c' = IConst (`make_fixed_const c, T, tvar_list)
     in (c', atyps_of T) end
-  | combterm_from_term _ _ (Free (v, T)) =
-    (CombConst (`make_fixed_var v, T, []), atyps_of T)
-  | combterm_from_term _ _ (Var (v as (s, _), T)) =
+  | iterm_from_term _ _ (Free (v, T)) =
+    (IConst (`make_fixed_var v, T, []), atyps_of T)
+  | iterm_from_term _ _ (Var (v as (s, _), T)) =
     (if String.isPrefix Meson_Clausify.new_skolem_var_prefix s then
        let
          val Ts = T |> strip_type |> swap |> op ::
          val s' = new_skolem_const_name s (length Ts)
-       in CombConst (`make_fixed_const s', T, Ts) end
+       in IConst (`make_fixed_const s', T, Ts) end
      else
-       CombVar ((make_schematic_var v, s), T), atyps_of T)
-  | combterm_from_term _ bs (Bound j) =
-    nth bs j
-    |> (fn (s, T) => (CombConst (`make_bound_var s, T, []), atyps_of T))
-  | combterm_from_term thy bs (Abs (s, T, t)) =
+       IVar ((make_schematic_var v, s), T), atyps_of T)
+  | iterm_from_term _ bs (Bound j) =
+    nth bs j |> (fn (s, T) => (IConst (`make_bound_var s, T, []), atyps_of T))
+  | iterm_from_term thy bs (Abs (s, T, t)) =
     let
       fun vary s = s |> AList.defined (op =) bs s ? vary o Symbol.bump_string
       val s = vary s
-      val (tm, atomic_Ts) = combterm_from_term thy ((s, T) :: bs) t
+      val (tm, atomic_Ts) = iterm_from_term thy ((s, T) :: bs) t
     in
-      (CombAbs ((`make_bound_var s, T), tm),
+      (IAbs ((`make_bound_var s, T), tm),
        union (op =) atomic_Ts (atyps_of T))
     end
 
@@ -630,15 +620,15 @@ type translated_formula =
   {name : string,
    locality : locality,
    kind : formula_kind,
-   combformula : (name, typ, combterm) formula,
+   iformula : (name, typ, iterm) formula,
    atomic_types : typ list}
 
-fun update_combformula f ({name, locality, kind, combformula, atomic_types}
-                          : translated_formula) =
-  {name = name, locality = locality, kind = kind, combformula = f combformula,
+fun update_iformula f ({name, locality, kind, iformula, atomic_types}
+                       : translated_formula) =
+  {name = name, locality = locality, kind = kind, iformula = f iformula,
    atomic_types = atomic_types} : translated_formula
 
-fun fact_lift f ({combformula, ...} : translated_formula) = f combformula
+fun fact_lift f ({iformula, ...} : translated_formula) = f iformula
 
 val type_instance = Sign.typ_instance o Proof_Context.theory_of
 
@@ -721,11 +711,11 @@ fun close_universally atom_vars phi =
                       |> filter_out (member (op =) bounds o fst))
   in mk_aquant AForall (formula_vars [] phi []) phi end
 
-fun combterm_vars (CombApp (tm1, tm2)) = fold combterm_vars [tm1, tm2]
-  | combterm_vars (CombConst _) = I
-  | combterm_vars (CombVar (name, T)) = insert (op =) (name, SOME T)
-  | combterm_vars (CombAbs (_, tm)) = combterm_vars tm
-fun close_combformula_universally phi = close_universally combterm_vars phi
+fun iterm_vars (IApp (tm1, tm2)) = fold iterm_vars [tm1, tm2]
+  | iterm_vars (IConst _) = I
+  | iterm_vars (IVar (name, T)) = insert (op =) (name, SOME T)
+  | iterm_vars (IAbs (_, tm)) = iterm_vars tm
+fun close_iformula_universally phi = close_universally iterm_vars phi
 
 fun term_vars bounds (ATerm (name as (s, _), tms)) =
     (is_tptp_variable s andalso not (member (op =) bounds name))
@@ -825,9 +815,9 @@ fun unmangled_const s =
 
 fun introduce_proxies type_enc =
   let
-    fun intro top_level (CombApp (tm1, tm2)) =
-        CombApp (intro top_level tm1, intro false tm2)
-      | intro top_level (CombConst (name as (s, _), T, T_args)) =
+    fun intro top_level (IApp (tm1, tm2)) =
+        IApp (intro top_level tm1, intro false tm2)
+      | intro top_level (IConst (name as (s, _), T, T_args)) =
         (case proxify_const s of
            SOME proxy_base =>
            if top_level orelse is_type_enc_higher_order type_enc then
@@ -847,15 +837,15 @@ fun introduce_proxies type_enc =
            else
              (proxy_base |>> prefix const_prefix, T_args)
           | NONE => (name, T_args))
-        |> (fn (name, T_args) => CombConst (name, T, T_args))
-      | intro _ (CombAbs (bound, tm)) = CombAbs (bound, intro false tm)
+        |> (fn (name, T_args) => IConst (name, T, T_args))
+      | intro _ (IAbs (bound, tm)) = IAbs (bound, intro false tm)
       | intro _ tm = tm
   in intro true end
 
-fun combformula_from_prop thy type_enc eq_as_iff =
+fun iformula_from_prop thy type_enc eq_as_iff =
   let
     fun do_term bs t atomic_types =
-      combterm_from_term thy bs (Envir.eta_contract t)
+      iterm_from_term thy bs (Envir.eta_contract t)
       |>> (introduce_proxies type_enc #> AAtom)
       ||> union (op =) atomic_types
     fun do_quant bs q s T t' =
@@ -888,7 +878,7 @@ fun presimplify_term _ [] t = t
             #> Meson.presimplify ctxt
             #> prop_of)
 
-fun concealed_bound_name j = sledgehammer_weak_prefix ^ string_of_int j
+fun concealed_bound_name j = atp_weak_prefix ^ string_of_int j
 fun conceal_bounds Ts t =
   subst_bounds (map (Free o apfst concealed_bound_name)
                     (0 upto length Ts - 1 ~~ Ts), t)
@@ -909,14 +899,7 @@ fun extensionalize_term ctxt t =
   else
     t
 
-fun conceal_lambdas Ts (t1 $ t2) = conceal_lambdas Ts t1 $ conceal_lambdas Ts t2
-  | conceal_lambdas Ts (Abs (_, T, t)) =
-    (* slightly unsound because of hash collisions *)
-    Free (concealed_lambda_prefix ^ string_of_int (hash_term t),
-          T --> fastype_of1 (Ts, t))
-  | conceal_lambdas _ t = t
-
-fun process_abstractions_in_term ctxt lambda_trans kind t =
+fun simple_translate_lambdas do_lambdas ctxt t =
   let val thy = Proof_Context.theory_of ctxt in
     if Meson.is_fol_term thy t then
       t
@@ -940,33 +923,44 @@ fun process_abstractions_in_term ctxt lambda_trans kind t =
               $ t1 $ t2 =>
             t0 $ aux Ts t1 $ aux Ts t2
           | _ =>
-            if not (exists_subterm (fn Abs _ => true | _ => false) t) then
-              t
-            else
-              let val t = t |> Envir.eta_contract in
-                if lambda_trans = concealed_lambdasN then
-                  t |> conceal_lambdas []
-                else if lambda_trans = lambda_liftingN then
-                  t (* TODO: implement *)
-                else if lambda_trans = combinatorsN then
-                  t |> conceal_bounds Ts
-                    |> cterm_of thy
-                    |> Meson_Clausify.introduce_combinators_in_cterm
-                    |> prop_of |> Logic.dest_equals |> snd
-                    |> reveal_bounds Ts
-                else if lambda_trans = lambdasN then
-                  t
-                else
-                  error ("Unknown lambda translation method: " ^
-                         quote lambda_trans ^ ".")
-              end
+            if not (exists_subterm (fn Abs _ => true | _ => false) t) then t
+            else t |> Envir.eta_contract |> do_lambdas ctxt Ts
         val (t, ctxt') = Variable.import_terms true [t] ctxt |>> the_single
       in t |> aux [] |> singleton (Variable.export_terms ctxt' ctxt) end
-      handle THM _ =>
-             (* A type variable of sort "{}" will make abstraction fail. *)
-             if kind = Conjecture then HOLogic.false_const
-             else HOLogic.true_const
   end
+
+fun do_conceal_lambdas Ts (t1 $ t2) =
+    do_conceal_lambdas Ts t1 $ do_conceal_lambdas Ts t2
+  | do_conceal_lambdas Ts (Abs (_, T, t)) =
+    (* slightly unsound because of hash collisions *)
+    Free (concealed_lambda_prefix ^ string_of_int (hash_term t),
+          T --> fastype_of1 (Ts, t))
+  | do_conceal_lambdas _ t = t
+val conceal_lambdas = simple_translate_lambdas (K do_conceal_lambdas)
+
+fun do_introduce_combinators ctxt Ts t =
+  let val thy = Proof_Context.theory_of ctxt in
+    t |> not (Meson.is_fol_term thy t)
+         ? (conceal_bounds Ts
+            #> cterm_of thy
+            #> Meson_Clausify.introduce_combinators_in_cterm
+            #> prop_of #> Logic.dest_equals #> snd
+            #> reveal_bounds Ts)
+  end
+  (* A type variable of sort "{}" will make abstraction fail. *)
+  handle THM _ => t |> do_conceal_lambdas Ts
+val introduce_combinators = simple_translate_lambdas do_introduce_combinators
+
+fun preprocess_abstractions_in_terms trans_lambdas facts =
+  let
+    val (facts, lambda_ts) =
+      facts |> map (snd o snd) |> trans_lambdas 
+            |>> map2 (fn (name, (kind, _)) => fn t => (name, (kind, t))) facts
+    val lambda_facts =
+      map2 (fn t => fn j =>
+               ((lambda_fact_prefix ^ Int.toString j, Helper), (Axiom, t)))
+           lambda_ts (1 upto length lambda_ts)
+  in (facts, lambda_facts) end
 
 (* Metis's use of "resolve_tac" freezes the schematic variables. We simulate the
    same in Sledgehammer to prevent the discovery of unreplayable proofs. *)
@@ -975,11 +969,11 @@ fun freeze_term t =
     fun aux (t $ u) = aux t $ aux u
       | aux (Abs (s, T, t)) = Abs (s, T, aux t)
       | aux (Var ((s, i), T)) =
-        Free (sledgehammer_weak_prefix ^ s ^ "_" ^ string_of_int i, T)
+        Free (atp_weak_prefix ^ s ^ "_" ^ string_of_int i, T)
       | aux t = t
   in t |> exists_subterm is_Var t ? aux end
 
-fun preprocess_prop ctxt lambda_trans presimp_consts kind t =
+fun presimp_prop ctxt presimp_consts t =
   let
     val thy = Proof_Context.theory_of ctxt
     val t = t |> Envir.beta_eta_contract
@@ -992,54 +986,36 @@ fun preprocess_prop ctxt lambda_trans presimp_consts kind t =
       |> extensionalize_term ctxt
       |> presimplify_term ctxt presimp_consts
       |> perhaps (try (HOLogic.dest_Trueprop))
-      |> process_abstractions_in_term ctxt lambda_trans kind
   end
 
 (* making fact and conjecture formulas *)
 fun make_formula thy type_enc eq_as_iff name loc kind t =
   let
-    val (combformula, atomic_types) =
-      combformula_from_prop thy type_enc eq_as_iff t []
+    val (iformula, atomic_types) =
+      iformula_from_prop thy type_enc eq_as_iff t []
   in
-    {name = name, locality = loc, kind = kind, combformula = combformula,
+    {name = name, locality = loc, kind = kind, iformula = iformula,
      atomic_types = atomic_types}
   end
 
-fun make_fact ctxt format type_enc lambda_trans eq_as_iff preproc presimp_consts
-              ((name, loc), t) =
+fun make_fact ctxt format type_enc eq_as_iff ((name, loc), t) =
   let val thy = Proof_Context.theory_of ctxt in
-    case t |> preproc ? preprocess_prop ctxt lambda_trans presimp_consts Axiom
-           |> make_formula thy type_enc (eq_as_iff andalso format <> CNF) name
+    case t |> make_formula thy type_enc (eq_as_iff andalso format <> CNF) name
                            loc Axiom of
-      formula as {combformula = AAtom (CombConst ((s, _), _, _)), ...} =>
+      formula as {iformula = AAtom (IConst ((s, _), _, _)), ...} =>
       if s = tptp_true then NONE else SOME formula
     | formula => SOME formula
   end
 
-fun make_conjecture ctxt format prem_kind type_enc lambda_trans preproc
-                    presimp_consts ts =
+fun make_conjecture ctxt format type_enc ps =
   let
     val thy = Proof_Context.theory_of ctxt
-    val last = length ts - 1
+    val last = length ps - 1
   in
-    map2 (fn j => fn t =>
-             let
-               val (kind, maybe_negate) =
-                 if j = last then
-                   (Conjecture, I)
-                 else
-                   (prem_kind,
-                    if prem_kind = Conjecture then update_combformula mk_anot
-                    else I)
-              in
-                t |> preproc ?
-                     (preprocess_prop ctxt lambda_trans presimp_consts kind
-                      #> freeze_term)
-                  |> make_formula thy type_enc (format <> CNF) (string_of_int j)
-                                  Local kind
-                  |> maybe_negate
-              end)
-         (0 upto last) ts
+    map2 (fn j => fn ((name, loc), (kind, t)) =>
+             t |> make_formula thy type_enc (format <> CNF) name loc kind
+               |> (j <> last) = (kind = Conjecture) ? update_iformula mk_anot)
+         (0 upto last) ps
   end
 
 (** Finite and infinite type inference **)
@@ -1066,9 +1042,9 @@ fun should_predicate_on_type ctxt nonmono_Ts (Preds (_, level, heaviness))
     should_encode_type ctxt nonmono_Ts level T
   | should_predicate_on_type _ _ _ _ _ = false
 
-fun is_var_or_bound_var (CombConst ((s, _), _, _)) =
+fun is_var_or_bound_var (IConst ((s, _), _, _)) =
     String.isPrefix bound_var_prefix s
-  | is_var_or_bound_var (CombVar _) = true
+  | is_var_or_bound_var (IVar _) = true
   | is_var_or_bound_var _ = false
 
 datatype tag_site =
@@ -1108,7 +1084,7 @@ fun homogenized_type ctxt nonmono_Ts level =
 type sym_info =
   {pred_sym : bool, min_ary : int, max_ary : int, types : typ list}
 
-fun add_combterm_syms_to_table ctxt explicit_apply =
+fun add_iterm_syms_to_table ctxt explicit_apply =
   let
     fun consider_var_arity const_T var_T max_ary =
       let
@@ -1140,9 +1116,9 @@ fun add_combterm_syms_to_table ctxt explicit_apply =
       else
         accum
     fun add top_level tm (accum as ((bool_vars, fun_var_Ts), sym_tab)) =
-      let val (head, args) = strip_combterm_comb tm in
+      let val (head, args) = strip_iterm_comb tm in
         (case head of
-           CombConst ((s, _), T, _) =>
+           IConst ((s, _), T, _) =>
            if String.isPrefix bound_var_prefix s then
              add_var_or_bound_var T accum
            else
@@ -1182,16 +1158,15 @@ fun add_combterm_syms_to_table ctxt explicit_apply =
                                       sym_tab
                   end)
              end
-         | CombVar (_, T) => add_var_or_bound_var T accum
-         | CombAbs ((_, T), tm) =>
-           accum |> add_var_or_bound_var T |> add false tm
+         | IVar (_, T) => add_var_or_bound_var T accum
+         | IAbs ((_, T), tm) => accum |> add_var_or_bound_var T |> add false tm
          | _ => accum)
         |> fold (add false) args
       end
   in add true end
 fun add_fact_syms_to_table ctxt explicit_apply =
   fact_lift (formula_fold NONE
-                          (K (add_combterm_syms_to_table ctxt explicit_apply)))
+                          (K (add_iterm_syms_to_table ctxt explicit_apply)))
 
 val default_sym_tab_entries : (string * sym_info) list =
   (prefixed_predicator_name,
@@ -1231,33 +1206,32 @@ fun is_pred_sym sym_tab s =
   | NONE => false
 
 val predicator_combconst =
-  CombConst (`make_fixed_const predicator_name, @{typ "bool => bool"}, [])
-fun predicator tm = CombApp (predicator_combconst, tm)
+  IConst (`make_fixed_const predicator_name, @{typ "bool => bool"}, [])
+fun predicator tm = IApp (predicator_combconst, tm)
 
-fun introduce_predicators_in_combterm sym_tab tm =
-  case strip_combterm_comb tm of
-    (CombConst ((s, _), _, _), _) =>
+fun introduce_predicators_in_iterm sym_tab tm =
+  case strip_iterm_comb tm of
+    (IConst ((s, _), _, _), _) =>
     if is_pred_sym sym_tab s then tm else predicator tm
   | _ => predicator tm
 
-fun list_app head args = fold (curry (CombApp o swap)) args head
+fun list_app head args = fold (curry (IApp o swap)) args head
 
 val app_op = `make_fixed_const app_op_name
 
 fun explicit_app arg head =
   let
-    val head_T = combtyp_of head
+    val head_T = ityp_of head
     val (arg_T, res_T) = dest_funT head_T
-    val explicit_app =
-      CombConst (app_op, head_T --> head_T, [arg_T, res_T])
+    val explicit_app = IConst (app_op, head_T --> head_T, [arg_T, res_T])
   in list_app explicit_app [head, arg] end
 fun list_explicit_app head args = fold explicit_app args head
 
-fun introduce_explicit_apps_in_combterm sym_tab =
+fun introduce_explicit_apps_in_iterm sym_tab =
   let
     fun aux tm =
-      case strip_combterm_comb tm of
-        (head as CombConst ((s, _), _, _), args) =>
+      case strip_iterm_comb tm of
+        (head as IConst ((s, _), _, _), args) =>
         args |> map aux
              |> chop (min_arity_of sym_tab s)
              |>> list_app head
@@ -1291,12 +1265,11 @@ fun filter_type_args _ _ _ [] = []
     end
     handle TYPE _ => T_args
 
-fun enforce_type_arg_policy_in_combterm ctxt format type_enc =
+fun enforce_type_arg_policy_in_iterm ctxt format type_enc =
   let
     val thy = Proof_Context.theory_of ctxt
-    fun aux arity (CombApp (tm1, tm2)) =
-        CombApp (aux (arity + 1) tm1, aux 0 tm2)
-      | aux arity (CombConst (name as (s, _), T, T_args)) =
+    fun aux arity (IApp (tm1, tm2)) = IApp (aux (arity + 1) tm1, aux 0 tm2)
+      | aux arity (IConst (name as (s, _), T, T_args)) =
         (case strip_prefix_and_unascii const_prefix s of
            NONE => (name, T_args)
          | SOME s'' =>
@@ -1313,19 +1286,18 @@ fun enforce_type_arg_policy_in_combterm ctxt format type_enc =
                                    name, [])
              | No_Type_Args => (name, [])
            end)
-        |> (fn (name, T_args) => CombConst (name, T, T_args))
-      | aux _ (CombAbs (bound, tm)) = CombAbs (bound, aux 0 tm)
+        |> (fn (name, T_args) => IConst (name, T, T_args))
+      | aux _ (IAbs (bound, tm)) = IAbs (bound, aux 0 tm)
       | aux _ tm = tm
   in aux 0 end
 
-fun repair_combterm ctxt format type_enc sym_tab =
+fun repair_iterm ctxt format type_enc sym_tab =
   not (is_type_enc_higher_order type_enc)
-  ? (introduce_explicit_apps_in_combterm sym_tab
-     #> introduce_predicators_in_combterm sym_tab)
-  #> enforce_type_arg_policy_in_combterm ctxt format type_enc
+  ? (introduce_explicit_apps_in_iterm sym_tab
+     #> introduce_predicators_in_iterm sym_tab)
+  #> enforce_type_arg_policy_in_iterm ctxt format type_enc
 fun repair_fact ctxt format type_enc sym_tab =
-  update_combformula (formula_map
-      (repair_combterm ctxt format type_enc sym_tab))
+  update_iformula (formula_map (repair_iterm ctxt format type_enc sym_tab))
 
 (** Helper facts **)
 
@@ -1381,8 +1353,7 @@ fun should_specialize_helper type_enc t =
   level_of_type_enc type_enc <> No_Types andalso
   not (null (Term.hidden_polymorphism t))
 
-fun helper_facts_for_sym ctxt format type_enc lambda_trans
-                         (s, {types, ...} : sym_info) =
+fun helper_facts_for_sym ctxt format type_enc (s, {types, ...} : sym_info) =
   case strip_prefix_and_unascii const_prefix s of
     SOME mangled_s =>
     let
@@ -1403,8 +1374,7 @@ fun helper_facts_for_sym ctxt format type_enc lambda_trans
             [t]
         end
         |> map (fn (k, t) => (dub needs_fairly_sound j k, t)) o tag_list 1
-      val make_facts =
-        map_filter (make_fact ctxt format type_enc lambda_trans false false [])
+      val make_facts = map_filter (make_fact ctxt format type_enc false)
       val fairly_sound = is_type_enc_fairly_sound type_enc
     in
       helper_table
@@ -1418,10 +1388,9 @@ fun helper_facts_for_sym ctxt format type_enc lambda_trans
                     |> make_facts)
     end
   | NONE => []
-fun helper_facts_for_sym_table ctxt format type_enc lambda_trans sym_tab =
-  Symtab.fold_rev (append
-                   o helper_facts_for_sym ctxt format type_enc lambda_trans)
-                  sym_tab []
+fun helper_facts_for_sym_table ctxt format type_enc sym_tab =
+  Symtab.fold_rev (append o helper_facts_for_sym ctxt format type_enc) sym_tab
+                  []
 
 (***************************************************************)
 (* Type Classes Present in the Axiom or Conjecture Clauses     *)
@@ -1461,38 +1430,50 @@ fun add_type_constrs_in_term thy =
 fun type_constrs_of_terms thy ts =
   Symtab.keys (fold (add_type_constrs_in_term thy) ts Symtab.empty)
 
-fun translate_formulas ctxt format prem_kind type_enc lambda_trans preproc
+fun translate_formulas ctxt format prem_kind type_enc trans_lambdas preproc
                        hyp_ts concl_t facts =
   let
     val thy = Proof_Context.theory_of ctxt
-    val fact_ts = facts |> map snd
     val presimp_consts = Meson.presimplified_consts ctxt
-    val make_fact =
-      make_fact ctxt format type_enc lambda_trans true preproc presimp_consts
-    val (facts, fact_names) =
-      facts |> map (fn (name, t) => (name, t) |> make_fact |> rpair name)
-            |> map_filter (try (apfst the))
-            |> ListPair.unzip
+    val fact_ts = facts |> map snd
     (* Remove existing facts from the conjecture, as this can dramatically
        boost an ATP's performance (for some reason). *)
     val hyp_ts =
       hyp_ts
       |> map (fn t => if member (op aconv) fact_ts t then @{prop True} else t)
-    val goal_t = Logic.list_implies (hyp_ts, concl_t)
-    val all_ts = goal_t :: fact_ts
+    val facts = facts |> map (apsnd (pair Axiom))
+    val conjs =
+      map (pair prem_kind) hyp_ts @ [(Conjecture, concl_t)]
+      |> map2 (pair o rpair Local o string_of_int) (0 upto length hyp_ts)
+    val ((conjs, facts), lambdas) =
+      if preproc then
+        conjs @ facts
+        |> map (apsnd (apsnd (presimp_prop ctxt presimp_consts)))
+        |> preprocess_abstractions_in_terms trans_lambdas
+        |>> chop (length conjs)
+        |>> apfst (map (apsnd (apsnd freeze_term)))
+      else
+        ((conjs, facts), [])
+    val conjs = conjs |> make_conjecture ctxt format type_enc
+    val (fact_names, facts) =
+      facts
+      |> map_filter (fn (name, (_, t)) =>
+                        make_fact ctxt format type_enc true (name, t)
+                        |> Option.map (pair name))
+      |> ListPair.unzip
+    val lambdas =
+      lambdas |> map_filter (make_fact ctxt format type_enc true o apsnd snd)
+    val all_ts = concl_t :: hyp_ts @ fact_ts
     val subs = tfree_classes_of_terms all_ts
     val supers = tvar_classes_of_terms all_ts
     val tycons = type_constrs_of_terms thy all_ts
-    val conjs =
-      hyp_ts @ [concl_t]
-      |> make_conjecture ctxt format prem_kind type_enc lambda_trans preproc
-                         presimp_consts
-    val (supers', arity_clauses) =
+    val (supers, arity_clauses) =
       if level_of_type_enc type_enc = No_Types then ([], [])
       else make_arity_clauses thy tycons supers
-    val class_rel_clauses = make_class_rel_clauses thy subs supers'
+    val class_rel_clauses = make_class_rel_clauses thy subs supers
   in
-    (fact_names |> map single, (conjs, facts, class_rel_clauses, arity_clauses))
+    (fact_names |> map single,
+     (conjs, facts @ lambdas, class_rel_clauses, arity_clauses))
   end
 
 fun fo_literal_from_type_literal (TyLitVar (class, name)) =
@@ -1504,9 +1485,9 @@ fun formula_from_fo_literal (pos, t) = AAtom t |> not pos ? mk_anot
 
 val type_pred = `make_fixed_const type_pred_name
 
-fun type_pred_combterm ctxt format type_enc T tm =
-  CombApp (CombConst (type_pred, T --> @{typ bool}, [T])
-           |> enforce_type_arg_policy_in_combterm ctxt format type_enc, tm)
+fun type_pred_iterm ctxt format type_enc T tm =
+  IApp (IConst (type_pred, T --> @{typ bool}, [T])
+        |> enforce_type_arg_policy_in_iterm ctxt format type_enc, tm)
 
 fun is_var_positively_naked_in_term _ (SOME false) _ accum = accum
   | is_var_positively_naked_in_term name _ (ATerm ((s, _), tms)) accum =
@@ -1520,16 +1501,16 @@ fun mk_aterm format type_enc name T_args args =
   ATerm (name, map_filter (ho_term_for_type_arg format type_enc) T_args @ args)
 
 fun tag_with_type ctxt format nonmono_Ts type_enc pos T tm =
-  CombConst (type_tag, T --> T, [T])
-  |> enforce_type_arg_policy_in_combterm ctxt format type_enc
-  |> ho_term_from_combterm ctxt format nonmono_Ts type_enc (Top_Level pos)
+  IConst (type_tag, T --> T, [T])
+  |> enforce_type_arg_policy_in_iterm ctxt format type_enc
+  |> ho_term_from_iterm ctxt format nonmono_Ts type_enc (Top_Level pos)
   |> (fn ATerm (s, tms) => ATerm (s, tms @ [tm])
        | _ => raise Fail "unexpected lambda-abstraction")
-and ho_term_from_combterm ctxt format nonmono_Ts type_enc =
+and ho_term_from_iterm ctxt format nonmono_Ts type_enc =
   let
     fun aux site u =
       let
-        val (head, args) = strip_combterm_comb u
+        val (head, args) = strip_iterm_comb u
         val pos =
           case site of
             Top_Level pos => pos
@@ -1537,17 +1518,19 @@ and ho_term_from_combterm ctxt format nonmono_Ts type_enc =
           | Elsewhere => NONE
         val t =
           case head of
-            CombConst (name as (s, _), _, T_args) =>
+            IConst (name as (s, _), _, T_args) =>
             let
               val arg_site = if is_tptp_equal s then Eq_Arg pos else Elsewhere
             in
               mk_aterm format type_enc name T_args (map (aux arg_site) args)
             end
-          | CombVar (name, _) => mk_aterm format type_enc name [] (map (aux Elsewhere) args)
-          | CombAbs ((name, T), tm) =>
-            AAbs ((name, ho_type_from_typ format type_enc true 0 T), aux Elsewhere tm)
-          | CombApp _ => raise Fail "impossible \"CombApp\""
-        val T = combtyp_of u
+          | IVar (name, _) =>
+            mk_aterm format type_enc name [] (map (aux Elsewhere) args)
+          | IAbs ((name, T), tm) =>
+            AAbs ((name, ho_type_from_typ format type_enc true 0 T),
+                  aux Elsewhere tm)
+          | IApp _ => raise Fail "impossible \"IApp\""
+        val T = ityp_of u
       in
         t |> (if should_tag_with_type ctxt nonmono_Ts type_enc site u T then
                 tag_with_type ctxt format nonmono_Ts type_enc pos T
@@ -1555,11 +1538,10 @@ and ho_term_from_combterm ctxt format nonmono_Ts type_enc =
                 I)
       end
   in aux end
-and formula_from_combformula ctxt format nonmono_Ts type_enc
-                             should_predicate_on_var =
+and formula_from_iformula ctxt format nonmono_Ts type_enc
+                          should_predicate_on_var =
   let
-    fun do_term pos =
-      ho_term_from_combterm ctxt format nonmono_Ts type_enc (Top_Level pos)
+    val do_term = ho_term_from_iterm ctxt format nonmono_Ts type_enc o Top_Level
     val do_bound_type =
       case type_enc of
         Simple_Types (_, level) =>
@@ -1569,8 +1551,8 @@ and formula_from_combformula ctxt format nonmono_Ts type_enc
     fun do_out_of_bound_type pos phi universal (name, T) =
       if should_predicate_on_type ctxt nonmono_Ts type_enc
              (fn () => should_predicate_on_var pos phi universal name) T then
-        CombVar (name, T)
-        |> type_pred_combterm ctxt format type_enc T
+        IVar (name, T)
+        |> type_pred_iterm ctxt format type_enc T
         |> do_term pos |> AAtom |> SOME
       else
         NONE
@@ -1601,14 +1583,13 @@ fun bound_tvars type_enc Ts =
    of monomorphization). The TPTP explicitly forbids name clashes, and some of
    the remote provers might care. *)
 fun formula_line_for_fact ctxt format prefix encode freshen pos nonmono_Ts
-        type_enc (j, {name, locality, kind, combformula, atomic_types}) =
-  (prefix ^ (if freshen then string_of_int j ^ "_" else "") ^ encode name,
-   kind,
-   combformula
-   |> close_combformula_universally
-   |> formula_from_combformula ctxt format nonmono_Ts type_enc
-                               should_predicate_on_var_in_formula
-                               (if pos then SOME true else NONE)
+        type_enc (j, {name, locality, kind, iformula, atomic_types}) =
+  (prefix ^ (if freshen then string_of_int j ^ "_" else "") ^ encode name, kind,
+   iformula
+   |> close_iformula_universally
+   |> formula_from_iformula ctxt format nonmono_Ts type_enc
+                            should_predicate_on_var_in_formula
+                            (if pos then SOME true else NONE)
    |> bound_tvars type_enc atomic_types
    |> close_formula_universally,
    NONE,
@@ -1643,11 +1624,11 @@ fun formula_line_for_arity_clause ({name, prem_lits, concl_lits, ...}
            |> close_formula_universally, isabelle_info introN, NONE)
 
 fun formula_line_for_conjecture ctxt format nonmono_Ts type_enc
-        ({name, kind, combformula, atomic_types, ...} : translated_formula) =
+        ({name, kind, iformula, atomic_types, ...} : translated_formula) =
   Formula (conjecture_prefix ^ name, kind,
-           formula_from_combformula ctxt format nonmono_Ts type_enc
+           formula_from_iformula ctxt format nonmono_Ts type_enc
                should_predicate_on_var_in_formula (SOME false)
-               (close_combformula_universally combformula)
+               (close_iformula_universally iformula)
            |> bound_tvars type_enc atomic_types
            |> close_formula_universally, NONE, NONE)
 
@@ -1675,10 +1656,10 @@ fun should_declare_sym type_enc pred_sym s =
 
 fun sym_decl_table_for_facts ctxt type_enc repaired_sym_tab (conjs, facts) =
   let
-    fun add_combterm in_conj tm =
-      let val (head, args) = strip_combterm_comb tm in
+    fun add_iterm in_conj tm =
+      let val (head, args) = strip_iterm_comb tm in
         (case head of
-           CombConst ((s, s'), T, T_args) =>
+           IConst ((s, s'), T, T_args) =>
            let val pred_sym = is_pred_sym repaired_sym_tab s in
              if should_declare_sym type_enc pred_sym s then
                Symtab.map_default (s, [])
@@ -1687,12 +1668,11 @@ fun sym_decl_table_for_facts ctxt type_enc repaired_sym_tab (conjs, facts) =
              else
                I
            end
-         | CombAbs (_, tm) => add_combterm in_conj tm
+         | IAbs (_, tm) => add_iterm in_conj tm
          | _ => I)
-        #> fold (add_combterm in_conj) args
+        #> fold (add_iterm in_conj) args
       end
-    fun add_fact in_conj =
-      fact_lift (formula_fold NONE (K (add_combterm in_conj)))
+    fun add_fact in_conj = fact_lift (formula_fold NONE (K (add_iterm in_conj)))
   in
     Symtab.empty
     |> is_type_enc_fairly_sound type_enc
@@ -1701,10 +1681,9 @@ fun sym_decl_table_for_facts ctxt type_enc repaired_sym_tab (conjs, facts) =
 
 (* This inference is described in section 2.3 of Claessen et al.'s "Sorting it
    out with monotonicity" paper presented at CADE 2011. *)
-fun add_combterm_nonmonotonic_types _ _ _ _ (SOME false) _ = I
-  | add_combterm_nonmonotonic_types ctxt level sound locality _
-        (CombApp (CombApp (CombConst ((s, _), Type (_, [T, _]), _), tm1),
-                           tm2)) =
+fun add_iterm_nonmonotonic_types _ _ _ _ (SOME false) _ = I
+  | add_iterm_nonmonotonic_types ctxt level sound locality _
+        (IApp (IApp (IConst ((s, _), Type (_, [T, _]), _), tm1), tm2)) =
     (is_tptp_equal s andalso exists is_var_or_bound_var [tm1, tm2] andalso
      (case level of
         Noninf_Nonmono_Types =>
@@ -1712,12 +1691,12 @@ fun add_combterm_nonmonotonic_types _ _ _ _ (SOME false) _ = I
         not (is_type_surely_infinite ctxt sound T)
       | Fin_Nonmono_Types => is_type_surely_finite ctxt false T
       | _ => true)) ? insert_type ctxt I (deep_freeze_type T)
-  | add_combterm_nonmonotonic_types _ _ _ _ _ _ = I
+  | add_iterm_nonmonotonic_types _ _ _ _ _ _ = I
 fun add_fact_nonmonotonic_types ctxt level sound
-        ({kind, locality, combformula, ...} : translated_formula) =
+        ({kind, locality, iformula, ...} : translated_formula) =
   formula_fold (SOME (kind <> Conjecture))
-               (add_combterm_nonmonotonic_types ctxt level sound locality)
-               combformula
+               (add_iterm_nonmonotonic_types ctxt level sound locality)
+               iformula
 fun nonmonotonic_types_for_facts ctxt type_enc sound facts =
   let val level = level_of_type_enc type_enc in
     if level = Noninf_Nonmono_Types orelse level = Fin_Nonmono_Types then
@@ -1754,7 +1733,7 @@ fun formula_line_for_preds_sym_decl ctxt format conj_sym_kind nonmono_Ts
     val bound_names =
       1 upto num_args |> map (`I o make_bound_var o string_of_int)
     val bounds =
-      bound_names ~~ arg_Ts |> map (fn (name, T) => CombConst (name, T, []))
+      bound_names ~~ arg_Ts |> map (fn (name, T) => IConst (name, T, []))
     val sym_needs_arg_types = n > 1 orelse exists (curry (op =) dummyT) T_args
     fun should_keep_arg_type T =
       sym_needs_arg_types orelse
@@ -1764,12 +1743,12 @@ fun formula_line_for_preds_sym_decl ctxt format conj_sym_kind nonmono_Ts
   in
     Formula (preds_sym_formula_prefix ^ s ^
              (if n > 1 then "_" ^ string_of_int j else ""), kind,
-             CombConst ((s, s'), T, T_args)
-             |> fold (curry (CombApp o swap)) bounds
-             |> type_pred_combterm ctxt format type_enc res_T
+             IConst ((s, s'), T, T_args)
+             |> fold (curry (IApp o swap)) bounds
+             |> type_pred_iterm ctxt format type_enc res_T
              |> AAtom |> mk_aquant AForall (bound_names ~~ bound_Ts)
-             |> formula_from_combformula ctxt format poly_nonmono_Ts type_enc
-                                         (K (K (K (K true)))) (SOME true)
+             |> formula_from_iformula ctxt format poly_nonmono_Ts type_enc
+                                      (K (K (K (K true)))) (SOME true)
              |> n > 1 ? bound_tvars type_enc (atyps_of T)
              |> close_formula_universally
              |> maybe_negate,
@@ -1903,11 +1882,11 @@ val free_typesN = "Type variables"
 val explicit_apply = NONE (* for experiments *)
 
 fun prepare_atp_problem ctxt format conj_sym_kind prem_kind type_enc sound
-        exporter lambda_trans readable_names preproc hyp_ts concl_t facts =
+        exporter trans_lambdas readable_names preproc hyp_ts concl_t facts =
   let
     val (format, type_enc) = choose_format [format] type_enc
     val (fact_names, (conjs, facts, class_rel_clauses, arity_clauses)) =
-      translate_formulas ctxt format prem_kind type_enc lambda_trans preproc
+      translate_formulas ctxt format prem_kind type_enc trans_lambdas preproc
                          hyp_ts concl_t facts
     val sym_tab = conjs @ facts |> sym_table_for_facts ctxt explicit_apply
     val nonmono_Ts =
@@ -1917,9 +1896,8 @@ fun prepare_atp_problem ctxt format conj_sym_kind prem_kind type_enc sound
     val repaired_sym_tab =
       conjs @ facts |> sym_table_for_facts ctxt (SOME false)
     val helpers =
-      repaired_sym_tab
-      |> helper_facts_for_sym_table ctxt format type_enc lambda_trans
-      |> map repair
+      repaired_sym_tab |> helper_facts_for_sym_table ctxt format type_enc
+                       |> map repair
     val poly_nonmono_Ts =
       if null nonmono_Ts orelse nonmono_Ts = [@{typ bool}] orelse
          polymorphism_of_type_enc type_enc <> Polymorphic then

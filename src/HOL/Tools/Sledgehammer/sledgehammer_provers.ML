@@ -60,6 +60,11 @@ sig
   type prover =
     params -> (string -> minimize_command) -> prover_problem -> prover_result
 
+  val concealedN : string
+  val liftingN : string
+  val combinatorsN : string
+  val lambdasN : string
+  val smartN : string
   val dest_dir : string Config.T
   val problem_prefix : string Config.T
   val measure_run_time : bool Config.T
@@ -329,6 +334,12 @@ type prover =
 
 (* configuration attributes *)
 
+val concealedN = "concealed"
+val liftingN = "lifting"
+val combinatorsN = "combinators"
+val lambdasN = "lambdas"
+val smartN = "smart"
+
 (* Empty string means create files in Isabelle's temporary files directory. *)
 val dest_dir =
   Attrib.setup_config_string @{binding sledgehammer_dest_dir} (K "")
@@ -514,17 +525,29 @@ fun choose_format_and_type_enc best_type_enc formats type_enc_opt =
    | NONE => type_enc_from_string best_type_enc)
   |> choose_format formats
 
-fun effective_atp_lambda_translation ctxt type_enc =
+fun translate_atp_lambdas ctxt type_enc =
   Config.get ctxt atp_lambda_translation
   |> (fn trans =>
          if trans = smartN then
            if is_type_enc_higher_order type_enc then lambdasN else combinatorsN
          else if trans = lambdasN andalso
                  not (is_type_enc_higher_order type_enc) then
-           error ("Lambda translation method incompatible with \
-                  \first-order encoding.")
+           error ("Lambda translation method incompatible with first-order \
+                  \encoding.")
          else
            trans)
+  |> (fn trans =>
+         if trans = concealedN then
+           rpair [] o map (conceal_lambdas ctxt)
+         else if trans = liftingN then
+           map (close_form o Envir.eta_contract)
+           #> SMT_Translate.lift_lambdas ctxt false #> snd #> swap
+         else if trans = combinatorsN then
+           rpair [] o map (introduce_combinators ctxt)
+         else if trans = lambdasN then
+           rpair [] o map (Envir.eta_contract)
+         else
+           error ("Unknown lambda translation method: " ^ quote trans ^ "."))
 
 val metis_minimize_max_time = seconds 2.0
 
@@ -657,8 +680,7 @@ fun run_atp mode name
                 val (atp_problem, pool, conjecture_offset, facts_offset,
                      fact_names, typed_helpers, sym_tab) =
                   prepare_atp_problem ctxt format conj_sym_kind prem_kind
-                      type_enc sound false
-                      (effective_atp_lambda_translation ctxt type_enc)
+                      type_enc sound false (translate_atp_lambdas ctxt type_enc)
                       (Config.get ctxt atp_readable_names) true hyp_ts concl_t
                       facts
                 fun weights () = atp_problem_weights atp_problem
