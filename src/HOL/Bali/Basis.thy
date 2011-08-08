@@ -3,12 +3,10 @@
 *)
 header {* Definitions extending HOL as logical basis of Bali *}
 
-theory Basis imports Main begin
+theory Basis imports Main "~~/src/HOL/Library/Old_Recdef" begin
 
 
 section "misc"
-
-declare same_fstI [intro!] (*### TO HOL/Wellfounded_Relations *)
 
 declare split_if_asm  [split] option.split [split] option.split_asm [split]
 declaration {* K (Simplifier.map_ss (fn ss => ss addloop ("split_all_tac", split_all_tac))) *}

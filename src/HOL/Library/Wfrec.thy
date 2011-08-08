@@ -1,22 +1,13 @@
-(*  Title:      HOL/Recdef.thy
-    Author:     Konrad Slind and Markus Wenzel, TU Muenchen
+(*  Title:      HOL/Library/Wfrec.thy
+    Author:     Tobias Nipkow
+    Author:     Lawrence C Paulson
+    Author:     Konrad Slind
 *)
 
-header {* TFL: recursive function definitions *}
+header {* Well-Founded Recursion Combinator *}
 
-theory Recdef
-imports Plain Hilbert_Choice
-uses
-  ("Tools/TFL/casesplit.ML")
-  ("Tools/TFL/utils.ML")
-  ("Tools/TFL/usyntax.ML")
-  ("Tools/TFL/dcterm.ML")
-  ("Tools/TFL/thms.ML")
-  ("Tools/TFL/rules.ML")
-  ("Tools/TFL/thry.ML")
-  ("Tools/TFL/tfl.ML")
-  ("Tools/TFL/post.ML")
-  ("Tools/recdef.ML")
+theory Wfrec
+imports Main
 begin
 
 inductive
@@ -39,10 +30,6 @@ definition
 definition
   wfrec :: "('a * 'a) set => (('a => 'b) => 'a => 'b) => 'a => 'b" where
   "wfrec R F == %x. THE y. wfrec_rel R (%f x. F (cut f R x) x) x y"
-
-subsection{*Well-Founded Recursion*}
-
-text{*cut*}
 
 lemma cuts_eq: "(cut f r x = cut g r x) = (ALL y. (y,x):r --> f(y)=g(y))"
 by (simp add: fun_eq_iff cut_def)
@@ -87,60 +74,27 @@ apply (blast intro: wfrec)
 done
 
 
-lemma tfl_wf_induct: "ALL R. wf R -->  
-       (ALL P. (ALL x. (ALL y. (y,x):R --> P y) --> P x) --> (ALL x. P x))"
-apply clarify
-apply (rule_tac r = R and P = P and a = x in wf_induct, assumption, blast)
-done
+subsection {* Nitpick setup *}
 
-lemma tfl_cut_apply: "ALL f R. (x,a):R --> (cut f R a)(x) = f(x)"
-apply clarify
-apply (rule cut_apply, assumption)
-done
+axiomatization wf_wfrec :: "('a \<times> 'a \<Rightarrow> bool) \<Rightarrow> (('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b"
 
-lemma tfl_wfrec:
-     "ALL M R f. (f=wfrec R M) --> wf R --> (ALL x. f x = M (cut f R x) x)"
-apply clarify
-apply (erule wfrec)
-done
+definition wf_wfrec' :: "('a \<times> 'a \<Rightarrow> bool) \<Rightarrow> (('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" where
+[nitpick_simp]: "wf_wfrec' R F x = F (cut (wf_wfrec R F) R x) x"
 
-lemma tfl_eq_True: "(x = True) --> x"
-  by blast
+definition wfrec' ::  "('a \<times> 'a \<Rightarrow> bool) \<Rightarrow> (('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b" where
+"wfrec' R F x \<equiv> if wf R then wf_wfrec' R F x
+                else THE y. wfrec_rel R (%f x. F (cut f R x) x) x y"
 
-lemma tfl_rev_eq_mp: "(x = y) --> y --> x";
-  by blast
+setup {*
+  Nitpick_HOL.register_ersatz_global
+    [(@{const_name wf_wfrec}, @{const_name wf_wfrec'}),
+     (@{const_name wfrec}, @{const_name wfrec'})]
+*}
 
-lemma tfl_simp_thm: "(x --> y) --> (x = x') --> (x' --> y)"
-  by blast
+hide_const (open) wf_wfrec wf_wfrec' wfrec'
+hide_fact (open) wf_wfrec'_def wfrec'_def
 
-lemma tfl_P_imp_P_iff_True: "P ==> P = True"
-  by blast
-
-lemma tfl_imp_trans: "(A --> B) ==> (B --> C) ==> (A --> C)"
-  by blast
-
-lemma tfl_disj_assoc: "(a \<or> b) \<or> c == a \<or> (b \<or> c)"
-  by simp
-
-lemma tfl_disjE: "P \<or> Q ==> P --> R ==> Q --> R ==> R"
-  by blast
-
-lemma tfl_exE: "\<exists>x. P x ==> \<forall>x. P x --> Q ==> Q"
-  by blast
-
-use "Tools/TFL/casesplit.ML"
-use "Tools/TFL/utils.ML"
-use "Tools/TFL/usyntax.ML"
-use "Tools/TFL/dcterm.ML"
-use "Tools/TFL/thms.ML"
-use "Tools/TFL/rules.ML"
-use "Tools/TFL/thry.ML"
-use "Tools/TFL/tfl.ML"
-use "Tools/TFL/post.ML"
-use "Tools/recdef.ML"
-setup Recdef.setup
-
-text {*Wellfoundedness of @{text same_fst}*}
+subsection {* Wellfoundedness of @{text same_fst} *}
 
 definition
  same_fst :: "('a => bool) => ('a => ('b * 'b)set) => (('a*'b)*('a*'b))set"
@@ -163,27 +117,5 @@ apply (case_tac "wf (R a)")
  apply (erule_tac a = b in wf_induct, blast)
 apply (blast intro: prem)
 done
-
-text {*Rule setup*}
-
-lemmas [recdef_simp] =
-  inv_image_def
-  measure_def
-  lex_prod_def
-  same_fst_def
-  less_Suc_eq [THEN iffD2]
-
-lemmas [recdef_cong] =
-  if_cong let_cong image_cong INT_cong UN_cong bex_cong ball_cong imp_cong
-
-lemmas [recdef_wf] =
-  wf_trancl
-  wf_less_than
-  wf_lex_prod
-  wf_inv_image
-  wf_measure
-  wf_pred_nat
-  wf_same_fst
-  wf_empty
 
 end

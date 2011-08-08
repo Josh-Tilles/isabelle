@@ -431,7 +431,7 @@ lemma eq_mem [simp]:
   "x \<in> (op =) y \<longleftrightarrow> x = y"
   by (auto simp add: mem_def)
 
-instantiation pred :: (type) "{complete_lattice, boolean_algebra}"
+instantiation pred :: (type) complete_lattice
 begin
 
 definition
@@ -482,6 +482,22 @@ lemma eval_Sup [simp]:
   "eval (\<Squnion>A) = SUPR A eval"
   by (simp add: Sup_pred_def)
 
+instance proof
+qed (auto intro!: pred_eqI simp add: less_eq_pred_def less_pred_def)
+
+end
+
+lemma eval_INFI [simp]:
+  "eval (INFI A f) = INFI A (eval \<circ> f)"
+  by (unfold INFI_def) simp
+
+lemma eval_SUPR [simp]:
+  "eval (SUPR A f) = SUPR A (eval \<circ> f)"
+  by (unfold SUPR_def) simp
+
+instantiation pred :: (type) complete_boolean_algebra
+begin
+
 definition
   "- P = Pred (- eval P)"
 
@@ -497,17 +513,9 @@ lemma eval_minus [simp]:
   by (simp add: minus_pred_def)
 
 instance proof
-qed (auto intro!: pred_eqI simp add: less_eq_pred_def less_pred_def uminus_apply minus_apply)
+qed (auto intro!: pred_eqI simp add: uminus_apply minus_apply)
 
 end
-
-lemma eval_INFI [simp]:
-  "eval (INFI A f) = INFI A (eval \<circ> f)"
-  by (unfold INFI_def) simp
-
-lemma eval_SUPR [simp]:
-  "eval (SUPR A f) = SUPR A (eval \<circ> f)"
-  by (unfold SUPR_def) simp
 
 definition single :: "'a \<Rightarrow> 'a pred" where
   "single x = Pred ((op =) x)"
@@ -741,11 +749,12 @@ lemma "f () = False \<or> f () = True"
 by simp
 
 lemma closure_of_bool_cases [no_atp]:
-assumes "(f :: unit \<Rightarrow> bool) = (%u. False) \<Longrightarrow> P f"
-assumes "f = (%u. True) \<Longrightarrow> P f"
-shows "P f"
+  fixes f :: "unit \<Rightarrow> bool"
+  assumes "f = (\<lambda>u. False) \<Longrightarrow> P f"
+  assumes "f = (\<lambda>u. True) \<Longrightarrow> P f"
+  shows "P f"
 proof -
-  have "f = (%u. False) \<or> f = (%u. True)"
+  have "f = (\<lambda>u. False) \<or> f = (\<lambda>u. True)"
     apply (cases "f ()")
     apply (rule disjI2)
     apply (rule ext)
@@ -758,19 +767,18 @@ proof -
 qed
 
 lemma unit_pred_cases:
-assumes "P \<bottom>"
-assumes "P (single ())"
-shows "P Q"
-using assms
-unfolding bot_pred_def Collect_def empty_def single_def
-apply (cases Q)
-apply simp
-apply (rule_tac f="fun" in closure_of_bool_cases)
-apply auto
-apply (subgoal_tac "(%x. () = x) = (%x. True)") 
-apply auto
-done
-
+  assumes "P \<bottom>"
+  assumes "P (single ())"
+  shows "P Q"
+using assms unfolding bot_pred_def Collect_def empty_def single_def proof (cases Q)
+  fix f
+  assume "P (Pred (\<lambda>u. False))" "P (Pred (\<lambda>u. () = u))"
+  then have "P (Pred f)" 
+    by (cases _ f rule: closure_of_bool_cases) simp_all
+  moreover assume "Q = Pred f"
+  ultimately show "P Q" by simp
+qed
+  
 lemma holds_if_pred:
   "holds (if_pred b) = b"
 unfolding if_pred_eq holds_eq
