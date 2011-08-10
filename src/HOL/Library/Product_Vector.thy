@@ -435,27 +435,21 @@ end
 subsection {* Pair operations are linear *}
 
 interpretation fst: bounded_linear fst
-  apply (unfold_locales)
-  apply (rule fst_add)
-  apply (rule fst_scaleR)
-  apply (rule_tac x="1" in exI, simp add: norm_Pair)
-  done
+  using fst_add fst_scaleR
+  by (rule bounded_linear_intro [where K=1], simp add: norm_prod_def)
 
 interpretation snd: bounded_linear snd
-  apply (unfold_locales)
-  apply (rule snd_add)
-  apply (rule snd_scaleR)
-  apply (rule_tac x="1" in exI, simp add: norm_Pair)
-  done
+  using snd_add snd_scaleR
+  by (rule bounded_linear_intro [where K=1], simp add: norm_prod_def)
 
 text {* TODO: move to NthRoot *}
 lemma sqrt_add_le_add_sqrt:
   assumes x: "0 \<le> x" and y: "0 \<le> y"
   shows "sqrt (x + y) \<le> sqrt x + sqrt y"
 apply (rule power2_le_imp_le)
-apply (simp add: real_sum_squared_expand add_nonneg_nonneg x y)
+apply (simp add: real_sum_squared_expand x y)
 apply (simp add: mult_nonneg_nonneg x y)
-apply (simp add: add_nonneg_nonneg x y)
+apply (simp add: x y)
 done
 
 lemma bounded_linear_Pair:

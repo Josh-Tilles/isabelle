@@ -473,29 +473,15 @@ lemma perfect_choose_dist:
 using islimpt_UNIV [of x]
 by (simp add: islimpt_approachable)
 
-instance real :: perfect_space
-apply default
-apply (rule islimpt_approachable [THEN iffD2])
-apply (clarify, rule_tac x="x + e/2" in bexI)
-apply (auto simp add: dist_norm)
-done
-
 instance euclidean_space \<subseteq> perfect_space
-proof fix x::'a
+proof
+  fix x :: 'a
   { fix e :: real assume "0 < e"
-    def a \<equiv> "x $$ 0"
-    have "a islimpt UNIV" by (rule islimpt_UNIV)
-    with `0 < e` obtain b where "b \<noteq> a" and "dist b a < e"
-      unfolding islimpt_approachable by auto
-    def y \<equiv> "\<chi>\<chi> i. if i = 0 then b else x$$i :: 'a"
-    from `b \<noteq> a` have "y \<noteq> x" unfolding a_def y_def apply(subst euclidean_eq) apply safe
-      apply(erule_tac x=0 in allE) using DIM_positive[where 'a='a] by auto
-
-    have *:"(\<Sum>i<DIM('a). (dist (y $$ i) (x $$ i))\<twosuperior>) = (\<Sum>i\<in>{0}. (dist (y $$ i) (x $$ i))\<twosuperior>)"
-      apply(rule setsum_mono_zero_right) unfolding y_def by auto
-    from `dist b a < e` have "dist y x < e"
-      apply(subst euclidean_dist_l2)
-      unfolding setL2_def * unfolding y_def a_def using `0 < e` by auto
+    def y \<equiv> "x + scaleR (e/2) (sgn (basis 0))"
+    from `0 < e` have "y \<noteq> x"
+      unfolding y_def by (simp add: sgn_zero_iff basis_eq_0_iff DIM_positive)
+    from `0 < e` have "dist y x < e"
+      unfolding y_def by (simp add: dist_norm norm_sgn)
     from `y \<noteq> x` and `dist y x < e`
     have "\<exists>y\<in>UNIV. y \<noteq> x \<and> dist y x < e" by auto
   }
@@ -1237,62 +1223,15 @@ next
   thus ?lhs unfolding islimpt_approachable by auto
 qed
 
-text{* Basic arithmetical combining theorems for limits. *}
-
-lemma Lim_linear:
-  assumes "(f ---> l) net" "bounded_linear h"
-  shows "((\<lambda>x. h (f x)) ---> h l) net"
-using `bounded_linear h` `(f ---> l) net`
-by (rule bounded_linear.tendsto)
-
-lemma Lim_ident_at: "((\<lambda>x. x) ---> a) (at a)"
-  unfolding tendsto_def Limits.eventually_at_topological by fast
-
-lemma Lim_const[intro]: "((\<lambda>x. a) ---> a) net" by (rule tendsto_const)
-
-lemma Lim_cmul[intro]:
-  fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  shows "(f ---> l) net ==> ((\<lambda>x. c *\<^sub>R f x) ---> c *\<^sub>R l) net"
-  by (intro tendsto_intros)
-
-lemma Lim_neg:
-  fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  shows "(f ---> l) net ==> ((\<lambda>x. -(f x)) ---> -l) net"
-  by (rule tendsto_minus)
-
-lemma Lim_add: fixes f :: "'a \<Rightarrow> 'b::real_normed_vector" shows
- "(f ---> l) net \<Longrightarrow> (g ---> m) net \<Longrightarrow> ((\<lambda>x. f(x) + g(x)) ---> l + m) net"
-  by (rule tendsto_add)
-
-lemma Lim_sub:
-  fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  shows "(f ---> l) net \<Longrightarrow> (g ---> m) net \<Longrightarrow> ((\<lambda>x. f(x) - g(x)) ---> l - m) net"
-  by (rule tendsto_diff)
-
-lemma Lim_mul:
-  fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  assumes "(c ---> d) net"  "(f ---> l) net"
-  shows "((\<lambda>x. c(x) *\<^sub>R f x) ---> (d *\<^sub>R l)) net"
-  using assms by (rule scaleR.tendsto)
-
-lemma Lim_inv:
+lemma Lim_inv: (* TODO: delete *)
   fixes f :: "'a \<Rightarrow> real" and A :: "'a filter"
   assumes "(f ---> l) A" and "l \<noteq> 0"
   shows "((inverse o f) ---> inverse l) A"
   unfolding o_def using assms by (rule tendsto_inverse)
 
-lemma Lim_vmul:
-  fixes c :: "'a \<Rightarrow> real" and v :: "'b::real_normed_vector"
-  shows "(c ---> d) net ==> ((\<lambda>x. c(x) *\<^sub>R v) ---> d *\<^sub>R v) net"
-  by (intro tendsto_intros)
-
 lemma Lim_null:
   fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  shows "(f ---> l) net \<longleftrightarrow> ((\<lambda>x. f(x) - l) ---> 0) net" by (simp add: Lim dist_norm)
-
-lemma Lim_null_norm:
-  fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
-  shows "(f ---> 0) net \<longleftrightarrow> ((\<lambda>x. norm(f x)) ---> 0) net"
+  shows "(f ---> l) net \<longleftrightarrow> ((\<lambda>x. f(x) - l) ---> 0) net"
   by (simp add: Lim dist_norm)
 
 lemma Lim_null_comparison:
@@ -1310,16 +1249,6 @@ proof(simp add: tendsto_iff, rule+)
     using eventually_mono[of "(\<lambda>x. norm (f x) \<le> g x \<and> dist (g x) 0 < e)" "(\<lambda>x. dist (f x) 0 < e)" net]
     using assms `e>0` unfolding tendsto_iff by auto
 qed
-
-lemma Lim_component:
-  fixes f :: "'a \<Rightarrow> ('a::euclidean_space)"
-  shows "(f ---> l) net \<Longrightarrow> ((\<lambda>a. f a $$i) ---> l$$i) net"
-  unfolding tendsto_iff
-  apply (clarify)
-  apply (drule spec, drule (1) mp)
-  apply (erule eventually_elim1)
-  apply (erule le_less_trans [OF dist_nth_le])
-  done
 
 lemma Lim_transform_bound:
   fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
@@ -1436,8 +1365,6 @@ lemma Lim_within_id: "(id ---> a) (at a within s)"
   unfolding tendsto_def Limits.eventually_within eventually_at_topological
   by auto
 
-lemmas Lim_intros = Lim_add Lim_const Lim_sub Lim_cmul Lim_vmul Lim_within_id
-
 lemma Lim_at_id: "(id ---> a) (at a)"
 apply (subst within_UNIV[symmetric]) by (simp add: Lim_within_id)
 
@@ -1492,10 +1419,10 @@ lemma netlimit_within:
 unfolding netlimit_def
 apply (rule some_equality)
 apply (rule Lim_at_within)
-apply (rule Lim_ident_at)
+apply (rule LIM_ident)
 apply (erule tendsto_unique [OF assms])
 apply (rule Lim_at_within)
-apply (rule Lim_ident_at)
+apply (rule LIM_ident)
 done
 
 lemma netlimit_at:
@@ -1512,8 +1439,8 @@ lemma Lim_transform:
   assumes "((\<lambda>x. f x - g x) ---> 0) net" "(f ---> l) net"
   shows "(g ---> l) net"
 proof-
-  from assms have "((\<lambda>x. f x - g x - f x) ---> 0 - l) net" using Lim_sub[of "\<lambda>x. f x - g x" 0 net f l] by auto
-  thus "?thesis" using Lim_neg [of "\<lambda> x. - g x" "-l" net] by auto
+  from assms have "((\<lambda>x. f x - g x - f x) ---> 0 - l) net" using tendsto_diff[of "\<lambda>x. f x - g x" 0 net f l] by auto
+  thus "?thesis" using tendsto_minus [of "\<lambda> x. - g x" "-l" net] by auto
 qed
 
 lemma Lim_transform_eventually:
@@ -1606,7 +1533,7 @@ lemma closure_sequential:
 proof
   assume "?lhs" moreover
   { assume "l \<in> S"
-    hence "?rhs" using Lim_const[of l sequentially] by auto
+    hence "?rhs" using tendsto_const[of l sequentially] by auto
   } moreover
   { assume "l islimpt S"
     hence "?rhs" unfolding islimpt_sequential by auto
@@ -2823,7 +2750,7 @@ proof -
         by (rule infinite_enumerate)
       then obtain r where "subseq r" and fr: "\<forall>n. f (r n) = l" by auto
       hence "subseq r \<and> ((f \<circ> r) ---> l) sequentially"
-        unfolding o_def by (simp add: fr Lim_const)
+        unfolding o_def by (simp add: fr tendsto_const)
       hence "\<exists>r. subseq r \<and> ((f \<circ> r) ---> l) sequentially"
         by - (rule exI)
       from f have "\<forall>n. f (r n) \<in> s" by simp
@@ -3611,7 +3538,7 @@ lemma uniformly_continuous_on_sequentially:
                     \<longrightarrow> ((\<lambda>n. f(x n) - f(y n)) ---> 0) sequentially)" (is "?lhs = ?rhs")
 (* BH: maybe the previous lemma should replace this one? *)
 unfolding uniformly_continuous_on_sequentially'
-unfolding dist_norm Lim_null_norm [symmetric] ..
+unfolding dist_norm tendsto_norm_zero_iff ..
 
 text{* The usual transformation theorems. *}
 
@@ -3642,34 +3569,34 @@ lemma continuous_transform_at:
 text{* Combination results for pointwise continuity. *}
 
 lemma continuous_const: "continuous net (\<lambda>x. c)"
-  by (auto simp add: continuous_def Lim_const)
+  by (auto simp add: continuous_def tendsto_const)
 
 lemma continuous_cmul:
   fixes f :: "'a::t2_space \<Rightarrow> 'b::real_normed_vector"
   shows "continuous net f ==> continuous net (\<lambda>x. c *\<^sub>R f x)"
-  by (auto simp add: continuous_def Lim_cmul)
+  by (auto simp add: continuous_def intro: tendsto_intros)
 
 lemma continuous_neg:
   fixes f :: "'a::t2_space \<Rightarrow> 'b::real_normed_vector"
   shows "continuous net f ==> continuous net (\<lambda>x. -(f x))"
-  by (auto simp add: continuous_def Lim_neg)
+  by (auto simp add: continuous_def tendsto_minus)
 
 lemma continuous_add:
   fixes f g :: "'a::t2_space \<Rightarrow> 'b::real_normed_vector"
   shows "continuous net f \<Longrightarrow> continuous net g \<Longrightarrow> continuous net (\<lambda>x. f x + g x)"
-  by (auto simp add: continuous_def Lim_add)
+  by (auto simp add: continuous_def tendsto_add)
 
 lemma continuous_sub:
   fixes f g :: "'a::t2_space \<Rightarrow> 'b::real_normed_vector"
   shows "continuous net f \<Longrightarrow> continuous net g \<Longrightarrow> continuous net (\<lambda>x. f x - g x)"
-  by (auto simp add: continuous_def Lim_sub)
+  by (auto simp add: continuous_def tendsto_diff)
 
 
 text{* Same thing for setwise continuity. *}
 
 lemma continuous_on_const:
  "continuous_on s (\<lambda>x. c)"
-  unfolding continuous_on_def by auto
+  unfolding continuous_on_def by (auto intro: tendsto_intros)
 
 lemma continuous_on_cmul:
   fixes f :: "'a::topological_space \<Rightarrow> 'b::real_normed_vector"
@@ -3706,11 +3633,11 @@ lemma uniformly_continuous_on_cmul:
 proof-
   { fix x y assume "((\<lambda>n. f (x n) - f (y n)) ---> 0) sequentially"
     hence "((\<lambda>n. c *\<^sub>R f (x n) - c *\<^sub>R f (y n)) ---> 0) sequentially"
-      using Lim_cmul[of "(\<lambda>n. f (x n) - f (y n))" 0 sequentially c]
+      using scaleR.tendsto [OF tendsto_const, of "(\<lambda>n. f (x n) - f (y n))" 0 sequentially c]
       unfolding scaleR_zero_right scaleR_right_diff_distrib by auto
   }
   thus ?thesis using assms unfolding uniformly_continuous_on_sequentially'
-    unfolding dist_norm Lim_null_norm [symmetric] by auto
+    unfolding dist_norm tendsto_norm_zero_iff by auto
 qed
 
 lemma dist_minus:
@@ -3732,10 +3659,10 @@ proof-
   {  fix x y assume "((\<lambda>n. f (x n) - f (y n)) ---> 0) sequentially"
                     "((\<lambda>n. g (x n) - g (y n)) ---> 0) sequentially"
     hence "((\<lambda>xa. f (x xa) - f (y xa) + (g (x xa) - g (y xa))) ---> 0 + 0) sequentially"
-      using Lim_add[of "\<lambda> n. f (x n) - f (y n)" 0  sequentially "\<lambda> n. g (x n) - g (y n)" 0] by auto
+      using tendsto_add[of "\<lambda> n. f (x n) - f (y n)" 0  sequentially "\<lambda> n. g (x n) - g (y n)" 0] by auto
     hence "((\<lambda>n. f (x n) + g (x n) - (f (y n) + g (y n))) ---> 0) sequentially" unfolding Lim_sequentially and add_diff_add [symmetric] by auto  }
   thus ?thesis using assms unfolding uniformly_continuous_on_sequentially'
-    unfolding dist_norm Lim_null_norm [symmetric] by auto
+    unfolding dist_norm tendsto_norm_zero_iff by auto
 qed
 
 lemma uniformly_continuous_on_sub:
@@ -3750,11 +3677,11 @@ text{* Identity function is continuous in every sense. *}
 
 lemma continuous_within_id:
  "continuous (at a within s) (\<lambda>x. x)"
-  unfolding continuous_within by (rule Lim_at_within [OF Lim_ident_at])
+  unfolding continuous_within by (rule Lim_at_within [OF LIM_ident])
 
 lemma continuous_at_id:
  "continuous (at a) (\<lambda>x. x)"
-  unfolding continuous_at by (rule Lim_ident_at)
+  unfolding continuous_at by (rule LIM_ident)
 
 lemma continuous_on_id:
  "continuous_on s (\<lambda>x. x)"
@@ -4117,7 +4044,7 @@ text {* We can now extend limit compositions to consider the scalar multiplier. 
 lemma continuous_vmul:
   fixes c :: "'a::metric_space \<Rightarrow> real" and v :: "'b::real_normed_vector"
   shows "continuous net c ==> continuous net (\<lambda>x. c(x) *\<^sub>R v)"
-  unfolding continuous_def using Lim_vmul[of c] by auto
+  unfolding continuous_def by (intro tendsto_intros)
 
 lemma continuous_mul:
   fixes c :: "'a::metric_space \<Rightarrow> real"
@@ -4448,7 +4375,7 @@ lemma distance_attains_sup:
 proof (rule continuous_attains_sup [OF assms])
   { fix x assume "x\<in>s"
     have "(dist a ---> dist a x) (at x within s)"
-      by (intro tendsto_dist tendsto_const Lim_at_within Lim_ident_at)
+      by (intro tendsto_dist tendsto_const Lim_at_within LIM_ident)
   }
   thus "continuous_on s (dist a)"
     unfolding continuous_on ..
@@ -4695,7 +4622,7 @@ proof-
     obtain l' r where "l'\<in>s" and r:"subseq r" and lr:"(((\<lambda>n. fst (f n)) \<circ> r) ---> l') sequentially"
       using assms(1)[unfolded compact_def, THEN spec[where x="\<lambda> n. fst (f n)"]] using f(2) by auto
     have "((\<lambda>n. snd (f (r n))) ---> l - l') sequentially"
-      using Lim_sub[OF lim_subseq[OF r as(2)] lr] and f(1) unfolding o_def by auto
+      using tendsto_diff[OF lim_subseq[OF r as(2)] lr] and f(1) unfolding o_def by auto
     hence "l - l' \<in> t"
       using assms(2)[unfolded closed_sequential_limits, THEN spec[where x="\<lambda> n. snd (f (r n))"], THEN spec[where x="l - l'"]]
       using f(3) by auto
@@ -5140,8 +5067,8 @@ proof-
       hence "((\<lambda>n. inverse (real n + 1)) ---> 0) sequentially"
         unfolding Lim_sequentially by(auto simp add: dist_norm)
       hence "(f ---> x) sequentially" unfolding f_def
-        using Lim_add[OF Lim_const, of "\<lambda>n::nat. (inverse (real n + 1)) *\<^sub>R ((1 / 2) *\<^sub>R (a + b) - x)" 0 sequentially x]
-        using Lim_vmul[of "\<lambda>n::nat. inverse (real n + 1)" 0 sequentially "((1 / 2) *\<^sub>R (a + b) - x)"] by auto  }
+        using tendsto_add[OF tendsto_const, of "\<lambda>n::nat. (inverse (real n + 1)) *\<^sub>R ((1 / 2) *\<^sub>R (a + b) - x)" 0 sequentially x]
+        using scaleR.tendsto [OF _ tendsto_const, of "\<lambda>n::nat. inverse (real n + 1)" 0 sequentially "((1 / 2) *\<^sub>R (a + b) - x)"] by auto  }
     ultimately have "x \<in> closure {a<..<b}"
       using as and open_interval_midpoint[OF assms] unfolding closure_def unfolding islimpt_sequential by(cases "x=?c")auto  }
   thus ?thesis using closure_minimal[OF interval_open_subset_closed closed_interval, of a b] by blast
@@ -6170,5 +6097,20 @@ qed
 
 (** TODO move this someplace else within this theory **)
 instance euclidean_space \<subseteq> banach ..
+
+text {* Legacy theorem names *}
+
+lemmas Lim_ident_at = LIM_ident
+lemmas Lim_const = tendsto_const
+lemmas Lim_cmul = scaleR.tendsto [OF tendsto_const]
+lemmas Lim_neg = tendsto_minus
+lemmas Lim_add = tendsto_add
+lemmas Lim_sub = tendsto_diff
+lemmas Lim_mul = scaleR.tendsto
+lemmas Lim_vmul = scaleR.tendsto [OF _ tendsto_const]
+lemmas Lim_null_norm = tendsto_norm_zero_iff [symmetric]
+lemmas Lim_linear = bounded_linear.tendsto [COMP swap_prems_rl]
+lemmas Lim_component = euclidean_component.tendsto
+lemmas Lim_intros = Lim_add Lim_const Lim_sub Lim_cmul Lim_vmul Lim_within_id
 
 end
