@@ -23,23 +23,12 @@ definition has_derivative :: "('a::real_normed_vector \<Rightarrow> 'b::real_nor
  "(f has_derivative f') net \<equiv> bounded_linear f' \<and> ((\<lambda>y. (1 / (norm (y - netlimit net))) *\<^sub>R
    (f y - (f (netlimit net) + f'(y - netlimit net)))) ---> 0) net"
 
-lemma derivative_linear[dest]:"(f has_derivative f') net \<Longrightarrow> bounded_linear f'"
+lemma derivative_linear[dest]:
+  "(f has_derivative f') net \<Longrightarrow> bounded_linear f'"
   unfolding has_derivative_def by auto
 
-lemma DERIV_conv_has_derivative:"(DERIV f x :> f') = (f has_derivative op * f') (at (x::real))" (is "?l = ?r") proof 
-  assume ?l note as = this[unfolded deriv_def LIM_def,rule_format]
-  show ?r unfolding has_derivative_def Lim_at apply- apply(rule,rule mult.bounded_linear_right)
-    apply safe apply(drule as,safe) apply(rule_tac x=s in exI) apply safe
-    apply(erule_tac x="xa - x" in allE) unfolding dist_norm netlimit_at[of x] unfolding diff_0_right norm_scaleR
-    by(auto simp add:field_simps) 
-next assume ?r note this[unfolded has_derivative_def Lim_at] note as=conjunct2[OF this,rule_format]
-  have *:"\<And>x xa f'. xa \<noteq> 0 \<Longrightarrow> \<bar>(f (xa + x) - f x) / xa - f'\<bar> = \<bar>(f (xa + x) - f x) - xa * f'\<bar> / \<bar>xa\<bar>" by(auto simp add:field_simps) 
-  show ?l unfolding deriv_def LIM_def apply safe apply(drule as,safe)
-    apply(rule_tac x=d in exI,safe) apply(erule_tac x="xa + x" in allE)
-    unfolding dist_norm diff_0_right norm_scaleR
-    unfolding dist_norm netlimit_at[of x] by(auto simp add:algebra_simps *) qed
-
 lemma netlimit_at_vector:
+  (* TODO: move *)
   fixes a :: "'a::real_normed_vector"
   shows "netlimit (at a) = a"
 proof (cases "\<exists>x. x \<noteq> a")
@@ -55,23 +44,15 @@ proof (cases "\<exists>x. x \<noteq> a")
 qed simp
 
 lemma FDERIV_conv_has_derivative:
-  shows "FDERIV f x :> f' = (f has_derivative f') (at x)" (is "?l = ?r")
-proof
-  assume ?l note as = this[unfolded fderiv_def]
-  show ?r unfolding has_derivative_def Lim_at apply-apply(rule,rule as[THEN conjunct1]) proof(rule,rule)
-    fix e::real assume "e>0"
-    guess d using as[THEN conjunct2,unfolded LIM_def,rule_format,OF`e>0`] ..
-    thus "\<exists>d>0. \<forall>xa. 0 < dist xa x \<and> dist xa x < d \<longrightarrow>
-      dist ((1 / norm (xa - netlimit (at x))) *\<^sub>R (f xa - (f (netlimit (at x)) + f' (xa - netlimit (at x))))) (0) < e"
-      apply(rule_tac x=d in exI) apply(erule conjE,rule,assumption) apply rule apply(erule_tac x="xa - x" in allE)
-      unfolding dist_norm netlimit_at_vector[of x] by (auto simp add: diff_diff_eq) qed next
-  assume ?r note as = this[unfolded has_derivative_def]
-  show ?l unfolding fderiv_def LIM_def apply-apply(rule,rule as[THEN conjunct1]) proof(rule,rule)
-    fix e::real assume "e>0"
-    guess d using as[THEN conjunct2,unfolded Lim_at,rule_format,OF`e>0`] ..
-    thus "\<exists>s>0. \<forall>xa. xa \<noteq> 0 \<and> dist xa 0 < s \<longrightarrow> dist (norm (f (x + xa) - f x - f' xa) / norm xa) 0 < e" apply-
-      apply(rule_tac x=d in exI) apply(erule conjE,rule,assumption) apply rule apply(erule_tac x="xa + x" in allE)
-      unfolding dist_norm netlimit_at_vector[of x] by (auto simp add: diff_diff_eq add.commute) qed qed
+  shows "FDERIV f x :> f' = (f has_derivative f') (at x)"
+  unfolding fderiv_def has_derivative_def netlimit_at_vector
+  by (simp add: diff_diff_eq Lim_at_zero [where a=x]
+    LIM_norm_zero_iff [where 'b='b, symmetric])
+
+lemma DERIV_conv_has_derivative:
+  "(DERIV f x :> f') = (f has_derivative op * f') (at x)"
+  unfolding deriv_fderiv FDERIV_conv_has_derivative
+  by (subst mult_commute, rule refl)
 
 text {* These are the only cases we'll care about, probably. *}
 
@@ -116,7 +97,7 @@ proof -
   also have "\<dots> \<longleftrightarrow> ((\<lambda>t. (f t - f x) / (t - x)) ---> y) (at x within ({x<..} \<inter> I))"
     by (simp add: Lim_null[symmetric])
   also have "\<dots> \<longleftrightarrow> ((\<lambda>t. (f x - f t) / (x - t)) ---> y) (at x within ({x<..} \<inter> I))"
-    by (intro Lim_cong_within) (simp_all add: times_divide_eq field_simps)
+    by (intro Lim_cong_within) (simp_all add: field_simps)
   finally show ?thesis
     by (simp add: mult.bounded_linear_right has_derivative_within)
 qed
@@ -135,43 +116,34 @@ lemma derivative_is_linear:
 
 subsubsection {* Combining theorems. *}
 
-lemma (in bounded_linear) has_derivative: "(f has_derivative f) net"
-  unfolding has_derivative_def apply(rule,rule bounded_linear_axioms)
-  unfolding diff by (simp add: tendsto_const)
-
 lemma has_derivative_id: "((\<lambda>x. x) has_derivative (\<lambda>h. h)) net"
-  apply(rule bounded_linear.has_derivative) using bounded_linear_ident[unfolded id_def] by simp
+  unfolding has_derivative_def
+  by (simp add: bounded_linear_ident tendsto_const)
 
 lemma has_derivative_const: "((\<lambda>x. c) has_derivative (\<lambda>h. 0)) net"
   unfolding has_derivative_def
-  by (rule, rule bounded_linear_zero, simp add: tendsto_const)
+  by (simp add: bounded_linear_zero tendsto_const)
 
-lemma (in bounded_linear) cmul: shows "bounded_linear (\<lambda>x. (c::real) *\<^sub>R f x)"
-proof -
-  have "bounded_linear (\<lambda>x. c *\<^sub>R x)"
-    by (rule scaleR.bounded_linear_right)
-  moreover have "bounded_linear f" ..
-  ultimately show ?thesis
-    by (rule bounded_linear_compose)
-qed
+lemma (in bounded_linear) has_derivative': "(f has_derivative f) net"
+  unfolding has_derivative_def apply(rule,rule bounded_linear_axioms)
+  unfolding diff by (simp add: tendsto_const)
 
-lemma has_derivative_cmul: assumes "(f has_derivative f') net" shows "((\<lambda>x. c *\<^sub>R f(x)) has_derivative (\<lambda>h. c *\<^sub>R f'(h))) net"
-  unfolding has_derivative_def apply(rule,rule bounded_linear.cmul)
-  using assms[unfolded has_derivative_def]
-  using scaleR.tendsto[OF tendsto_const assms[unfolded has_derivative_def,THEN conjunct2]]
-  unfolding scaleR_right_diff_distrib scaleR_right_distrib by auto 
+lemma (in bounded_linear) bounded_linear: "bounded_linear f" ..
 
-lemma has_derivative_cmul_eq: assumes "c \<noteq> 0" 
-  shows "(((\<lambda>x. c *\<^sub>R f(x)) has_derivative (\<lambda>h. c *\<^sub>R f'(h))) net \<longleftrightarrow> (f has_derivative f') net)"
-  apply(rule) defer apply(rule has_derivative_cmul,assumption) 
-  apply(drule has_derivative_cmul[where c="1/c"]) using assms by auto
+lemma (in bounded_linear) has_derivative:
+  assumes "((\<lambda>x. g x) has_derivative (\<lambda>h. g' h)) net"
+  shows "((\<lambda>x. f (g x)) has_derivative (\<lambda>h. f (g' h))) net"
+  using assms unfolding has_derivative_def
+  apply safe
+  apply (erule bounded_linear_compose [OF local.bounded_linear])
+  apply (drule local.tendsto)
+  apply (simp add: local.scaleR local.diff local.add local.zero)
+  done
 
 lemma has_derivative_neg:
- "(f has_derivative f') net \<Longrightarrow> ((\<lambda>x. -(f x)) has_derivative (\<lambda>h. -(f' h))) net"
-  apply(drule has_derivative_cmul[where c="-1"]) by auto
-
-lemma has_derivative_neg_eq: "((\<lambda>x. -(f x)) has_derivative (\<lambda>h. -(f' h))) net \<longleftrightarrow> (f has_derivative f') net"
-  apply(rule, drule_tac[!] has_derivative_neg) by auto
+  assumes "(f has_derivative f') net"
+  shows "((\<lambda>x. -(f x)) has_derivative (\<lambda>h. -(f' h))) net"
+  using scaleR_right.has_derivative [where r="-1", OF assms] by auto
 
 lemma has_derivative_add:
   assumes "(f has_derivative f') net" and "(g has_derivative g') net"
@@ -180,11 +152,12 @@ proof-
   note as = assms[unfolded has_derivative_def]
   show ?thesis unfolding has_derivative_def apply(rule,rule bounded_linear_add)
     using tendsto_add[OF as(1)[THEN conjunct2] as(2)[THEN conjunct2]] and as
-    by (auto simp add:algebra_simps scaleR_right_diff_distrib scaleR_right_distrib)
+    by (auto simp add: algebra_simps)
 qed
 
-lemma has_derivative_add_const:"(f has_derivative f') net \<Longrightarrow> ((\<lambda>x. f x + c) has_derivative f') net"
-  apply(drule has_derivative_add) apply(rule has_derivative_const) by auto
+lemma has_derivative_add_const:
+  "(f has_derivative f') net \<Longrightarrow> ((\<lambda>x. f x + c) has_derivative f') net"
+  by (drule has_derivative_add, rule has_derivative_const, auto)
 
 lemma has_derivative_sub:
   assumes "(f has_derivative f') net" and "(g has_derivative g') net"
@@ -195,82 +168,22 @@ lemma has_derivative_setsum:
   assumes "finite s" and "\<forall>a\<in>s. ((f a) has_derivative (f' a)) net"
   shows "((\<lambda>x. setsum (\<lambda>a. f a x) s) has_derivative (\<lambda>h. setsum (\<lambda>a. f' a h) s)) net"
   using assms by (induct, simp_all add: has_derivative_const has_derivative_add)
-
-lemma has_derivative_setsum_numseg:
-  "\<forall>i. m \<le> i \<and> i \<le> n \<longrightarrow> ((f i) has_derivative (f' i)) net \<Longrightarrow>
-  ((\<lambda>x. setsum (\<lambda>i. f i x) {m..n::nat}) has_derivative (\<lambda>h. setsum (\<lambda>i. f' i h) {m..n})) net"
-  by (rule has_derivative_setsum) simp_all
-
 text {* Somewhat different results for derivative of scalar multiplier. *}
 
 (** move **)
-lemma linear_vmul_component:
+lemma linear_vmul_component: (* TODO: delete *)
   assumes lf: "linear f"
   shows "linear (\<lambda>x. f x $$ k *\<^sub>R v)"
   using lf
   by (auto simp add: linear_def algebra_simps)
 
-lemma bounded_linear_euclidean_component: "bounded_linear (\<lambda>x. x $$ k)"
-  unfolding euclidean_component_def
-  by (rule inner.bounded_linear_right)
-
-lemma has_derivative_vmul_component:
-  fixes c::"'a::real_normed_vector \<Rightarrow> 'b::euclidean_space" and v::"'c::real_normed_vector"
-  assumes "(c has_derivative c') net"
-  shows "((\<lambda>x. c(x)$$k *\<^sub>R v) has_derivative (\<lambda>x. (c' x)$$k *\<^sub>R v)) net" proof-
-  have *:"\<And>y. (c y $$ k *\<^sub>R v - (c (netlimit net) $$ k *\<^sub>R v + c' (y - netlimit net) $$ k *\<^sub>R v)) = 
-        (c y $$ k - (c (netlimit net) $$ k + c' (y - netlimit net) $$ k)) *\<^sub>R v" 
-    unfolding scaleR_left_diff_distrib scaleR_left_distrib by auto
-  show ?thesis unfolding has_derivative_def and *
-    apply (rule conjI)
-    apply (rule bounded_linear_compose [OF scaleR.bounded_linear_left])
-    apply (rule bounded_linear_compose [OF bounded_linear_euclidean_component])
-    apply (rule derivative_linear [OF assms])
-    apply(subst scaleR_zero_left[THEN sym, of v]) unfolding scaleR_scaleR
-    apply (intro tendsto_intros)
-    using assms[unfolded has_derivative_def] unfolding Lim o_def apply- apply(cases "trivial_limit net")
-    apply(rule,assumption,rule disjI2,rule,rule) proof-
-    have *:"\<And>x. x - 0 = (x::'a)" by auto 
-    have **:"\<And>d x. d * (c x $$ k - (c (netlimit net) $$ k + c' (x - netlimit net) $$ k)) =
-      (d *\<^sub>R (c x - (c (netlimit net) + c' (x - netlimit net) ))) $$k" by(auto simp add:field_simps)
-    fix e assume "\<not> trivial_limit net" "0 < (e::real)"
-    then have "eventually (\<lambda>x. dist ((1 / norm (x - netlimit net)) *\<^sub>R
-      (c x - (c (netlimit net) + c' (x - netlimit net)))) 0 < e) net"
-      using assms[unfolded has_derivative_def Lim] by auto
-    thus "eventually (\<lambda>x. dist (1 / norm (x - netlimit net) *
-      (c x $$ k - (c (netlimit net) $$ k + c' (x - netlimit net) $$ k))) 0 < e) net"
-      proof (rule eventually_elim1)
-      case goal1 thus ?case apply - unfolding dist_norm  apply(rule le_less_trans)
-        prefer 2 apply assumption unfolding * **
-        using component_le_norm[of "(1 / norm (x - netlimit net)) *\<^sub>R
-          (c x - (c (netlimit net) + c' (x - netlimit net))) - 0" k] by auto
-    qed
-  qed
-qed
-
-lemma has_derivative_vmul_within: fixes c::"real \<Rightarrow> real"
-  assumes "(c has_derivative c') (at x within s)"
-  shows "((\<lambda>x. (c x) *\<^sub>R v) has_derivative (\<lambda>x. (c' x) *\<^sub>R v)) (at x within s)"
-  using has_derivative_vmul_component[OF assms, of 0 v] by auto
-
-lemma has_derivative_vmul_at: fixes c::"real \<Rightarrow> real"
-  assumes "(c has_derivative c') (at x)"
-  shows "((\<lambda>x. (c x) *\<^sub>R v) has_derivative (\<lambda>x. (c' x) *\<^sub>R v)) (at x)"
-  using has_derivative_vmul_within[where s=UNIV] and assms by(auto simp add: within_UNIV)
-
-lemma has_derivative_lift_dot:
-  assumes "(f has_derivative f') net"
-  shows "((\<lambda>x. inner v (f x)) has_derivative (\<lambda>t. inner v (f' t))) net" proof-
-  show ?thesis using assms unfolding has_derivative_def apply- apply(erule conjE,rule)
-    apply(rule bounded_linear_compose[of _ f']) apply(rule inner.bounded_linear_right,assumption)
-    apply(drule Lim_inner[where a=v]) unfolding o_def
-    by(auto simp add:inner.scaleR_right inner.add_right inner.diff_right) qed
-
 lemmas has_derivative_intros =
-  has_derivative_sub has_derivative_add has_derivative_cmul has_derivative_id
-  has_derivative_const has_derivative_neg has_derivative_vmul_component
-  has_derivative_vmul_at has_derivative_vmul_within has_derivative_cmul 
-  bounded_linear.has_derivative has_derivative_lift_dot
+  has_derivative_id has_derivative_const
+  has_derivative_add has_derivative_sub has_derivative_neg
+  has_derivative_add_const
+  scaleR_left.has_derivative scaleR_right.has_derivative
+  inner_left.has_derivative inner_right.has_derivative
+  euclidean_component.has_derivative
 
 subsubsection {* Limit transformation for derivatives *}
 
@@ -378,7 +291,7 @@ proof-
     apply (erule_tac x=e in allE)
     apply (erule impE | assumption)+
     apply (erule exE, rule_tac x=d in exI)
-    by (auto simp add: zero * elim!: allE)
+    by (auto simp add: zero *)
 qed
 
 lemma differentiable_imp_continuous_at:
@@ -546,7 +459,7 @@ lemma differentiable_cmul [intro]:
   "f differentiable net \<Longrightarrow>
   (\<lambda>x. c *\<^sub>R f(x)) differentiable (net::'a::real_normed_vector filter)"
   unfolding differentiable_def
-  apply(erule exE, drule has_derivative_cmul) by auto
+  apply(erule exE, drule scaleR_right.has_derivative) by auto
 
 lemma differentiable_neg [intro]:
   "f differentiable net \<Longrightarrow>
@@ -855,8 +768,8 @@ proof-
   proof
     fix x assume x:"x \<in> {a<..<b}"
     show "((\<lambda>x. f x - (f b - f a) / (b - a) * x) has_derivative (\<lambda>xa. f' x xa - (f b - f a) / (b - a) * xa)) (at x)"
-      by(rule has_derivative_intros assms(3)[rule_format,OF x]
-        has_derivative_cmul[where 'b=real, unfolded real_scaleR_def])+
+      by (intro has_derivative_intros assms(3)[rule_format,OF x]
+        mult_right.has_derivative)
   qed(insert assms(1), auto simp add:field_simps)
   then guess x ..
   thus ?thesis apply(rule_tac x=x in bexI)
@@ -901,7 +814,7 @@ proof-
   have "\<exists>x\<in>{a<..<b}. (op \<bullet> (f b - f a) \<circ> f) b - (op \<bullet> (f b - f a) \<circ> f) a = (f b - f a) \<bullet> f' x (b - a)"
     apply(rule mvt) apply(rule assms(1))
     apply(rule continuous_on_inner continuous_on_intros assms(2))+
-    unfolding o_def apply(rule,rule has_derivative_lift_dot)
+    unfolding o_def apply(rule,rule has_derivative_intros)
     using assms(3) by auto
   then guess x .. note x=this
   show ?thesis proof(cases "f a = f b")
@@ -1380,12 +1293,12 @@ proof-
           unfolding o_def and diff using f'g' by auto
         show "(ph has_derivative (\<lambda>v. v - g' (f' u v))) (at u within ball a d)"
           unfolding ph' * apply(rule diff_chain_within) defer
-          apply(rule bounded_linear.has_derivative[OF assms(3)])
+          apply(rule bounded_linear.has_derivative'[OF assms(3)])
           apply(rule has_derivative_intros) defer
           apply(rule has_derivative_sub[where g'="\<lambda>x.0",unfolded diff_0_right])
           apply(rule has_derivative_at_within)
           using assms(5) and `u\<in>s` `a\<in>s`
-          by(auto intro!: has_derivative_intros derivative_linear)
+          by(auto intro!: has_derivative_intros bounded_linear.has_derivative' derivative_linear)
         have **:"bounded_linear (\<lambda>x. f' u x - f' a x)"
           "bounded_linear (\<lambda>x. f' a x - f' u x)"
           apply(rule_tac[!] bounded_linear_sub)
@@ -1826,7 +1739,8 @@ lemma has_vector_derivative_id: "((\<lambda>x::real. x) has_vector_derivative 1)
 
 lemma has_vector_derivative_cmul:
   "(f has_vector_derivative f') net \<Longrightarrow> ((\<lambda>x. c *\<^sub>R f x) has_vector_derivative (c *\<^sub>R f')) net"
-  unfolding has_vector_derivative_def apply(drule has_derivative_cmul)
+  unfolding has_vector_derivative_def
+  apply (drule scaleR_right.has_derivative)
   by (auto simp add: algebra_simps)
 
 lemma has_vector_derivative_cmul_eq:

@@ -1031,9 +1031,6 @@ lemma Lim_sequentially:
           (\<forall>e>0. \<exists>N. \<forall>n\<ge>N. dist (S n) l < e)"
   by (auto simp add: tendsto_iff eventually_sequentially)
 
-lemma Lim_sequentially_iff_LIMSEQ: "(S ---> l) sequentially \<longleftrightarrow> S ----> l"
-  unfolding Lim_sequentially LIMSEQ_def ..
-
 lemma Lim_eventually: "eventually (\<lambda>x. f x = l) net \<Longrightarrow> (f ---> l) net"
   by (rule topological_tendstoI, auto elim: eventually_rev_mono)
 
@@ -2228,15 +2225,10 @@ proof
     by auto
 qed
 
-lemma bounded_component: "bounded s \<Longrightarrow>
-  bounded ((\<lambda>x. x $$ i) ` (s::'a::euclidean_space set))"
-unfolding bounded_def
-apply clarify
-apply (rule_tac x="x $$ i" in exI)
-apply (rule_tac x="e" in exI)
-apply clarify
-apply (rule order_trans[OF dist_nth_le],simp)
-done
+lemma bounded_component: "bounded s \<Longrightarrow> bounded ((\<lambda>x. x $$ i) ` s)"
+  apply (erule bounded_linear_image)
+  apply (rule bounded_linear_euclidean_component)
+  done
 
 lemma compact_lemma:
   fixes f :: "nat \<Rightarrow> 'a::euclidean_space"
