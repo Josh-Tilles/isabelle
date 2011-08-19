@@ -339,11 +339,22 @@ by (cases x) simp
 
 subsection {* Completeness of the Complexes *}
 
-interpretation Re: bounded_linear "Re"
+lemma bounded_linear_Re: "bounded_linear Re"
   by (rule bounded_linear_intro [where K=1], simp_all add: complex_norm_def)
 
-interpretation Im: bounded_linear "Im"
+lemma bounded_linear_Im: "bounded_linear Im"
   by (rule bounded_linear_intro [where K=1], simp_all add: complex_norm_def)
+
+lemmas tendsto_Re [tendsto_intros] =
+  bounded_linear.tendsto [OF bounded_linear_Re]
+
+lemmas tendsto_Im [tendsto_intros] =
+  bounded_linear.tendsto [OF bounded_linear_Im]
+
+lemmas isCont_Re [simp] = bounded_linear.isCont [OF bounded_linear_Re]
+lemmas isCont_Im [simp] = bounded_linear.isCont [OF bounded_linear_Im]
+lemmas Cauchy_Re = bounded_linear.Cauchy [OF bounded_linear_Re]
+lemmas Cauchy_Im = bounded_linear.Cauchy [OF bounded_linear_Im]
 
 lemma tendsto_Complex [tendsto_intros]:
   assumes "(f ---> a) net" and "(g ---> b) net"
@@ -370,9 +381,9 @@ instance complex :: banach
 proof
   fix X :: "nat \<Rightarrow> complex"
   assume X: "Cauchy X"
-  from Re.Cauchy [OF X] have 1: "(\<lambda>n. Re (X n)) ----> lim (\<lambda>n. Re (X n))"
+  from Cauchy_Re [OF X] have 1: "(\<lambda>n. Re (X n)) ----> lim (\<lambda>n. Re (X n))"
     by (simp add: Cauchy_convergent_iff convergent_LIMSEQ_iff)
-  from Im.Cauchy [OF X] have 2: "(\<lambda>n. Im (X n)) ----> lim (\<lambda>n. Im (X n))"
+  from Cauchy_Im [OF X] have 2: "(\<lambda>n. Im (X n)) ----> lim (\<lambda>n. Im (X n))"
     by (simp add: Cauchy_convergent_iff convergent_LIMSEQ_iff)
   have "X ----> Complex (lim (\<lambda>n. Re (X n))) (lim (\<lambda>n. Im (X n)))"
     using LIMSEQ_Complex [OF 1 2] by simp
@@ -511,9 +522,15 @@ by (simp add: complex_eq_iff power2_eq_square)
 lemma complex_mod_mult_cnj: "cmod (z * cnj z) = (cmod z)\<twosuperior>"
 by (simp add: norm_mult power2_eq_square)
 
-interpretation cnj: bounded_linear "cnj"
+lemma bounded_linear_cnj: "bounded_linear cnj"
   using complex_cnj_add complex_cnj_scaleR
   by (rule bounded_linear_intro [where K=1], simp)
+
+lemmas tendsto_cnj [tendsto_intros] =
+  bounded_linear.tendsto [OF bounded_linear_cnj]
+
+lemmas isCont_cnj [simp] =
+  bounded_linear.isCont [OF bounded_linear_cnj]
 
 
 subsection{*The Functions @{term sgn} and @{term arg}*}
@@ -586,10 +603,42 @@ definition
   rcis :: "[real, real] => complex" where
   "rcis r a = complex_of_real r * cis a"
 
-definition
-  (* e ^ (x + iy) *)
-  expi :: "complex => complex" where
-  "expi z = complex_of_real(exp (Re z)) * cis (Im z)"
+abbreviation expi :: "complex \<Rightarrow> complex"
+  where "expi \<equiv> exp"
+
+lemma cos_coeff_Suc: "cos_coeff (Suc n) = - sin_coeff n / real (Suc n)"
+  unfolding cos_coeff_def sin_coeff_def
+  by (simp del: mult_Suc, auto simp add: odd_Suc_mult_two_ex)
+
+lemma sin_coeff_Suc: "sin_coeff (Suc n) = cos_coeff n / real (Suc n)"
+  unfolding cos_coeff_def sin_coeff_def
+  by (simp del: mult_Suc)
+
+lemma expi_imaginary: "expi (Complex 0 b) = cis b"
+proof (rule complex_eqI)
+  { fix n have "Complex 0 b ^ n =
+    real (fact n) *\<^sub>R Complex (cos_coeff n * b ^ n) (sin_coeff n * b ^ n)"
+      apply (induct n)
+      apply (simp add: cos_coeff_def sin_coeff_def)
+      apply (simp add: sin_coeff_Suc cos_coeff_Suc del: mult_Suc)
+      done } note * = this
+  show "Re (exp (Complex 0 b)) = Re (cis b)"
+    unfolding exp_def cis_def cos_def
+    by (subst bounded_linear.suminf[OF bounded_linear_Re summable_exp_generic],
+      simp add: * mult_assoc [symmetric])
+  show "Im (exp (Complex 0 b)) = Im (cis b)"
+    unfolding exp_def cis_def sin_def
+    by (subst bounded_linear.suminf[OF bounded_linear_Im summable_exp_generic],
+      simp add: * mult_assoc [symmetric])
+qed
+
+lemma expi_def: "expi z = complex_of_real (exp (Re z)) * cis (Im z)"
+proof -
+  have "expi z = expi (complex_of_real (Re z) + Complex 0 (Im z))"
+    by simp
+  thus ?thesis
+    unfolding exp_add exp_of_real expi_imaginary .
+qed
 
 lemma complex_split_polar:
      "\<exists>r a. z = complex_of_real r * (Complex (cos a) (sin a))"
@@ -696,10 +745,10 @@ lemma sin_n_Im_cis_pow_n: "sin (real n * a) = Im(cis a ^ n)"
 by (auto simp add: DeMoivre)
 
 lemma expi_add: "expi(a + b) = expi(a) * expi(b)"
-by (simp add: expi_def exp_add cis_mult [symmetric] mult_ac)
+  by (rule exp_add) (* FIXME: redundant *)
 
-lemma expi_zero [simp]: "expi (0::complex) = 1"
-by (simp add: expi_def)
+lemma expi_zero: "expi (0::complex) = 1"
+  by (rule exp_zero) (* FIXME: redundant *)
 
 lemma complex_expi_Ex: "\<exists>a r. z = complex_of_real r * expi a"
 apply (insert rcis_Ex [of z])

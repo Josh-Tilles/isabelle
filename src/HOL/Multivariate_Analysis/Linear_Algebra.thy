@@ -10,8 +10,8 @@ imports
   "~~/src/HOL/Library/Infinite_Set"
   L2_Norm
   "~~/src/HOL/Library/Convex"
+  "~~/src/HOL/Library/Sum_of_Squares"
 uses
-  "~~/src/HOL/Library/positivstellensatz.ML"  (* FIXME duplicate use!? *)
   ("normarith.ML")
 begin
 
@@ -1756,7 +1756,7 @@ proof-
   have Kp: "?K > 0" by arith
     { assume C: "B < 0"
       have "((\<chi>\<chi> i. 1)::'a) \<noteq> 0" unfolding euclidean_eq[where 'a='a]
-        by(auto intro!:exI[where x=0] simp add:euclidean_component_zero)
+        by(auto intro!:exI[where x=0])
       hence "norm ((\<chi>\<chi> i. 1)::'a) > 0" by auto
       with C have "B * norm ((\<chi>\<chi> i. 1)::'a) < 0"
         by (simp add: mult_less_0_iff)
