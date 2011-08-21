@@ -1553,11 +1553,6 @@ declaration {*
 
 subsection{* Simprules combining x+y and 0: ARE THEY NEEDED?*}
 
-text{*Needed in this non-standard form by Hyperreal/Transcendental*}
-lemma real_0_le_divide_iff:
-     "((0::real) \<le> x/y) = ((x \<le> 0 | 0 \<le> y) & (0 \<le> x | y \<le> 0))"
-by (auto simp add: zero_le_divide_iff)
-
 lemma real_add_minus_iff [simp]: "(x + - a = (0::real)) = (x=a)" 
 by arith
 
@@ -1606,35 +1601,10 @@ lemma realpow_minus_mult:
   shows "0 < n \<Longrightarrow> x ^ (n - 1) * x = x ^ n"
 by (simp add: power_commutes split add: nat_diff_split)
 
-text {* TODO: no longer real-specific; rename and move elsewhere *}
-lemma realpow_two_diff:
-  fixes x :: "'a::comm_ring_1"
-  shows "x^Suc (Suc 0) - y^Suc (Suc 0) = (x - y) * (x + y)"
-by (simp add: algebra_simps)
-
-text {* TODO: move elsewhere *}
-lemma add_eq_0_iff:
-  fixes x y :: "'a::group_add"
-  shows "x + y = 0 \<longleftrightarrow> y = - x"
-by (auto dest: minus_unique)
-
-text {* TODO: no longer real-specific; rename and move elsewhere *}
-lemma realpow_two_disj:
-  fixes x :: "'a::idom"
-  shows "(x^Suc (Suc 0) = y^Suc (Suc 0)) = (x = y | x = -y)"
-using realpow_two_diff [of x y]
-by (auto simp add: add_eq_0_iff)
-
 text {* FIXME: declare this [simp] for all types, or not at all *}
 lemma real_two_squares_add_zero_iff [simp]:
   "(x * x + y * y = 0) = ((x::real) = 0 \<and> y = 0)"
 by (rule sum_squares_eq_zero_iff)
-
-text {* TODO: no longer real-specific; rename and move elsewhere *}
-lemma real_squared_diff_one_factored:
-  fixes x :: "'a::ring_1"
-  shows "x * x - 1 = (x + 1) * (x - 1)"
-by (simp add: algebra_simps)
 
 text {* FIXME: declare this [simp] for all types, or not at all *}
 lemma realpow_two_sum_zero_iff [simp]:
@@ -1674,13 +1644,13 @@ by (simp add: abs_if)
 lemma abs_le_interval_iff: "(abs x \<le> r) = (-r\<le>x & x\<le>(r::real))"
 by (force simp add: abs_le_iff)
 
-lemma abs_add_one_gt_zero [simp]: "(0::real) < 1 + abs(x)"
+lemma abs_add_one_gt_zero: "(0::real) < 1 + abs(x)"
 by (simp add: abs_if)
 
 lemma abs_real_of_nat_cancel [simp]: "abs (real x) = real (x::nat)"
 by (rule abs_of_nonneg [OF real_of_nat_ge_zero])
 
-lemma abs_add_one_not_less_self [simp]: "~ abs(x) + (1::real) < x"
+lemma abs_add_one_not_less_self: "~ abs(x) + (1::real) < x"
 by simp
  
 lemma abs_sum_triangle_ineq: "abs ((x::real) + y + (-l + -m)) \<le> abs(x + -l) + abs(y + -m)"

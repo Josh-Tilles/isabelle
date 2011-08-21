@@ -270,12 +270,20 @@ begin
 subclass ring ..
 subclass comm_semiring_0_cancel ..
 
+lemma square_diff_square_factored:
+  "x * x - y * y = (x + y) * (x - y)"
+  by (simp add: algebra_simps)
+
 end
 
 class ring_1 = ring + zero_neq_one + monoid_mult
 begin
 
 subclass semiring_1_cancel ..
+
+lemma square_diff_one_factored:
+  "x * x - 1 = (x + 1) * (x - 1)"
+  by (simp add: algebra_simps)
 
 end
 
