@@ -30,8 +30,10 @@ sig
   datatype formula_kind = Axiom | Definition | Lemma | Hypothesis | Conjecture
   datatype 'a problem_line =
     Decl of string * 'a * 'a ho_type |
-    Formula of string * formula_kind * ('a, 'a ho_type, ('a, 'a ho_type) ho_term) formula
-               * (string, string ho_type) ho_term option * (string, string ho_type) ho_term option
+    Formula of string * formula_kind
+               * ('a, 'a ho_type, ('a, 'a ho_type) ho_term) formula
+               * (string, string ho_type) ho_term option
+               * (string, string ho_type) ho_term option
   type 'a problem = (string * 'a problem_line list) list
 
   val tptp_cnf : string
@@ -503,6 +505,7 @@ fun readable_name full_name s =
     s
   else
     s |> no_qualifiers
+      |> perhaps (try (unprefix "'"))
       |> Name.desymbolize (Char.isUpper (String.sub (full_name, 0)))
       |> (fn s =>
              if size s > max_readable_name_size then
@@ -526,7 +529,7 @@ fun nice_name (full_name, _) NONE = (full_name, NONE)
         fun add j =
           let
             val nice_name =
-              nice_prefix ^ (if j = 0 then "" else "_" ^ string_of_int j)
+              nice_prefix ^ (if j = 0 then "" else string_of_int j)
           in
             case Symtab.lookup (snd the_pool) nice_name of
               SOME full_name' =>

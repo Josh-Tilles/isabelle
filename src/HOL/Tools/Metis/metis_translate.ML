@@ -9,6 +9,8 @@ Translation of HOL to FOL for Metis.
 
 signature METIS_TRANSLATE =
 sig
+  type type_enc = ATP_Translate.type_enc
+
   datatype isa_thm =
     Isa_Reflexive_or_Trivial |
     Isa_Raw of thm
@@ -25,7 +27,7 @@ sig
   val metis_name_table : ((string * int) * (string * bool)) list
   val reveal_old_skolem_terms : (string * term) list -> term -> term
   val prepare_metis_problem :
-    Proof.context -> string -> thm list -> thm list
+    Proof.context -> type_enc -> thm list -> thm list
     -> int Symtab.table * (Metis_Thm.thm * isa_thm) list * (string * term) list
 end
 
@@ -141,7 +143,7 @@ fun metis_axiom_from_atp clauses (Formula (ident, _, phi, _, _)) =
                   |> Metis_Thm.axiom, isa)
     in
       if ident = type_tag_idempotence_helper_name orelse
-         String.isPrefix lightweight_tags_sym_formula_prefix ident then
+         String.isPrefix tags_sym_formula_prefix ident then
         Isa_Reflexive_or_Trivial |> some
       else if String.isPrefix conjecture_prefix ident then
         NONE
@@ -167,7 +169,6 @@ fun metis_axiom_from_atp clauses (Formula (ident, _, phi, _, _)) =
 (* Function to generate metis clauses, including comb and type clauses *)
 fun prepare_metis_problem ctxt type_enc conj_clauses fact_clauses =
   let
-    val type_enc = type_enc_from_string type_enc
     val (conj_clauses, fact_clauses) =
       if polymorphism_of_type_enc type_enc = Polymorphic then
         (conj_clauses, fact_clauses)
@@ -196,13 +197,13 @@ fun prepare_metis_problem ctxt type_enc conj_clauses fact_clauses =
       tracing ("PROPS:\n" ^ cat_lines (map (Syntax.string_of_term ctxt) props))
     *)
     val (atp_problem, _, _, _, _, _, sym_tab) =
-      prepare_atp_problem ctxt CNF Hypothesis Axiom type_enc true false
-                          no_lambdasN false false [] @{prop False} props
+      prepare_atp_problem ctxt CNF Hypothesis Axiom type_enc false no_lambdasN
+                          false false [] @{prop False} props
     (*
     val _ = tracing ("ATP PROBLEM: " ^
                      cat_lines (tptp_lines_for_atp_problem CNF atp_problem))
     *)
-    (* "rev" is for compatibility *)
+    (* "rev" is for compatibility. *)
     val axioms =
       atp_problem |> maps (map_filter (metis_axiom_from_atp clauses) o snd)
                   |> rev

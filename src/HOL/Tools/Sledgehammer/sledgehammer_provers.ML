@@ -24,7 +24,7 @@ sig
      overlord: bool,
      blocking: bool,
      provers: string list,
-     type_enc: type_enc option,
+     type_enc: string option,
      sound: bool,
      relevance_thresholds: real * real,
      max_relevant: int option,
@@ -65,6 +65,7 @@ sig
   val measure_run_time : bool Config.T
   val atp_lambda_translation : string Config.T
   val atp_readable_names : bool Config.T
+  val atp_sound_modulo_infiniteness : bool Config.T
   val smt_triggers : bool Config.T
   val smt_weights : bool Config.T
   val smt_weight_min_facts : int Config.T
@@ -153,7 +154,9 @@ fun is_smt_prover ctxt name =
 fun is_unit_equational_atp ctxt name =
   let val thy = Proof_Context.theory_of ctxt in
     case try (get_atp thy) name of
-      SOME {formats, ...} => member (op =) formats CNF_UEQ
+      SOME {best_slices, ...} =>
+      exists (fn (_, (_, (_, format, _, _))) => format = CNF_UEQ)
+             (best_slices ctxt)
     | NONE => false
   end
 
@@ -290,7 +293,7 @@ type params =
    overlord: bool,
    blocking: bool,
    provers: string list,
-   type_enc: type_enc option,
+   type_enc: string option,
    sound: bool,
    relevance_thresholds: real * real,
    max_relevant: int option,
@@ -341,10 +344,13 @@ val atp_lambda_translation =
   Attrib.setup_config_string @{binding sledgehammer_atp_lambda_translation}
                              (K smartN)
 (* In addition to being easier to read, readable names are often much shorter,
-   especially if types are mangled in names. For these reason, they are enabled
-   by default. *)
+   especially if types are mangled in names. This makes a difference for some
+   provers (e.g., E). For these reason, short names are enabled by default. *)
 val atp_readable_names =
   Attrib.setup_config_bool @{binding sledgehammer_atp_readable_names} (K true)
+val atp_sound_modulo_infiniteness =
+  Attrib.setup_config_bool @{binding sledgehammer_atp_sound_modulo_infiniteness}
+                           (K true)
 
 val smt_triggers =
   Attrib.setup_config_bool @{binding sledgehammer_smt_triggers} (K true)
@@ -498,7 +504,7 @@ fun has_bound_or_var_of_type pred =
    are omitted. *)
 fun is_dangerous_prop ctxt =
   transform_elim_prop
-  #> (has_bound_or_var_of_type (is_type_surely_finite ctxt false) orf
+  #> (has_bound_or_var_of_type (is_type_surely_finite ctxt) orf
       is_exhaustive_finite)
 
 fun int_opt_add (SOME m) (SOME n) = SOME (m + n)
@@ -508,11 +514,10 @@ fun int_opt_add (SOME m) (SOME n) = SOME (m + n)
    them each time. *)
 val atp_important_message_keep_quotient = 10
 
-fun choose_format_and_type_enc best_type_enc formats type_enc_opt =
-  (case type_enc_opt of
-     SOME ts => ts
-   | NONE => type_enc_from_string best_type_enc)
-  |> choose_format formats
+fun choose_type_enc soundness best_type_enc format =
+  the_default best_type_enc
+  #> type_enc_from_string soundness
+  #> adjust_type_enc format
 
 val metis_minimize_max_time = seconds 2.0
 
@@ -531,13 +536,13 @@ fun repair_monomorph_context max_iters max_new_instances =
   #> Config.put Monomorph.max_new_instances max_new_instances
   #> Config.put Monomorph.keep_partial_instances false
 
-(* Give the ATPs some slack before interrupting them the hard way. "z3_atp" on
+(* Give the ATPs some slack before interrupting them the hard way. "z3_tptp" on
    Linux appears to be the only ATP that does not honor its time limit. *)
 val atp_timeout_slack = seconds 1.0
 
 fun run_atp mode name
         ({exec, required_execs, arguments, proof_delims, known_failures,
-          conj_sym_kind, prem_kind, formats, best_slices, ...} : atp_config)
+          conj_sym_kind, prem_kind, best_slices, ...} : atp_config)
         ({debug, verbose, overlord, type_enc, sound, max_relevant,
           max_mono_iters, max_new_mono_instances, isar_proof,
           isar_shrink_factor, slicing, timeout, preplay_timeout, ...} : params)
@@ -606,14 +611,23 @@ fun run_atp mode name
                 |> maps (fn (name, rths) => map (pair name o snd) rths)
               end
             fun run_slice (slice, (time_frac, (complete,
-                                    (best_max_relevant, best_type_enc, extra))))
+                                    (best_max_relevant, format, best_type_enc,
+                                     extra))))
                           time_left =
               let
                 val num_facts =
                   length facts |> is_none max_relevant
                                   ? Integer.min best_max_relevant
-                val (format, type_enc) =
-                  choose_format_and_type_enc best_type_enc formats type_enc
+                val soundness =
+                  if sound then
+                    if Config.get ctxt atp_sound_modulo_infiniteness then
+                      Sound_Modulo_Infiniteness
+                    else
+                      Sound
+                  else
+                    Unsound
+                val type_enc =
+                  type_enc |> choose_type_enc soundness best_type_enc format
                 val fairly_sound = is_type_enc_fairly_sound type_enc
                 val facts =
                   facts |> map untranslated_fact
@@ -645,8 +659,7 @@ fun run_atp mode name
                 val (atp_problem, pool, conjecture_offset, facts_offset,
                      fact_names, typed_helpers, sym_tab) =
                   prepare_atp_problem ctxt format conj_sym_kind prem_kind
-                      type_enc sound false
-                      (Config.get ctxt atp_lambda_translation)
+                      type_enc false (Config.get ctxt atp_lambda_translation)
                       (Config.get ctxt atp_readable_names) true hyp_ts concl_t
                       facts
                 fun weights () = atp_problem_weights atp_problem
@@ -694,7 +707,7 @@ fun run_atp mode name
                         conjecture_shape facts_offset fact_names atp_proof
                     |> Option.map (fn facts =>
                            UnsoundProof
-                               (if is_type_enc_virtually_sound type_enc then
+                               (if is_type_enc_quasi_sound type_enc then
                                   SOME sound
                                 else
                                   NONE, facts |> sort string_ord))
