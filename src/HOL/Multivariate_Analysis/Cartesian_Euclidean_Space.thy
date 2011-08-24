@@ -831,7 +831,7 @@ proof-
     have IU: " (UNIV :: (real^'m) set) \<subseteq> span ?I" by blast
     from linear_eq[OF lf lg IU] fg x
     have "f x = g x" unfolding Ball_def mem_Collect_eq by metis}
-  then show ?thesis by (auto intro: ext)
+  then show ?thesis by auto
 qed
 
 lemma bilinear_eq_stdbasis_cart:
@@ -841,7 +841,7 @@ lemma bilinear_eq_stdbasis_cart:
   shows "f = g"
 proof-
   from fg have th: "\<forall>x \<in> {cart_basis i| i. i\<in> (UNIV :: 'm set)}. \<forall>y\<in>  {cart_basis j |j. j \<in> (UNIV :: 'n set)}. f x y = g x y" by blast
-  from bilinear_eq[OF bf bg equalityD2[OF span_stdbasis] equalityD2[OF span_stdbasis] th] show ?thesis by (blast intro: ext)
+  from bilinear_eq[OF bf bg equalityD2[OF span_stdbasis] equalityD2[OF span_stdbasis] th] show ?thesis by blast
 qed
 
 lemma left_invertible_transpose:
@@ -1101,11 +1101,6 @@ unfolding continuous_on_def by (intro ballI tendsto_intros)
 
 lemma closed_positive_orthant: "closed {x::real^'n. \<forall>i. 0 \<le>x$i}"
   by (simp add: Collect_all_eq closed_INT closed_Collect_le)
-
-lemma Lim_component_cart:
-  fixes f :: "'a \<Rightarrow> 'b::metric_space ^ 'n"
-  shows "(f ---> l) net \<Longrightarrow> ((\<lambda>a. f a $i) ---> l$i) net"
-  by (intro tendsto_intros)
 
 lemma bounded_component_cart: "bounded s \<Longrightarrow> bounded ((\<lambda>x. x $ i) ` s)"
 unfolding bounded_def
@@ -2005,5 +2000,9 @@ proof- have *:"\<And>p. (\<Sum>(x, k)\<in>p. content k *\<^sub>R vec1 (f x)) - v
   show ?thesis using assms unfolding has_integral apply safe
     apply(erule_tac x=e in allE,safe) apply(rule_tac x=d in exI,safe)
     apply(erule_tac x=p in allE,safe) unfolding * norm_vector_1 by auto qed
+
+text {* Legacy theorem names *}
+
+lemmas Lim_component_cart = tendsto_vec_nth
 
 end

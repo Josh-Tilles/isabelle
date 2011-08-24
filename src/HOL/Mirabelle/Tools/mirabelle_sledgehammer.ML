@@ -21,6 +21,8 @@ val minimize_timeoutK = "minimize_timeout"
 val metis_ftK = "metis_ft"
 val reconstructorK = "reconstructor"
 
+val preplay_timeout = "4"
+
 fun sh_tag id = "#" ^ string_of_int id ^ " sledgehammer: "
 fun minimize_tag id = "#" ^ string_of_int id ^ " minimize (sledgehammer): "
 fun reconstructor_tag reconstructor id =
@@ -384,9 +386,11 @@ fun run_sh prover_name prover type_enc sound max_relevant slicing
           [("verbose", "true"),
            ("type_enc", type_enc),
            ("sound", sound),
+           ("preplay_timeout", preplay_timeout),
            ("max_relevant", max_relevant),
            ("slicing", slicing),
-           ("timeout", string_of_int timeout)]
+           ("timeout", string_of_int timeout),
+           ("preplay_timeout", preplay_timeout)]
     val default_max_relevant =
       Sledgehammer_Provers.default_max_relevant_for_prover ctxt slicing
         prover_name
@@ -522,7 +526,8 @@ fun run_minimize args reconstructor named_thms id
        ("verbose", "true"),
        ("type_enc", type_enc),
        ("sound", sound),
-       ("timeout", string_of_int timeout)]
+       ("timeout", string_of_int timeout),
+       ("preplay_timeout", preplay_timeout)]
     val minimize =
       Sledgehammer_Minimize.minimize_facts prover_name params
           true 1 (Sledgehammer_Util.subgoal_count st)
@@ -545,40 +550,53 @@ fun run_minimize args reconstructor named_thms id
   end
 
 
-val e_override_params =
+fun e_override_params timeout =
   [("provers", "e"),
+   ("max_relevant", "0"),
    ("type_enc", "poly_guards?"),
    ("sound", "true"),
-   ("slicing", "false")]
+   ("slicing", "false"),
+   ("timeout", timeout |> Time.toSeconds |> string_of_int)]
 
-val vampire_override_params =
+fun vampire_override_params timeout =
   [("provers", "vampire"),
+   ("max_relevant", "0"),
    ("type_enc", "poly_tags"),
    ("sound", "true"),
-   ("slicing", "false")]
+   ("slicing", "false"),
+   ("timeout", timeout |> Time.toSeconds |> string_of_int)]
 
 fun run_reconstructor trivial full m name reconstructor named_thms id
     ({pre=st, timeout, log, pos, ...}: Mirabelle.run_args) =
   let
-    fun do_reconstructor thms ctxt =
-      (if !reconstructor = "sledgehammer_tac" then
-         (fn ctxt => fn thms =>
-            Method.insert_tac thms THEN'
-            (Sledgehammer_Tactics.sledgehammer_as_oracle_tac ctxt
-                 e_override_params
-             ORELSE'
-             Sledgehammer_Tactics.sledgehammer_as_oracle_tac ctxt
-                 vampire_override_params))
-       else if !reconstructor = "smt" then
-         SMT_Solver.smt_tac
-       else if full orelse !reconstructor = "metis (full_types)" then
-         Metis_Tactics.metis_tac [Metis_Tactics.full_type_enc]
-       else if !reconstructor = "metis (no_types)" then
-         Metis_Tactics.metis_tac [Metis_Tactics.no_type_enc]
-       else
-         Metis_Tactics.metis_tac []) ctxt thms
-    fun apply_reconstructor thms =
-      Mirabelle.can_apply timeout (do_reconstructor thms) st
+    fun do_reconstructor named_thms ctxt =
+      let
+        val ref_of_str =
+          suffix ";" #> Outer_Syntax.scan Position.none #> Parse_Spec.xthm
+          #> fst
+        val thms = named_thms |> maps snd
+        val facts = named_thms |> map (ref_of_str o fst o fst)
+        val relevance_override = {add = facts, del = [], only = true}
+      in
+        if !reconstructor = "sledgehammer_tac" then
+          Sledgehammer_Tactics.sledgehammer_as_oracle_tac ctxt
+             (e_override_params timeout) relevance_override
+          ORELSE'
+          Sledgehammer_Tactics.sledgehammer_as_oracle_tac ctxt
+             (vampire_override_params timeout) relevance_override
+        else if !reconstructor = "smt" then
+          SMT_Solver.smt_tac ctxt thms
+        else if full orelse !reconstructor = "metis (full_types)" then
+          Metis_Tactics.metis_tac [Metis_Tactics.full_type_enc] ctxt thms
+        else if !reconstructor = "metis (no_types)" then
+          Metis_Tactics.metis_tac [Metis_Tactics.no_type_enc] ctxt thms
+        else if !reconstructor = "metis" then
+          Metis_Tactics.metis_tac [] ctxt thms
+        else
+          K all_tac
+      end
+    fun apply_reconstructor named_thms =
+      Mirabelle.can_apply timeout (do_reconstructor named_thms) st
 
     fun with_time (false, t) = "failed (" ^ string_of_int t ^ ")"
       | with_time (true, t) = (change_data id (inc_reconstructor_success m);
@@ -590,8 +608,8 @@ fun run_reconstructor trivial full m name reconstructor named_thms id
           if name = "proof" then change_data id (inc_reconstructor_proofs m)
           else ();
           "succeeded (" ^ string_of_int t ^ ")")
-    fun timed_reconstructor thms =
-      (with_time (Mirabelle.cpu_time apply_reconstructor thms), true)
+    fun timed_reconstructor named_thms =
+      (with_time (Mirabelle.cpu_time apply_reconstructor named_thms), true)
       handle TimeLimit.TimeOut => (change_data id (inc_reconstructor_timeout m);
                ("timeout", false))
            | ERROR msg => ("error: " ^ msg, false)
@@ -601,7 +619,7 @@ fun run_reconstructor trivial full m name reconstructor named_thms id
     val _ = if trivial then ()
             else change_data id (inc_reconstructor_nontriv_calls m)
   in
-    maps snd named_thms
+    named_thms
     |> timed_reconstructor
     |>> log o prefix (reconstructor_tag reconstructor id)
     |> snd
@@ -617,49 +635,52 @@ fun sledgehammer_action args id (st as {pre, name, ...}: Mirabelle.run_args) =
     if can Logic.dest_conjunction goal orelse can Logic.dest_equals goal
     then () else
     let
-      val reconstructor = Unsynchronized.ref ""
-      val named_thms =
-        Unsynchronized.ref (NONE : ((string * locality) * thm list) list option)
       val max_calls =
         AList.lookup (op =) args max_callsK |> the_default "10000000"
         |> Int.fromString |> the
-      val minimize = AList.defined (op =) args minimizeK
-      val metis_ft = AList.defined (op =) args metis_ftK
-      val trivial =
-        Try_Methods.try_methods (SOME try_timeout) ([], [], [], []) pre
-        handle TimeLimit.TimeOut => false
-      fun apply_reconstructor m1 m2 =
-        if metis_ft
-        then
-          if not (Mirabelle.catch_result (reconstructor_tag reconstructor) false
-              (run_reconstructor trivial false m1 name reconstructor
-                   (these (!named_thms))) id st)
-          then
-            (Mirabelle.catch_result (reconstructor_tag reconstructor) false
-              (run_reconstructor trivial true m2 name reconstructor
-                   (these (!named_thms))) id st; ())
-          else ()
-        else
-          (Mirabelle.catch_result (reconstructor_tag reconstructor) false
-            (run_reconstructor trivial false m1 name reconstructor
-                 (these (!named_thms))) id st; ())
       val _ = num_sledgehammer_calls := !num_sledgehammer_calls + 1;
-    in 
+    in
       if !num_sledgehammer_calls > max_calls then ()
       else
-        change_data id (set_mini minimize);
-        Mirabelle.catch sh_tag (run_sledgehammer trivial args reconstructor
-                                                 named_thms) id st;
-        if is_some (!named_thms)
-        then
-         (apply_reconstructor Unminimized UnminimizedFT;
-          if minimize andalso not (null (these (!named_thms)))
+        let
+          val reconstructor = Unsynchronized.ref ""
+          val named_thms =
+            Unsynchronized.ref (NONE : ((string * locality) * thm list) list option)
+          val minimize = AList.defined (op =) args minimizeK
+          val metis_ft = AList.defined (op =) args metis_ftK
+          val trivial =
+            Try_Methods.try_methods (SOME try_timeout) ([], [], [], []) pre
+            handle TimeLimit.TimeOut => false
+          fun apply_reconstructor m1 m2 =
+            if metis_ft
+            then
+              if not (Mirabelle.catch_result (reconstructor_tag reconstructor) false
+                  (run_reconstructor trivial false m1 name reconstructor
+                       (these (!named_thms))) id st)
+              then
+                (Mirabelle.catch_result (reconstructor_tag reconstructor) false
+                  (run_reconstructor trivial true m2 name reconstructor
+                       (these (!named_thms))) id st; ())
+              else ()
+            else
+              (Mirabelle.catch_result (reconstructor_tag reconstructor) false
+                (run_reconstructor trivial false m1 name reconstructor
+                     (these (!named_thms))) id st; ())
+        in
+          change_data id (set_mini minimize);
+          Mirabelle.catch sh_tag (run_sledgehammer trivial args reconstructor
+                                                   named_thms) id st;
+          if is_some (!named_thms)
           then
-           (Mirabelle.catch minimize_tag
-                (run_minimize args reconstructor named_thms) id st;
-            apply_reconstructor Minimized MinimizedFT)
-          else ())
-        else ()
+           (apply_reconstructor Unminimized UnminimizedFT;
+            if minimize andalso not (null (these (!named_thms)))
+            then
+             (Mirabelle.catch minimize_tag
+                  (run_minimize args reconstructor named_thms) id st;
+              apply_reconstructor Minimized MinimizedFT)
+            else ())
+          else ()
+        end
     end
   end
 
