@@ -8,11 +8,6 @@ theory Linear_Algebra
 imports
   Euclidean_Space
   "~~/src/HOL/Library/Infinite_Set"
-  L2_Norm
-  "~~/src/HOL/Library/Convex"
-  "~~/src/HOL/Library/Sum_of_Squares"
-uses
-  ("normarith.ML")
 begin
 
 lemma cond_application_beta: "(if b then f else g) x = (if b then f x else g x)"
@@ -66,7 +61,7 @@ lemma norm_mul[simp]: "norm(a *\<^sub>R x) = abs(a) * norm x"
 *)
 
 lemma norm_eq_0_dot: "(norm x = 0) \<longleftrightarrow> (inner x x = (0::real))"
-  by (simp add: setL2_def power2_eq_square)
+  by (simp add: power2_eq_square)
 
 lemma norm_cauchy_schwarz:
   shows "inner x y <= norm x * norm y"
@@ -154,111 +149,6 @@ next
   then show "x = y" by (simp)
 qed
 
-subsection{* General linear decision procedure for normed spaces. *}
-
-lemma norm_cmul_rule_thm:
-  fixes x :: "'a::real_normed_vector"
-  shows "b >= norm(x) ==> \<bar>c\<bar> * b >= norm(scaleR c x)"
-  unfolding norm_scaleR
-  apply (erule mult_left_mono)
-  apply simp
-  done
-
-  (* FIXME: Move all these theorems into the ML code using lemma antiquotation *)
-lemma norm_add_rule_thm:
-  fixes x1 x2 :: "'a::real_normed_vector"
-  shows "norm x1 \<le> b1 \<Longrightarrow> norm x2 \<le> b2 \<Longrightarrow> norm (x1 + x2) \<le> b1 + b2"
-  by (rule order_trans [OF norm_triangle_ineq add_mono])
-
-lemma ge_iff_diff_ge_0: "(a::'a::linordered_ring) \<ge> b == a - b \<ge> 0"
-  by (simp add: field_simps)
-
-lemma pth_1:
-  fixes x :: "'a::real_normed_vector"
-  shows "x == scaleR 1 x" by simp
-
-lemma pth_2:
-  fixes x :: "'a::real_normed_vector"
-  shows "x - y == x + -y" by (atomize (full)) simp
-
-lemma pth_3:
-  fixes x :: "'a::real_normed_vector"
-  shows "- x == scaleR (-1) x" by simp
-
-lemma pth_4:
-  fixes x :: "'a::real_normed_vector"
-  shows "scaleR 0 x == 0" and "scaleR c 0 = (0::'a)" by simp_all
-
-lemma pth_5:
-  fixes x :: "'a::real_normed_vector"
-  shows "scaleR c (scaleR d x) == scaleR (c * d) x" by simp
-
-lemma pth_6:
-  fixes x :: "'a::real_normed_vector"
-  shows "scaleR c (x + y) == scaleR c x + scaleR c y"
-  by (simp add: scaleR_right_distrib)
-
-lemma pth_7:
-  fixes x :: "'a::real_normed_vector"
-  shows "0 + x == x" and "x + 0 == x" by simp_all
-
-lemma pth_8:
-  fixes x :: "'a::real_normed_vector"
-  shows "scaleR c x + scaleR d x == scaleR (c + d) x"
-  by (simp add: scaleR_left_distrib)
-
-lemma pth_9:
-  fixes x :: "'a::real_normed_vector" shows
-  "(scaleR c x + z) + scaleR d x == scaleR (c + d) x + z"
-  "scaleR c x + (scaleR d x + z) == scaleR (c + d) x + z"
-  "(scaleR c x + w) + (scaleR d x + z) == scaleR (c + d) x + (w + z)"
-  by (simp_all add: algebra_simps)
-
-lemma pth_a:
-  fixes x :: "'a::real_normed_vector"
-  shows "scaleR 0 x + y == y" by simp
-
-lemma pth_b:
-  fixes x :: "'a::real_normed_vector" shows
-  "scaleR c x + scaleR d y == scaleR c x + scaleR d y"
-  "(scaleR c x + z) + scaleR d y == scaleR c x + (z + scaleR d y)"
-  "scaleR c x + (scaleR d y + z) == scaleR c x + (scaleR d y + z)"
-  "(scaleR c x + w) + (scaleR d y + z) == scaleR c x + (w + (scaleR d y + z))"
-  by (simp_all add: algebra_simps)
-
-lemma pth_c:
-  fixes x :: "'a::real_normed_vector" shows
-  "scaleR c x + scaleR d y == scaleR d y + scaleR c x"
-  "(scaleR c x + z) + scaleR d y == scaleR d y + (scaleR c x + z)"
-  "scaleR c x + (scaleR d y + z) == scaleR d y + (scaleR c x + z)"
-  "(scaleR c x + w) + (scaleR d y + z) == scaleR d y + ((scaleR c x + w) + z)"
-  by (simp_all add: algebra_simps)
-
-lemma pth_d:
-  fixes x :: "'a::real_normed_vector"
-  shows "x + 0 == x" by simp
-
-lemma norm_imp_pos_and_ge:
-  fixes x :: "'a::real_normed_vector"
-  shows "norm x == n \<Longrightarrow> norm x \<ge> 0 \<and> n \<ge> norm x"
-  by atomize auto
-
-lemma real_eq_0_iff_le_ge_0: "(x::real) = 0 == x \<ge> 0 \<and> -x \<ge> 0" by arith
-
-lemma norm_pths:
-  fixes x :: "'a::real_normed_vector" shows
-  "x = y \<longleftrightarrow> norm (x - y) \<le> 0"
-  "x \<noteq> y \<longleftrightarrow> \<not> (norm (x - y) \<le> 0)"
-  using norm_ge_zero[of "x - y"] by auto
-
-use "normarith.ML"
-
-method_setup norm = {* Scan.succeed (SIMPLE_METHOD' o NormArith.norm_arith_tac)
-*} "prove simple linear statements about vector norms"
-
-
-text{* Hence more metric properties. *}
-
 lemma norm_triangle_half_r:
   shows "norm (y - x1) < e / 2 \<Longrightarrow> norm (y - x2) < e / 2 \<Longrightarrow> norm (x1 - x2) < e"
   using dist_triangle_half_r unfolding dist_norm[THEN sym] by auto
@@ -273,16 +163,6 @@ lemma norm_triangle_le: "norm(x) + norm y <= e ==> norm(x + y) <= e"
 
 lemma norm_triangle_lt: "norm(x) + norm(y) < e ==> norm(x + y) < e"
   by (metis basic_trans_rules(21) norm_triangle_ineq)
-
-lemma dist_triangle_add:
-  fixes x y x' y' :: "'a::real_normed_vector"
-  shows "dist (x + y) (x' + y') <= dist x x' + dist y y'"
-  by norm
-
-lemma dist_triangle_add_half:
-  fixes x x' y y' :: "'a::real_normed_vector"
-  shows "dist x x' < e / 2 \<Longrightarrow> dist y y' < e / 2 \<Longrightarrow> dist(x + y) (x' + y') < e"
-  by norm
 
 lemma setsum_clauses:
   shows "setsum f {} = 0"
@@ -310,12 +190,6 @@ lemma setsum_group:
   apply (subst setsum_image_gen[OF fS, of g f])
   apply (rule setsum_mono_zero_right[OF fT fST])
   by (auto intro: setsum_0')
-
-lemma dot_lsum: "finite S \<Longrightarrow> setsum f S \<bullet> y = setsum (\<lambda>x. f x \<bullet> y) S "
-  apply(induct rule: finite_induct) by(auto simp add: inner_add)
-
-lemma dot_rsum: "finite S \<Longrightarrow> y \<bullet> setsum f S = setsum (\<lambda>x. y \<bullet> f x) S "
-  apply(induct rule: finite_induct) by(auto simp add: inner_add)
 
 lemma vector_eq_ldot: "(\<forall>x. x \<bullet> y = x \<bullet> z) \<longleftrightarrow> y = z"
 proof
@@ -702,65 +576,6 @@ proof-
   then show ?thesis by blast
 qed
 
-subsection {* Geometric progression *}
-
-lemma sum_gp_basic: "((1::'a::{field}) - x) * setsum (\<lambda>i. x^i) {0 .. n} = (1 - x^(Suc n))"
-  (is "?lhs = ?rhs")
-proof-
-  {assume x1: "x = 1" hence ?thesis by simp}
-  moreover
-  {assume x1: "x\<noteq>1"
-    hence x1': "x - 1 \<noteq> 0" "1 - x \<noteq> 0" "x - 1 = - (1 - x)" "- (1 - x) \<noteq> 0" by auto
-    from geometric_sum[OF x1, of "Suc n", unfolded x1']
-    have "(- (1 - x)) * setsum (\<lambda>i. x^i) {0 .. n} = - (1 - x^(Suc n))"
-      unfolding atLeastLessThanSuc_atLeastAtMost
-      using x1' apply (auto simp only: field_simps)
-      apply (simp add: field_simps)
-      done
-    then have ?thesis by (simp add: field_simps) }
-  ultimately show ?thesis by metis
-qed
-
-lemma sum_gp_multiplied: assumes mn: "m <= n"
-  shows "((1::'a::{field}) - x) * setsum (op ^ x) {m..n} = x^m - x^ Suc n"
-  (is "?lhs = ?rhs")
-proof-
-  let ?S = "{0..(n - m)}"
-  from mn have mn': "n - m \<ge> 0" by arith
-  let ?f = "op + m"
-  have i: "inj_on ?f ?S" unfolding inj_on_def by auto
-  have f: "?f ` ?S = {m..n}"
-    using mn apply (auto simp add: image_iff Bex_def) by arith
-  have th: "op ^ x o op + m = (\<lambda>i. x^m * x^i)"
-    by (rule ext, simp add: power_add power_mult)
-  from setsum_reindex[OF i, of "op ^ x", unfolded f th setsum_right_distrib[symmetric]]
-  have "?lhs = x^m * ((1 - x) * setsum (op ^ x) {0..n - m})" by simp
-  then show ?thesis unfolding sum_gp_basic using mn
-    by (simp add: field_simps power_add[symmetric])
-qed
-
-lemma sum_gp: "setsum (op ^ (x::'a::{field})) {m .. n} =
-   (if n < m then 0 else if x = 1 then of_nat ((n + 1) - m)
-                    else (x^ m - x^ (Suc n)) / (1 - x))"
-proof-
-  {assume nm: "n < m" hence ?thesis by simp}
-  moreover
-  {assume "\<not> n < m" hence nm: "m \<le> n" by arith
-    {assume x: "x = 1"  hence ?thesis by simp}
-    moreover
-    {assume x: "x \<noteq> 1" hence nz: "1 - x \<noteq> 0" by simp
-      from sum_gp_multiplied[OF nm, of x] nz have ?thesis by (simp add: field_simps)}
-    ultimately have ?thesis by metis
-  }
-  ultimately show ?thesis by metis
-qed
-
-lemma sum_gp_offset: "setsum (op ^ (x::'a::{field})) {m .. m+n} =
-  (if x = 1 then of_nat n + 1 else x^m * (1 - x^Suc n) / (1 - x))"
-  unfolding sum_gp[of x m "m + n"] power_Suc
-  by (simp add: field_simps power_add)
-
-
 subsection{* A bit of linear algebra. *}
 
 definition (in real_vector)
@@ -807,6 +622,9 @@ lemma subspace_linear_image:
   apply (rule_tac x="c *\<^sub>R x" in bexI, auto)
   done
 
+lemma subspace_linear_vimage: "linear f \<Longrightarrow> subspace S \<Longrightarrow> subspace (f -` S)"
+  by (auto simp add: subspace_def linear_def linear_0[of f])
+
 lemma subspace_linear_preimage: "linear f ==> subspace S ==> subspace {x. f x \<in> S}"
   by (auto simp add: subspace_def linear_def linear_0[of f])
 
@@ -815,6 +633,11 @@ lemma subspace_trivial: "subspace {0}"
 
 lemma (in real_vector) subspace_inter: "subspace A \<Longrightarrow> subspace B ==> subspace (A \<inter> B)"
   by (simp add: subspace_def)
+
+lemma subspace_Times: "\<lbrakk>subspace A; subspace B\<rbrakk> \<Longrightarrow> subspace (A \<times> B)"
+  unfolding subspace_def zero_prod_def by simp
+
+text {* Properties of span. *}
 
 lemma (in real_vector) span_mono: "A \<subseteq> B ==> span A \<subseteq> span B"
   by (metis span_def hull_mono)
@@ -834,8 +657,16 @@ lemma (in real_vector) span_clauses:
   by (metis span_def hull_subset subset_eq)
      (metis subspace_span subspace_def)+
 
-lemma (in real_vector) span_induct: assumes SP: "\<And>x. x \<in> S ==> x \<in> P"
-  and P: "subspace P" and x: "x \<in> span S" shows "x \<in> P"
+lemma span_unique:
+  "\<lbrakk>S \<subseteq> T; subspace T; \<And>T'. \<lbrakk>S \<subseteq> T'; subspace T'\<rbrakk> \<Longrightarrow> T \<subseteq> T'\<rbrakk> \<Longrightarrow> span S = T"
+  unfolding span_def by (rule hull_unique)
+
+lemma span_minimal: "S \<subseteq> T \<Longrightarrow> subspace T \<Longrightarrow> span S \<subseteq> T"
+  unfolding span_def by (rule hull_minimal)
+
+lemma (in real_vector) span_induct:
+  assumes x: "x \<in> span S" and P: "subspace P" and SP: "\<And>x. x \<in> S ==> x \<in> P"
+  shows "x \<in> P"
 proof-
   from SP have SP': "S \<subseteq> P" by (simp add: subset_eq)
   from x hull_minimal[where S=subspace, OF SP' P, unfolded span_def[symmetric]]
@@ -967,105 +798,76 @@ lemma span_add_eq: "x \<in> span S \<Longrightarrow> x + y \<in> span S \<longle
 
 text {* Mapping under linear image. *}
 
-lemma span_linear_image: assumes lf: "linear f"
+lemma image_subset_iff_subset_vimage: "f ` A \<subseteq> B \<longleftrightarrow> A \<subseteq> f -` B"
+  by auto (* TODO: move *)
+
+lemma span_linear_image:
+  assumes lf: "linear f"
   shows "span (f ` S) = f ` (span S)"
-proof-
-  {fix x
-    assume x: "x \<in> span (f ` S)"
-    have "x \<in> f ` span S"
-      apply (rule span_induct[where x=x and S = "f ` S"])
-      apply (clarsimp simp add: image_iff)
-      apply (frule span_superset)
-      apply blast
-      apply (rule subspace_linear_image[OF lf])
-      apply (rule subspace_span)
-      apply (rule x)
-      done}
-  moreover
-  {fix x assume x: "x \<in> span S"
-    have "x \<in> {x. f x \<in> span (f ` S)}"
-      apply (rule span_induct[where S=S])
-      apply simp
-      apply (rule span_superset)
-      apply simp
-      apply (rule subspace_linear_preimage[OF lf subspace_span, of "f ` S"])
-      apply (rule x)
-      done
-    hence "f x \<in> span (f ` S)" by simp
-  }
-  ultimately show ?thesis by blast
+proof (rule span_unique)
+  show "f ` S \<subseteq> f ` span S"
+    by (intro image_mono span_inc)
+  show "subspace (f ` span S)"
+    using lf subspace_span by (rule subspace_linear_image)
+next
+  fix T assume "f ` S \<subseteq> T" and "subspace T" thus "f ` span S \<subseteq> T"
+    unfolding image_subset_iff_subset_vimage
+    by (intro span_minimal subspace_linear_vimage lf)
+qed
+
+lemma span_union: "span (A \<union> B) = (\<lambda>(a, b). a + b) ` (span A \<times> span B)"
+proof (rule span_unique)
+  show "A \<union> B \<subseteq> (\<lambda>(a, b). a + b) ` (span A \<times> span B)"
+    by safe (force intro: span_clauses)+
+next
+  have "linear (\<lambda>(a, b). a + b)"
+    by (simp add: linear_def scaleR_add_right)
+  moreover have "subspace (span A \<times> span B)"
+    by (intro subspace_Times subspace_span)
+  ultimately show "subspace ((\<lambda>(a, b). a + b) ` (span A \<times> span B))"
+    by (rule subspace_linear_image)
+next
+  fix T assume "A \<union> B \<subseteq> T" and "subspace T"
+  thus "(\<lambda>(a, b). a + b) ` (span A \<times> span B) \<subseteq> T"
+    by (auto intro!: subspace_add elim: span_induct)
 qed
 
 text {* The key breakdown property. *}
 
-lemma span_breakdown:
-  assumes bS: "b \<in> S" and aS: "a \<in> span S"
-  shows "\<exists>k. a - k *\<^sub>R b \<in> span (S - {b})" (is "?P a")
-proof-
-  {fix x assume xS: "x \<in> S"
-    {assume ab: "x = b"
-      then have "?P x"
-        apply simp
-        apply (rule exI[where x="1"], simp)
-        by (rule span_0)}
-    moreover
-    {assume ab: "x \<noteq> b"
-      then have "?P x"  using xS
-        apply -
-        apply (rule exI[where x=0])
-        apply (rule span_superset)
-        by simp}
-    ultimately have "x \<in> Collect ?P" by blast}
-  moreover have "subspace (Collect ?P)"
+lemma span_singleton: "span {x} = range (\<lambda>k. k *\<^sub>R x)"
+proof (rule span_unique)
+  show "{x} \<subseteq> range (\<lambda>k. k *\<^sub>R x)"
+    by (fast intro: scaleR_one [symmetric])
+  show "subspace (range (\<lambda>k. k *\<^sub>R x))"
     unfolding subspace_def
-    apply auto
-    apply (rule exI[where x=0])
-    using span_0[of "S - {b}"]
-    apply simp
-    apply (rule_tac x="k + ka" in exI)
-    apply (subgoal_tac "x + y - (k + ka) *\<^sub>R b = (x - k*\<^sub>R b) + (y - ka *\<^sub>R b)")
-    apply (simp only: )
-    apply (rule span_add)
-    apply assumption+
-    apply (simp add: algebra_simps)
-    apply (rule_tac x= "c*k" in exI)
-    apply (subgoal_tac "c *\<^sub>R x - (c * k) *\<^sub>R b = c*\<^sub>R (x - k*\<^sub>R b)")
-    apply (simp only: )
-    apply (rule span_mul)
-    apply assumption
-    by (simp add: algebra_simps)
-  ultimately have "a \<in> Collect ?P" using aS by (rule span_induct)
-  thus "?P a" by simp
+    by (auto intro: scaleR_add_left [symmetric])
+  fix T assume "{x} \<subseteq> T" and "subspace T" thus "range (\<lambda>k. k *\<^sub>R x) \<subseteq> T"
+    unfolding subspace_def by auto
 qed
 
-lemma span_breakdown_eq:
-  "x \<in> span (insert a S) \<longleftrightarrow> (\<exists>k. (x - k *\<^sub>R a) \<in> span S)" (is "?lhs \<longleftrightarrow> ?rhs")
-proof-
-  {assume x: "x \<in> span (insert a S)"
-    from x span_breakdown[of "a" "insert a S" "x"]
-    have ?rhs apply clarsimp
-      apply (rule_tac x= "k" in exI)
-      apply (rule set_rev_mp[of _ "span (S - {a})" _])
-      apply assumption
-      apply (rule span_mono)
-      apply blast
-      done}
-  moreover
-  { fix k assume k: "x - k *\<^sub>R a \<in> span S"
-    have eq: "x = (x - k *\<^sub>R a) + k *\<^sub>R a" by simp
-    have "(x - k *\<^sub>R a) + k *\<^sub>R a \<in> span (insert a S)"
-      apply (rule span_add)
-      apply (rule set_rev_mp[of _ "span S" _])
-      apply (rule k)
-      apply (rule span_mono)
-      apply blast
-      apply (rule span_mul)
-      apply (rule span_superset)
-      apply blast
-      done
-    then have ?lhs using eq by metis}
-  ultimately show ?thesis by blast
+lemma span_insert:
+  "span (insert a S) = {x. \<exists>k. (x - k *\<^sub>R a) \<in> span S}"
+proof -
+  have "span ({a} \<union> S) = {x. \<exists>k. (x - k *\<^sub>R a) \<in> span S}"
+    unfolding span_union span_singleton
+    apply safe
+    apply (rule_tac x=k in exI, simp)
+    apply (erule rev_image_eqI [OF SigmaI [OF rangeI]])
+    apply simp
+    apply (rule right_minus)
+    done
+  thus ?thesis by simp
 qed
+
+lemma span_breakdown:
+  assumes bS: "b \<in> S" and aS: "a \<in> span S"
+  shows "\<exists>k. a - k *\<^sub>R b \<in> span (S - {b})"
+  using assms span_insert [of b "S - {b}"]
+  by (simp add: insert_absorb)
+
+lemma span_breakdown_eq:
+  "x \<in> span (insert a S) \<longleftrightarrow> (\<exists>k. (x - k *\<^sub>R a) \<in> span S)"
+  by (simp add: span_insert)
 
 text {* Hence some "reversal" results. *}
 
@@ -1122,26 +924,16 @@ lemma in_span_delete:
 
 text {* Transitivity property. *}
 
+lemma span_redundant: "x \<in> span S \<Longrightarrow> span (insert x S) = span S"
+  unfolding span_def by (rule hull_redundant)
+
 lemma span_trans:
   assumes x: "x \<in> span S" and y: "y \<in> span (insert x S)"
   shows "y \<in> span S"
-proof-
-  from span_breakdown[of x "insert x S" y, OF insertI1 y]
-  obtain k where k: "y -k*\<^sub>R x \<in> span (S - {x})" by auto
-  have eq: "y = (y - k *\<^sub>R x) + k *\<^sub>R x" by simp
-  show ?thesis
-    apply (subst eq)
-    apply (rule span_add)
-    apply (rule set_rev_mp)
-    apply (rule k)
-    apply (rule span_mono)
-    apply blast
-    apply (rule span_mul)
-    by (rule x)
-qed
+  using assms by (simp only: span_redundant)
 
 lemma span_insert_0[simp]: "span (insert 0 S) = span S"
-  using span_mono[of S "insert 0 S"] by (auto intro: span_trans span_0)
+  by (simp only: span_redundant span_0)
 
 text {* An explicit expansion is sometimes needed. *}
 
@@ -1271,43 +1063,6 @@ proof-
   {fix y u assume u: "setsum (\<lambda>v. u v *\<^sub>R v) S = y"
     then have "y \<in> span S" using fS unfolding span_explicit by auto}
   ultimately show ?thesis by blast
-qed
-
-lemma Int_Un_cancel: "(A \<union> B) \<inter> A = A" "(A \<union> B) \<inter> B = B" by auto
-
-lemma span_union: "span (A \<union> B) = (\<lambda>(a, b). a + b) ` (span A \<times> span B)"
-proof safe
-  fix x assume "x \<in> span (A \<union> B)"
-  then obtain S u where S: "finite S" "S \<subseteq> A \<union> B" and x: "x = (\<Sum>v\<in>S. u v *\<^sub>R v)"
-    unfolding span_explicit by auto
-
-  let ?Sa = "\<Sum>v\<in>S\<inter>A. u v *\<^sub>R v"
-  let ?Sb = "(\<Sum>v\<in>S\<inter>(B - A). u v *\<^sub>R v)"
-  show "x \<in> (\<lambda>(a, b). a + b) ` (span A \<times> span B)"
-  proof
-    show "x = (case (?Sa, ?Sb) of (a, b) \<Rightarrow> a + b)"
-      unfolding x using S
-      by (simp, subst setsum_Un_disjoint[symmetric]) (auto intro!: setsum_cong)
-
-    from S have "?Sa \<in> span A" unfolding span_explicit
-      by (auto intro!: exI[of _ "S \<inter> A"])
-    moreover from S have "?Sb \<in> span B" unfolding span_explicit
-      by (auto intro!: exI[of _ "S \<inter> (B - A)"])
-    ultimately show "(?Sa, ?Sb) \<in> span A \<times> span B" by simp
-  qed
-next
-  fix a b assume "a \<in> span A" and "b \<in> span B"
-  then obtain Sa ua Sb ub where span:
-    "finite Sa" "Sa \<subseteq> A" "a = (\<Sum>v\<in>Sa. ua v *\<^sub>R v)"
-    "finite Sb" "Sb \<subseteq> B" "b = (\<Sum>v\<in>Sb. ub v *\<^sub>R v)"
-    unfolding span_explicit by auto
-  let "?u v" = "(if v \<in> Sa then ua v else 0) + (if v \<in> Sb then ub v else 0)"
-  from span have "finite (Sa \<union> Sb)" "Sa \<union> Sb \<subseteq> A \<union> B"
-    and "a + b = (\<Sum>v\<in>(Sa\<union>Sb). ?u v *\<^sub>R v)"
-    unfolding setsum_addf scaleR_left_distrib
-    by (auto simp add: if_distrib cond_application_beta setsum_cases Int_Un_cancel)
-  thus "a + b \<in> span (A \<union> B)"
-    unfolding span_explicit by (auto intro!: exI[of _ ?u])
 qed
 
 text {* This is useful for building a basis step-by-step. *}
@@ -1495,30 +1250,6 @@ lemma independent_basis:
   apply (simp add: inner_setsum_right dot_basis)
   done
 
-lemma dimensionI:
-  assumes "\<And>d. \<lbrakk> 0 < d; basis ` {d..} = {0::'a::euclidean_space};
-    independent (basis ` {..<d} :: 'a set);
-    inj_on (basis :: nat \<Rightarrow> 'a) {..<d} \<rbrakk> \<Longrightarrow> P d"
-  shows "P DIM('a::euclidean_space)"
-  using DIM_positive basis_finite independent_basis basis_inj
-  by (rule assms)
-
-lemma (in euclidean_space) dimension_eq:
-  assumes "\<And>i. i < d \<Longrightarrow> basis i \<noteq> 0"
-  assumes "\<And>i. d \<le> i \<Longrightarrow> basis i = 0"
-  shows "DIM('a) = d"
-proof (rule linorder_cases [of "DIM('a)" d])
-  assume "DIM('a) < d"
-  hence "basis DIM('a) \<noteq> 0" by (rule assms)
-  thus ?thesis by simp
-next
-  assume "d < DIM('a)"
-  hence "basis d \<noteq> 0" by simp
-  thus ?thesis by (simp add: assms)
-next
-  assume "DIM('a) = d" thus ?thesis .
-qed
-
 lemma (in euclidean_space) range_basis:
     "range basis = insert 0 (basis ` {..<DIM('a)})"
 proof -
@@ -1627,22 +1358,6 @@ proof-
     hence ?rhs by metis }
   ultimately show ?thesis by metis
 qed
-
-subsection {* An ordering on euclidean spaces that will allow us to talk about intervals *}
-
-class ordered_euclidean_space = ord + euclidean_space +
-  assumes eucl_le: "x \<le> y \<longleftrightarrow> (\<forall>i < DIM('a). x $$ i \<le> y $$ i)"
-  and eucl_less: "x < y \<longleftrightarrow> (\<forall>i < DIM('a). x $$ i < y $$ i)"
-
-lemma eucl_less_not_refl[simp, intro!]: "\<not> x < (x::'a::ordered_euclidean_space)"
-  unfolding eucl_less[where 'a='a] by auto
-
-lemma euclidean_trans[trans]:
-  fixes x y z :: "'a::ordered_euclidean_space"
-  shows "x < y \<Longrightarrow> y < z \<Longrightarrow> x < z"
-  and "x \<le> y \<Longrightarrow> y < z \<Longrightarrow> x < z"
-  and "x \<le> y \<Longrightarrow> y \<le> z \<Longrightarrow> x \<le> z"
-  by (force simp: eucl_less[where 'a='a] eucl_le[where 'a='a])+
 
 subsection {* Linearity and Bilinearity continued *}
 
@@ -2035,8 +1750,15 @@ definition "pairwise R S \<longleftrightarrow> (\<forall>x \<in> S. \<forall>y\<
 lemma vector_sub_project_orthogonal: "(b::'a::euclidean_space) \<bullet> (x - ((b \<bullet> x) / (b \<bullet> b)) *\<^sub>R b) = 0"
   unfolding inner_simps by auto
 
+lemma pairwise_orthogonal_insert:
+  assumes "pairwise orthogonal S"
+  assumes "\<And>y. y \<in> S \<Longrightarrow> orthogonal x y"
+  shows "pairwise orthogonal (insert x S)"
+  using assms unfolding pairwise_def
+  by (auto simp add: orthogonal_commute)
+
 lemma basis_orthogonal:
-  fixes B :: "('a::euclidean_space) set"
+  fixes B :: "('a::real_inner) set"
   assumes fB: "finite B"
   shows "\<exists>C. finite C \<and> card C \<le> card B \<and> span C = span B \<and> pairwise orthogonal C"
   (is " \<exists>C. ?P B C")
@@ -2064,48 +1786,20 @@ next
       by (rule span_superset)}
   then have SC: "span ?C = span (insert a B)"
     unfolding set_eq_iff span_breakdown_eq C(3)[symmetric] by auto
-  thm pairwise_def
-  {fix x y assume xC: "x \<in> ?C" and yC: "y \<in> ?C" and xy: "x \<noteq> y"
-    {assume xa: "x = ?a" and ya: "y = ?a"
-      have "orthogonal x y" using xa ya xy by blast}
-    moreover
-    {assume xa: "x = ?a" and ya: "y \<noteq> ?a" "y \<in> C"
-      from ya have Cy: "C = insert y (C - {y})" by blast
-      have fth: "finite (C - {y})" using C by simp
-      have "orthogonal x y"
-        using xa ya
-        unfolding orthogonal_def xa inner_simps diff_eq_0_iff_eq
-        apply simp
-        apply (subst Cy)
-        using C(1) fth
-        apply (simp only: setsum_clauses)
-        apply (auto simp add: inner_add inner_commute[of y a] dot_lsum[OF fth])
-        apply (rule setsum_0')
-        apply clarsimp
-        apply (rule C(4)[unfolded pairwise_def orthogonal_def, rule_format])
-        by auto}
-    moreover
-    {assume xa: "x \<noteq> ?a" "x \<in> C" and ya: "y = ?a"
-      from xa have Cx: "C = insert x (C - {x})" by blast
-      have fth: "finite (C - {x})" using C by simp
-      have "orthogonal x y"
-        using xa ya
-        unfolding orthogonal_def ya inner_simps diff_eq_0_iff_eq
-        apply simp
-        apply (subst Cx)
-        using C(1) fth
-        apply (simp only: setsum_clauses)
-        apply (subst inner_commute[of x])
-        apply (auto simp add: inner_add inner_commute[of x a] dot_rsum[OF fth])
-        apply (rule setsum_0')
-        apply clarsimp
-        apply (rule C(4)[unfolded pairwise_def orthogonal_def, rule_format])
-        by auto}
-    moreover
-    {assume xa: "x \<in> C" and ya: "y \<in> C"
-      have "orthogonal x y" using xa ya xy C(4) unfolding pairwise_def by blast}
-    ultimately have "orthogonal x y" using xC yC by blast}
-  then have CPO: "pairwise orthogonal ?C" unfolding pairwise_def by blast
+  { fix y assume yC: "y \<in> C"
+    hence Cy: "C = insert y (C - {y})" by blast
+    have fth: "finite (C - {y})" using C by simp
+    have "orthogonal ?a y"
+      unfolding orthogonal_def
+      unfolding inner_diff inner_setsum_left diff_eq_0_iff_eq
+      unfolding setsum_diff1' [OF `finite C` `y \<in> C`]
+      apply (clarsimp simp add: inner_commute[of y a])
+      apply (rule setsum_0')
+      apply clarsimp
+      apply (rule C(4)[unfolded pairwise_def orthogonal_def, rule_format])
+      using `y \<in> C` by auto }
+  with `pairwise orthogonal C` have CPO: "pairwise orthogonal ?C"
+    by (rule pairwise_orthogonal_insert)
   from fC cC SC CPO have "?P (insert a B) ?C" by blast
   then show ?case by blast
 qed
@@ -2166,7 +1860,7 @@ next
         apply (subst B') using fB fth
         unfolding setsum_clauses(2)[OF fth]
         apply simp unfolding inner_simps
-        apply (clarsimp simp add: inner_add dot_lsum)
+        apply (clarsimp simp add: inner_add inner_setsum_left)
         apply (rule setsum_0', rule ballI)
         unfolding inner_commute
         by (auto simp add: x field_simps intro: B(5)[unfolded pairwise_def orthogonal_def, rule_format])}
@@ -3017,7 +2711,23 @@ apply simp
 apply simp
 done
 
-subsection "Instantiate @{typ real} and @{typ complex} as typeclass @{text ordered_euclidean_space}."
+subsection {* An ordering on euclidean spaces that will allow us to talk about intervals *}
+
+class ordered_euclidean_space = ord + euclidean_space +
+  assumes eucl_le: "x \<le> y \<longleftrightarrow> (\<forall>i < DIM('a). x $$ i \<le> y $$ i)"
+  and eucl_less: "x < y \<longleftrightarrow> (\<forall>i < DIM('a). x $$ i < y $$ i)"
+
+lemma eucl_less_not_refl[simp, intro!]: "\<not> x < (x::'a::ordered_euclidean_space)"
+  unfolding eucl_less[where 'a='a] by auto
+
+lemma euclidean_trans[trans]:
+  fixes x y z :: "'a::ordered_euclidean_space"
+  shows "x < y \<Longrightarrow> y < z \<Longrightarrow> x < z"
+  and "x \<le> y \<Longrightarrow> y < z \<Longrightarrow> x < z"
+  and "x \<le> y \<Longrightarrow> y \<le> z \<Longrightarrow> x \<le> z"
+  unfolding eucl_less[where 'a='a] eucl_le[where 'a='a]
+  by (fast intro: less_trans, fast intro: le_less_trans,
+    fast intro: order_trans)
 
 lemma basis_real_range: "basis ` {..<1} = {1::real}" by auto
 
@@ -3036,8 +2746,6 @@ lemma complex_basis[simp]:
   shows "basis 0 = (1::complex)" and "basis 1 = ii" and "basis (Suc 0) = ii"
   unfolding basis_complex_def by auto
 
-subsection {* Products Spaces *}
-
 lemma DIM_prod[simp]: "DIM('a \<times> 'b) = DIM('b::euclidean_space) + DIM('a::euclidean_space)"
   (* FIXME: why this orientation? Why not "DIM('a) + DIM('b)" ? *)
   unfolding dimension_prod_def by (rule add_commute)
@@ -3050,6 +2758,5 @@ definition "x < (y::('a\<times>'b)) \<longleftrightarrow> (\<forall>i<DIM('a\<ti
 
 instance proof qed (auto simp: less_prod_def less_eq_prod_def)
 end
-
 
 end

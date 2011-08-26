@@ -792,7 +792,7 @@ proof-
  have "subspace ?P"
    by (auto simp add: subspace_def)
  ultimately show ?thesis
-   using x span_induct[of ?B ?P x] iS by blast
+   using x span_induct[of x ?B ?P] iS by blast
 qed
 
 lemma independent_stdbasis: "independent {cart_basis i ::real^'n |i. i\<in> (UNIV :: 'n set)}"
@@ -2000,9 +2000,5 @@ proof- have *:"\<And>p. (\<Sum>(x, k)\<in>p. content k *\<^sub>R vec1 (f x)) - v
   show ?thesis using assms unfolding has_integral apply safe
     apply(erule_tac x=e in allE,safe) apply(rule_tac x=d in exI,safe)
     apply(erule_tac x=p in allE,safe) unfolding * norm_vector_1 by auto qed
-
-text {* Legacy theorem names *}
-
-lemmas Lim_component_cart = tendsto_vec_nth
 
 end

@@ -229,12 +229,18 @@ proof-
   from g(1) gS giS gBC show ?thesis by blast
 qed
 
+lemma closure_bounded_linear_image:
+  assumes f: "bounded_linear f"
+  shows "f ` (closure S) \<subseteq> closure (f ` S)"
+  using linear_continuous_on [OF f] closed_closure closure_subset
+  by (rule image_closure_subset)
+
 lemma closure_linear_image:
 fixes f :: "('m::euclidean_space) => ('n::real_normed_vector)"
 assumes "linear f"
 shows "f ` (closure S) <= closure (f ` S)"
-using image_closure_subset[of S f "closure (f ` S)"] assms linear_conv_bounded_linear[of f] 
-linear_continuous_on[of f "closure S"] closed_closure[of "f ` S"] closure_subset[of "f ` S"] by auto
+  using assms unfolding linear_conv_bounded_linear
+  by (rule closure_bounded_linear_image)
 
 lemma closure_injective_linear_image:
 fixes f :: "('n::euclidean_space) => ('n::euclidean_space)"
@@ -254,23 +260,16 @@ lemma closure_direct_sum:
 shows "closure (S <*> T) = closure S <*> closure T"
   by (rule closure_Times)
 
-lemma closure_scaleR:  (* TODO: generalize to real_normed_vector *)
-fixes S :: "('n::euclidean_space) set"
-shows "(op *\<^sub>R c) ` (closure S) = closure ((op *\<^sub>R c) ` S)"
-proof-
-{ assume "c ~= 0" hence ?thesis using closure_injective_linear_image[of "(op *\<^sub>R c)" S]
-      linear_scaleR injective_scaleR by auto 
-}
-moreover
-{ assume zero: "c=0 & S ~= {}"
-  hence "closure S ~= {}" using closure_subset by auto
-  hence "op *\<^sub>R c ` (closure S) = {0}" using zero by auto
-  moreover have "op *\<^sub>R 0 ` S = {0}" using zero by auto
-  ultimately have ?thesis using zero by auto
-}
-moreover
-{ assume "S={}" hence ?thesis by auto }
-ultimately show ?thesis by blast
+lemma closure_scaleR:
+  fixes S :: "('a::real_normed_vector) set"
+  shows "(op *\<^sub>R c) ` (closure S) = closure ((op *\<^sub>R c) ` S)"
+proof
+  show "(op *\<^sub>R c) ` (closure S) \<subseteq> closure ((op *\<^sub>R c) ` S)"
+    using bounded_linear_scaleR_right
+    by (rule closure_bounded_linear_image)
+  show "closure ((op *\<^sub>R c) ` S) \<subseteq> (op *\<^sub>R c) ` (closure S)"
+    by (intro closure_minimal image_mono closure_subset
+      closed_scaling closed_closure)
 qed
 
 lemma fst_linear: "linear fst" unfolding linear_def by (simp add: algebra_simps)
@@ -859,9 +858,8 @@ moreover
 qed
 
 lemma cone_closure:
-fixes S :: "('m::euclidean_space) set"
-assumes "cone S"
-shows "cone (closure S)"
+  fixes S :: "('a::real_normed_vector) set"
+  assumes "cone S" shows "cone (closure S)"
 proof-
 { assume "S = {}" hence ?thesis by auto }
 moreover
@@ -2310,12 +2308,7 @@ qed
 lemma closure_affine_hull:
   fixes S :: "('n::euclidean_space) set"
   shows "closure S <= affine hull S"
-proof-
-have "closure S <= closure (affine hull S)" using subset_closure by auto
-moreover have "closure (affine hull S) = affine hull S" 
-   using affine_affine_hull affine_closed[of "affine hull S"] closure_eq by auto
-ultimately show ?thesis by auto  
-qed
+  by (intro closure_minimal hull_subset affine_closed affine_affine_hull)
 
 lemma closure_same_affine_hull:
   fixes S :: "('n::euclidean_space) set"
@@ -2580,6 +2573,37 @@ proof-
     done
 qed
 
+lemma finite_imp_compact_convex_hull:
+  fixes s :: "('a::real_normed_vector) set"
+  assumes "finite s" shows "compact (convex hull s)"
+proof (cases "s = {}")
+  case True thus ?thesis by simp
+next
+  case False with assms show ?thesis
+  proof (induct rule: finite_ne_induct)
+    case (singleton x) show ?case by simp
+  next
+    case (insert x A)
+    let ?f = "\<lambda>(u, y::'a). u *\<^sub>R x + (1 - u) *\<^sub>R y"
+    let ?T = "{0..1::real} \<times> (convex hull A)"
+    have "continuous_on ?T ?f"
+      unfolding split_def continuous_on by (intro ballI tendsto_intros)
+    moreover have "compact ?T"
+      by (intro compact_Times compact_interval insert)
+    ultimately have "compact (?f ` ?T)"
+      by (rule compact_continuous_image)
+    also have "?f ` ?T = convex hull (insert x A)"
+      unfolding convex_hull_insert [OF `A \<noteq> {}`]
+      apply safe
+      apply (rule_tac x=a in exI, simp)
+      apply (rule_tac x="1 - a" in exI, simp)
+      apply fast
+      apply (rule_tac x="(u, b)" in image_eqI, simp_all)
+      done
+    finally show "compact (convex hull (insert x A))" .
+  qed
+qed
+
 lemma compact_convex_hull: fixes s::"('a::euclidean_space) set"
   assumes "compact s"  shows "compact(convex hull s)"
 proof(cases "s={}")
@@ -2653,11 +2677,6 @@ next
     qed
   qed
 qed
-
-lemma finite_imp_compact_convex_hull:
-  fixes s :: "('a::euclidean_space) set"
-  shows "finite s \<Longrightarrow> compact(convex hull s)"
-by (metis compact_convex_hull finite_imp_compact)
 
 subsection {* Extremal points of a simplex are some vertices. *}
 
@@ -2738,7 +2757,7 @@ proof(induct_tac rule: finite_induct[of s])
 qed (auto simp add: assms)
 
 lemma simplex_furthest_le:
-  fixes s :: "('a::euclidean_space) set"
+  fixes s :: "('a::real_inner) set"
   assumes "finite s" "s \<noteq> {}"
   shows "\<exists>y\<in>s. \<forall>x\<in>(convex hull s). norm(x - a) \<le> norm(y - a)"
 proof-
@@ -2754,12 +2773,12 @@ proof-
 qed
 
 lemma simplex_furthest_le_exists:
-  fixes s :: "('a::euclidean_space) set"
+  fixes s :: "('a::real_inner) set"
   shows "finite s \<Longrightarrow> (\<forall>x\<in>(convex hull s). \<exists>y\<in>s. norm(x - a) \<le> norm(y - a))"
   using simplex_furthest_le[of s] by (cases "s={}")auto
 
 lemma simplex_extremal_le:
-  fixes s :: "('a::euclidean_space) set"
+  fixes s :: "('a::real_inner) set"
   assumes "finite s" "s \<noteq> {}"
   shows "\<exists>u\<in>s. \<exists>v\<in>s. \<forall>x\<in>convex hull s. \<forall>y \<in> convex hull s. norm(x - y) \<le> norm(u - v)"
 proof-
@@ -2780,7 +2799,7 @@ proof-
 qed 
 
 lemma simplex_extremal_le_exists:
-  fixes s :: "('a::euclidean_space) set"
+  fixes s :: "('a::real_inner) set"
   shows "finite s \<Longrightarrow> x \<in> convex hull s \<Longrightarrow> y \<in> convex hull s
   \<Longrightarrow> (\<exists>u\<in>s. \<exists>v\<in>s. norm(x - y) \<le> norm(u - v))"
   using convex_hull_empty simplex_extremal_le[of s] by(cases "s={}")auto
@@ -3094,7 +3113,6 @@ by(simp only: image_image[THEN sym] convex_hull_scaling convex_hull_translation)
 subsection {* Convexity of cone hulls *}
 
 lemma convex_cone_hull:
-fixes S :: "('m::euclidean_space) set"
 assumes "convex S"
 shows "convex (cone hull S)"
 proof-
@@ -3126,7 +3144,6 @@ proof-
 qed
 
 lemma cone_convex_hull:
-fixes S :: "('m::euclidean_space) set"
 assumes "cone S"
 shows "cone (convex hull S)"
 proof-
@@ -3453,22 +3470,27 @@ proof-
         ultimately show ?thesis using injpi by auto qed qed
   qed auto qed
 
-lemma homeomorphic_convex_compact_lemma: fixes s::"('a::euclidean_space) set"
-  assumes "convex s" "compact s" "cball 0 1 \<subseteq> s"
+lemma homeomorphic_convex_compact_lemma:
+  fixes s :: "('a::euclidean_space) set"
+  assumes "convex s" and "compact s" and "cball 0 1 \<subseteq> s"
   shows "s homeomorphic (cball (0::'a) 1)"
-  apply(rule starlike_compact_projective[OF assms(2-3)]) proof(rule,rule,rule,erule conjE)
-  fix x u assume as:"x \<in> s" "0 \<le> u" "u < (1::real)"
-  hence "u *\<^sub>R x \<in> interior s" unfolding interior_def mem_Collect_eq
-    apply(rule_tac x="ball (u *\<^sub>R x) (1 - u)" in exI) apply(rule, rule open_ball)
-    unfolding centre_in_ball apply rule defer apply(rule) unfolding mem_ball proof-
-    fix y assume "dist (u *\<^sub>R x) y < 1 - u"
-    hence "inverse (1 - u) *\<^sub>R (y - u *\<^sub>R x) \<in> s"
-      using assms(3) apply(erule_tac subsetD) unfolding mem_cball dist_commute dist_norm
-      unfolding group_add_class.diff_0 group_add_class.diff_0_right norm_minus_cancel norm_scaleR
-      apply (rule mult_left_le_imp_le[of "1 - u"])
-      unfolding mult_assoc[symmetric] using `u<1` by auto
-    thus "y \<in> s" using assms(1)[unfolded convex_def, rule_format, of "inverse(1 - u) *\<^sub>R (y - u *\<^sub>R x)" x "1 - u" u]
-      using as unfolding scaleR_scaleR by auto qed auto
+proof (rule starlike_compact_projective[OF assms(2-3)], clarify)
+  fix x u assume "x \<in> s" and "0 \<le> u" and "u < (1::real)"
+  have "open (ball (u *\<^sub>R x) (1 - u))" by (rule open_ball)
+  moreover have "u *\<^sub>R x \<in> ball (u *\<^sub>R x) (1 - u)"
+    unfolding centre_in_ball using `u < 1` by simp
+  moreover have "ball (u *\<^sub>R x) (1 - u) \<subseteq> s"
+  proof
+    fix y assume "y \<in> ball (u *\<^sub>R x) (1 - u)"
+    hence "dist (u *\<^sub>R x) y < 1 - u" unfolding mem_ball .
+    with `u < 1` have "inverse (1 - u) *\<^sub>R (y - u *\<^sub>R x) \<in> cball 0 1"
+      by (simp add: dist_norm inverse_eq_divide norm_minus_commute)
+    with assms(3) have "inverse (1 - u) *\<^sub>R (y - u *\<^sub>R x) \<in> s" ..
+    with assms(1) have "(1 - u) *\<^sub>R ((y - u *\<^sub>R x) /\<^sub>R (1 - u)) + u *\<^sub>R x \<in> s"
+      using `x \<in> s` `0 \<le> u` `u < 1` [THEN less_imp_le] by (rule mem_convex)
+    thus "y \<in> s" using `u < 1` by simp
+  qed
+  ultimately have "u *\<^sub>R x \<in> interior s" ..
   thus "u *\<^sub>R x \<in> s - frontier s" using frontier_def and interior_subset by auto qed
 
 lemma homeomorphic_convex_compact_cball: fixes e::real and s::"('a::euclidean_space) set"
@@ -3621,8 +3643,8 @@ lemma ivt_decreasing_component_on_1: fixes f::"real \<Rightarrow> 'a::euclidean_
   assumes "a \<le> b" "continuous_on {a .. b} f" "(f b)$$k \<le> y" "y \<le> (f a)$$k"
   shows "\<exists>x\<in>{a..b}. (f x)$$k = y"
   apply(subst neg_equal_iff_equal[THEN sym])
-  using ivt_increasing_component_on_1[of a b "\<lambda>x. - f x" k "- y"] using assms using continuous_on_neg
-  by auto
+  using ivt_increasing_component_on_1[of a b "\<lambda>x. - f x" k "- y"]
+  using assms using continuous_on_minus by auto
 
 lemma ivt_decreasing_component_1: fixes f::"real \<Rightarrow> 'a::euclidean_space"
   shows "a \<le> b \<Longrightarrow> \<forall>x\<in>{a .. b}. continuous (at x) f
@@ -4042,7 +4064,7 @@ proof- obtain d where "d>0" and d:"ball c d \<subseteq> s" using assms(2) unfold
   then obtain y where "y\<in>s" and y:"norm (y - x) * (1 - e) < e * d" by auto
   def z \<equiv> "c + ((1 - e) / e) *\<^sub>R (x - y)"
   have *:"x - e *\<^sub>R (x - c) = y - e *\<^sub>R (y - z)" unfolding z_def using `e>0` by (auto simp add: scaleR_right_diff_distrib scaleR_right_distrib scaleR_left_diff_distrib)
-  have "z\<in>interior s" apply(rule subset_interior[OF d,unfolded subset_eq,rule_format])
+  have "z\<in>interior s" apply(rule interior_mono[OF d,unfolded subset_eq,rule_format])
     unfolding interior_open[OF open_ball] mem_ball z_def dist_norm using y and assms(4,5)
     by(auto simp add:field_simps norm_minus_commute)
   thus ?thesis unfolding * apply - apply(rule mem_interior_convex_shrink) 
@@ -4380,7 +4402,7 @@ assumes "convex S"
 shows "closure(rel_interior S) = closure S"
 proof-
 have h1: "closure(rel_interior S) <= closure S" 
-   using subset_closure[of "rel_interior S" S] rel_interior_subset[of S] by auto
+   using closure_mono[of "rel_interior S" S] rel_interior_subset[of S] by auto
 { assume "S ~= {}" from this obtain a where a_def: "a : rel_interior S" 
     using rel_interior_convex_nonempty assms by auto
   { fix x assume x_def: "x : closure S"
@@ -4517,7 +4539,7 @@ shows "(closure S1 = closure S2) <->
 proof-
 have "?A --> ?B" by (metis assms closure_subset convex_rel_interior_closure rel_interior_subset)
 moreover have "?B --> (closure S1 <= closure S2)" 
-     by (metis assms(1) convex_closure_rel_interior subset_closure)
+     by (metis assms(1) convex_closure_rel_interior closure_mono)
 moreover have "?B --> (closure S1 >= closure S2)" by (metis closed_closure closure_minimal)
 ultimately show ?thesis by blast
 qed
@@ -4777,7 +4799,7 @@ have "Inter {closure S |S. S : I} <= closure (Inter {rel_interior S |S. S : I})"
   using convex_closure_rel_interior_inter assms by auto
 moreover have "closure (Inter {rel_interior S |S. S : I}) <= closure (Inter I)" 
     using rel_interior_inter_aux 
-          subset_closure[of "Inter {rel_interior S |S. S : I}" "Inter I"] by auto
+          closure_mono[of "Inter {rel_interior S |S. S : I}" "Inter I"] by auto
 ultimately show ?thesis using closure_inter[of I] by auto
 qed
 
@@ -4790,7 +4812,7 @@ have "Inter {closure S |S. S : I} <= closure (Inter {rel_interior S |S. S : I})"
   using convex_closure_rel_interior_inter assms by auto
 moreover have "closure (Inter {rel_interior S |S. S : I}) <= closure (Inter I)" 
     using rel_interior_inter_aux 
-          subset_closure[of "Inter {rel_interior S |S. S : I}" "Inter I"] by auto
+          closure_mono[of "Inter {rel_interior S |S. S : I}" "Inter I"] by auto
 ultimately show ?thesis using closure_inter[of I] by auto
 qed
 
@@ -4886,7 +4908,7 @@ shows "rel_interior S <= rel_interior T"
 proof-
 have *: "S Int closure T = S" using assms by auto
 have "~(rel_interior S <= rel_frontier T)"
-     using subset_closure[of "rel_interior S" "rel_frontier T"] closed_rel_frontier[of T] 
+     using closure_mono[of "rel_interior S" "rel_frontier T"] closed_rel_frontier[of T] 
      closure_closed convex_closure_rel_interior[of S] closure_subset[of S] assms by auto
 hence "(rel_interior S) Int (rel_interior (closure T)) ~= {}" 
      using assms rel_frontier_def[of T] rel_interior_subset convex_rel_interior_closure[of T] by auto
@@ -4911,8 +4933,8 @@ have "f ` S <= f ` (closure S)" unfolding image_mono using closure_subset by aut
 also have "... = f ` (closure (rel_interior S))" using convex_closure_rel_interior assms by auto  
 also have "... <= closure (f ` (rel_interior S))" using closure_linear_image assms by auto 
 finally have "closure (f ` S) = closure (f ` rel_interior S)"
-   using subset_closure[of "f ` S" "closure (f ` rel_interior S)"] closure_closure 
-         subset_closure[of "f ` rel_interior S" "f ` S"] * by auto
+   using closure_mono[of "f ` S" "closure (f ` rel_interior S)"] closure_closure 
+         closure_mono[of "f ` rel_interior S" "f ` S"] * by auto
 hence "rel_interior (f ` S) = rel_interior (f ` rel_interior S)" using assms convex_rel_interior
    linear_conv_bounded_linear[of f] convex_linear_image[of S] convex_linear_image[of "rel_interior S"] 
    closure_eq_rel_interior_eq[of "f ` S" "f ` rel_interior S"] by auto

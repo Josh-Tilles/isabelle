@@ -7,7 +7,7 @@
 header {* Elementary topology in Euclidean space. *}
 
 theory Topology_Euclidean_Space
-imports SEQ Linear_Algebra "~~/src/HOL/Library/Glbs"
+imports SEQ Linear_Algebra "~~/src/HOL/Library/Glbs" Norm_Arith L2_Norm
 begin
 
 (* to be moved elsewhere *)
@@ -20,7 +20,7 @@ lemma dist_nth_le: "dist (x $$ i) (y $$ i) \<le> dist x (y::'a::euclidean_space)
   apply(subst(2) euclidean_dist_l2) apply(cases "i<DIM('a)")
   apply(rule member_le_setL2) by auto
 
-subsection {* General notion of a topologies as values *}
+subsection {* General notion of a topology as a value *}
 
 definition "istopology L \<longleftrightarrow> L {} \<and> (\<forall>S T. L S \<longrightarrow> L T \<longrightarrow> L (S \<inter> T)) \<and> (\<forall>K. Ball K L \<longrightarrow> L (\<Union> K))"
 typedef (open) 'a topology = "{L::('a set) \<Rightarrow> bool. istopology L}"
@@ -555,37 +555,61 @@ qed
 
 subsection {* Interior of a Set *}
 
-definition "interior S = {x. \<exists>T. open T \<and> x \<in> T \<and> T \<subseteq> S}"
+definition "interior S = \<Union>{T. open T \<and> T \<subseteq> S}"
+
+lemma interiorI [intro?]:
+  assumes "open T" and "x \<in> T" and "T \<subseteq> S"
+  shows "x \<in> interior S"
+  using assms unfolding interior_def by fast
+
+lemma interiorE [elim?]:
+  assumes "x \<in> interior S"
+  obtains T where "open T" and "x \<in> T" and "T \<subseteq> S"
+  using assms unfolding interior_def by fast
+
+lemma open_interior [simp, intro]: "open (interior S)"
+  by (simp add: interior_def open_Union)
+
+lemma interior_subset: "interior S \<subseteq> S"
+  by (auto simp add: interior_def)
+
+lemma interior_maximal: "T \<subseteq> S \<Longrightarrow> open T \<Longrightarrow> T \<subseteq> interior S"
+  by (auto simp add: interior_def)
+
+lemma interior_open: "open S \<Longrightarrow> interior S = S"
+  by (intro equalityI interior_subset interior_maximal subset_refl)
 
 lemma interior_eq: "interior S = S \<longleftrightarrow> open S"
-  apply (simp add: set_eq_iff interior_def)
-  apply (subst (2) open_subopen) by (safe, blast+)
+  by (metis open_interior interior_open)
 
-lemma interior_open: "open S ==> (interior S = S)" by (metis interior_eq)
-
-lemma interior_empty[simp]: "interior {} = {}" by (simp add: interior_def)
-
-lemma open_interior[simp, intro]: "open(interior S)"
-  apply (simp add: interior_def)
-  apply (subst open_subopen) by blast
-
-lemma interior_interior[simp]: "interior(interior S) = interior S" by (metis interior_eq open_interior)
-lemma interior_subset: "interior S \<subseteq> S" by (auto simp add: interior_def)
-lemma subset_interior: "S \<subseteq> T ==> (interior S) \<subseteq> (interior T)" by (auto simp add: interior_def)
-lemma interior_maximal: "T \<subseteq> S \<Longrightarrow> open T ==> T \<subseteq> (interior S)" by (auto simp add: interior_def)
-lemma interior_unique: "T \<subseteq> S \<Longrightarrow> open T  \<Longrightarrow> (\<forall>T'. T' \<subseteq> S \<and> open T' \<longrightarrow> T' \<subseteq> T) \<Longrightarrow> interior S = T"
-  by (metis equalityI interior_maximal interior_subset open_interior)
-lemma mem_interior: "x \<in> interior S \<longleftrightarrow> (\<exists>e. 0 < e \<and> ball x e \<subseteq> S)"
-  apply (simp add: interior_def)
-  by (metis open_contains_ball centre_in_ball open_ball subset_trans)
-
-lemma open_subset_interior: "open S ==> S \<subseteq> interior T \<longleftrightarrow> S \<subseteq> T"
+lemma open_subset_interior: "open S \<Longrightarrow> S \<subseteq> interior T \<longleftrightarrow> S \<subseteq> T"
   by (metis interior_maximal interior_subset subset_trans)
 
-lemma interior_inter[simp]: "interior(S \<inter> T) = interior S \<inter> interior T"
-  apply (rule equalityI, simp)
-  apply (metis Int_lower1 Int_lower2 subset_interior)
-  by (metis Int_mono interior_subset open_Int open_interior open_subset_interior)
+lemma interior_empty [simp]: "interior {} = {}"
+  using open_empty by (rule interior_open)
+
+lemma interior_UNIV [simp]: "interior UNIV = UNIV"
+  using open_UNIV by (rule interior_open)
+
+lemma interior_interior [simp]: "interior (interior S) = interior S"
+  using open_interior by (rule interior_open)
+
+lemma interior_mono: "S \<subseteq> T \<Longrightarrow> interior S \<subseteq> interior T"
+  by (auto simp add: interior_def)
+
+lemma interior_unique:
+  assumes "T \<subseteq> S" and "open T"
+  assumes "\<And>T'. T' \<subseteq> S \<Longrightarrow> open T' \<Longrightarrow> T' \<subseteq> T"
+  shows "interior S = T"
+  by (intro equalityI assms interior_subset open_interior interior_maximal)
+
+lemma interior_inter [simp]: "interior (S \<inter> T) = interior S \<inter> interior T"
+  by (intro equalityI Int_mono Int_greatest interior_mono Int_lower1
+    Int_lower2 interior_maximal interior_subset open_Int open_interior)
+
+lemma mem_interior: "x \<in> interior S \<longleftrightarrow> (\<exists>e>0. ball x e \<subseteq> S)"
+  using open_contains_ball_eq [where S="interior S"]
+  by (simp add: open_subset_interior)
 
 lemma interior_limit_point [intro]:
   fixes x :: "'a::perfect_space"
@@ -599,21 +623,20 @@ lemma interior_limit_point [intro]:
 
 lemma interior_closed_Un_empty_interior:
   assumes cS: "closed S" and iT: "interior T = {}"
-  shows "interior(S \<union> T) = interior S"
+  shows "interior (S \<union> T) = interior S"
 proof
-  show "interior S \<subseteq> interior (S\<union>T)"
-    by (rule subset_interior, blast)
+  show "interior S \<subseteq> interior (S \<union> T)"
+    by (rule interior_mono, rule Un_upper1)
 next
   show "interior (S \<union> T) \<subseteq> interior S"
   proof
     fix x assume "x \<in> interior (S \<union> T)"
-    then obtain R where "open R" "x \<in> R" "R \<subseteq> S \<union> T"
-      unfolding interior_def by fast
+    then obtain R where "open R" "x \<in> R" "R \<subseteq> S \<union> T" ..
     show "x \<in> interior S"
     proof (rule ccontr)
       assume "x \<notin> interior S"
       with `x \<in> R` `open R` obtain y where "y \<in> R - S"
-        unfolding interior_def set_eq_iff by fast
+        unfolding interior_def by fast
       from `open R` `closed S` have "open (R - S)" by (rule open_Diff)
       from `R \<subseteq> S \<union> T` have "R - S \<subseteq> T" by fast
       from `y \<in> R - S` `open (R - S)` `R - S \<subseteq> T` `interior T = {}`
@@ -628,15 +651,16 @@ proof (rule interior_unique)
     by (intro Sigma_mono interior_subset)
   show "open (interior A \<times> interior B)"
     by (intro open_Times open_interior)
-  show "\<forall>T. T \<subseteq> A \<times> B \<and> open T \<longrightarrow> T \<subseteq> interior A \<times> interior B"
-    apply (simp add: open_prod_def, clarify)
-    apply (drule (1) bspec, clarify, rename_tac C D)
-    apply (simp add: interior_def, rule conjI)
-    apply (rule_tac x=C in exI, clarsimp)
-    apply (rule SigmaD1, erule subsetD, erule subsetD, erule (1) SigmaI)
-    apply (rule_tac x=D in exI, clarsimp)
-    apply (rule SigmaD2, erule subsetD, erule subsetD, erule (1) SigmaI)
-    done
+  fix T assume "T \<subseteq> A \<times> B" and "open T" thus "T \<subseteq> interior A \<times> interior B"
+  proof (safe)
+    fix x y assume "(x, y) \<in> T"
+    then obtain C D where "open C" "open D" "C \<times> D \<subseteq> T" "x \<in> C" "y \<in> D"
+      using `open T` unfolding open_prod_def by fast
+    hence "open C" "open D" "C \<subseteq> A" "D \<subseteq> B" "x \<in> C" "y \<in> D"
+      using `T \<subseteq> A \<times> B` by auto
+    thus "x \<in> interior A" and "y \<in> interior B"
+      by (auto intro: interiorI)
+  qed
 qed
 
 
@@ -644,119 +668,50 @@ subsection {* Closure of a Set *}
 
 definition "closure S = S \<union> {x | x. x islimpt S}"
 
-lemma closure_interior: "closure S = - interior (- S)"
-proof-
-  { fix x
-    have "x\<in>- interior (- S) \<longleftrightarrow> x \<in> closure S"  (is "?lhs = ?rhs")
-    proof
-      let ?exT = "\<lambda> y. (\<exists>T. open T \<and> y \<in> T \<and> T \<subseteq> - S)"
-      assume "?lhs"
-      hence *:"\<not> ?exT x"
-        unfolding interior_def
-        by simp
-      { assume "\<not> ?rhs"
-        hence False using *
-          unfolding closure_def islimpt_def
-          by blast
-      }
-      thus "?rhs"
-        by blast
-    next
-      assume "?rhs" thus "?lhs"
-        unfolding closure_def interior_def islimpt_def
-        by blast
-    qed
-  }
-  thus ?thesis
-    by blast
-qed
-
 lemma interior_closure: "interior S = - (closure (- S))"
-proof-
-  { fix x
-    have "x \<in> interior S \<longleftrightarrow> x \<in> - (closure (- S))"
-      unfolding interior_def closure_def islimpt_def
-      by auto
-  }
-  thus ?thesis
-    by blast
-qed
+  unfolding interior_def closure_def islimpt_def by auto
+
+lemma closure_interior: "closure S = - interior (- S)"
+  unfolding interior_closure by simp
 
 lemma closed_closure[simp, intro]: "closed (closure S)"
-proof-
-  have "closed (- interior (-S))" by blast
-  thus ?thesis using closure_interior[of S] by simp
-qed
-
-lemma closure_hull: "closure S = closed hull S"
-proof-
-  have "S \<subseteq> closure S"
-    unfolding closure_def
-    by blast
-  moreover
-  have "closed (closure S)"
-    using closed_closure[of S]
-    by assumption
-  moreover
-  { fix t
-    assume *:"S \<subseteq> t" "closed t"
-    { fix x
-      assume "x islimpt S"
-      hence "x islimpt t" using *(1)
-        using islimpt_subset[of x, of S, of t]
-        by blast
-    }
-    with * have "closure S \<subseteq> t"
-      unfolding closure_def
-      using closed_limpt[of t]
-      by auto
-  }
-  ultimately show ?thesis
-    using hull_unique[of S, of "closure S", of closed]
-    by simp
-qed
-
-lemma closure_eq: "closure S = S \<longleftrightarrow> closed S"
-  unfolding closure_hull
-  using hull_eq[of closed, OF  closed_Inter, of S]
-  by metis
-
-lemma closure_closed[simp]: "closed S \<Longrightarrow> closure S = S"
-  using closure_eq[of S]
-  by simp
-
-lemma closure_closure[simp]: "closure (closure S) = closure S"
-  unfolding closure_hull
-  using hull_hull[of closed S]
-  by assumption
+  unfolding closure_interior by (simp add: closed_Compl)
 
 lemma closure_subset: "S \<subseteq> closure S"
-  unfolding closure_hull
-  using hull_subset[of S closed]
-  by assumption
+  unfolding closure_def by simp
 
-lemma subset_closure: "S \<subseteq> T \<Longrightarrow> closure S \<subseteq> closure T"
-  unfolding closure_hull
-  using hull_mono[of S T closed]
-  by assumption
+lemma closure_hull: "closure S = closed hull S"
+  unfolding hull_def closure_interior interior_def by auto
 
-lemma closure_minimal: "S \<subseteq> T \<Longrightarrow>  closed T \<Longrightarrow> closure S \<subseteq> T"
-  using hull_minimal[of S T closed]
-  unfolding closure_hull
-  by simp
+lemma closure_eq: "closure S = S \<longleftrightarrow> closed S"
+  unfolding closure_hull using closed_Inter by (rule hull_eq)
 
-lemma closure_unique: "S \<subseteq> T \<and> closed T \<and> (\<forall> T'. S \<subseteq> T' \<and> closed T' \<longrightarrow> T \<subseteq> T') \<Longrightarrow> closure S = T"
-  using hull_unique[of S T closed]
-  unfolding closure_hull
-  by simp
+lemma closure_closed [simp]: "closed S \<Longrightarrow> closure S = S"
+  unfolding closure_eq .
 
-lemma closure_empty[simp]: "closure {} = {}"
-  using closed_empty closure_closed[of "{}"]
-  by simp
+lemma closure_closure [simp]: "closure (closure S) = closure S"
+  unfolding closure_hull by (rule hull_hull)
 
-lemma closure_univ[simp]: "closure UNIV = UNIV"
-  using closure_closed[of UNIV]
-  by simp
+lemma closure_mono: "S \<subseteq> T \<Longrightarrow> closure S \<subseteq> closure T"
+  unfolding closure_hull by (rule hull_mono)
+
+lemma closure_minimal: "S \<subseteq> T \<Longrightarrow> closed T \<Longrightarrow> closure S \<subseteq> T"
+  unfolding closure_hull by (rule hull_minimal)
+
+lemma closure_unique:
+  assumes "S \<subseteq> T" and "closed T"
+  assumes "\<And>T'. S \<subseteq> T' \<Longrightarrow> closed T' \<Longrightarrow> T \<subseteq> T'"
+  shows "closure S = T"
+  using assms unfolding closure_hull by (rule hull_unique)
+
+lemma closure_empty [simp]: "closure {} = {}"
+  using closed_empty by (rule closure_closed)
+
+lemma closure_UNIV [simp]: "closure UNIV = UNIV"
+  using closed_UNIV by (rule closure_closed)
+
+lemma closure_union [simp]: "closure (S \<union> T) = closure S \<union> closure T"
+  unfolding closure_interior by simp
 
 lemma closure_eq_empty: "closure S = {} \<longleftrightarrow> S = {}"
   using closure_empty closure_subset[of S]
@@ -797,26 +752,19 @@ proof
     by blast
 qed
 
-lemma closure_complement: "closure(- S) = - interior(S)"
-proof-
-  have "S = - (- S)"
-    by auto
-  thus ?thesis
-    unfolding closure_interior
-    by auto
-qed
+lemma closure_complement: "closure (- S) = - interior S"
+  unfolding closure_interior by simp
 
-lemma interior_complement: "interior(- S) = - closure(S)"
-  unfolding closure_interior
-  by blast
+lemma interior_complement: "interior (- S) = - closure S"
+  unfolding closure_interior by simp
 
 lemma closure_Times: "closure (A \<times> B) = closure A \<times> closure B"
-proof (intro closure_unique conjI)
+proof (rule closure_unique)
   show "A \<times> B \<subseteq> closure A \<times> closure B"
     by (intro Sigma_mono closure_subset)
   show "closed (closure A \<times> closure B)"
     by (intro closed_Times closed_closure)
-  show "\<forall>T. A \<times> B \<subseteq> T \<and> closed T \<longrightarrow> closure A \<times> closure B \<subseteq> T"
+  fix T assume "A \<times> B \<subseteq> T" and "closed T" thus "closure A \<times> closure B \<subseteq> T"
     apply (simp add: closed_def open_prod_def, clarify)
     apply (rule ccontr)
     apply (drule_tac x="(a, b)" in bspec, simp, clarify, rename_tac C D)
@@ -1090,8 +1038,7 @@ lemma eventually_within_interior:
   assumes "x \<in> interior S"
   shows "eventually P (at x within S) \<longleftrightarrow> eventually P (at x)" (is "?lhs = ?rhs")
 proof-
-  from assms obtain T where T: "open T" "x \<in> T" "T \<subseteq> S"
-    unfolding interior_def by fast
+  from assms obtain T where T: "open T" "x \<in> T" "T \<subseteq> S" ..
   { assume "?lhs"
     then obtain A where "open A" "x \<in> A" "\<forall>y\<in>A. y \<noteq> x \<longrightarrow> y \<in> S \<longrightarrow> P y"
       unfolding Limits.eventually_within Limits.eventually_at_topological
@@ -2783,8 +2730,8 @@ lemma closure_insert:
   fixes x :: "'a::t1_space"
   shows "closure (insert x s) = insert x (closure s)"
 apply (rule closure_unique)
-apply (rule conjI [OF insert_mono [OF closure_subset]])
-apply (rule conjI [OF closed_insert [OF closed_closure]])
+apply (rule insert_mono [OF closure_subset])
+apply (rule closed_insert [OF closed_closure])
 apply (simp add: closure_minimal)
 done
 
@@ -3351,10 +3298,9 @@ lemma continuous_on_subset:
   unfolding continuous_on by (metis subset_eq Lim_within_subset)
 
 lemma continuous_on_interior:
-  shows "continuous_on s f \<Longrightarrow> x \<in> interior s ==> continuous (at x) f"
-unfolding interior_def
-apply simp
-by (meson continuous_on_eq_continuous_at continuous_on_subset)
+  shows "continuous_on s f \<Longrightarrow> x \<in> interior s \<Longrightarrow> continuous (at x) f"
+  by (erule interiorE, drule (1) continuous_on_subset,
+    simp add: continuous_on_eq_continuous_at)
 
 lemma continuous_on_eq:
   "(\<forall>x \<in> s. f x = g x) \<Longrightarrow> continuous_on s f \<Longrightarrow> continuous_on s g"
@@ -3363,56 +3309,41 @@ lemma continuous_on_eq:
 
 text {* Characterization of various kinds of continuity in terms of sequences. *}
 
-(* \<longrightarrow> could be generalized, but \<longleftarrow> requires metric space *)
 lemma continuous_within_sequentially:
-  fixes f :: "'a::metric_space \<Rightarrow> 'b::metric_space"
+  fixes f :: "'a::metric_space \<Rightarrow> 'b::topological_space"
   shows "continuous (at a within s) f \<longleftrightarrow>
                 (\<forall>x. (\<forall>n::nat. x n \<in> s) \<and> (x ---> a) sequentially
                      --> ((f o x) ---> f a) sequentially)" (is "?lhs = ?rhs")
 proof
   assume ?lhs
-  { fix x::"nat \<Rightarrow> 'a" assume x:"\<forall>n. x n \<in> s" "\<forall>e>0. \<exists>N. \<forall>n\<ge>N. dist (x n) a < e"
-    fix e::real assume "e>0"
-    from `?lhs` obtain d where "d>0" and d:"\<forall>x\<in>s. 0 < dist x a \<and> dist x a < d \<longrightarrow> dist (f x) (f a) < e" unfolding continuous_within Lim_within using `e>0` by auto
-    from x(2) `d>0` obtain N where N:"\<forall>n\<ge>N. dist (x n) a < d" by auto
-    hence "\<exists>N. \<forall>n\<ge>N. dist ((f \<circ> x) n) (f a) < e"
-      apply(rule_tac  x=N in exI) using N d  apply auto using x(1)
-      apply(erule_tac x=n in allE) apply(erule_tac x=n in allE)
-      apply(erule_tac x="x n" in ballE)  apply auto unfolding dist_nz[THEN sym] apply auto using `e>0` by auto
+  { fix x::"nat \<Rightarrow> 'a" assume x:"\<forall>n. x n \<in> s" "\<forall>e>0. eventually (\<lambda>n. dist (x n) a < e) sequentially"
+    fix T::"'b set" assume "open T" and "f a \<in> T"
+    with `?lhs` obtain d where "d>0" and d:"\<forall>x\<in>s. 0 < dist x a \<and> dist x a < d \<longrightarrow> f x \<in> T"
+      unfolding continuous_within tendsto_def eventually_within by auto
+    have "eventually (\<lambda>n. dist (x n) a < d) sequentially"
+      using x(2) `d>0` by simp
+    hence "eventually (\<lambda>n. (f \<circ> x) n \<in> T) sequentially"
+    proof (rule eventually_elim1)
+      fix n assume "dist (x n) a < d" thus "(f \<circ> x) n \<in> T"
+        using d x(1) `f a \<in> T` unfolding dist_nz[THEN sym] by auto
+    qed
   }
-  thus ?rhs unfolding continuous_within unfolding Lim_sequentially by simp
+  thus ?rhs unfolding tendsto_iff unfolding tendsto_def by simp
 next
-  assume ?rhs
-  { fix e::real assume "e>0"
-    assume "\<not> (\<exists>d>0. \<forall>x\<in>s. 0 < dist x a \<and> dist x a < d \<longrightarrow> dist (f x) (f a) < e)"
-    hence "\<forall>d. \<exists>x. d>0 \<longrightarrow> x\<in>s \<and> (0 < dist x a \<and> dist x a < d \<and> \<not> dist (f x) (f a) < e)" by blast
-    then obtain x where x:"\<forall>d>0. x d \<in> s \<and> (0 < dist (x d) a \<and> dist (x d) a < d \<and> \<not> dist (f (x d)) (f a) < e)"
-      using choice[of "\<lambda>d x.0<d \<longrightarrow> x\<in>s \<and> (0 < dist x a \<and> dist x a < d \<and> \<not> dist (f x) (f a) < e)"] by auto
-    { fix d::real assume "d>0"
-      hence "\<exists>N::nat. inverse (real (N + 1)) < d" using real_arch_inv[of d] by (auto, rule_tac x="n - 1" in exI)auto
-      then obtain N::nat where N:"inverse (real (N + 1)) < d" by auto
-      { fix n::nat assume n:"n\<ge>N"
-        hence "dist (x (inverse (real (n + 1)))) a < inverse (real (n + 1))" using x[THEN spec[where x="inverse (real (n + 1))"]] by auto
-        moreover have "inverse (real (n + 1)) < d" using N n by (auto, metis Suc_le_mono le_SucE less_imp_inverse_less nat_le_real_less order_less_trans real_of_nat_Suc real_of_nat_Suc_gt_zero)
-        ultimately have "dist (x (inverse (real (n + 1)))) a < d" by auto
-      }
-      hence "\<exists>N::nat. \<forall>n\<ge>N. dist (x (inverse (real (n + 1)))) a < d" by auto
-    }
-    hence "(\<forall>n::nat. x (inverse (real (n + 1))) \<in> s) \<and> (\<forall>e>0. \<exists>N::nat. \<forall>n\<ge>N. dist (x (inverse (real (n + 1)))) a < e)" using x by auto
-    hence "\<forall>e>0. \<exists>N::nat. \<forall>n\<ge>N. dist (f (x (inverse (real (n + 1))))) (f a) < e"  using `?rhs`[THEN spec[where x="\<lambda>n::nat. x (inverse (real (n+1)))"], unfolded Lim_sequentially] by auto
-    hence "False" apply(erule_tac x=e in allE) using `e>0` using x by auto
-  }
-  thus ?lhs  unfolding continuous_within unfolding Lim_within unfolding Lim_sequentially by blast
+  assume ?rhs thus ?lhs
+    unfolding continuous_within tendsto_def [where l="f a"]
+    by (simp add: sequentially_imp_eventually_within)
 qed
 
 lemma continuous_at_sequentially:
-  fixes f :: "'a::metric_space \<Rightarrow> 'b::metric_space"
+  fixes f :: "'a::metric_space \<Rightarrow> 'b::topological_space"
   shows "continuous (at a) f \<longleftrightarrow> (\<forall>x. (x ---> a) sequentially
                   --> ((f o x) ---> f a) sequentially)"
-  using continuous_within_sequentially[of a UNIV f] unfolding within_UNIV by auto
+  using continuous_within_sequentially[of a UNIV f]
+  unfolding within_UNIV by auto
 
 lemma continuous_on_sequentially:
-  fixes f :: "'a::metric_space \<Rightarrow> 'b::metric_space"
+  fixes f :: "'a::metric_space \<Rightarrow> 'b::topological_space"
   shows "continuous_on s f \<longleftrightarrow>
     (\<forall>x. \<forall>a \<in> s. (\<forall>n. x(n) \<in> s) \<and> (x ---> a) sequentially
                     --> ((f o x) ---> f(a)) sequentially)" (is "?lhs = ?rhs")
@@ -3527,16 +3458,10 @@ lemma continuous_sub:
 
 text{* Same thing for setwise continuity. *}
 
-lemma continuous_on_const:
- "continuous_on s (\<lambda>x. c)"
+lemma continuous_on_const: "continuous_on s (\<lambda>x. c)"
   unfolding continuous_on_def by (auto intro: tendsto_intros)
 
-lemma continuous_on_cmul:
-  fixes f :: "'a::topological_space \<Rightarrow> 'b::real_normed_vector"
-  shows "continuous_on s f \<Longrightarrow> continuous_on s (\<lambda>x. c *\<^sub>R (f x))"
-  unfolding continuous_on_def by (auto intro: tendsto_intros)
-
-lemma continuous_on_neg:
+lemma continuous_on_minus:
   fixes f :: "'a::topological_space \<Rightarrow> 'b::real_normed_vector"
   shows "continuous_on s f \<Longrightarrow> continuous_on s (\<lambda>x. - f x)"
   unfolding continuous_on_def by (auto intro: tendsto_intros)
@@ -3547,11 +3472,45 @@ lemma continuous_on_add:
            \<Longrightarrow> continuous_on s (\<lambda>x. f x + g x)"
   unfolding continuous_on_def by (auto intro: tendsto_intros)
 
-lemma continuous_on_sub:
+lemma continuous_on_diff:
   fixes f g :: "'a::topological_space \<Rightarrow> 'b::real_normed_vector"
   shows "continuous_on s f \<Longrightarrow> continuous_on s g
            \<Longrightarrow> continuous_on s (\<lambda>x. f x - g x)"
   unfolding continuous_on_def by (auto intro: tendsto_intros)
+
+lemma (in bounded_linear) continuous_on:
+  "continuous_on s g \<Longrightarrow> continuous_on s (\<lambda>x. f (g x))"
+  unfolding continuous_on_def by (fast intro: tendsto)
+
+lemma (in bounded_bilinear) continuous_on:
+  "\<lbrakk>continuous_on s f; continuous_on s g\<rbrakk> \<Longrightarrow> continuous_on s (\<lambda>x. f x ** g x)"
+  unfolding continuous_on_def by (fast intro: tendsto)
+
+lemma continuous_on_scaleR:
+  fixes g :: "'a::topological_space \<Rightarrow> 'b::real_normed_vector"
+  assumes "continuous_on s f" and "continuous_on s g"
+  shows "continuous_on s (\<lambda>x. f x *\<^sub>R g x)"
+  using bounded_bilinear_scaleR assms
+  by (rule bounded_bilinear.continuous_on)
+
+lemma continuous_on_mult:
+  fixes g :: "'a::topological_space \<Rightarrow> 'b::real_normed_algebra"
+  assumes "continuous_on s f" and "continuous_on s g"
+  shows "continuous_on s (\<lambda>x. f x * g x)"
+  using bounded_bilinear_mult assms
+  by (rule bounded_bilinear.continuous_on)
+
+lemma continuous_on_inner:
+  fixes g :: "'a::topological_space \<Rightarrow> 'b::real_inner"
+  assumes "continuous_on s f" and "continuous_on s g"
+  shows "continuous_on s (\<lambda>x. inner (f x) (g x))"
+  using bounded_bilinear_inner assms
+  by (rule bounded_bilinear.continuous_on)
+
+lemma continuous_on_euclidean_component:
+  "continuous_on s f \<Longrightarrow> continuous_on s (\<lambda>x. f x $$ i)"
+  using bounded_linear_euclidean_component
+  by (rule bounded_linear.continuous_on)
 
 text{* Same thing for uniform continuity, using sequential formulations. *}
 
@@ -3796,13 +3755,20 @@ lemma continuous_closed_vimage:
 lemma interior_image_subset:
   assumes "\<forall>x. continuous (at x) f" "inj f"
   shows "interior (f ` s) \<subseteq> f ` (interior s)"
-  apply rule unfolding interior_def mem_Collect_eq image_iff apply safe
-proof- fix x T assume as:"open T" "x \<in> T" "T \<subseteq> f ` s" 
-  hence "x \<in> f ` s" by auto then guess y unfolding image_iff .. note y=this
-  thus "\<exists>xa\<in>{x. \<exists>T. open T \<and> x \<in> T \<and> T \<subseteq> s}. x = f xa" apply(rule_tac x=y in bexI) using assms as
-    apply safe apply(rule_tac x="{x. f x \<in> T}" in exI) apply(safe,rule continuous_open_preimage_univ)
-  proof- fix x assume "f x \<in> T" hence "f x \<in> f ` s" using as by auto
-    thus "x \<in> s" unfolding inj_image_mem_iff[OF assms(2)] . qed auto qed
+proof
+  fix x assume "x \<in> interior (f ` s)"
+  then obtain T where as: "open T" "x \<in> T" "T \<subseteq> f ` s" ..
+  hence "x \<in> f ` s" by auto
+  then obtain y where y: "y \<in> s" "x = f y" by auto
+  have "open (vimage f T)"
+    using assms(1) `open T` by (rule continuous_open_vimage)
+  moreover have "y \<in> vimage f T"
+    using `x = f y` `x \<in> T` by simp
+  moreover have "vimage f T \<subseteq> s"
+    using `T \<subseteq> image f s` `inj f` unfolding inj_on_def subset_eq by auto
+  ultimately have "y \<in> interior s" ..
+  with `x = f y` show "x \<in> f ` interior s" ..
+qed
 
 text {* Equality of continuous functions on closure and related results. *}
 
@@ -3989,28 +3955,10 @@ lemma continuous_mul:
 lemmas continuous_intros = continuous_add continuous_vmul continuous_cmul
   continuous_const continuous_sub continuous_at_id continuous_within_id continuous_mul
 
-lemma continuous_on_vmul:
-  fixes c :: "'a::metric_space \<Rightarrow> real" and v :: "'b::real_normed_vector"
-  shows "continuous_on s c ==> continuous_on s (\<lambda>x. c(x) *\<^sub>R v)"
-  unfolding continuous_on_eq_continuous_within using continuous_vmul[of _ c] by auto
-
-lemma continuous_on_mul:
-  fixes c :: "'a::metric_space \<Rightarrow> real"
-  fixes f :: "'a::metric_space \<Rightarrow> 'b::real_normed_vector"
-  shows "continuous_on s c \<Longrightarrow> continuous_on s f
-             ==> continuous_on s (\<lambda>x. c(x) *\<^sub>R f x)"
-  unfolding continuous_on_eq_continuous_within using continuous_mul[of _ c] by auto
-
-lemma continuous_on_mul_real:
-  fixes f :: "'a::metric_space \<Rightarrow> real"
-  fixes g :: "'a::metric_space \<Rightarrow> real"
-  shows "continuous_on s f \<Longrightarrow> continuous_on s g
-             ==> continuous_on s (\<lambda>x. f x * g x)"
-  using continuous_on_mul[of s f g] unfolding real_scaleR_def .
-
 lemmas continuous_on_intros = continuous_on_add continuous_on_const
-  continuous_on_id continuous_on_compose continuous_on_cmul continuous_on_neg
-  continuous_on_sub continuous_on_mul continuous_on_vmul continuous_on_mul_real
+  continuous_on_id continuous_on_compose continuous_on_minus
+  continuous_on_diff continuous_on_scaleR continuous_on_mult
+  continuous_on_inner continuous_on_euclidean_component
   uniformly_continuous_on_add uniformly_continuous_on_const
   uniformly_continuous_on_id uniformly_continuous_on_compose
   uniformly_continuous_on_cmul uniformly_continuous_on_neg
@@ -4870,13 +4818,15 @@ proof-
   finally show "closed {a .. b}" .
 qed
 
-lemma interior_closed_interval[intro]: fixes a :: "'a::ordered_euclidean_space" shows
- "interior {a .. b} = {a<..<b}" (is "?L = ?R")
+lemma interior_closed_interval [intro]:
+  fixes a b :: "'a::ordered_euclidean_space"
+  shows "interior {a..b} = {a<..<b}" (is "?L = ?R")
 proof(rule subset_antisym)
-  show "?R \<subseteq> ?L" using interior_maximal[OF interval_open_subset_closed open_interval] by auto
+  show "?R \<subseteq> ?L" using interval_open_subset_closed open_interval
+    by (rule interior_maximal)
 next
-  { fix x assume "\<exists>T. open T \<and> x \<in> T \<and> T \<subseteq> {a..b}"
-    then obtain s where s:"open s" "x \<in> s" "s \<subseteq> {a..b}" by auto
+  { fix x assume "x \<in> interior {a..b}"
+    then obtain s where s:"open s" "x \<in> s" "s \<subseteq> {a..b}" ..
     then obtain e where "e>0" and e:"\<forall>x'. dist x' x < e \<longrightarrow> x' \<in> {a..b}" unfolding open_dist and subset_eq by auto
     { fix i assume i:"i<DIM('a)"
       have "dist (x - (e / 2) *\<^sub>R basis i) x < e"
@@ -4891,7 +4841,7 @@ next
       hence "a $$ i < x $$ i" and "x $$ i < b $$ i" unfolding euclidean_simps
         unfolding basis_component using `e>0` i by auto  }
     hence "x \<in> {a<..<b}" unfolding mem_interval by auto  }
-  thus "?L \<subseteq> ?R" unfolding interior_def and subset_eq by auto
+  thus "?L \<subseteq> ?R" ..
 qed
 
 lemma bounded_closed_interval: fixes a :: "'a::ordered_euclidean_space" shows "bounded {a .. b}"
@@ -5149,20 +5099,11 @@ proof -
   finally show ?thesis .
 qed
 
-lemma Lim_inner:
-  assumes "(f ---> l) net"  shows "((\<lambda>y. inner a (f y)) ---> inner a l) net"
-  by (intro tendsto_intros assms)
-
 lemma continuous_at_inner: "continuous (at x) (inner a)"
   unfolding continuous_at by (intro tendsto_intros)
 
 lemma continuous_at_euclidean_component[intro!, simp]: "continuous (at x) (\<lambda>x. x $$ i)"
   unfolding euclidean_component_def by (rule continuous_at_inner)
-
-lemma continuous_on_inner:
-  fixes s :: "'a::real_inner set"
-  shows "continuous_on s (inner a)"
-  unfolding continuous_on by (rule ballI) (intro tendsto_intros)
 
 lemma closed_halfspace_le: "closed {x. inner a x \<le> b}"
   by (simp add: closed_Collect_le)
@@ -5440,8 +5381,7 @@ lemma homeomorphic_scaling:
   unfolding homeomorphic_minimal
   apply(rule_tac x="\<lambda>x. c *\<^sub>R x" in exI)
   apply(rule_tac x="\<lambda>x. (1 / c) *\<^sub>R x" in exI)
-  using assms apply auto
-  using continuous_on_cmul[OF continuous_on_id] by auto
+  using assms by (auto simp add: continuous_on_intros)
 
 lemma homeomorphic_translation:
   fixes s :: "'a::real_normed_vector set"
@@ -5763,15 +5703,13 @@ next
   { fix y assume "m > 0"  "m *\<^sub>R a + c \<le> y"  "y \<le> m *\<^sub>R b + c"
     hence "y \<in> (\<lambda>x. m *\<^sub>R x + c) ` {a..b}"
       unfolding image_iff Bex_def mem_interval eucl_le[where 'a='a]
-      apply(auto simp add: pth_3[symmetric] 
-        intro!: exI[where x="(1 / m) *\<^sub>R (y - c)"]) 
+      apply (intro exI[where x="(1 / m) *\<^sub>R (y - c)"])
       by(auto simp add: pos_le_divide_eq pos_divide_le_eq mult_commute diff_le_iff)
   } moreover
   { fix y assume "m *\<^sub>R b + c \<le> y" "y \<le> m *\<^sub>R a + c" "m < 0"
     hence "y \<in> (\<lambda>x. m *\<^sub>R x + c) ` {a..b}"
       unfolding image_iff Bex_def mem_interval eucl_le[where 'a='a]
-      apply(auto simp add: pth_3[symmetric]
-        intro!: exI[where x="(1 / m) *\<^sub>R (y - c)"])
+      apply (intro exI[where x="(1 / m) *\<^sub>R (y - c)"])
       by(auto simp add: neg_le_divide_eq neg_divide_le_eq mult_commute diff_le_iff)
   }
   ultimately show ?thesis using False by auto
@@ -6039,20 +5977,5 @@ qed
 instance euclidean_space \<subseteq> banach ..
 
 declare tendsto_const [intro] (* FIXME: move *)
-
-text {* Legacy theorem names *}
-
-lemmas Lim_ident_at = LIM_ident
-lemmas Lim_const = tendsto_const
-lemmas Lim_cmul = tendsto_scaleR [OF tendsto_const]
-lemmas Lim_neg = tendsto_minus
-lemmas Lim_add = tendsto_add
-lemmas Lim_sub = tendsto_diff
-lemmas Lim_mul = tendsto_scaleR
-lemmas Lim_vmul = tendsto_scaleR [OF _ tendsto_const]
-lemmas Lim_null_norm = tendsto_norm_zero_iff [symmetric]
-lemmas Lim_linear = bounded_linear.tendsto [COMP swap_prems_rl]
-lemmas Lim_component = tendsto_euclidean_component
-lemmas Lim_intros = Lim_add Lim_const Lim_sub Lim_cmul Lim_vmul Lim_within_id
 
 end
