@@ -33,7 +33,8 @@ object Isabelle_Markup
   val bad_color = new Color(255, 106, 106, 100)
   val hilite_color = new Color(255, 204, 102, 100)
 
-  val subexp_color = new Color(0xC0, 0xC0, 0xC0, 100)
+  val quoted_color = new Color(139, 139, 139, 25)
+  val subexp_color = new Color(80, 80, 80, 50)
 
   val keyword1_color = get_color("#006699")
   val keyword2_color = get_color("#009966")
@@ -42,8 +43,9 @@ object Isabelle_Markup
   {
     def >= (that: Icon): Boolean = this.priority >= that.priority
   }
-  val warning_icon = new Icon(1, Isabelle.load_icon("16x16/status/dialog-warning.png"))
-  val error_icon = new Icon(2, Isabelle.load_icon("16x16/status/dialog-error.png"))
+  val warning_icon = new Icon(1, Isabelle.load_icon("16x16/status/dialog-information.png"))
+  val legacy_icon = new Icon(2, Isabelle.load_icon("16x16/status/dialog-warning.png"))
+  val error_icon = new Icon(3, Isabelle.load_icon("16x16/status/dialog-error.png"))
 
 
   /* command status */
@@ -95,7 +97,11 @@ object Isabelle_Markup
 
   val gutter_message: Markup_Tree.Select[Icon] =
   {
-    case Text.Info(_, XML.Elem(Markup(Markup.WARNING, _), _)) => warning_icon
+    case Text.Info(_, XML.Elem(Markup(Markup.WARNING, _), body)) =>
+      body match {
+        case List(XML.Elem(Markup(Markup.LEGACY, _), _)) => legacy_icon
+        case _ => warning_icon
+      }
     case Text.Info(_, XML.Elem(Markup(Markup.ERROR, _), _)) => error_icon
   }
 
@@ -110,6 +116,13 @@ object Isabelle_Markup
     case Text.Info(_, XML.Elem(Markup(Markup.TOKEN_RANGE, _), _)) => light_color
   }
 
+  val foreground: Markup_Tree.Select[Color] =
+  {
+    case Text.Info(_, XML.Elem(Markup(Markup.STRING, _), _)) => quoted_color
+    case Text.Info(_, XML.Elem(Markup(Markup.ALTSTRING, _), _)) => quoted_color
+    case Text.Info(_, XML.Elem(Markup(Markup.VERBATIM, _), _)) => quoted_color
+  }
+
   private val text_entity_colors: Map[String, Color] =
     Map(
       Markup.CLASS -> get_color("red"),
@@ -118,6 +131,9 @@ object Isabelle_Markup
 
   private val text_colors: Map[String, Color] =
     Map(
+      Markup.STRING -> get_color("black"),
+      Markup.ALTSTRING -> get_color("black"),
+      Markup.VERBATIM -> get_color("black"),
       Markup.LITERAL -> keyword1_color,
       Markup.DELIMITER -> get_color("black"),
       Markup.IDENT -> get_color("black"),
