@@ -23,7 +23,7 @@ object Isabelle_Markup
 
   def get_color(s: String): Color = ColorFactory.getInstance.getColor(s)
 
-  val outdated_color = new Color(240, 240, 240)
+  val outdated_color = new Color(238, 227, 227)
   val unfinished_color = new Color(255, 228, 225)
 
   val light_color = new Color(240, 240, 240)
@@ -52,7 +52,7 @@ object Isabelle_Markup
 
   def status_color(snapshot: Document.Snapshot, command: Command): Option[Color] =
   {
-    val state = snapshot.state(command)
+    val state = snapshot.command_state(command)
     if (snapshot.is_outdated) Some(outdated_color)
     else
       Isar_Document.command_status(state.status) match {
@@ -64,7 +64,7 @@ object Isabelle_Markup
 
   def overview_color(snapshot: Document.Snapshot, command: Command): Option[Color] =
   {
-    val state = snapshot.state(command)
+    val state = snapshot.command_state(command)
     if (snapshot.is_outdated) None
     else
       Isar_Document.command_status(state.status) match {
