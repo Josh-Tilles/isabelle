@@ -21,7 +21,7 @@ sig
 
   datatype order = First_Order | Higher_Order
   datatype polymorphism = Polymorphic | Raw_Monomorphic | Mangled_Monomorphic
-  datatype soundness = Unsound | Sound_Modulo_Infiniteness | Sound
+  datatype soundness = Sound_Modulo_Infiniteness | Sound
   datatype type_level =
     All_Types |
     Noninf_Nonmono_Types of soundness |
@@ -138,6 +138,11 @@ fun isabelle_info s =
 val introN = "intro"
 val elimN = "elim"
 val simpN = "simp"
+
+(* TFF1 is still in development, and it is still unclear whether symbols will be
+   allowed to have types like "$tType > $o" (i.e., "![A : $tType] : $o"), with
+   "dummy" type variables. *)
+val exploit_tff1_dummy_type_vars = false
 
 val bound_var_prefix = "B_"
 val all_bound_var_prefix = "BA_"
@@ -360,27 +365,19 @@ fun atp_schematic_consts_of t = add_schematic_consts_of t Symtab.empty
 
 (** Definitions and functions for FOL clauses and formulas for TPTP **)
 
-(* The first component is the type class; the second is a "TVar" or "TFree". *)
-datatype type_literal =
-  TyLitVar of name * name |
-  TyLitFree of name * name
-
-
 (** Isabelle arities **)
 
-datatype arity_literal =
-  TConsLit of name * name * name list |
-  TVarLit of name * name
+type arity_atom = name * name * name list
 
 val type_class = the_single @{sort type}
 
-fun add_packed_sort tvar =
-  fold (fn s => s <> type_class ? cons (`make_type_class s, `I tvar))
-
 type arity_clause =
   {name : string,
-   prem_lits : arity_literal list,
-   concl_lits : arity_literal}
+   prem_atoms : arity_atom list,
+   concl_atom : arity_atom}
+
+fun add_prem_atom tvar =
+  fold (fn s => s <> type_class ? cons (`make_type_class s, `I tvar, []))
 
 (* Arity of type constructor "tcon :: (arg1, ..., argN) res" *)
 fun make_axiom_arity_clause (tcons, name, (cls, args)) =
@@ -389,9 +386,9 @@ fun make_axiom_arity_clause (tcons, name, (cls, args)) =
     val tvars_srts = ListPair.zip (tvars, args)
   in
     {name = name,
-     prem_lits = [] |> fold (uncurry add_packed_sort) tvars_srts |> map TVarLit,
-     concl_lits = TConsLit (`make_type_class cls, `make_fixed_type_const tcons,
-                            tvars ~~ tvars)}
+     prem_atoms = [] |> fold (uncurry add_prem_atom) tvars_srts,
+     concl_atom = (`make_type_class cls, `make_fixed_type_const tcons,
+                   tvars ~~ tvars)}
   end
 
 fun arity_clause _ _ (_, []) = []
@@ -539,7 +536,7 @@ datatype locality =
 
 datatype order = First_Order | Higher_Order
 datatype polymorphism = Polymorphic | Raw_Monomorphic | Mangled_Monomorphic
-datatype soundness = Unsound | Sound_Modulo_Infiniteness | Sound
+datatype soundness = Sound_Modulo_Infiniteness | Sound
 datatype type_level =
   All_Types |
   Noninf_Nonmono_Types of soundness |
@@ -718,24 +715,40 @@ fun type_arg_policy type_enc s =
               Explicit_Type_Args)
     end
 
-(* Make literals for sorted type variables. *)
+(* Make atoms for sorted type variables. *)
 fun generic_add_sorts_on_type (_, []) = I
   | generic_add_sorts_on_type ((x, i), s :: ss) =
     generic_add_sorts_on_type ((x, i), ss)
     #> (if s = the_single @{sort HOL.type} then
           I
         else if i = ~1 then
-          insert (op =) (TyLitFree (`make_type_class s, `make_fixed_type_var x))
+          insert (op =) (`make_type_class s, `make_fixed_type_var x)
         else
-          insert (op =) (TyLitVar (`make_type_class s,
-                                   (make_schematic_type_var (x, i), x))))
+          insert (op =) (`make_type_class s,
+                         (make_schematic_type_var (x, i), x)))
 fun add_sorts_on_tfree (TFree (s, S)) = generic_add_sorts_on_type ((s, ~1), S)
   | add_sorts_on_tfree _ = I
 fun add_sorts_on_tvar (TVar z) = generic_add_sorts_on_type z
   | add_sorts_on_tvar _ = I
 
-fun type_literals_for_types type_enc add_sorts_on_typ Ts =
+val tvar_a_str = "'a"
+val tvar_a = TVar ((tvar_a_str, 0), HOLogic.typeS)
+val tvar_a_name = (make_schematic_type_var (tvar_a_str, 0), tvar_a_str)
+val itself_name = `make_fixed_type_const @{type_name itself}
+val TYPE_name = `(make_fixed_const NONE) @{const_name TYPE}
+val tvar_a_atype = AType (tvar_a_name, [])
+val a_itself_atype = AType (itself_name, [tvar_a_atype])
+
+fun type_class_formula type_enc class arg =
+  AAtom (ATerm (class, arg ::
+      (case type_enc of
+         Simple_Types (_, Polymorphic, _) =>
+         if exploit_tff1_dummy_type_vars then [] else [ATerm (TYPE_name, [arg])]
+       | _ => [])))
+fun formulas_for_types type_enc add_sorts_on_typ Ts =
   [] |> level_of_type_enc type_enc <> No_Types ? fold add_sorts_on_typ Ts
+     |> map (fn (class, name) =>
+                type_class_formula type_enc class (ATerm (name, [])))
 
 fun mk_aconns c phis =
   let val (phis', phi') = split_last phis in
@@ -1120,11 +1133,10 @@ type monotonicity_info =
 (* These types witness that the type classes they belong to allow infinite
    models and hence that any types with these type classes is monotonic. *)
 val known_infinite_types =
-  [@{typ nat}, Type ("Int.int", []), @{typ "nat => bool"}]
+  [@{typ nat}, HOLogic.intT, HOLogic.realT, @{typ "nat => bool"}]
 
 fun is_type_kind_of_surely_infinite ctxt soundness cached_Ts T =
-  soundness <> Sound andalso
-  is_type_surely_infinite ctxt (soundness <> Unsound) cached_Ts T
+  soundness <> Sound andalso is_type_surely_infinite ctxt true cached_Ts T
 
 (* Finite types such as "unit", "bool", "bool * bool", and "bool => bool" are
    dangerous because their "exhaust" properties can easily lead to unsound ATP
@@ -1275,8 +1287,6 @@ fun add_iterm_syms_to_table ctxt explicit_apply =
 fun add_fact_syms_to_table ctxt explicit_apply =
   K (add_iterm_syms_to_table ctxt explicit_apply)
   |> formula_fold NONE |> fact_lift
-
-val tvar_a = TVar (("'a", 0), HOLogic.typeS)
 
 val default_sym_tab_entries : (string * sym_info) list =
   (prefixed_predicator_name,
@@ -1450,16 +1460,8 @@ val helper_table =
    (("If", true), @{thms if_True if_False True_or_False})]
   |> map (apsnd (map zero_var_indexes))
 
-fun fo_literal_from_type_literal (TyLitVar (class, name)) =
-    (true, ATerm (class, [ATerm (name, [])]))
-  | fo_literal_from_type_literal (TyLitFree (class, name)) =
-    (true, ATerm (class, [ATerm (name, [])]))
-
-fun formula_from_fo_literal (pos, t) = AAtom t |> not pos ? mk_anot
-
-fun bound_tvars type_enc Ts =
-  mk_ahorn (map (formula_from_fo_literal o fo_literal_from_type_literal)
-                (type_literals_for_types type_enc add_sorts_on_tvar Ts))
+fun bound_tvars type_enc =
+  mk_ahorn o formulas_for_types type_enc add_sorts_on_tvar
 
 fun eq_formula type_enc atomic_Ts pred_sym tm1 tm2 =
   (if pred_sym then AConn (AIff, [AAtom tm1, AAtom tm2])
@@ -1738,25 +1740,23 @@ fun formula_line_for_fact ctxt format prefix encode freshen pos mono type_enc
 
 fun formula_line_for_class_rel_clause type_enc
         ({name, subclass, superclass, ...} : class_rel_clause) =
-  let val ty_arg = ATerm ((make_schematic_type_var ("'a", 0), "'a"), []) in
+  let val ty_arg = ATerm (tvar_a_name, []) in
     Formula (class_rel_clause_prefix ^ ascii_of name, Axiom,
-             AConn (AImplies, [AAtom (ATerm (subclass, [ty_arg])),
-                               AAtom (ATerm (superclass, [ty_arg]))])
+             AConn (AImplies,
+                    [type_class_formula type_enc subclass ty_arg,
+                     type_class_formula type_enc superclass ty_arg])
              |> close_formula_universally type_enc, isabelle_info introN, NONE)
   end
 
-fun fo_literal_from_arity_literal (TConsLit (c, t, args)) =
-    (true, ATerm (c, [ATerm (t, map (fn arg => ATerm (arg, [])) args)]))
-  | fo_literal_from_arity_literal (TVarLit (c, sort)) =
-    (false, ATerm (c, [ATerm (sort, [])]))
+fun formula_from_arity_atom type_enc (class, t, args) =
+  ATerm (t, map (fn arg => ATerm (arg, [])) args)
+  |> type_class_formula type_enc class
 
 fun formula_line_for_arity_clause type_enc
-        ({name, prem_lits, concl_lits, ...} : arity_clause) =
+        ({name, prem_atoms, concl_atom, ...} : arity_clause) =
   Formula (arity_clause_prefix ^ name, Axiom,
-           mk_ahorn (map (formula_from_fo_literal o apfst not
-                          o fo_literal_from_arity_literal) prem_lits)
-                    (formula_from_fo_literal
-                         (fo_literal_from_arity_literal concl_lits))
+           mk_ahorn (map (formula_from_arity_atom type_enc) prem_atoms)
+                    (formula_from_arity_atom type_enc concl_atom)
            |> close_formula_universally type_enc, isabelle_info introN, NONE)
 
 fun formula_line_for_conjecture ctxt format mono type_enc
@@ -1768,24 +1768,24 @@ fun formula_line_for_conjecture ctxt format mono type_enc
            |> bound_tvars type_enc atomic_types
            |> close_formula_universally type_enc, NONE, NONE)
 
-fun free_type_literals type_enc ({atomic_types, ...} : translated_formula) =
-  atomic_types |> type_literals_for_types type_enc add_sorts_on_tfree
-               |> map fo_literal_from_type_literal
-
-fun formula_line_for_free_type j lit =
-  Formula (tfree_clause_prefix ^ string_of_int j, Hypothesis,
-           formula_from_fo_literal lit, NONE, NONE)
-fun formula_lines_for_free_types type_enc facts =
+fun formula_line_for_free_type j phi =
+  Formula (tfree_clause_prefix ^ string_of_int j, Hypothesis, phi, NONE, NONE)
+fun formula_lines_for_free_types type_enc (facts : translated_formula list) =
   let
-    val litss = map (free_type_literals type_enc) facts
-    val lits = fold (union (op =)) litss []
-  in map2 formula_line_for_free_type (0 upto length lits - 1) lits end
+    val phis =
+      fold (union (op =)) (map #atomic_types facts) []
+      |> formulas_for_types type_enc add_sorts_on_tfree
+  in map2 formula_line_for_free_type (0 upto length phis - 1) phis end
 
 (** Symbol declarations **)
 
 fun decl_line_for_class s =
   let val name as (s, _) = `make_type_class s in
-    Decl (sym_decl_prefix ^ s, name, AFun (atype_of_types, bool_atype))
+    Decl (sym_decl_prefix ^ s, name,
+          if exploit_tff1_dummy_type_vars then
+            AFun (atype_of_types, bool_atype)
+          else
+            ATyAbs ([tvar_a_name], AFun (a_itself_atype, bool_atype)))
   end
 
 fun decl_lines_for_classes type_enc classes =
@@ -1833,7 +1833,7 @@ fun sym_decl_table_for_facts ctxt format type_enc repaired_sym_tab
     fun add_undefined_const T =
       let
         val (s, s') =
-          `(make_fixed_const (SOME format)) @{const_name undefined}
+          `(make_fixed_const NONE) @{const_name undefined}
           |> (case type_arg_policy type_enc @{const_name undefined} of
                 Mangled_Type_Args _ => mangled_const_name format type_enc [T]
               | _ => I)
@@ -1841,22 +1841,32 @@ fun sym_decl_table_for_facts ctxt format type_enc repaired_sym_tab
         Symtab.map_default (s, [])
                            (insert_type ctxt #3 (s', [T], T, false, 0, false))
       end
+    fun add_TYPE_const () =
+      let val (s, s') = TYPE_name in
+        Symtab.map_default (s, [])
+            (insert_type ctxt #3
+                         (s', [tvar_a], @{typ "'a itself"}, false, 0, false))
+      end
   in
     Symtab.empty
     |> is_type_enc_fairly_sound type_enc
        ? (fold (add_fact_syms true) conjs
           #> fold (add_fact_syms false) facts
           #> (case type_enc of
-                Simple_Types _ => I
+                Simple_Types (_, poly, _) =>
+                if poly = Polymorphic then add_TYPE_const () else I
               | _ => fold add_undefined_const (var_types ())))
   end
 
 (* We add "bool" in case the helper "True_or_False" is included later. *)
-val default_mono =
+fun default_mono level =
   {maybe_finite_Ts = [@{typ bool}],
    surely_finite_Ts = [@{typ bool}],
    maybe_infinite_Ts = known_infinite_types,
-   surely_infinite_Ts = known_infinite_types,
+   surely_infinite_Ts =
+     case level of
+       Noninf_Nonmono_Types Sound => []
+     | _ => known_infinite_types,
    maybe_nonmono_Ts = [@{typ bool}]}
 
 (* This inference is described in section 2.3 of Claessen et al.'s "Sorting it
@@ -1911,7 +1921,7 @@ fun add_fact_mononotonicity_info ctxt level
                (add_iterm_mononotonicity_info ctxt level) iformula
 fun mononotonicity_info_for_facts ctxt type_enc facts =
   let val level = level_of_type_enc type_enc in
-    default_mono
+    default_mono level
     |> is_type_level_monotonicity_based level
        ? fold (add_fact_mononotonicity_info ctxt level) facts
   end
