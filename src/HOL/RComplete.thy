@@ -336,9 +336,6 @@ lemma real_natfloor_le: "0 <= x ==> real(natfloor x) <= x"
 lemma natfloor_neg: "x <= 0 ==> natfloor x = 0"
   unfolding natfloor_def by simp
 
-lemma nat_mono: "x \<le> y \<Longrightarrow> nat x \<le> nat y"
-  by simp (* TODO: move to Int.thy *)
-
 lemma natfloor_mono: "x <= y ==> natfloor x <= natfloor y"
   unfolding natfloor_def by (intro nat_mono floor_mono)
 
@@ -474,19 +471,16 @@ lemma natceiling_neg: "x <= 0 ==> natceiling x = 0"
 lemma natceiling_mono: "x <= y ==> natceiling x <= natceiling y"
   unfolding natceiling_def by (intro nat_mono ceiling_mono)
 
-lemma nat_le_iff: "nat x \<le> n \<longleftrightarrow> x \<le> int n"
-  by auto (* TODO: move to Int.thy *)
-
 lemma natceiling_le: "x <= real a ==> natceiling x <= a"
   unfolding natceiling_def real_of_nat_def
   by (simp add: nat_le_iff ceiling_le_iff)
 
-lemma natceiling_le_eq: "0 <= x ==> (natceiling x <= a) = (x <= real a)"
-  unfolding natceiling_def real_of_nat_def (* FIXME: unused assumption *)
+lemma natceiling_le_eq: "(natceiling x <= a) = (x <= real a)"
+  unfolding natceiling_def real_of_nat_def
   by (simp add: nat_le_iff ceiling_le_iff)
 
 lemma natceiling_le_eq_number_of [simp]:
-    "~ neg((number_of n)::int) ==> 0 <= x ==>
+    "~ neg((number_of n)::int) ==>
       (natceiling x <= number_of n) = (x <= number_of n)"
   by (simp add: natceiling_le_eq)
 
