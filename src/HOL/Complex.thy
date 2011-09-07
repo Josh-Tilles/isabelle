@@ -304,10 +304,10 @@ qed
 
 end
 
-lemma cmod_unit_one [simp]: "cmod (Complex (cos a) (sin a)) = 1"
+lemma cmod_unit_one: "cmod (Complex (cos a) (sin a)) = 1"
   by simp
 
-lemma cmod_complex_polar [simp]:
+lemma cmod_complex_polar:
   "cmod (complex_of_real r * Complex (cos a) (sin a)) = abs r"
   by (simp add: norm_mult)
 
@@ -315,10 +315,10 @@ lemma complex_Re_le_cmod: "Re x \<le> cmod x"
   unfolding complex_norm_def
   by (rule real_sqrt_sum_squares_ge1)
 
-lemma complex_mod_minus_le_complex_mod [simp]: "- cmod x \<le> cmod x"
+lemma complex_mod_minus_le_complex_mod: "- cmod x \<le> cmod x"
   by (rule order_trans [OF _ norm_ge_zero], simp)
 
-lemma complex_mod_triangle_ineq2 [simp]: "cmod(b + a) - cmod b \<le> cmod a"
+lemma complex_mod_triangle_ineq2: "cmod(b + a) - cmod b \<le> cmod a"
   by (rule ord_le_eq_trans [OF norm_triangle_ineq2], simp)
 
 lemma abs_Re_le_cmod: "\<bar>Re x\<bar> \<le> cmod x"
@@ -528,12 +528,6 @@ definition arg :: "complex => real" where
 lemma sgn_eq: "sgn z = z / complex_of_real (cmod z)"
   by (simp add: sgn_div_norm divide_inverse scaleR_conv_of_real mult_commute)
 
-lemma i_mult_eq: "ii * ii = complex_of_real (-1)"
-  by (simp add: i_def complex_of_real_def)
-
-lemma i_mult_eq2 [simp]: "ii * ii = -(1::complex)"
-  by (simp add: i_def complex_one_def)
-
 lemma complex_eq_cancel_iff2 [simp]:
   shows "(Complex x y = complex_of_real xa) = (x = xa & y = 0)"
   by (simp add: complex_of_real_def)
@@ -635,7 +629,7 @@ proof -
 qed
 
 lemma complex_mod_rcis [simp]: "cmod(rcis r a) = abs r"
-  by (simp add: rcis_def cis_def sin_cos_squared_add2_mult)
+  by (simp add: rcis_def cis_def norm_mult)
 
 lemma complex_mod_sqrt_Re_mult_cnj: "cmod z = sqrt (Re (z * cnj z))"
   by (simp add: cmod_def power2_eq_square)
