@@ -621,13 +621,6 @@ lemma Re_rcis [simp]: "Re(rcis r a) = r * cos a"
 lemma Im_rcis [simp]: "Im(rcis r a) = r * sin a"
   by (simp add: rcis_def cis_def)
 
-lemma sin_cos_squared_add2_mult: "(r * cos a)\<twosuperior> + (r * sin a)\<twosuperior> = r\<twosuperior>"
-proof -
-  have "(r * cos a)\<twosuperior> + (r * sin a)\<twosuperior> = r\<twosuperior> * ((cos a)\<twosuperior> + (sin a)\<twosuperior>)"
-    by (simp only: power_mult_distrib right_distrib)
-  thus ?thesis by simp
-qed
-
 lemma complex_mod_rcis [simp]: "cmod(rcis r a) = abs r"
   by (simp add: rcis_def cis_def norm_mult)
 
@@ -656,22 +649,11 @@ lemma rcis_zero_mod [simp]: "rcis 0 a = 0"
 lemma rcis_zero_arg [simp]: "rcis r 0 = complex_of_real r"
   by (simp add: rcis_def)
 
-lemma complex_of_real_minus_one:
-   "complex_of_real (-(1::real)) = -(1::complex)"
-  by (simp add: complex_of_real_def complex_one_def)
-
 lemma complex_i_mult_minus [simp]: "ii * (ii * x) = - x"
   by (simp add: mult_assoc [symmetric])
 
-
-lemma cis_real_of_nat_Suc_mult:
-   "cis (real (Suc n) * a) = cis a * cis (real n * a)"
-  by (simp add: cis_def real_of_nat_Suc left_distrib cos_add sin_add right_distrib)
-
 lemma DeMoivre: "(cis a) ^ n = cis (real n * a)"
-apply (induct_tac "n")
-apply (auto simp add: cis_real_of_nat_Suc_mult)
-done
+  by (induct n, simp_all add: real_of_nat_Suc algebra_simps cis_mult)
 
 lemma DeMoivre2: "(rcis r a) ^ n = rcis (r ^ n) (real n * a)"
   by (simp add: rcis_def power_mult_distrib DeMoivre)
