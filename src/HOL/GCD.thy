@@ -485,16 +485,16 @@ lemma gcd_red_int: "gcd (x::int) y = gcd y (x mod y)"
 done
 
 lemma gcd_add1_int [simp]: "gcd ((m::int) + n) n = gcd m n"
-by (metis gcd_red_int mod_add_self1 zadd_commute)
+by (metis gcd_red_int mod_add_self1 add_commute)
 
 lemma gcd_add2_int [simp]: "gcd m ((m::int) + n) = gcd m n"
-by (metis gcd_add1_int gcd_commute_int zadd_commute)
+by (metis gcd_add1_int gcd_commute_int add_commute)
 
 lemma gcd_add_mult_nat: "gcd (m::nat) (k * m + n) = gcd m n"
 by (metis mod_mult_self3 gcd_commute_nat gcd_red_nat)
 
 lemma gcd_add_mult_int: "gcd (m::int) (k * m + n) = gcd m n"
-by (metis gcd_commute_int gcd_red_int mod_mult_self1 zadd_commute)
+by (metis gcd_commute_int gcd_red_int mod_mult_self1 add_commute)
 
 
 (* to do: differences, and all variations of addition rules
@@ -1030,8 +1030,7 @@ proof (induct x y rule: gcd_nat_induct)
       apply (subst mod_div_equality [of m n, symmetric])
       (* applying simp here undoes the last substitution!
          what is procedure cancel_div_mod? *)
-      apply (simp only: field_simps zadd_int [symmetric]
-        zmult_int [symmetric])
+      apply (simp only: field_simps of_nat_add of_nat_mult)
       done
 qed
 
@@ -1237,7 +1236,7 @@ subsection {* LCM properties *}
 
 lemma lcm_altdef_int [code]: "lcm (a::int) b = (abs a) * (abs b) div gcd a b"
   by (simp add: lcm_int_def lcm_nat_def zdiv_int
-    zmult_int [symmetric] gcd_int_def)
+    of_nat_mult gcd_int_def)
 
 lemma prod_gcd_lcm_nat: "(m::nat) * n = gcd m n * lcm m n"
   unfolding lcm_nat_def
@@ -1452,7 +1451,7 @@ lemma lcm_0_iff_nat[simp]: "lcm (m::nat) n = 0 \<longleftrightarrow> m=0 \<or> n
 by (metis lcm_0_left_nat lcm_0_nat mult_is_0 prod_gcd_lcm_nat)
 
 lemma lcm_0_iff_int[simp]: "lcm (m::int) n = 0 \<longleftrightarrow> m=0 \<or> n=0"
-by (metis lcm_0_int lcm_0_left_int lcm_pos_int zless_le)
+by (metis lcm_0_int lcm_0_left_int lcm_pos_int less_le)
 
 lemma lcm_1_iff_nat[simp]: "lcm (m::nat) n = 1 \<longleftrightarrow> m=1 \<and> n=1"
 by (metis gcd_1_nat lcm_unique_nat nat_mult_1 prod_gcd_lcm_nat)
@@ -1464,17 +1463,17 @@ by (auto simp add: abs_mult_self trans [OF lcm_unique_int eq_commute, symmetric]
 subsubsection {* The complete divisibility lattice *}
 
 
-interpretation gcd_semilattice_nat: semilattice_inf "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" gcd
+interpretation gcd_semilattice_nat: semilattice_inf gcd "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)"
 proof
   case goal3 thus ?case by(metis gcd_unique_nat)
 qed auto
 
-interpretation lcm_semilattice_nat: semilattice_sup "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" lcm
+interpretation lcm_semilattice_nat: semilattice_sup lcm "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)"
 proof
   case goal3 thus ?case by(metis lcm_unique_nat)
 qed auto
 
-interpretation gcd_lcm_lattice_nat: lattice "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" gcd lcm ..
+interpretation gcd_lcm_lattice_nat: lattice gcd "op dvd" "(%m n::nat. m dvd n & ~ n dvd m)" lcm ..
 
 text{* Lifting gcd and lcm to finite (Gcd/Lcm) and infinite sets (GCD/LCM).
 GCD is defined via LCM to facilitate the proof that we have a complete lattice.
@@ -1580,7 +1579,7 @@ proof -
 qed
 
 interpretation gcd_lcm_complete_lattice_nat:
-  complete_lattice GCD LCM "op dvd" "%m n::nat. m dvd n & ~ n dvd m" gcd lcm 1 0
+  complete_lattice GCD LCM gcd "op dvd" "%m n::nat. m dvd n & ~ n dvd m" lcm 1 0
 proof
   case goal1 show ?case by simp
 next

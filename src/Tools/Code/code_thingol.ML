@@ -22,7 +22,7 @@ sig
   datatype itype =
       `%% of string * itype list
     | ITyVar of vname;
-  type const = string * ((itype list * dict list list) * itype list)
+  type const = string * (((itype list * dict list list) * (itype list * itype)) * bool)
     (* f [T1..Tn] {dicts} (_::S1) .. (_..Sm) =^= (f, (([T1..Tn], dicts), [S1..Sm]) *)
   datatype iterm =
       IConst of const
@@ -55,7 +55,6 @@ sig
   val is_IAbs: iterm -> bool
   val eta_expand: int -> const * iterm list -> iterm
   val contains_dict_var: iterm -> bool
-  val locally_monomorphic: iterm -> bool
   val add_constnames: iterm -> string list -> string list
   val add_tyconames: iterm -> string list -> string list
   val fold_varnames: (string -> 'a -> 'a) -> iterm -> 'a -> 'a
@@ -88,7 +87,6 @@ sig
   val map_terms_stmt: (iterm -> iterm) -> stmt -> stmt
   val is_cons: program -> string -> bool
   val is_case: stmt -> bool
-  val contr_classparam_typs: program -> string -> itype option list
   val labelled_name: theory -> program -> string -> string
   val group_stmts: theory -> program
     -> ((string * stmt) list * (string * stmt) list
@@ -145,7 +143,8 @@ datatype itype =
     `%% of string * itype list
   | ITyVar of vname;
 
-type const = string * ((itype list * dict list list) * itype list (*types of arguments*))
+type const = string * (((itype list * dict list list) *
+  (itype list (*types of arguments*) * itype (*body type*))) * bool (*requires type annotation*))
 
 datatype iterm =
     IConst of const
@@ -198,7 +197,7 @@ val add_constnames = fold_constexprs (fn (c, _) => insert (op =) c);
 fun add_tycos (tyco `%% tys) = insert (op =) tyco #> fold add_tycos tys
   | add_tycos (ITyVar _) = I;
 
-val add_tyconames = fold_constexprs (fn (_, ((tys, _), _)) => fold add_tycos tys);
+val add_tyconames = fold_constexprs (fn (_, (((tys, _), _), _)) => fold add_tycos tys);
 
 fun fold_varnames f =
   let
@@ -240,7 +239,7 @@ fun unfold_abs_eta [] t = ([], t)
         val vs_tys = (map o apfst) SOME (Name.invent_names ctxt "a" tys);
       in (vs_tys, t `$$ map (IVar o fst) vs_tys) end;
 
-fun eta_expand k (c as (name, (_, tys)), ts) =
+fun eta_expand k (c as (name, ((_, (tys, _)), _)), ts) =
   let
     val j = length ts;
     val l = k - j;
@@ -256,18 +255,12 @@ fun contains_dict_var t =
     fun cont_dict (Dict (_, d)) = cont_plain_dict d
     and cont_plain_dict (Dict_Const (_, dss)) = (exists o exists) cont_dict dss
       | cont_plain_dict (Dict_Var _) = true;
-    fun cont_term (IConst (_, ((_, dss), _))) = (exists o exists) cont_dict dss
+    fun cont_term (IConst (_, (((_, dss), _), _))) = (exists o exists) cont_dict dss
       | cont_term (IVar _) = false
       | cont_term (t1 `$ t2) = cont_term t1 orelse cont_term t2
       | cont_term (_ `|=> t) = cont_term t
       | cont_term (ICase (_, t)) = cont_term t;
   in cont_term t end;
-  
-fun locally_monomorphic (IConst _) = false
-  | locally_monomorphic (IVar _) = true
-  | locally_monomorphic (t `$ _) = locally_monomorphic t
-  | locally_monomorphic (_ `|=> t) = locally_monomorphic t
-  | locally_monomorphic (ICase ((_, ds), _)) = exists (locally_monomorphic o snd) ds;
 
 
 (** namings **)
@@ -480,28 +473,6 @@ fun lookup_classparam_instance program name = program |> Graph.get_first
   (fn (_, (Classinst ((class, _), (_, (param_insts, _))), _)) =>
     Option.map (fn ((const, _), _) => (class, const))
       (find_first (fn ((_, (inst_const, _)), _) => inst_const = name) param_insts) | _ => NONE)
-
-fun contr_classparam_typs program name = 
-  let
-    fun contr_classparam_typs' (class, name) =
-      let
-        val Class (_, (_, (_, params))) = Graph.get_node program class;
-        val SOME ty = AList.lookup (op =) params name;
-        val (tys, res_ty) = unfold_fun ty;
-        fun no_tyvar (_ `%% tys) = forall no_tyvar tys
-          | no_tyvar (ITyVar _) = false;
-      in if no_tyvar res_ty
-        then map (fn ty => if no_tyvar ty then NONE else SOME ty) tys
-        else []
-      end
- in 
-   case Graph.get_node program name
-   of Classparam (_, class) => contr_classparam_typs' (class, name)
-    | Fun (c, _) => (case lookup_classparam_instance program name
-      of NONE => []
-       | SOME (class, name) => the_default [] (try contr_classparam_typs' (class, name)))
-    | _ => []
-  end;
   
 fun labelled_name thy program name =
   let val ctxt = Proof_Context.init_global thy in
@@ -608,6 +579,42 @@ fun not_wellsorted thy permissive some_thm ty sort e =
       (err_typ ^ "\n" ^ err_class)
   end;
 
+(* inference of type annotations for disambiguation with type classes *)
+
+fun annotate_term (Const (c', T'), Const (c, T)) tvar_names =
+    let
+      val tvar_names' = Term.add_tvar_namesT T' tvar_names
+    in
+      (Const (c, if eq_set (op =) (tvar_names, tvar_names') then T else Type("", [T])), tvar_names')
+    end
+  | annotate_term (t1 $ u1, t $ u) tvar_names =
+    let
+      val (u', tvar_names') = annotate_term (u1, u) tvar_names
+      val (t', tvar_names'') = annotate_term (t1, t) tvar_names'    
+    in
+      (t' $ u', tvar_names'')
+    end
+  | annotate_term (Abs (_, _, t1) , Abs (x, T, t)) tvar_names =
+    apfst (fn t => Abs (x, T, t)) (annotate_term (t1, t) tvar_names)
+  | annotate_term (_, t) tvar_names = (t, tvar_names)
+
+fun annotate_eqns thy eqns = 
+  let
+    val ctxt = ProofContext.init_global thy |> Config.put Type_Infer_Context.const_sorts false
+    val erase = map_types (fn _ => Type_Infer.anyT [])
+    val reinfer = singleton (Type_Infer_Context.infer_types ctxt)
+    fun add_annotations ((args, (rhs, some_abs)), (SOME th, proper)) =
+      let
+        val (lhs, drhs) = Logic.dest_equals (prop_of (Thm.unvarify_global th))
+        val drhs' = snd (Logic.dest_equals (reinfer (Logic.mk_equals (lhs, erase drhs))))
+        val (rhs', _) = annotate_term (drhs', rhs) []
+     in
+        ((args, (rhs', some_abs)), (SOME th, proper))
+     end
+     | add_annotations eqn = eqn
+  in
+    map add_annotations eqns
+  end;
 
 (* translation *)
 
@@ -633,11 +640,12 @@ and ensure_const thy algbr eqngr permissive c =
     fun stmt_fun cert =
       let
         val ((vs, ty), eqns) = Code.equations_of_cert thy cert;
+        val eqns' = annotate_eqns thy eqns
         val some_case_cong = Code.get_case_cong thy c;
       in
         fold_map (translate_tyvar_sort thy algbr eqngr permissive) vs
         ##>> translate_typ thy algbr eqngr permissive ty
-        ##>> translate_eqns thy algbr eqngr permissive eqns
+        ##>> translate_eqns thy algbr eqngr permissive eqns'
         #>> (fn info => Fun (c, (info, some_case_cong)))
       end;
     val stmt_const = case Code.get_type_of_constr_or_abstr thy c
@@ -748,15 +756,17 @@ and translate_const thy algbr eqngr permissive some_thm ((c, ty), some_abs) =
         then translation_error thy permissive some_thm
           "Abstraction violation" ("constant " ^ Code.string_of_const thy c)
       else ()
-    val arg_typs = Sign.const_typargs thy (c, ty);
+    val (annotate, ty') = (case ty of Type("", [ty']) => (true, ty') | ty' => (false, ty'))
+    val arg_typs = Sign.const_typargs thy (c, ty');
     val sorts = Code_Preproc.sortargs eqngr c;
-    val function_typs = Term.binder_types ty;
+    val (function_typs, body_typ) = Term.strip_type ty';
   in
     ensure_const thy algbr eqngr permissive c
     ##>> fold_map (translate_typ thy algbr eqngr permissive) arg_typs
     ##>> fold_map (translate_dicts thy algbr eqngr permissive some_thm) (arg_typs ~~ sorts)
-    ##>> fold_map (translate_typ thy algbr eqngr permissive) function_typs
-    #>> (fn (((c, arg_typs), dss), function_typs) => IConst (c, ((arg_typs, dss), function_typs)))
+    ##>> fold_map (translate_typ thy algbr eqngr permissive) (body_typ :: function_typs)
+    #>> (fn (((c, arg_typs), dss), body_typ :: function_typs) =>
+      IConst (c, (((arg_typs, dss), (function_typs, body_typ)), annotate)))
   end
 and translate_app_const thy algbr eqngr permissive some_thm ((c_ty, ts), some_abs) =
   translate_const thy algbr eqngr permissive some_thm (c_ty, some_abs)
@@ -801,7 +811,7 @@ and translate_case thy algbr eqngr permissive some_thm (num_args, (t_pos, case_p
         val ts_clause = nth_drop t_pos ts;
         val clauses = if null case_pats
           then mk_clause (fn ([t], body) => (t, body)) [ty] (the_single ts_clause)
-          else maps (fn ((constr as IConst (_, (_, tys)), n), t) =>
+          else maps (fn ((constr as IConst (_, ((_, (tys, _)), _)), n), t) =>
             mk_clause (fn (ts, body) => (constr `$$ ts, body)) (take n tys) t)
               (constrs ~~ ts_clause);
       in ((t, ty), clauses) end;

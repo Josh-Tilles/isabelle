@@ -163,8 +163,8 @@ apply (drule minus_unique)
 apply (simp add: minus_equation_iff [of x y])
 done
 
-lemma hcomplex_i_mult_eq [simp]: "iii * iii = - 1"
-by transfer (rule i_mult_eq2)
+lemma hcomplex_i_mult_eq [simp]: "iii * iii = -1"
+by transfer (rule i_squared)
 
 lemma hcomplex_i_mult_left [simp]: "!!z. iii * (iii * z) = -z"
 by transfer (rule complex_i_mult_minus)
@@ -434,12 +434,6 @@ by transfer (rule Re_sgn)
 lemma hIm_hsgn [simp]: "!!z. hIm(hsgn z) = hIm(z)/hcmod z"
 by transfer (rule Im_sgn)
 
-lemma hcomplex_inverse_complex_split:
-     "!!x y. inverse(hcomplex_of_hypreal x + iii * hcomplex_of_hypreal y) =
-      hcomplex_of_hypreal(x/(x ^ 2 + y ^ 2)) -
-      iii * hcomplex_of_hypreal(y/(x ^ 2 + y ^ 2))"
-by transfer (rule complex_inverse_complex_split)
-
 lemma HComplex_inverse:
      "!!x y. inverse (HComplex x y) =
       HComplex (x/(x ^ 2 + y ^ 2)) (-y/(x ^ 2 + y ^ 2))"
@@ -462,14 +456,6 @@ by transfer simp
 (*---------------------------------------------------------------------------*)
 (*  harg                                                                     *)
 (*---------------------------------------------------------------------------*)
-
-lemma cos_harg_i_mult_zero_pos:
-     "!!y. 0 < y ==> ( *f* cos) (harg(HComplex 0 y)) = 0"
-by transfer (rule cos_arg_i_mult_zero_pos)
-
-lemma cos_harg_i_mult_zero_neg:
-     "!!y. y < 0 ==> ( *f* cos) (harg(HComplex 0 y)) = 0"
-by transfer (rule cos_arg_i_mult_zero_neg)
 
 lemma cos_harg_i_mult_zero [simp]:
      "!!y. y \<noteq> 0 ==> ( *f* cos) (harg(HComplex 0 y)) = 0"
@@ -561,8 +547,7 @@ lemma hcis_hypreal_of_nat_Suc_mult:
    "!!a. hcis (hypreal_of_nat (Suc n) * a) =
      hcis a * hcis (hypreal_of_nat n * a)"
 apply transfer
-apply (fold real_of_nat_def)
-apply (rule cis_real_of_nat_Suc_mult)
+apply (simp add: left_distrib cis_mult)
 done
 
 lemma NSDeMoivre: "!!a. (hcis a) ^ n = hcis (hypreal_of_nat n * a)"
@@ -574,7 +559,7 @@ done
 lemma hcis_hypreal_of_hypnat_Suc_mult:
      "!! a n. hcis (hypreal_of_hypnat (n + 1) * a) =
       hcis a * hcis (hypreal_of_hypnat n * a)"
-by transfer (fold real_of_nat_def, simp add: cis_real_of_nat_Suc_mult)
+by transfer (simp add: left_distrib cis_mult)
 
 lemma NSDeMoivre_ext:
   "!!a n. (hcis a) pow n = hcis (hypreal_of_hypnat n * a)"

@@ -455,12 +455,12 @@ lemma word_number_of_alt [code_unfold_post]:
   by (simp add: number_of_eq word_number_of_def)
 
 lemma word_no_wi: "number_of = word_of_int"
-  by (auto simp: word_number_of_def intro: ext)
+  by (auto simp: word_number_of_def)
 
 lemma to_bl_def': 
   "(to_bl :: 'a :: len0 word => bool list) =
     bin_to_bl (len_of TYPE('a)) o uint"
-  by (auto simp: to_bl_def intro: ext)
+  by (auto simp: to_bl_def)
 
 lemmas word_reverse_no_def [simp] = word_reverse_def [of "number_of w", standard]
 
@@ -1257,7 +1257,7 @@ lemma word_arith_eqs:
         word_of_int_Ex [of b] 
         word_of_int_Ex [of c]
   by (auto simp: word_of_int_hom_syms [symmetric]
-                 zadd_0_right add_commute add_assoc add_left_commute
+                 add_0_right add_commute add_assoc add_left_commute
                  mult_commute mult_assoc mult_left_commute
                  left_distrib right_distrib)
   
@@ -4219,7 +4219,7 @@ lemma word_roti_conv_mod': "word_roti n w = word_roti (n mod int (size w)) w"
   apply (rule rotater_eqs)
   apply (simp add: word_size nat_mod_distrib)
   apply (rule int_eq_0_conv [THEN iffD1])
-  apply (simp only: zmod_int zadd_int [symmetric])
+  apply (simp only: zmod_int of_nat_add)
   apply (simp add: rdmods)
   done
 
@@ -4230,8 +4230,6 @@ subsubsection "Word rotation commutes with bit-wise operations"
 
 (* using locale to not pollute lemma namespace *)
 locale word_rotate 
-
-context word_rotate
 begin
 
 lemmas word_rot_defs' = to_bl_rotl to_bl_rotr

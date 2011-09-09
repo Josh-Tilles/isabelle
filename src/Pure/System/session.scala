@@ -7,8 +7,11 @@ Main Isabelle/Scala session, potentially with running prover process.
 
 package isabelle
 
-import java.lang.System
 
+import java.lang.System
+import java.util.{Timer, TimerTask}
+
+import scala.collection.mutable
 import scala.actors.TIMEOUT
 import scala.actors.Actor._
 
@@ -19,7 +22,7 @@ object Session
 
   //{{{
   case object Global_Settings
-  case object Perspective
+  case object Caret_Focus
   case object Assignment
   case class Commands_Changed(nodes: Set[Document.Node.Name], commands: Set[Command])
 
@@ -37,6 +40,7 @@ class Session(thy_load: Thy_Load)
 {
   /* real time parameters */  // FIXME properties or settings (!?)
 
+  val message_delay = Time.seconds(0.01)  // prover messages
   val input_delay = Time.seconds(0.3)  // user input (e.g. text edits, cursor movement)
   val output_delay = Time.seconds(0.1)  // prover output (markup, common messages)
   val update_delay = Time.seconds(0.5)  // GUI layout updates
@@ -48,11 +52,13 @@ class Session(thy_load: Thy_Load)
   /* pervasive event buses */
 
   val global_settings = new Event_Bus[Session.Global_Settings.type]
-  val perspective = new Event_Bus[Session.Perspective.type]
+  val caret_focus = new Event_Bus[Session.Caret_Focus.type]
   val assignments = new Event_Bus[Session.Assignment.type]
   val commands_changed = new Event_Bus[Session.Commands_Changed]
   val phase_changed = new Event_Bus[Session.Phase]
-  val raw_messages = new Event_Bus[Isabelle_Process.Message]
+  val syslog_messages = new Event_Bus[Isabelle_Process.Result]
+  val raw_output_messages = new Event_Bus[Isabelle_Process.Result]
+  val raw_messages = new Event_Bus[Isabelle_Process.Message]  // potential bottle-neck
 
 
 
@@ -131,7 +137,7 @@ class Session(thy_load: Thy_Load)
   /* actor messages */
 
   private case class Start(timeout: Time, args: List[String])
-  private case object Interrupt
+  private case object Cancel_Execution
   private case class Init_Node(name: Document.Node.Name,
     header: Document.Node_Header, perspective: Text.Perspective, text: String)
   private case class Edit_Node(name: Document.Node.Name,
@@ -141,13 +147,43 @@ class Session(thy_load: Thy_Load)
     doc_edits: List[Document.Edit_Command],
     previous: Document.Version,
     version: Document.Version)
+  private case class Messages(msgs: List[Isabelle_Process.Message])
 
   private val (_, session_actor) = Simple_Thread.actor("session_actor", daemon = true)
   {
     val this_actor = self
-    var prover: Option[Isabelle_Process with Isar_Document] = None
 
     var prune_next = System.currentTimeMillis() + prune_delay.ms
+
+
+    /* buffered prover messages */
+
+    object receiver
+    {
+      private var buffer = new mutable.ListBuffer[Isabelle_Process.Message]
+
+      def flush(): Unit = synchronized {
+        if (!buffer.isEmpty) {
+          val msgs = buffer.toList
+          this_actor ! Messages(msgs)
+          buffer = new mutable.ListBuffer[Isabelle_Process.Message]
+        }
+      }
+      def invoke(msg: Isabelle_Process.Message): Unit = synchronized {
+        buffer += msg
+        msg match {
+          case result: Isabelle_Process.Result if result.is_raw => flush()
+          case _ =>
+        }
+      }
+
+      private val timer = new Timer("session_actor.receiver", true)
+      timer.schedule(new TimerTask { def run = flush }, message_delay.ms, message_delay.ms)
+
+      def cancel() { timer.cancel() }
+    }
+
+    var prover: Option[Isabelle_Process with Isar_Document] = None
 
 
     /* delayed command changes */
@@ -371,7 +407,8 @@ class Session(thy_load: Thy_Load)
         case Start(timeout, args) if prover.isEmpty =>
           if (phase == Session.Inactive || phase == Session.Failed) {
             phase = Session.Startup
-            prover = Some(new Isabelle_Process(timeout, this_actor, args:_*) with Isar_Document)
+            prover =
+              Some(new Isabelle_Process(timeout, receiver.invoke _, args:_*) with Isar_Document)
           }
 
         case Stop =>
@@ -383,10 +420,11 @@ class Session(thy_load: Thy_Load)
             phase = Session.Inactive
           }
           finished = true
+          receiver.cancel()
           reply(())
 
-        case Interrupt if prover.isDefined =>
-          prover.get.interrupt
+        case Cancel_Execution if prover.isDefined =>
+          prover.get.cancel_execution()
 
         case Init_Node(name, header, perspective, text) if prover.isDefined =>
           // FIXME compare with existing node
@@ -408,12 +446,17 @@ class Session(thy_load: Thy_Load)
         case change: Change_Node if prover.isDefined =>
           handle_change(change)
 
-        case input: Isabelle_Process.Input =>
-          raw_messages.event(input)
+        case Messages(msgs) =>
+          msgs foreach {
+            case input: Isabelle_Process.Input =>
+              raw_messages.event(input)
 
-        case result: Isabelle_Process.Result =>
-          handle_result(result)
-          raw_messages.event(result)
+            case result: Isabelle_Process.Result =>
+              handle_result(result)
+              if (result.is_syslog) syslog_messages.event(result)
+              if (result.is_stdout) raw_output_messages.event(result)
+              raw_messages.event(result)
+          }
 
         case bad => System.err.println("session_actor: ignoring bad message " + bad)
       }
@@ -428,7 +471,7 @@ class Session(thy_load: Thy_Load)
 
   def stop() { commands_changed_buffer !? Stop; session_actor !? Stop }
 
-  def interrupt() { session_actor ! Interrupt }
+  def cancel_execution() { session_actor ! Cancel_Execution }
 
   def init_node(name: Document.Node.Name,
     header: Document.Node_Header, perspective: Text.Perspective, text: String)
