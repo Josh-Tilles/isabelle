@@ -581,41 +581,43 @@ fun not_wellsorted thy permissive some_thm ty sort e =
 
 (* inference of type annotations for disambiguation with type classes *)
 
-fun annotate_term (Const (c', T'), Const (c, T)) tvar_names =
-    let
-      val tvar_names' = Term.add_tvar_namesT T' tvar_names
-    in
-      (Const (c, if eq_set (op =) (tvar_names, tvar_names') then T else Type("", [T])), tvar_names')
-    end
-  | annotate_term (t1 $ u1, t $ u) tvar_names =
-    let
-      val (u', tvar_names') = annotate_term (u1, u) tvar_names
-      val (t', tvar_names'') = annotate_term (t1, t) tvar_names'    
-    in
-      (t' $ u', tvar_names'')
-    end
-  | annotate_term (Abs (_, _, t1) , Abs (x, T, t)) tvar_names =
-    apfst (fn t => Abs (x, T, t)) (annotate_term (t1, t) tvar_names)
-  | annotate_term (Free _, t as Free _) tvar_names = (t, tvar_names)
-  | annotate_term (Var _, t as Var _) tvar_names = (t, tvar_names)
-  | annotate_term (Bound   _, t as Bound _) tvar_names = (t, tvar_names)
+fun mk_tagged_type (true, T) = Type ("", [T])
+  | mk_tagged_type (false, T) = T
 
-fun annotate_eqns thy (c, ty) eqns = 
+fun dest_tagged_type (Type ("", [T])) = (true, T)
+  | dest_tagged_type T = (false, T)
+
+val untag_term = map_types (snd o dest_tagged_type)
+
+fun tag_term (proj_sort, _) eqngr =
+  let
+    val has_sort_constraints = exists (not o null) o map proj_sort o Code_Preproc.sortargs eqngr
+    fun tag (Const (c', T')) (Const (c, T)) =
+        Const (c,
+          mk_tagged_type (not (null (Term.add_tvarsT T' [])) andalso has_sort_constraints c, T))
+      | tag (t1 $ u1) (t $ u) = tag t1 t $ tag u1 u
+      | tag (Abs (_, _, t1)) (Abs (x, T, t)) = Abs (x, T, tag t1 t)
+      | tag (Free _) (t as Free _) = t
+      | tag (Var _) (t as Var _) = t
+      | tag (Bound _) (t as Bound _) = t
+  in
+    tag
+  end
+
+fun annotate thy algbr eqngr (c, ty) args rhs =
   let
     val ctxt = ProofContext.init_global thy |> Config.put Type_Infer_Context.const_sorts false
     val erase = map_types (fn _ => Type_Infer.anyT [])
     val reinfer = singleton (Type_Infer_Context.infer_types ctxt)
-    fun add_annotations (args, (rhs, some_abs)) =
-      let
-        val lhs = list_comb (Const (c, ty), map (map_types Type.strip_sorts o fst) args)
-        val reinferred_rhs = snd (Logic.dest_equals (reinfer (Logic.mk_equals (lhs, erase rhs))))
-        val (rhs', _) = annotate_term (reinferred_rhs, rhs) []
-     in
-        (args, (rhs', some_abs))
-     end
+    val lhs = list_comb (Const (c, ty), map (map_types Type.strip_sorts o fst) args)
+    val reinferred_rhs = snd (Logic.dest_equals (reinfer (Logic.mk_equals (lhs, erase rhs))))
   in
-    map (apfst add_annotations) eqns
-  end;
+    tag_term algbr eqngr reinferred_rhs rhs
+  end
+
+fun annotate_eqns thy algbr eqngr (c, ty) eqns = 
+  map (apfst (fn (args, (rhs, some_abs)) => (args,
+    (annotate thy algbr eqngr (c, ty) args rhs, some_abs)))) eqns
 
 (* translation *)
 
@@ -641,7 +643,7 @@ and ensure_const thy algbr eqngr permissive c =
     fun stmt_fun cert =
       let
         val ((vs, ty), eqns) = Code.equations_of_cert thy cert;
-        val eqns' = annotate_eqns thy (c, ty) eqns
+        val eqns' = annotate_eqns thy algbr eqngr (c, ty) eqns
         val some_case_cong = Code.get_case_cong thy c;
       in
         fold_map (translate_tyvar_sort thy algbr eqngr permissive) vs
@@ -757,7 +759,7 @@ and translate_const thy algbr eqngr permissive some_thm ((c, ty), some_abs) =
         then translation_error thy permissive some_thm
           "Abstraction violation" ("constant " ^ Code.string_of_const thy c)
       else ()
-    val (annotate, ty') = (case ty of Type("", [ty']) => (true, ty') | ty' => (false, ty'))
+    val (annotate, ty') = dest_tagged_type ty
     val arg_typs = Sign.const_typargs thy (c, ty');
     val sorts = Code_Preproc.sortargs eqngr c;
     val (function_typs, body_typ) = Term.strip_type ty';
@@ -779,7 +781,7 @@ and translate_case thy algbr eqngr permissive some_thm (num_args, (t_pos, case_p
     val tys = arg_types num_args (snd c_ty);
     val ty = nth tys t_pos;
     fun mk_constr c t = let val n = Code.args_number thy c
-      in ((c, arg_types n (fastype_of t) ---> ty), n) end;
+      in ((c, arg_types n (fastype_of (untag_term t)) ---> ty), n) end;
     val constrs = if null case_pats then []
       else map2 mk_constr case_pats (nth_drop t_pos ts);
     fun casify naming constrs ty ts =
@@ -922,10 +924,11 @@ fun ensure_value thy algbr eqngr t =
     val ty = fastype_of t;
     val vs = fold_term_types (K (fold_atyps (insert (eq_fst op =)
       o dest_TFree))) t [];
+    val t' = annotate thy algbr eqngr (Term.dummy_patternN, ty) [] (Code.subst_signatures thy t) 
     val stmt_value =
       fold_map (translate_tyvar_sort thy algbr eqngr false) vs
       ##>> translate_typ thy algbr eqngr false ty
-      ##>> translate_term thy algbr eqngr false NONE (Code.subst_signatures thy t, NONE)
+      ##>> translate_term thy algbr eqngr false NONE (t', NONE)
       #>> (fn ((vs, ty), t) => Fun
         (Term.dummy_patternN, (((vs, ty), [(([], t), (NONE, true))]), NONE)));
     fun term_value (dep, (naming, program1)) =
