@@ -1135,4 +1135,6 @@ lemmas split = split_conv  -- {* for backwards compatibility *}
 
 lemmas Pair_fst_snd_eq = prod_eq_iff
 
+hide_const (open) prod
+
 end
