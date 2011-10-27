@@ -8,20 +8,17 @@ Data slots for the quotient package.
 
 signature QUOTIENT_INFO =
 sig
-  exception NotFound  (* FIXME complicates signatures unnecessarily *)
 
   type maps_info = {mapfun: string, relmap: string}
   val maps_defined: theory -> string -> bool
-  (* FIXME functions called "lookup" must return option, not raise exception! *)
-  val maps_lookup: theory -> string -> maps_info     (* raises NotFound *)
+  val maps_lookup: theory -> string -> maps_info option
   val maps_update_thy: string -> maps_info -> theory -> theory
   val maps_update: string -> maps_info -> Proof.context -> Proof.context
   val print_mapsinfo: Proof.context -> unit
 
   type quotdata_info = {qtyp: typ, rtyp: typ, equiv_rel: term, equiv_thm: thm}
   val transform_quotdata: morphism -> quotdata_info -> quotdata_info
-  val quotdata_lookup_raw: theory -> string -> quotdata_info option
-  val quotdata_lookup: theory -> string -> quotdata_info     (* raises NotFound *)
+  val quotdata_lookup: theory -> string -> quotdata_info option
   val quotdata_update_thy: string -> quotdata_info -> theory -> theory
   val quotdata_update_gen: string -> quotdata_info -> Context.generic -> Context.generic
   val quotdata_dest: Proof.context -> quotdata_info list
@@ -29,7 +26,7 @@ sig
 
   type qconsts_info = {qconst: term, rconst: term, def: thm}
   val transform_qconsts: morphism -> qconsts_info -> qconsts_info
-  val qconsts_lookup: theory -> term -> qconsts_info     (* raises NotFound *)
+  val qconsts_lookup: theory -> term -> qconsts_info option
   val qconsts_update_thy: string -> qconsts_info -> theory -> theory
   val qconsts_update_gen: string -> qconsts_info -> Context.generic -> Context.generic
   val qconsts_dest: Proof.context -> qconsts_info list
@@ -50,9 +47,6 @@ end;
 structure Quotient_Info: QUOTIENT_INFO =
 struct
 
-exception NotFound  (* FIXME odd OCaml-ism!? *)
-
-
 (** data containers **)
 
 (* FIXME just one data slot (record) per program unit *)
@@ -68,13 +62,9 @@ structure MapsData = Theory_Data
   fun merge data = Symtab.merge (K true) data
 )
 
-fun maps_defined thy s =
-  Symtab.defined (MapsData.get thy) s
+fun maps_defined thy s = Symtab.defined (MapsData.get thy) s
 
-fun maps_lookup thy s =
-  (case Symtab.lookup (MapsData.get thy) s of
-    SOME map_fun => map_fun
-  | NONE => raise NotFound)
+fun maps_lookup thy s = Symtab.lookup (MapsData.get thy) s
 
 fun maps_update_thy k minfo = MapsData.map (Symtab.update (k, minfo))
 fun maps_update k minfo = Proof_Context.background_theory (maps_update_thy k minfo)  (* FIXME *)
@@ -136,12 +126,7 @@ fun transform_quotdata phi {qtyp, rtyp, equiv_rel, equiv_thm} =
    equiv_rel = Morphism.term phi equiv_rel,
    equiv_thm = Morphism.thm phi equiv_thm}
 
-fun quotdata_lookup_raw thy str = Symtab.lookup (QuotData.get thy) str
-
-fun quotdata_lookup thy str =
-  case Symtab.lookup (QuotData.get thy) str of
-    SOME qinfo => qinfo
-  | NONE => raise NotFound
+fun quotdata_lookup thy str = Symtab.lookup (QuotData.get thy) str
 
 fun quotdata_update_thy str qinfo = QuotData.map (Symtab.update (str, qinfo))
 fun quotdata_update_gen str qinfo = Context.mapping (quotdata_update_thy str qinfo) I
@@ -208,11 +193,8 @@ fun qconsts_lookup thy t =
       end
   in
     (case Symtab.lookup (QConstsData.get thy) name of
-      NONE => raise NotFound
-    | SOME l =>
-        (case find_first matches l of
-          SOME x => x
-        | NONE => raise NotFound))
+      NONE => NONE
+    | SOME l => find_first matches l)
   end
 
 fun print_qconstinfo ctxt =
