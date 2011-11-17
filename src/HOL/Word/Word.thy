@@ -1769,16 +1769,8 @@ lemma word_of_nat: "of_nat n = word_of_int (int n)"
 
 lemma word_of_int: "of_int = word_of_int"
   apply (rule ext)
-  apply (unfold of_int_def)
-  apply (rule the_elemI)
-  apply safe
-  apply (simp_all add: word_of_nat word_of_int_homs)
-   defer
-   apply (rule Rep_Integ_ne [THEN nonemptyE])
-   apply (rule bexI)
-    prefer 2
-    apply assumption
-   apply (auto simp add: RI_eq_diff)
+  apply (case_tac x rule: int_diff_cases)
+  apply (simp add: word_of_nat word_of_int_sub_hom)
   done
 
 lemma word_of_int_nat: 
@@ -2436,7 +2428,7 @@ lemma word_lsb_last: "lsb (w::'a::len word) = last (to_bl w)"
   done
 
 lemma word_lsb_int: "lsb w = (uint w mod 2 = 1)"
-  unfolding word_lsb_def bin_last_mod by auto
+  unfolding word_lsb_def bin_last_def by auto
 
 lemma word_msb_sint: "msb w = (sint w < 0)" 
   unfolding word_msb_def
@@ -2831,7 +2823,7 @@ lemma nth_sshiftr [rule_format] :
   done
     
 lemma shiftr1_div_2: "uint (shiftr1 w) = uint w div 2"
-  apply (unfold shiftr1_def bin_rest_div)
+  apply (unfold shiftr1_def bin_rest_def)
   apply (rule word_uint.Abs_inverse)
   apply (simp add: uints_num pos_imp_zdiv_nonneg_iff)
   apply (rule xtr7)
@@ -2841,7 +2833,7 @@ lemma shiftr1_div_2: "uint (shiftr1 w) = uint w div 2"
   done
 
 lemma sshiftr1_div_2: "sint (sshiftr1 w) = sint w div 2"
-  apply (unfold sshiftr1_def bin_rest_div [symmetric])
+  apply (unfold sshiftr1_def bin_rest_def [symmetric])
   apply (simp add: word_sbin.eq_norm)
   apply (rule trans)
    defer
