@@ -132,9 +132,6 @@ lemma uints_num: "uints n = {i. 0 \<le> i \<and> i < 2 ^ n}"
 lemma sints_num: "sints n = {i. - (2 ^ (n - 1)) \<le> i \<and> i < 2 ^ (n - 1)}"
   by (simp add: sints_def range_sbintrunc)
 
-lemma mod_in_reps: "m > 0 \<Longrightarrow> y mod m : {0::int ..< m}"
-  by auto
-
 lemma 
   uint_0:"0 <= uint x" and 
   uint_lt: "uint (x::'a::len0 word) < 2 ^ len_of TYPE('a)"
@@ -153,18 +150,16 @@ lemma td_ext_uint:
                    word.uint_inverse word.Abs_word_inverse int_mod_lem)
   done
 
-lemma int_word_uint:
-  "uint (word_of_int x::'a::len0 word) = x mod 2 ^ len_of TYPE('a)"
-  by (fact td_ext_uint [THEN td_ext.eq_norm])
-
 interpretation word_uint:
   td_ext "uint::'a::len0 word \<Rightarrow> int" 
          word_of_int 
          "uints (len_of TYPE('a::len0))"
          "\<lambda>w. w mod 2 ^ len_of TYPE('a::len0)"
   by (rule td_ext_uint)
-  
+
 lemmas td_uint = word_uint.td_thm
+
+lemmas int_word_uint = word_uint.eq_norm
 
 lemmas td_ext_ubin = td_ext_uint 
   [unfolded len_gt_0 no_bintr_alt1 [symmetric]]
@@ -227,8 +222,8 @@ definition
 definition
   word_number_of_def: "number_of w = word_of_int w"
 
-lemmas word_arith_wis = 
-  word_add_def word_mult_def word_minus_def 
+lemmas word_arith_wis =
+  word_add_def word_sub_wi word_mult_def word_minus_def 
   word_succ_def word_pred_def word_0_wi word_1_wi
 
 lemmas arths = 
@@ -237,6 +232,7 @@ lemmas arths =
 lemma wi_homs: 
   shows
   wi_hom_add: "word_of_int a + word_of_int b = word_of_int (a + b)" and
+  wi_hom_sub: "word_of_int a - word_of_int b = word_of_int (a - b)" and
   wi_hom_mult: "word_of_int a * word_of_int b = word_of_int (a * b)" and
   wi_hom_neg: "- word_of_int a = word_of_int (- a)" and
   wi_hom_succ: "word_succ (word_of_int a) = word_of_int (a + 1)" and
@@ -245,29 +241,9 @@ lemma wi_homs:
 
 lemmas wi_hom_syms = wi_homs [symmetric]
 
-lemma word_of_int_sub_hom:
-  "(word_of_int a) - word_of_int b = word_of_int (a - b)"
-  by (simp add: word_sub_wi arths)
+lemmas word_of_int_homs = wi_homs word_0_wi word_1_wi
 
-lemmas new_word_of_int_homs = 
-  word_of_int_sub_hom wi_homs word_0_wi word_1_wi 
-
-lemmas new_word_of_int_hom_syms = new_word_of_int_homs [symmetric]
-
-lemmas word_of_int_hom_syms =
-  new_word_of_int_hom_syms (* FIXME: duplicate *)
-
-lemmas word_of_int_homs =
-  new_word_of_int_homs (* FIXME: duplicate *)
-
-(* FIXME: provide only one copy of these theorems! *)
-lemmas word_of_int_add_hom = wi_hom_add
-lemmas word_of_int_mult_hom = wi_hom_mult
-lemmas word_of_int_minus_hom = wi_hom_neg
-lemmas word_of_int_succ_hom = wi_hom_succ
-lemmas word_of_int_pred_hom = wi_hom_pred
-lemmas word_of_int_0_hom = word_0_wi
-lemmas word_of_int_1_hom = word_1_wi
+lemmas word_of_int_hom_syms = word_of_int_homs [symmetric]
 
 instance
   by default (auto simp: split_word_all word_of_int_homs algebra_simps)
@@ -288,7 +264,7 @@ lemma word_of_nat: "of_nat n = word_of_int (int n)"
 lemma word_of_int: "of_int = word_of_int"
   apply (rule ext)
   apply (case_tac x rule: int_diff_cases)
-  apply (simp add: word_of_nat word_of_int_sub_hom)
+  apply (simp add: word_of_nat wi_hom_sub)
   done
 
 instance word :: (len) number_ring
@@ -461,6 +437,8 @@ primrec of_bool :: "bool \<Rightarrow> 'a::len word" where
 
 (* FIXME: only provide one theorem name *)
 lemmas of_nth_def = word_set_bits_def
+
+subsection {* Theorems about typedefs *}
 
 lemma sint_sbintrunc': 
   "sint (word_of_int bin :: 'a word) = 
@@ -670,6 +648,8 @@ lemma sint_below_size:
   "x \<le> - (2 ^ (size (w::'a::len word) - 1)) \<Longrightarrow> x \<le> sint w"
   unfolding word_size by (rule order_trans [OF _ sint_ge])
 
+subsection {* Testing bits *}
+
 lemma test_bit_eq_iff: "(test_bit (u::'a::len0 word) = test_bit v) = (u = v)"
   unfolding word_test_bit_def by (simp add: bin_nth_eq_iff)
 
@@ -680,17 +660,16 @@ lemma test_bit_size [rule_format] : "(w::'a::len0 word) !! n --> n < size w"
   apply fast
   done
 
-lemma word_eqI [rule_format] : 
+lemma word_eq_iff:
+  fixes x y :: "'a::len0 word"
+  shows "x = y \<longleftrightarrow> (\<forall>n<len_of TYPE('a). x !! n = y !! n)"
+  unfolding uint_inject [symmetric] bin_eq_iff word_test_bit_def [symmetric]
+  by (metis test_bit_size [unfolded word_size])
+
+lemma word_eqI [rule_format]:
   fixes u :: "'a::len0 word"
   shows "(ALL n. n < size u --> u !! n = v !! n) \<Longrightarrow> u = v"
-  apply (rule test_bit_eq_iff [THEN iffD1])
-  apply (rule ext)
-  apply (erule allE)
-  apply (erule impCE)
-   prefer 2
-   apply assumption
-  apply (auto dest!: test_bit_size simp add: word_size)
-  done
+  by (simp add: word_size word_eq_iff)
 
 lemma word_eqD: "(u::'a::len0 word) = v \<Longrightarrow> u !! x = v !! x"
   by simp
@@ -810,8 +789,11 @@ lemma to_bl_no_bin [simp]:
 
 lemma to_bl_to_bin [simp] : "bl_to_bin (to_bl w) = uint w"
   unfolding uint_bl by (simp add : word_size)
-  
-lemmas uint_bl_bin [simp] = trans [OF bin_bl_bin word_ubin.norm_Rep]
+
+lemma uint_bl_bin:
+  fixes x :: "'a::len0 word"
+  shows "bl_to_bin (bin_to_bl (len_of TYPE('a)) (uint x)) = uint x"
+  by (rule trans [OF bin_bl_bin word_ubin.norm_Rep])
 
 (* FIXME: the next two lemmas should be unnecessary, because the lhs
 terms should never occur in practice *)
@@ -894,10 +876,21 @@ lemma scast_sbintr [simp]:
    word_of_int (sbintrunc (len_of TYPE('a) - Suc 0) (number_of w))"
   unfolding scast_def by simp
 
-lemmas source_size = source_size_def [unfolded Let_def word_size]
-lemmas target_size = target_size_def [unfolded Let_def word_size]
-lemmas is_down = is_down_def [unfolded source_size target_size]
-lemmas is_up = is_up_def [unfolded source_size target_size]
+lemma source_size: "source_size (c::'a::len0 word \<Rightarrow> _) = len_of TYPE('a)"
+  unfolding source_size_def word_size Let_def ..
+
+lemma target_size: "target_size (c::_ \<Rightarrow> 'b::len0 word) = len_of TYPE('b)"
+  unfolding target_size_def word_size Let_def ..
+
+lemma is_down:
+  fixes c :: "'a::len0 word \<Rightarrow> 'b::len0 word"
+  shows "is_down c \<longleftrightarrow> len_of TYPE('b) \<le> len_of TYPE('a)"
+  unfolding is_down_def source_size target_size ..
+
+lemma is_up:
+  fixes c :: "'a::len0 word \<Rightarrow> 'b::len0 word"
+  shows "is_up c \<longleftrightarrow> len_of TYPE('a) \<le> len_of TYPE('b)"
+  unfolding is_up_def source_size target_size ..
 
 lemmas is_up_down = trans [OF is_up is_down [symmetric]]
 
@@ -1041,7 +1034,6 @@ lemmas slice_def' = slice_def [unfolded word_size]
 lemmas test_bit_def' = word_test_bit_def [THEN fun_cong]
 
 lemmas word_log_defs = word_and_def word_or_def word_xor_def word_not_def
-lemmas word_log_bin_defs = word_log_defs
 
 text {* Executable equality *}
 
@@ -1060,9 +1052,7 @@ end
 subsection {* Word Arithmetic *}
 
 lemma word_less_alt: "(a < b) = (uint a < uint b)"
-  unfolding word_less_def word_le_def
-  by (auto simp del: word_uint.Rep_inject 
-           simp: word_uint.Rep_inject [symmetric])
+  unfolding word_less_def word_le_def by (simp add: less_le)
 
 lemma signed_linorder: "class.linorder word_sle word_sless"
 proof
@@ -1100,12 +1090,8 @@ lemma word_0_wi_Pls: "0 = word_of_int Int.Pls"
 lemma word_0_no: "(0::'a::len0 word) = Numeral0"
   by (simp add: word_number_of_alt)
 
-lemma int_one_bin: "(1 :: int) = (Int.Pls BIT 1)"
-  unfolding Pls_def Bit_def by auto
-
-lemma word_1_no: 
-  "(1 :: 'a :: len0 word) = number_of (Int.Pls BIT 1)"
-  unfolding word_1_wi word_number_of_def int_one_bin by auto
+lemma word_1_no: "(1::'a::len0 word) = Numeral1"
+  by (simp add: word_number_of_alt)
 
 lemma word_m1_wi: "-1 = word_of_int -1" 
   by (rule word_number_of_alt)
@@ -1204,7 +1190,7 @@ lemma word_ths:
   by (rule word_uint.Abs_cases [of b],
       rule word_uint.Abs_cases [of a],
       simp add: add_commute mult_commute 
-                ring_distribs new_word_of_int_homs
+                ring_distribs word_of_int_homs
            del: word_of_int_0 word_of_int_1)+
 
 lemma uint_cong: "x = y \<Longrightarrow> uint x = uint y"
@@ -1237,11 +1223,11 @@ lemma succ_pred_no [simp]:
   "word_succ (number_of bin) = number_of (Int.succ bin) & 
     word_pred (number_of bin) = number_of (Int.pred bin)"
   unfolding word_number_of_def Int.succ_def Int.pred_def
-  by (simp add: new_word_of_int_homs)
+  by (simp add: word_of_int_homs)
 
 lemma word_sp_01 [simp] : 
   "word_succ -1 = 0 & word_succ 0 = 1 & word_pred 0 = -1 & word_pred 1 = 0"
-  by (unfold word_0_no word_1_no) (auto simp: BIT_simps)
+  unfolding word_0_no word_1_no by simp
 
 (* alternative approach to lifting arithmetic equalities *)
 lemma word_of_int_Ex:
@@ -1502,7 +1488,7 @@ lemma le_plus':
 
 lemmas le_plus = le_plus' [rotated]
 
-lemmas le_minus = leD [THEN thin_rl, THEN le_minus']
+lemmas le_minus = leD [THEN thin_rl, THEN le_minus'] (* FIXME *)
 
 lemma word_plus_mono_right: 
   "(y :: 'a :: len0 word) <= z \<Longrightarrow> x <= x + z \<Longrightarrow> x + y <= x + z"
@@ -1774,11 +1760,11 @@ lemma Abs_fnat_hom_add:
 
 lemma Abs_fnat_hom_mult:
   "of_nat a * of_nat b = (of_nat (a * b) :: 'a :: len word)"
-  by (simp add: word_of_nat word_of_int_mult_hom zmult_int)
+  by (simp add: word_of_nat wi_hom_mult zmult_int)
 
 lemma Abs_fnat_hom_Suc:
   "word_succ (of_nat a) = of_nat (Suc a)"
-  by (simp add: word_of_nat word_of_int_succ_hom add_ac)
+  by (simp add: word_of_nat wi_hom_succ add_ac)
 
 lemma Abs_fnat_hom_0: "(0::'a::len word) = of_nat 0"
   by simp
@@ -2108,17 +2094,23 @@ lemmas wils1 = bin_log_bintrs [THEN word_ubin.norm_eq_iff [THEN iffD1],
   folded word_ubin.eq_norm, THEN eq_reflection]
 
 (* the binary operations only *)
+(* BH: why is this needed? *)
 lemmas word_log_binary_defs = 
   word_and_def word_or_def word_xor_def
 
-lemmas word_no_log_defs [simp] = 
-  word_not_def  [where a="number_of a", 
-                 unfolded word_no_wi wils1, folded word_no_wi]
-  word_log_binary_defs [where a="number_of a" and b="number_of b",
-                        unfolded word_no_wi wils1, folded word_no_wi]
-  for a b
+lemma word_wi_log_defs:
+  "NOT word_of_int a = word_of_int (NOT a)"
+  "word_of_int a AND word_of_int b = word_of_int (a AND b)"
+  "word_of_int a OR word_of_int b = word_of_int (a OR b)"
+  "word_of_int a XOR word_of_int b = word_of_int (a XOR b)"
+  unfolding word_log_defs wils1 by simp_all
 
-lemmas word_wi_log_defs = word_no_log_defs [unfolded word_no_wi]
+lemma word_no_log_defs [simp]:
+  "NOT number_of a = (number_of (NOT a) :: 'a::len0 word)"
+  "number_of a AND number_of b = (number_of (a AND b) :: 'a word)"
+  "number_of a OR number_of b = (number_of (a OR b) :: 'a word)"
+  "number_of a XOR number_of b = (number_of (a XOR b) :: 'a word)"
+  unfolding word_no_wi word_wi_log_defs by simp_all
 
 lemma uint_or: "uint (x OR y) = (uint x) OR (uint y)"
   by (simp add: word_or_def word_wi_log_defs word_ubin.eq_norm
@@ -2147,11 +2139,24 @@ lemma word_ao_nth:
   apply (simp add : test_bit_bin word_size)
   done
 
+lemma test_bit_wi [simp]:
+  "(word_of_int x::'a::len0 word) !! n \<longleftrightarrow> n < len_of TYPE('a) \<and> bin_nth x n"
+  unfolding word_test_bit_def
+  by (simp add: nth_bintr [symmetric] word_ubin.eq_norm)
+
+lemma test_bit_no [simp]:
+  "(number_of w :: 'a::len0 word) !! n \<longleftrightarrow>
+    n < len_of TYPE('a) \<and> bin_nth (number_of w) n"
+  unfolding word_number_of_alt test_bit_wi ..
+
+lemma nth_0 [simp]: "~ (0::'a::len0 word) !! n"
+  unfolding word_test_bit_def by simp
+
 (* get from commutativity, associativity etc of int_and etc
   to same for word_and etc *)
 
 lemmas bwsimps = 
-  word_of_int_homs(2) 
+  wi_hom_add
   word_0_wi_Pls
   word_m1_wi_Min
   word_wi_log_defs
@@ -2162,10 +2167,7 @@ lemma word_bw_assocs:
   "(x AND y) AND z = x AND y AND z"
   "(x OR y) OR z = x OR y OR z"
   "(x XOR y) XOR z = x XOR y XOR z"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-        word_of_int_Ex [where x=z]
-  by (auto simp: bwsimps bbw_assocs)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
   
 lemma word_bw_comms:
   fixes x :: "'a::len0 word"
@@ -2173,9 +2175,7 @@ lemma word_bw_comms:
   "x AND y = y AND x"
   "x OR y = y OR x"
   "x XOR y = y XOR x"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-  by (auto simp: bwsimps bin_ops_comm)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
   
 lemma word_bw_lcs:
   fixes x :: "'a::len0 word"
@@ -2183,10 +2183,7 @@ lemma word_bw_lcs:
   "y AND x AND z = x AND y AND z"
   "y OR x OR z = x OR y OR z"
   "y XOR x XOR z = x XOR y XOR z"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-        word_of_int_Ex [where x=z]
-  by (auto simp: bwsimps)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_log_esimps [simp]:
   fixes x :: "'a::len0 word"
@@ -2203,17 +2200,14 @@ lemma word_log_esimps [simp]:
   "-1 OR x = -1"
   "0 XOR x = x"
   "-1 XOR x = NOT x"
-  using word_of_int_Ex [where x=x] 
-  by (auto simp: bwsimps)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_not_dist:
   fixes x :: "'a::len0 word"
   shows
   "NOT (x OR y) = NOT x AND NOT y"
   "NOT (x AND y) = NOT x OR NOT y"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-  by (auto simp: bwsimps bbw_not_dist)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_bw_same:
   fixes x :: "'a::len0 word"
@@ -2221,8 +2215,7 @@ lemma word_bw_same:
   "x AND x = x"
   "x OR x = x"
   "x XOR x = 0"
-  using word_of_int_Ex [where x=x] 
-  by (auto simp: bwsimps)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_ao_absorbs [simp]:
   fixes x :: "'a::len0 word"
@@ -2235,30 +2228,21 @@ lemma word_ao_absorbs [simp]:
   "x OR x AND y = x"
   "(x OR y) AND x = x"
   "x AND y OR x = x"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-  by (auto simp: bwsimps)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_not_not [simp]:
   "NOT NOT (x::'a::len0 word) = x"
-  using word_of_int_Ex [where x=x] 
-  by (auto simp: bwsimps)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_ao_dist:
   fixes x :: "'a::len0 word"
   shows "(x OR y) AND z = x AND z OR y AND z"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-        word_of_int_Ex [where x=z]   
-  by (auto simp: bwsimps bbw_ao_dist)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_oa_dist:
   fixes x :: "'a::len0 word"
   shows "x AND y OR z = (x OR z) AND (y OR z)"
-  using word_of_int_Ex [where x=x] 
-        word_of_int_Ex [where x=y] 
-        word_of_int_Ex [where x=z]   
-  by (auto simp: bwsimps bbw_oa_dist)
+  by (auto simp: word_eq_iff word_ops_nth_size [unfolded word_size])
 
 lemma word_add_not [simp]: 
   fixes x :: "'a::len0 word"
@@ -2328,15 +2312,13 @@ lemma word_msb_sint: "msb w = (sint w < 0)"
   by (simp add : sign_Min_lt_0 number_of_is_id)
 
 lemma word_msb_no [simp]:
-  "msb (number_of bin :: 'a::len word) = bin_nth bin (len_of TYPE('a) - 1)"
-  unfolding word_msb_def word_number_of_def
+  "msb (number_of w::'a::len word) = bin_nth (number_of w) (len_of TYPE('a) - 1)"
+  unfolding word_msb_def word_number_of_alt
   by (clarsimp simp add: word_sbin.eq_norm bin_sign_lem)
 
 lemma word_msb_nth:
   "msb (w::'a::len word) = bin_nth (uint w) (len_of TYPE('a) - 1)"
-  apply (rule trans [OF _ word_msb_no])
-  apply (simp add : word_number_of_def)
-  done
+  unfolding word_msb_def sint_uint by (simp add: bin_sign_lem)
 
 lemma word_msb_alt: "msb (w::'a::len word) = hd (to_bl w)"
   apply (unfold word_msb_nth uint_bl)
@@ -2442,19 +2424,6 @@ lemma word_set_set_diff:
   shows "set_bit (set_bit w m x) n y = set_bit (set_bit w n y) m x" 
   by (rule word_eqI) (clarsimp simp add: test_bit_set_gen word_size assms)
 
-lemma test_bit_wi [simp]:
-  "(word_of_int x::'a::len0 word) !! n \<longleftrightarrow> n < len_of TYPE('a) \<and> bin_nth x n"
-  unfolding word_test_bit_def
-  by (simp add: nth_bintr [symmetric] word_ubin.eq_norm)
-
-lemma test_bit_no [simp]:
-  "(number_of bin :: 'a::len0 word) !! n \<equiv> n < len_of TYPE('a) \<and> bin_nth bin n"
-  unfolding word_test_bit_def word_number_of_def word_size
-  by (simp add : nth_bintr [symmetric] word_ubin.eq_norm)
-
-lemma nth_0 [simp]: "~ (0::'a::len0 word) !! n"
-  unfolding test_bit_no word_0_no by auto
-
 lemma nth_sint: 
   fixes w :: "'a::len word"
   defines "l \<equiv> len_of TYPE ('a)"
@@ -2463,7 +2432,7 @@ lemma nth_sint:
   by (clarsimp simp add: nth_sbintr word_test_bit_def [symmetric])
 
 lemma word_lsb_no [simp]:
-  "lsb (number_of bin :: 'a :: len word) = (bin_last bin = 1)"
+  "lsb (number_of bin :: 'a :: len word) = (bin_last (number_of bin) = 1)"
   unfolding word_lsb_alt test_bit_no by auto
 
 lemma word_set_no [simp]:
@@ -2928,15 +2897,15 @@ lemma sshiftr1_sbintr [simp] :
 
 lemma shiftr_no': 
   "w = number_of bin \<Longrightarrow> 
-  (w::'a::len0 word) >> n = number_of ((bin_rest ^^ n) (bintrunc (size w) bin))"
+  (w::'a::len0 word) >> n = word_of_int ((bin_rest ^^ n) (bintrunc (size w) (number_of bin)))"
   apply clarsimp
   apply (rule word_eqI)
   apply (auto simp: nth_shiftr nth_rest_power_bin nth_bintr word_size)
   done
 
 lemma sshiftr_no': 
-  "w = number_of bin \<Longrightarrow> w >>> n = number_of ((bin_rest ^^ n) 
-    (sbintrunc (size w - 1) bin))"
+  "w = number_of bin \<Longrightarrow> w >>> n = word_of_int ((bin_rest ^^ n) 
+    (sbintrunc (size w - 1) (number_of bin)))"
   apply clarsimp
   apply (rule word_eqI)
   apply (auto simp: nth_sshiftr nth_rest_power_bin nth_sbintr word_size)
@@ -3042,7 +3011,7 @@ lemma nth_mask [OF refl, simp]:
 lemma mask_bl: "mask n = of_bl (replicate n True)"
   by (auto simp add : test_bit_of_bl word_size intro: word_eqI)
 
-lemma mask_bin: "mask n = number_of (bintrunc n Int.Min)"
+lemma mask_bin: "mask n = word_of_int (bintrunc n -1)"
   by (auto simp add: nth_bintr word_size intro: word_eqI)
 
 lemma and_mask_bintr: "w AND mask n = word_of_int (bintrunc n (uint w))"
@@ -3051,11 +3020,11 @@ lemma and_mask_bintr: "w AND mask n = word_of_int (bintrunc n (uint w))"
   apply (auto simp add: test_bit_bin)
   done
 
-lemma and_mask_no: "number_of i AND mask n = number_of (bintrunc n i)" 
-  by (auto simp add : nth_bintr word_size word_ops_nth_size intro: word_eqI)
-
 lemma and_mask_wi: "word_of_int i AND mask n = word_of_int (bintrunc n i)"
-  by (fact and_mask_no [unfolded word_number_of_def])
+  by (auto simp add: nth_bintr word_size word_ops_nth_size word_eq_iff)
+
+lemma and_mask_no: "number_of i AND mask n = word_of_int (bintrunc n (number_of i))"
+  unfolding word_number_of_alt by (rule and_mask_wi)
 
 lemma bl_and_mask':
   "to_bl (w AND mask n :: 'a :: len word) = 
@@ -3152,7 +3121,7 @@ lemma mask_eqs:
   "word_succ (a AND mask n) AND mask n = word_succ a AND mask n"
   "word_pred (a AND mask n) AND mask n = word_pred a AND mask n"
   using word_of_int_Ex [where x=a] word_of_int_Ex [where x=b]
-  by (auto simp: and_mask_wi bintr_ariths bintr_arith1s new_word_of_int_homs)
+  by (auto simp: and_mask_wi bintr_ariths bintr_arith1s word_of_int_homs)
 
 lemma mask_power_eq:
   "(x AND mask n) ^ k AND mask n = x ^ k AND mask n"
@@ -3448,7 +3417,7 @@ lemma of_bl_append:
   "(of_bl (xs @ ys) :: 'a :: len word) = of_bl xs * 2^(length ys) + of_bl ys"
   apply (unfold of_bl_def)
   apply (simp add: bl_to_bin_app_cat bin_cat_num)
-  apply (simp add: word_of_int_power_hom [symmetric] new_word_of_int_hom_syms)
+  apply (simp add: word_of_int_power_hom [symmetric] word_of_int_hom_syms)
   done
 
 lemma of_bl_False [simp]:
@@ -3769,7 +3738,7 @@ lemma word_rsplit_rcat_size [OF refl]:
   apply (clarsimp simp add : word_size)
   apply (rule nth_equalityI, assumption)
   apply clarsimp
-  apply (rule word_eqI)
+  apply (rule word_eqI [rule_format])
   apply (rule trans)
    apply (rule test_bit_rsplit_alt)
      apply (clarsimp simp: word_size)+
@@ -4141,7 +4110,7 @@ lemmas word_rotl_dt_no_bin' [simp] =
 declare word_roti_def [simp]
 
 
-subsection {* Miscellaneous  *}
+subsection {* Maximum machine word *}
 
 lemma word_int_cases:
   "\<lbrakk>\<And>n. \<lbrakk>(x ::'a::len0 word) = word_of_int n; 0 \<le> n; n < 2^len_of TYPE('a)\<rbrakk> \<Longrightarrow> P\<rbrakk>
@@ -4460,6 +4429,8 @@ lemma word_induct2 [induct type]:
   apply (case_tac "1+n = 0", auto)
   done
 
+subsection {* Recursion combinator for words *}
+
 definition word_rec :: "'a \<Rightarrow> ('b::len word \<Rightarrow> 'a \<Rightarrow> 'a) \<Rightarrow> 'b word \<Rightarrow> 'a" where
   "word_rec forZero forSuc n = nat_rec forZero (forSuc \<circ> of_nat) (unat n)"
 
@@ -4568,7 +4539,7 @@ lemma unatSuc:
 
 
 lemma word_no_1 [simp]: "(Numeral1::'a::len0 word) = 1"
-  by (fact word_1_no [symmetric, unfolded BIT_simps])
+  by (fact word_1_no [symmetric])
 
 lemma word_no_0 [simp]: "(Numeral0::'a::len0 word) = 0"
   by (fact word_0_no [symmetric])
