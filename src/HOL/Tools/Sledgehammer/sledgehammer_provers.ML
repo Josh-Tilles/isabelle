@@ -27,6 +27,7 @@ sig
      type_enc: string option,
      strict: bool,
      lam_trans: string option,
+     uncurried_aliases: bool option,
      relevance_thresholds: real * real,
      max_relevant: int option,
      max_mono_iters: int,
@@ -147,7 +148,7 @@ fun is_atp_for_format is_format ctxt name =
   let val thy = Proof_Context.theory_of ctxt in
     case try (get_atp thy) name of
       SOME {best_slices, ...} =>
-      exists (fn (_, (_, (_, format, _, _, _))) => is_format format)
+      exists (fn (_, (_, ((_, format, _, _, _), _))) => is_format format)
              (best_slices ctxt)
     | NONE => false
   end
@@ -174,7 +175,7 @@ fun default_max_relevant_for_prover ctxt slice name =
     if is_reconstructor name then
       reconstructor_default_max_relevant
     else if is_atp thy name then
-      fold (Integer.max o #1 o snd o snd o snd)
+      fold (Integer.max o #1 o fst o snd o snd o snd)
            (get_slices slice (#best_slices (get_atp thy name) ctxt)) 0
     else (* is_smt_prover ctxt name *)
       SMT_Solver.default_max_relevant ctxt name
@@ -291,6 +292,7 @@ type params =
    type_enc: string option,
    strict: bool,
    lam_trans: string option,
+   uncurried_aliases: bool option,
    relevance_thresholds: real * real,
    max_relevant: int option,
    max_mono_iters: int,
@@ -399,10 +401,10 @@ fun proof_banner mode name =
   | _ => "Try this"
 
 fun bunch_of_reconstructors needs_full_types lam_trans =
-  [(false, Metis (partial_type_enc, lam_trans true)),
+  [(false, Metis (partial_type_enc, lam_trans false)),
    (true, Metis (full_type_enc, lam_trans false)),
-   (false, Metis (no_typesN, lam_trans false)),
-   (true, Metis (really_full_type_enc, lam_trans false)),
+   (false, Metis (no_typesN, lam_trans true)),
+   (true, Metis (really_full_type_enc, lam_trans true)),
    (true, SMT)]
   |> map_filter (fn (full_types, reconstr) =>
                     if needs_full_types andalso not full_types then NONE
@@ -581,9 +583,9 @@ fun run_atp mode name
         ({exec, required_execs, arguments, proof_delims, known_failures,
           conj_sym_kind, prem_kind, best_slices, ...} : atp_config)
         (params as {debug, verbose, overlord, type_enc, strict, lam_trans,
-                    max_relevant, max_mono_iters, max_new_mono_instances,
-                    isar_proof, isar_shrink_factor, slice, timeout,
-                    preplay_timeout, ...})
+                    uncurried_aliases, max_relevant, max_mono_iters,
+                    max_new_mono_instances, isar_proof, isar_shrink_factor,
+                    slice, timeout, preplay_timeout, ...})
         minimize_command
         ({state, goal, subgoal, subgoal_count, facts, ...} : prover_problem) =
   let
@@ -651,10 +653,11 @@ fun run_atp mode name
                 |> curry ListPair.zip (map fst facts)
                 |> maps (fn (name, rths) => map (pair name o snd) rths)
               end
-            fun run_slice (slice, (time_frac, (complete,
-                                    (best_max_relevant, format, best_type_enc,
-                                     best_lam_trans, extra))))
-                          time_left =
+            fun run_slice time_left (cache_key, cache_value)
+                    (slice, (time_frac, (complete,
+                        (key as (best_max_relevant, format, best_type_enc,
+                                 best_lam_trans, best_uncurried_aliases),
+                                 extra)))) =
               let
                 val num_facts =
                   length facts |> is_none max_relevant
@@ -663,14 +666,6 @@ fun run_atp mode name
                 val type_enc =
                   type_enc |> choose_type_enc soundness best_type_enc format
                 val fairly_sound = is_type_enc_fairly_sound type_enc
-                val facts =
-                  facts |> map untranslated_fact
-                        |> not fairly_sound
-                           ? filter_out (is_dangerous_prop ctxt o prop_of o snd)
-                        |> take num_facts
-                        |> polymorphism_of_type_enc type_enc <> Polymorphic
-                           ? monomorphize_facts
-                        |> map (apsnd prop_of)
                 val real_ms = Real.fromInt o Time.toMilliseconds
                 val slice_timeout =
                   ((real_ms time_left
@@ -695,20 +690,36 @@ fun run_atp mode name
                   case lam_trans of
                     SOME s => s
                   | NONE => best_lam_trans
-                val (atp_problem, pool, fact_names, _, sym_tab) =
-                  prepare_atp_problem ctxt format conj_sym_kind prem_kind
-                      type_enc false lam_trans readable_names true hyp_ts
-                      concl_t facts
+                val uncurried_aliases =
+                  case uncurried_aliases of
+                    SOME b => b
+                  | NONE => best_uncurried_aliases
+                val value as (atp_problem, _, fact_names, _, _) =
+                  if cache_key = SOME key then
+                    cache_value
+                  else
+                    facts
+                    |> map untranslated_fact
+                    |> not fairly_sound
+                       ? filter_out (is_dangerous_prop ctxt o prop_of o snd)
+                    |> take num_facts
+                    |> polymorphism_of_type_enc type_enc <> Polymorphic
+                       ? monomorphize_facts
+                    |> map (apsnd prop_of)
+                    |> prepare_atp_problem ctxt format conj_sym_kind prem_kind
+                           type_enc false lam_trans uncurried_aliases
+                           readable_names true hyp_ts concl_t
                 fun weights () = atp_problem_weights atp_problem
                 val full_proof = debug orelse isar_proof
-                val core =
+                val command =
                   File.shell_path command ^ " " ^
                   arguments ctxt full_proof extra slice_timeout weights ^ " " ^
                   File.shell_path prob_file
-                val command = "TIMEFORMAT='%3R'; { time " ^ core ^ " ; } 2>&1"
-                val _ = atp_problem |> lines_for_atp_problem format
-                                    |> cons ("% " ^ command ^ "\n")
-                                    |> File.write_list prob_file
+                  |> enclose "TIMEFORMAT='%3R'; { time " " ; } 2>&1"
+                val _ =
+                  atp_problem |> lines_for_atp_problem format
+                              |> cons ("% " ^ command ^ "\n")
+                              |> File.write_list prob_file
                 val ((output, run_time), (atp_proof, outcome)) =
                   TimeLimit.timeLimit generous_slice_timeout
                                       Isabelle_System.bash_output command
@@ -735,8 +746,11 @@ fun run_atp mode name
                        SOME facts =>
                        let
                          val failure =
-                           UnsoundProof (is_type_enc_quasi_sound type_enc,
-                                         facts)
+                           if null facts then
+                             ProofIncomplete
+                           else
+                             UnsoundProof (is_type_enc_quasi_sound type_enc,
+                                           facts)
                        in
                          if debug then
                            (warning (string_for_failure failure); NONE)
@@ -745,27 +759,24 @@ fun run_atp mode name
                        end
                      | NONE => NONE)
                   | _ => outcome
-              in
-                ((pool, fact_names, sym_tab),
-                 (output, run_time, atp_proof, outcome))
-              end
+              in ((SOME key, value), (output, run_time, atp_proof, outcome)) end
             val timer = Timer.startRealTimer ()
             fun maybe_run_slice slice
-                                (result as (_, (_, run_time0, _, SOME _))) =
+                    (result as (cache, (_, run_time0, _, SOME _))) =
                 let
                   val time_left = Time.- (timeout, Timer.checkRealTimer timer)
                 in
                   if Time.<= (time_left, Time.zeroTime) then
                     result
                   else
-                    run_slice slice time_left
-                    |> (fn (stuff, (output, run_time, atp_proof, outcome)) =>
-                           (stuff, (output, Time.+ (run_time0, run_time),
+                    run_slice time_left cache slice
+                    |> (fn (cache, (output, run_time, atp_proof, outcome)) =>
+                           (cache, (output, Time.+ (run_time0, run_time),
                                     atp_proof, outcome)))
                 end
               | maybe_run_slice _ result = result
           in
-            ((Symtab.empty, Vector.fromList [], Symtab.empty),
+            ((NONE, ([], Symtab.empty, Vector.fromList [], [], Symtab.empty)),
              ("", Time.zeroTime, [], SOME InternalError))
             |> fold maybe_run_slice actual_slices
           end
@@ -781,7 +792,8 @@ fun run_atp mode name
         ()
       else
         File.write (Path.explode (Path.implode prob_file ^ "_proof")) output
-    val ((pool, fact_names, sym_tab), (output, run_time, atp_proof, outcome)) =
+    val ((_, (_, pool, fact_names, _, sym_tab)),
+         (output, run_time, atp_proof, outcome)) =
       with_path cleanup export run_on problem_path_name
     val important_message =
       if mode = Normal andalso
@@ -798,8 +810,8 @@ fun run_atp mode name
           val reconstrs =
             bunch_of_reconstructors needs_full_types
                 (lam_trans_from_atp_proof atp_proof
-                 o (fn plain =>
-                       if plain then metis_default_lam_trans else hide_lamsN))
+                 o (fn desperate => if desperate then hide_lamsN
+                                    else metis_default_lam_trans))
         in
           (used_facts,
            fn () =>

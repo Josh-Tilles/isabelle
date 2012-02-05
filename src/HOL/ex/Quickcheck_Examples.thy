@@ -267,6 +267,19 @@ lemma "(\<exists>x. P x) \<longrightarrow> (EX! x. P x)"
 oops
 
 
+subsection {* Examples with sets *}
+
+lemma
+  "{} = A Un - A"
+quickcheck[exhaustive, expect = counterexample]
+oops
+
+lemma
+  "[| bij_betw f A B; bij_betw f C D |] ==> bij_betw f (A Un C) (B Un D)"
+quickcheck[exhaustive, expect = counterexample]
+oops
+
+
 subsection {* Examples with relations *}
 
 lemma

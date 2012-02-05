@@ -48,7 +48,8 @@ fun print silent f = if silent then () else Output.urgent_message (f ())
 
 fun test_facts ({debug, verbose, overlord, provers, max_mono_iters,
                  max_new_mono_instances, type_enc, strict, lam_trans,
-                 isar_proof, isar_shrink_factor, preplay_timeout, ...} : params)
+                 uncurried_aliases, isar_proof, isar_shrink_factor,
+                 preplay_timeout, ...} : params)
                silent (prover : prover) timeout i n state facts =
   let
     val _ =
@@ -62,8 +63,9 @@ fun test_facts ({debug, verbose, overlord, provers, max_mono_iters,
     val params =
       {debug = debug, verbose = verbose, overlord = overlord, blocking = true,
        provers = provers, type_enc = type_enc, strict = strict,
-       lam_trans = lam_trans, relevance_thresholds = (1.01, 1.01),
-       max_relevant = SOME (length facts), max_mono_iters = max_mono_iters,
+       lam_trans = lam_trans, uncurried_aliases = uncurried_aliases,
+       relevance_thresholds = (1.01, 1.01), max_relevant = SOME (length facts),
+       max_mono_iters = max_mono_iters,
        max_new_mono_instances = max_new_mono_instances, isar_proof = isar_proof,
        isar_shrink_factor = isar_shrink_factor, slice = false,
        minimize = SOME false, timeout = timeout,
@@ -216,9 +218,10 @@ fun run_minimize (params as {provers, ...}) i refs state =
     val ctxt = Proof.context_of state
     val reserved = reserved_isar_keyword_table ()
     val chained_ths = normalize_chained_theorems (#facts (Proof.goal state))
+    val css_table = clasimpset_rule_table_of ctxt
     val facts =
-      refs
-      |> maps (map (apsnd single) o fact_from_ref ctxt reserved chained_ths)
+      refs |> maps (map (apsnd single)
+                    o fact_from_ref ctxt reserved chained_ths css_table)
   in
     case subgoal_count state of
       0 => Output.urgent_message "No subgoal!"
