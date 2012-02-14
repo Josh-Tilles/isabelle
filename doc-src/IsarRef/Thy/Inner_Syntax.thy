@@ -4,9 +4,35 @@ begin
 
 chapter {* Inner syntax --- the term language \label{ch:inner-syntax} *}
 
+text {* The inner syntax of Isabelle provides concrete notation for
+  the main entities of the logical framework, notably @{text
+  "\<lambda>"}-terms with types and type classes.  Applications may either
+  extend existing syntactic categories by additional notation, or
+  define new sub-languages that are linked to the standard term
+  language via some explicit markers.  For example @{verbatim
+  FOO}~@{text "foo"} could embed the syntax corresponding for some
+  user-defined nonterminal @{text "foo"} --- within the bounds of the
+  given lexical syntax of Isabelle/Pure.
+
+  The most basic way to specify concrete syntax for logical entities
+  works via mixfix annotations (\secref{sec:mixfix}), which may be
+  usually given as part of the original declaration or via explicit
+  notation commands later on (\secref{sec:notation}).  This already
+  covers many needs of concrete syntax without having to understand
+  the full complexity of inner syntax layers.
+
+  Further details of the syntax engine involves the classical
+  distinction of lexical language versus context-free grammar (see
+  \secref{sec:pure-syntax}), and various mechanisms for \emph{syntax
+  translations} --- either as rewrite systems on first-order ASTs
+  (\secref{sec:syn-trans}) or ML functions on ASTs or @{text
+  "\<lambda>"}-terms that represent parse trees (\secref{sec:tr-funs}).
+*}
+
+
 section {* Printing logical entities *}
 
-subsection {* Diagnostic commands *}
+subsection {* Diagnostic commands \label{sec:print-diag} *}
 
 text {*
   \begin{matharray}{rcl}
@@ -78,11 +104,11 @@ text {*
 
   All of the diagnostic commands above admit a list of @{text modes}
   to be specified, which is appended to the current print mode; see
-  \secref{sec:print-modes}.  Thus the output behavior may be modified
-  according particular print mode features.  For example, @{command
-  "pr"}~@{text "(latex xsymbols)"} would print the current proof state
-  with mathematical symbols and special characters represented in
-  {\LaTeX} source, according to the Isabelle style
+  also \secref{sec:print-modes}.  Thus the output behavior may be
+  modified according particular print mode features.  For example,
+  @{command "pr"}~@{text "(latex xsymbols)"} would print the current
+  proof state with mathematical symbols and special characters
+  represented in {\LaTeX} source, according to the Isabelle style
   \cite{isabelle-sys}.
 
   Note that antiquotations (cf.\ \secref{sec:antiq}) provide a more
@@ -206,6 +232,77 @@ text {*
 *}
 
 
+subsection {* Alternative print modes \label{sec:print-modes} *}
+
+text {*
+  \begin{mldecls}
+    @{index_ML print_mode_value: "unit -> string list"} \\
+    @{index_ML Print_Mode.with_modes: "string list -> ('a -> 'b) -> 'a -> 'b"} \\
+  \end{mldecls}
+
+  The \emph{print mode} facility allows to modify various operations
+  for printing.  Commands like @{command typ}, @{command term},
+  @{command thm} (see \secref{sec:print-diag}) take additional print
+  modes as optional argument.  The underlying ML operations are as
+  follows.
+
+  \begin{description}
+
+  \item @{ML "print_mode_value ()"} yields the list of currently
+  active print mode names.  This should be understood as symbolic
+  representation of certain individual features for printing (with
+  precedence from left to right).
+
+  \item @{ML Print_Mode.with_modes}~@{text "modes f x"} evaluates
+  @{text "f x"} in an execution context where the print mode is
+  prepended by the given @{text "modes"}.  This provides a thread-safe
+  way to augment print modes.  It is also monotonic in the set of mode
+  names: it retains the default print mode that certain
+  user-interfaces might have installed for their proper functioning!
+
+  \end{description}
+
+  \begin{warn}
+  The old global reference @{ML print_mode} should never be used
+  directly in applications.  Its main reason for being publicly
+  accessible is to support historic versions of Proof~General.
+  \end{warn}
+
+  \medskip The pretty printer for inner syntax maintains alternative
+  mixfix productions for any print mode name invented by the user, say
+  in commands like @{command notation} or @{command abbreviation}.
+  Mode names can be arbitrary, but the following ones have a specific
+  meaning by convention:
+
+  \begin{itemize}
+
+  \item @{verbatim "\"\""} (the empty string): default mode;
+  implicitly active as last element in the list of modes.
+
+  \item @{verbatim input}: dummy print mode that is never active; may
+  be used to specify notation that is only available for input.
+
+  \item @{verbatim internal} dummy print mode that is never active;
+  used internally in Isabelle/Pure.
+
+  \item @{verbatim xsymbols}: enable proper mathematical symbols
+  instead of ASCII art.\footnote{This traditional mode name stems from
+  the ``X-Symbol'' package for old versions Proof~General with XEmacs,
+  although that package has been superseded by Unicode in recent
+  years.}
+
+  \item @{verbatim HTML}: additional mode that is active in HTML
+  presentation of Isabelle theory sources; allows to provide
+  alternative output notation.
+
+  \item @{verbatim latex}: additional mode that is active in {\LaTeX}
+  document preparation of Isabelle theory sources; allows to provide
+  alternative output notation.
+
+  \end{itemize}
+*}
+
+
 subsection {* Printing limits *}
 
 text {*
@@ -234,49 +331,63 @@ text {*
 *}
 
 
-section {* Mixfix annotations *}
+section {* Mixfix annotations \label{sec:mixfix} *}
 
 text {* Mixfix annotations specify concrete \emph{inner syntax} of
   Isabelle types and terms.  Locally fixed parameters in toplevel
-  theorem statements, locale specifications etc.\ also admit mixfix
-  annotations.
+  theorem statements, locale and class specifications also admit
+  mixfix annotations in a fairly uniform manner.  A mixfix annotation
+  describes describes the concrete syntax, the translation to abstract
+  syntax, and the pretty printing.  Special case annotations provide a
+  simple means of specifying infix operators and binders.
+
+  Isabelle mixfix syntax is inspired by {\OBJ} \cite{OBJ}.  It allows
+  to specify any context-free priority grammar, which is more general
+  than the fixity declarations of ML and Prolog.
 
   @{rail "
-    @{syntax_def \"infix\"}: '(' (@'infix' | @'infixl' | @'infixr')
-      @{syntax string} @{syntax nat} ')'
+    @{syntax_def mixfix}: '(' mfix ')'
     ;
-    @{syntax_def mixfix}: @{syntax \"infix\"} | '(' @{syntax string} prios? @{syntax nat}? ')' |
-    '(' @'binder' @{syntax string} prios? @{syntax nat} ')'
-    ;
-    @{syntax_def struct_mixfix}: @{syntax mixfix} | '(' @'structure' ')'
+    @{syntax_def struct_mixfix}: '(' ( mfix | @'structure' ) ')'
     ;
 
+    mfix: @{syntax template} prios? @{syntax nat}? |
+      (@'infix' | @'infixl' | @'infixr') @{syntax template} @{syntax nat} |
+      @'binder' @{syntax template} prios? @{syntax nat}
+    ;
+    template: string
+    ;
     prios: '[' (@{syntax nat} + ',') ']'
   "}
 
-  Here the @{syntax string} specifications refer to the actual mixfix
-  template, which may include literal text, spacing, blocks, and
-  arguments (denoted by ``@{text _}''); the special symbol
-  ``@{verbatim "\<index>"}'' (printed as ``@{text "\<index>"}'') represents an index
-  argument that specifies an implicit structure reference (see also
-  \secref{sec:locale}).  Infix and binder declarations provide common
-  abbreviations for particular mixfix declarations.  So in practice,
-  mixfix templates mostly degenerate to literal text for concrete
-  syntax, such as ``@{verbatim "++"}'' for an infix symbol.
+  The string given as @{text template} may include literal text,
+  spacing, blocks, and arguments (denoted by ``@{text _}''); the
+  special symbol ``@{verbatim "\<index>"}'' (printed as ``@{text "\<index>"}'')
+  represents an index argument that specifies an implicit structure
+  reference (see also \secref{sec:locale}).  Infix and binder
+  declarations provide common abbreviations for particular mixfix
+  declarations.  So in practice, mixfix templates mostly degenerate to
+  literal text for concrete syntax, such as ``@{verbatim "++"}'' for
+  an infix symbol.
+*}
 
-  \medskip In full generality, mixfix declarations work as follows.
-  Suppose a constant @{text "c :: \<tau>\<^sub>1 \<Rightarrow> \<dots> \<tau>\<^sub>n \<Rightarrow> \<tau>"} is
-  annotated by @{text "(mixfix [p\<^sub>1, \<dots>, p\<^sub>n] p)"}, where @{text
-  "mixfix"} is a string @{text "d\<^sub>0 _ d\<^sub>1 _ \<dots> _ d\<^sub>n"} consisting of
-  delimiters that surround argument positions as indicated by
-  underscores.
+
+subsection {* The general mixfix form *}
+
+text {* In full generality, mixfix declarations work as follows.
+  Suppose a constant @{text "c :: \<tau>\<^sub>1 \<Rightarrow> \<dots> \<tau>\<^sub>n \<Rightarrow> \<tau>"} is annotated by
+  @{text "(mixfix [p\<^sub>1, \<dots>, p\<^sub>n] p)"}, where @{text "mixfix"} is a string
+  @{text "d\<^sub>0 _ d\<^sub>1 _ \<dots> _ d\<^sub>n"} consisting of delimiters that surround
+  argument positions as indicated by underscores.
 
   Altogether this determines a production for a context-free priority
   grammar, where for each argument @{text "i"} the syntactic category
-  is determined by @{text "\<tau>\<^sub>i"} (with priority @{text "p\<^sub>i"}), and
-  the result category is determined from @{text "\<tau>"} (with
-  priority @{text "p"}).  Priority specifications are optional, with
-  default 0 for arguments and 1000 for the result.
+  is determined by @{text "\<tau>\<^sub>i"} (with priority @{text "p\<^sub>i"}), and the
+  result category is determined from @{text "\<tau>"} (with priority @{text
+  "p"}).  Priority specifications are optional, with default 0 for
+  arguments and 1000 for the result.\footnote{Omitting priorities is
+  prone to syntactic ambiguities unless the delimiter tokens determine
+  fully bracketed notation, as in @{text "if _ then _ else _ fi"}.}
 
   Since @{text "\<tau>"} may be again a function type, the constant
   type scheme may have more argument positions than the mixfix
@@ -340,17 +451,85 @@ text {* Mixfix annotations specify concrete \emph{inner syntax} of
 
   \end{description}
 
-  For example, the template @{verbatim "(_ +/ _)"} specifies an infix
-  operator.  There are two argument positions; the delimiter
-  @{verbatim "+"} is preceded by a space and followed by a space or
-  line break; the entire phrase is a pretty printing block.
-
   The general idea of pretty printing with blocks and breaks is also
-  described in \cite{paulson-ml2}.
+  described in \cite{paulson-ml2}; it goes back to \cite{Oppen:1980}.
 *}
 
 
-section {* Explicit notation *}
+subsection {* Infixes *}
+
+text {* Infix operators are specified by convenient short forms that
+  abbreviate general mixfix annotations as follows:
+
+  \begin{center}
+  \begin{tabular}{lll}
+
+  @{verbatim "("}@{keyword_def "infix"}~@{verbatim "\""}@{text sy}@{verbatim "\""} @{text "p"}@{verbatim ")"}
+  & @{text "\<mapsto>"} &
+  @{verbatim "(\"(_ "}@{text sy}@{verbatim "/ _)\" ["}@{text "p + 1"}@{verbatim ", "}@{text "p + 1"}@{verbatim "]"}@{text " p"}@{verbatim ")"} \\
+  @{verbatim "("}@{keyword_def "infixl"}~@{verbatim "\""}@{text sy}@{verbatim "\""} @{text "p"}@{verbatim ")"}
+  & @{text "\<mapsto>"} &
+  @{verbatim "(\"(_ "}@{text sy}@{verbatim "/ _)\" ["}@{text "p"}@{verbatim ", "}@{text "p + 1"}@{verbatim "]"}@{text " p"}@{verbatim ")"} \\
+  @{verbatim "("}@{keyword_def "infixr"}~@{verbatim "\""}@{text sy}@{verbatim "\""} @{text "p"}@{verbatim ")"}
+  & @{text "\<mapsto>"} &
+  @{verbatim "(\"(_ "}@{text sy}@{verbatim "/ _)\" ["}@{text "p + 1"}@{verbatim ", "}@{text "p"}@{verbatim "]"}@{text " p"}@{verbatim ")"} \\
+
+  \end{tabular}
+  \end{center}
+
+  The mixfix template @{verbatim "\"(_ "}@{text sy}@{verbatim "/ _)\""}
+  specifies two argument positions; the delimiter is preceded by a
+  space and followed by a space or line break; the entire phrase is a
+  pretty printing block.
+
+  The alternative notation @{verbatim "op"}~@{text sy} is introduced
+  in addition.  Thus any infix operator may be written in prefix form
+  (as in ML), independently of the number of arguments in the term.
+*}
+
+
+subsection {* Binders *}
+
+text {* A \emph{binder} is a variable-binding construct such as a
+  quantifier.  The idea to formalize @{text "\<forall>x. b"} as @{text "All
+  (\<lambda>x. b)"} for @{text "All :: ('a \<Rightarrow> bool) \<Rightarrow> bool"} already goes back
+  to \cite{church40}.  Isabelle declarations of certain higher-order
+  operators may be annotated with @{keyword_def "binder"} annotations
+  as follows:
+
+  \begin{center}
+  @{text "c :: "}@{verbatim "\""}@{text "(\<tau>\<^sub>1 \<Rightarrow> \<tau>\<^sub>2) \<Rightarrow> \<tau>\<^sub>3"}@{verbatim "\"  ("}@{keyword "binder"}@{verbatim " \""}@{text "sy"}@{verbatim "\" ["}@{text "p"}@{verbatim "] "}@{text "q"}@{verbatim ")"}
+  \end{center}
+
+  This introduces concrete binder syntax @{text "sy x. b"}, where
+  @{text x} is a bound variable of type @{text "\<tau>\<^sub>1"}, the body @{text
+  b} has type @{text "\<tau>\<^sub>2"} and the whole term has type @{text "\<tau>\<^sub>3"}.
+  The optional integer @{text p} specifies the syntactic priority of
+  the body; the default is @{text "q"}, which is also the priority of
+  the whole construct.
+
+  Internally, the binder syntax is expanded to something like this:
+  \begin{center}
+  @{text "c_binder :: "}@{verbatim "\""}@{text "idts \<Rightarrow> \<tau>\<^sub>2 \<Rightarrow> \<tau>\<^sub>3"}@{verbatim "\"  (\"(3"}@{text sy}@{verbatim "_./ _)\" [0, "}@{text "p"}@{verbatim "] "}@{text "q"}@{verbatim ")"}
+  \end{center}
+
+  Here @{syntax (inner) idts} is the nonterminal symbol for a list of
+  identifiers with optional type constraints (see also
+  \secref{sec:pure-grammar}).  The mixfix template @{verbatim
+  "\"(3"}@{text sy}@{verbatim "_./ _)\""} defines argument positions
+  for the bound identifiers and the body, separated by a dot with
+  optional line break; the entire phrase is a pretty printing block of
+  indentation level 3.  Note that there is no extra space after @{text
+  "sy"}, so it needs to be included user specification if the binder
+  syntax ends with a token that may be continued by an identifier
+  token at the start of @{syntax (inner) idts}.
+
+  Furthermore, a syntax translation to transforms @{text "c_binder x\<^sub>1
+  \<dots> x\<^sub>n b"} into iterated application @{text "c (\<lambda>x\<^sub>1. \<dots> c (\<lambda>x\<^sub>n. b)\<dots>)"}.
+  This works in both directions, for parsing and printing.  *}
+
+
+section {* Explicit notation \label{sec:notation} *}
 
 text {*
   \begin{matharray}{rcll}
@@ -360,6 +539,13 @@ text {*
     @{command_def "no_notation"} & : & @{text "local_theory \<rightarrow> local_theory"} \\
     @{command_def "write"} & : & @{text "proof(state) \<rightarrow> proof(state)"} \\
   \end{matharray}
+
+  Commands that introduce new logical entities (terms or types)
+  usually allow to provide mixfix annotations on the spot, which is
+  convenient for default notation.  Nonetheless, the syntax may be
+  modified later on by declarations for explicit notation.  This
+  allows to add or delete mixfix annotations for of existing logical
+  entities within the current context.
 
   @{rail "
     (@@{command type_notation} | @@{command no_type_notation}) @{syntax target}?
@@ -376,7 +562,7 @@ text {*
   \item @{command "type_notation"}~@{text "c (mx)"} associates mixfix
   syntax with an existing type constructor.  The arity of the
   constructor is retrieved from the context.
-  
+
   \item @{command "no_type_notation"} is similar to @{command
   "type_notation"}, but removes the specified syntax annotation from
   the present context.
@@ -384,7 +570,7 @@ text {*
   \item @{command "notation"}~@{text "c (mx)"} associates mixfix
   syntax with an existing constant or fixed variable.  The type
   declaration of the given entity is retrieved from the context.
-  
+
   \item @{command "no_notation"} is similar to @{command "notation"},
   but removes the specified syntax annotation from the present
   context.
@@ -393,14 +579,63 @@ text {*
   works within an Isar proof body.
 
   \end{description}
-
-  Note that the more primitive commands @{command "syntax"} and
-  @{command "no_syntax"} (\secref{sec:syn-trans}) provide raw access
-  to the syntax tables of a global theory.
 *}
 
 
 section {* The Pure syntax \label{sec:pure-syntax} *}
+
+subsection {* Lexical matters \label{sec:inner-lex} *}
+
+text {* The inner lexical syntax vaguely resembles the outer one
+  (\secref{sec:outer-lex}), but some details are different.  There are
+  two main categories of inner syntax tokens:
+
+  \begin{enumerate}
+
+  \item \emph{delimiters} --- the literal tokens occurring in
+  productions of the given priority grammar (cf.\
+  \secref{sec:priority-grammar});
+
+  \item \emph{named tokens} --- various categories of identifiers etc.
+
+  \end{enumerate}
+
+  Delimiters override named tokens and may thus render certain
+  identifiers inaccessible.  Sometimes the logical context admits
+  alternative ways to refer to the same entity, potentially via
+  qualified names.
+
+  \medskip The categories for named tokens are defined once and for
+  all as follows, reusing some categories of the outer token syntax
+  (\secref{sec:outer-lex}).
+
+  \begin{center}
+  \begin{supertabular}{rcl}
+    @{syntax_def (inner) id} & = & @{syntax_ref ident} \\
+    @{syntax_def (inner) longid} & = & @{syntax_ref longident} \\
+    @{syntax_def (inner) var} & = & @{syntax_ref var} \\
+    @{syntax_def (inner) tid} & = & @{syntax_ref typefree} \\
+    @{syntax_def (inner) tvar} & = & @{syntax_ref typevar} \\
+    @{syntax_def (inner) num_token} & = & @{syntax_ref nat}@{text "  |  "}@{verbatim "-"}@{syntax_ref nat} \\
+    @{syntax_def (inner) float_token} & = & @{syntax_ref nat}@{verbatim "."}@{syntax_ref nat}@{text "  |  "}@{verbatim "-"}@{syntax_ref nat}@{verbatim "."}@{syntax_ref nat} \\
+    @{syntax_def (inner) xnum_token} & = & @{verbatim "#"}@{syntax_ref nat}@{text "  |  "}@{verbatim "#-"}@{syntax_ref nat} \\
+
+    @{syntax_def (inner) xstr} & = & @{verbatim "''"} @{text "\<dots>"} @{verbatim "''"} \\
+  \end{supertabular}
+  \end{center}
+
+  The token categories @{syntax (inner) num_token}, @{syntax (inner)
+  float_token}, @{syntax (inner) xnum_token}, and @{syntax (inner)
+  xstr} are not used in Pure.  Object-logics may implement numerals
+  and string constants by adding appropriate syntax declarations,
+  together with some translation functions (e.g.\ see Isabelle/HOL).
+
+  The derived categories @{syntax_def (inner) num_const}, @{syntax_def
+  (inner) float_const}, and @{syntax_def (inner) num_const} provide
+  robust access to the respective tokens: the syntax tree holds a
+  syntactic constant instead of a free variable.
+*}
+
 
 subsection {* Priority grammars \label{sec:priority-grammar} *}
 
@@ -477,13 +712,10 @@ text {* A context-free grammar consists of a set of \emph{terminal
 *}
 
 
-subsection {* The Pure grammar *}
+subsection {* The Pure grammar \label{sec:pure-grammar} *}
 
-text {*
-  The priority grammar of the @{text "Pure"} theory is defined as follows:
-
-  %FIXME syntax for "index" (?)
-  %FIXME "op" versions of ==> etc. (?)
+text {* The priority grammar of the @{text "Pure"} theory is defined
+  approximately like this:
 
   \begin{center}
   \begin{supertabular}{rclr}
@@ -509,20 +741,27 @@ text {*
   @{syntax_def (inner) aprop} & = & @{verbatim "("} @{text aprop} @{verbatim ")"} \\
     & @{text "|"} & @{text "id  |  longid  |  var  |  "}@{verbatim "_"}@{text "  |  "}@{verbatim "..."} \\
     & @{text "|"} & @{verbatim CONST} @{text "id  |  "}@{verbatim CONST} @{text "longid"} \\
+    & @{text "|"} & @{verbatim XCONST} @{text "id  |  "}@{verbatim XCONST} @{text "longid"} \\
     & @{text "|"} & @{text "logic\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>)  any\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>) \<dots> any\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>)"} & @{text "(999)"} \\\\
 
   @{syntax_def (inner) logic} & = & @{verbatim "("} @{text logic} @{verbatim ")"} \\
     & @{text "|"} & @{text "logic\<^sup>(\<^sup>4\<^sup>)"} @{verbatim "::"} @{text type} & @{text "(3)"} \\
     & @{text "|"} & @{text "id  |  longid  |  var  |  "}@{verbatim "_"}@{text "  |  "}@{verbatim "..."} \\
     & @{text "|"} & @{verbatim CONST} @{text "id  |  "}@{verbatim CONST} @{text "longid"} \\
+    & @{text "|"} & @{verbatim XCONST} @{text "id  |  "}@{verbatim XCONST} @{text "longid"} \\
     & @{text "|"} & @{text "logic\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>)  any\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>) \<dots> any\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>)"} & @{text "(999)"} \\
+    & @{text "|"} & @{text "\<struct> index\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>)"} \\
     & @{text "|"} & @{verbatim "%"} @{text pttrns} @{verbatim "."} @{text "any\<^sup>(\<^sup>3\<^sup>)"} & @{text "(3)"} \\
     & @{text "|"} & @{text \<lambda>} @{text pttrns} @{verbatim "."} @{text "any\<^sup>(\<^sup>3\<^sup>)"} & @{text "(3)"} \\
+    & @{text "|"} & @{verbatim op} @{verbatim "=="}@{text "  |  "}@{verbatim op} @{text "\<equiv>"}@{text "  |  "}@{verbatim op} @{verbatim "&&&"} \\
+    & @{text "|"} & @{verbatim op} @{verbatim "==>"}@{text "  |  "}@{verbatim op} @{text "\<Longrightarrow>"} \\
     & @{text "|"} & @{verbatim TYPE} @{verbatim "("} @{text type} @{verbatim ")"} \\\\
 
   @{syntax_def (inner) idt} & = & @{verbatim "("} @{text idt} @{verbatim ")"}@{text "  |  id  |  "}@{verbatim "_"} \\
     & @{text "|"} & @{text id} @{verbatim "::"} @{text type} & @{text "(0)"} \\
     & @{text "|"} & @{verbatim "_"} @{verbatim "::"} @{text type} & @{text "(0)"} \\\\
+
+  @{syntax_def (inner) index} & = & @{verbatim "\<^bsub>"} @{text "logic\<^sup>(\<^sup>0\<^sup>)"} @{verbatim "\<^esub>"}@{text "  |  |  \<index>"} \\\\
 
   @{syntax_def (inner) idts} & = & @{text "idt  |  idt\<^sup>(\<^sup>1\<^sup>) idts"} & @{text "(0)"} \\\\
 
@@ -533,16 +772,17 @@ text {*
   @{syntax_def (inner) type} & = & @{verbatim "("} @{text type} @{verbatim ")"} \\
     & @{text "|"} & @{text "tid  |  tvar  |  "}@{verbatim "_"} \\
     & @{text "|"} & @{text "tid"} @{verbatim "::"} @{text "sort  |  tvar  "}@{verbatim "::"} @{text "sort  |  "}@{verbatim "_"} @{verbatim "::"} @{text "sort"} \\
-    & @{text "|"} & @{text "id  |  type\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>) id  |  "}@{verbatim "("} @{text type} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text type} @{verbatim ")"} @{text id} \\
-    & @{text "|"} & @{text "longid  |  type\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>) longid"} \\
-    & @{text "|"} & @{verbatim "("} @{text type} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text type} @{verbatim ")"} @{text longid} \\
+    & @{text "|"} & @{text "type_name  |  type\<^sup>(\<^sup>1\<^sup>0\<^sup>0\<^sup>0\<^sup>) type_name"} \\
+    & @{text "|"} & @{verbatim "("} @{text type} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text type} @{verbatim ")"} @{text type_name} \\
     & @{text "|"} & @{text "type\<^sup>(\<^sup>1\<^sup>)"} @{verbatim "=>"} @{text type} & @{text "(0)"} \\
     & @{text "|"} & @{text "type\<^sup>(\<^sup>1\<^sup>)"} @{text "\<Rightarrow>"} @{text type} & @{text "(0)"} \\
     & @{text "|"} & @{verbatim "["} @{text type} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text type} @{verbatim "]"} @{verbatim "=>"} @{text type} & @{text "(0)"} \\
-    & @{text "|"} & @{verbatim "["} @{text type} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text type} @{verbatim "]"} @{text "\<Rightarrow>"} @{text type} & @{text "(0)"} \\\\
+    & @{text "|"} & @{verbatim "["} @{text type} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text type} @{verbatim "]"} @{text "\<Rightarrow>"} @{text type} & @{text "(0)"} \\
+  @{syntax_def (inner) type_name} & = & @{text "id  |  longid"} \\\\
 
-  @{syntax_def (inner) sort} & = & @{text "id  |  longid  |  "}@{verbatim "{}"} \\
-    & @{text "|"} & @{verbatim "{"} @{text "(id | longid)"} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{text "(id | longid)"} @{verbatim "}"} \\
+  @{syntax_def (inner) sort} & = & @{syntax class_name}~@{text "  |  "}@{verbatim "{}"} \\
+    & @{text "|"} & @{verbatim "{"} @{syntax class_name} @{verbatim ","} @{text "\<dots>"} @{verbatim ","} @{syntax class_name} @{verbatim "}"} \\
+  @{syntax_def (inner) class_name} & = & @{text "id  |  longid"} \\
   \end{supertabular}
   \end{center}
 
@@ -580,6 +820,12 @@ text {*
   When specifying notation for logical entities, all logical types
   (excluding @{typ prop}) are \emph{collapsed} to this single category
   of @{syntax (inner) logic}.
+
+  \item @{syntax_ref (inner) index} denotes an optional index term for
+  indexed syntax.  If omitted, it refers to the first @{keyword
+  "structure"} variable in the context.  The special dummy ``@{text
+  "\<index>"}'' serves as pattern variable in mixfix annotations that
+  introduce indexed notation.
 
   \item @{syntax_ref (inner) idt} denotes identifiers, possibly
   constrained by types.
@@ -657,178 +903,20 @@ text {*
   context.  This special term abbreviation works nicely with
   calculational reasoning (\secref{sec:calculation}).
 
+  \item @{verbatim CONST} ensures that the given identifier is treated
+  as constant term, and passed through the parse tree in fully
+  internalized form.  This is particularly relevant for translation
+  rules (\secref{sec:syn-trans}), notably on the RHS.
+
+  \item @{verbatim XCONST} is similar to @{verbatim CONST}, but
+  retains the constant name as given.  This is only relevant to
+  translation rules (\secref{sec:syn-trans}), notably on the LHS.
+
   \end{itemize}
 *}
 
 
-section {* Lexical matters \label{sec:inner-lex} *}
-
-text {* The inner lexical syntax vaguely resembles the outer one
-  (\secref{sec:outer-lex}), but some details are different.  There are
-  two main categories of inner syntax tokens:
-
-  \begin{enumerate}
-
-  \item \emph{delimiters} --- the literal tokens occurring in
-  productions of the given priority grammar (cf.\
-  \secref{sec:priority-grammar});
-
-  \item \emph{named tokens} --- various categories of identifiers etc.
-
-  \end{enumerate}
-
-  Delimiters override named tokens and may thus render certain
-  identifiers inaccessible.  Sometimes the logical context admits
-  alternative ways to refer to the same entity, potentially via
-  qualified names.
-
-  \medskip The categories for named tokens are defined once and for
-  all as follows, reusing some categories of the outer token syntax
-  (\secref{sec:outer-lex}).
-
-  \begin{center}
-  \begin{supertabular}{rcl}
-    @{syntax_def (inner) id} & = & @{syntax_ref ident} \\
-    @{syntax_def (inner) longid} & = & @{syntax_ref longident} \\
-    @{syntax_def (inner) var} & = & @{syntax_ref var} \\
-    @{syntax_def (inner) tid} & = & @{syntax_ref typefree} \\
-    @{syntax_def (inner) tvar} & = & @{syntax_ref typevar} \\
-    @{syntax_def (inner) num_token} & = & @{syntax_ref nat}@{text "  |  "}@{verbatim "-"}@{syntax_ref nat} \\
-    @{syntax_def (inner) float_token} & = & @{syntax_ref nat}@{verbatim "."}@{syntax_ref nat}@{text "  |  "}@{verbatim "-"}@{syntax_ref nat}@{verbatim "."}@{syntax_ref nat} \\
-    @{syntax_def (inner) xnum_token} & = & @{verbatim "#"}@{syntax_ref nat}@{text "  |  "}@{verbatim "#-"}@{syntax_ref nat} \\
-
-    @{syntax_def (inner) xstr} & = & @{verbatim "''"} @{text "\<dots>"} @{verbatim "''"} \\
-  \end{supertabular}
-  \end{center}
-
-  The token categories @{syntax (inner) num_token}, @{syntax (inner)
-  float_token}, @{syntax (inner) xnum_token}, and @{syntax (inner)
-  xstr} are not used in Pure.  Object-logics may implement numerals
-  and string constants by adding appropriate syntax declarations,
-  together with some translation functions (e.g.\ see Isabelle/HOL).
-
-  The derived categories @{syntax_def (inner) num_const}, @{syntax_def
-  (inner) float_const}, and @{syntax_def (inner) num_const} provide
-  robust access to the respective tokens: the syntax tree holds a
-  syntactic constant instead of a free variable.
-*}
-
-
-section {* Syntax and translations \label{sec:syn-trans} *}
-
-text {*
-  \begin{matharray}{rcl}
-    @{command_def "nonterminal"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "syntax"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "no_syntax"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "translations"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "no_translations"} & : & @{text "theory \<rightarrow> theory"} \\
-  \end{matharray}
-
-  @{rail "
-    @@{command nonterminal} (@{syntax name} + @'and')
-    ;
-    (@@{command syntax} | @@{command no_syntax}) @{syntax mode}? (@{syntax constdecl} +)
-    ;
-    (@@{command translations} | @@{command no_translations})
-      (transpat ('==' | '=>' | '<=' | '\<rightleftharpoons>' | '\<rightharpoonup>' | '\<leftharpoondown>') transpat +)
-    ;
-
-    mode: ('(' ( @{syntax name} | @'output' | @{syntax name} @'output' ) ')')
-    ;
-    transpat: ('(' @{syntax nameref} ')')? @{syntax string}
-  "}
-
-  \begin{description}
-  
-  \item @{command "nonterminal"}~@{text c} declares a type
-  constructor @{text c} (without arguments) to act as purely syntactic
-  type: a nonterminal symbol of the inner syntax.
-
-  \item @{command "syntax"}~@{text "(mode) decls"} is similar to
-  @{command "consts"}~@{text decls}, except that the actual logical
-  signature extension is omitted.  Thus the context free grammar of
-  Isabelle's inner syntax may be augmented in arbitrary ways,
-  independently of the logic.  The @{text mode} argument refers to the
-  print mode that the grammar rules belong; unless the @{keyword_ref
-  "output"} indicator is given, all productions are added both to the
-  input and output grammar.
-  
-  \item @{command "no_syntax"}~@{text "(mode) decls"} removes grammar
-  declarations (and translations) resulting from @{text decls}, which
-  are interpreted in the same manner as for @{command "syntax"} above.
-  
-  \item @{command "translations"}~@{text rules} specifies syntactic
-  translation rules (i.e.\ macros): parse~/ print rules (@{text "\<rightleftharpoons>"}),
-  parse rules (@{text "\<rightharpoonup>"}), or print rules (@{text "\<leftharpoondown>"}).
-  Translation patterns may be prefixed by the syntactic category to be
-  used for parsing; the default is @{text logic}.
-  
-  \item @{command "no_translations"}~@{text rules} removes syntactic
-  translation rules, which are interpreted in the same manner as for
-  @{command "translations"} above.
-
-  \end{description}
-*}
-
-
-section {* Syntax translation functions \label{sec:tr-funs} *}
-
-text {*
-  \begin{matharray}{rcl}
-    @{command_def "parse_ast_translation"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "parse_translation"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "print_translation"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "typed_print_translation"} & : & @{text "theory \<rightarrow> theory"} \\
-    @{command_def "print_ast_translation"} & : & @{text "theory \<rightarrow> theory"} \\
-  \end{matharray}
-
-  @{rail "
-  ( @@{command parse_ast_translation} | @@{command parse_translation} |
-    @@{command print_translation} | @@{command typed_print_translation} |
-    @@{command print_ast_translation}) ('(' @'advanced' ')')? @{syntax text}
-  "}
-
-  Syntax translation functions written in ML admit almost arbitrary
-  manipulations of Isabelle's inner syntax.  Any of the above commands
-  have a single @{syntax text} argument that refers to an ML
-  expression of appropriate type, which are as follows by default:
-
-%FIXME proper antiquotations
-\begin{ttbox}
-val parse_ast_translation   : (string * (ast list -> ast)) list
-val parse_translation       : (string * (term list -> term)) list
-val print_translation       : (string * (term list -> term)) list
-val typed_print_translation : (string * (typ -> term list -> term)) list
-val print_ast_translation   : (string * (ast list -> ast)) list
-\end{ttbox}
-
-  If the @{text "(advanced)"} option is given, the corresponding
-  translation functions may depend on the current theory or proof
-  context.  This allows to implement advanced syntax mechanisms, as
-  translations functions may refer to specific theory declarations or
-  auxiliary proof data.
-
-  See also \cite{isabelle-ref} for more information on the general
-  concept of syntax transformations in Isabelle.
-
-%FIXME proper antiquotations
-\begin{ttbox}
-val parse_ast_translation:
-  (string * (Proof.context -> ast list -> ast)) list
-val parse_translation:
-  (string * (Proof.context -> term list -> term)) list
-val print_translation:
-  (string * (Proof.context -> term list -> term)) list
-val typed_print_translation:
-  (string * (Proof.context -> typ -> term list -> term)) list
-val print_ast_translation:
-  (string * (Proof.context -> ast list -> ast)) list
-\end{ttbox}
-*}
-
-
-section {* Inspecting the syntax *}
+subsection {* Inspecting the syntax *}
 
 text {*
   \begin{matharray}{rcl}
@@ -883,8 +971,231 @@ text {*
   functions; see \secref{sec:tr-funs}.
 
   \end{description}
-  
+
   \end{description}
+*}
+
+
+subsection {* Ambiguity of parsed expressions *}
+
+text {*
+  \begin{tabular}{rcll}
+    @{attribute_def syntax_ambiguity_level} & : & @{text attribute} & default @{text 1} \\
+  \end{tabular}
+
+  \begin{mldecls}
+    @{index_ML Syntax.ambiguity_limit: "int Config.T"} \\  %FIXME attribute
+  \end{mldecls}
+
+  Depending on the grammar and the given input, parsing may be
+  ambiguous.  Isabelle lets the Earley parser enumerate all possible
+  parse trees, and then tries to make the best out of the situation.
+  Terms that cannot be type-checked are filtered out, which often
+  leads to a unique result in the end.  Unlike regular type
+  reconstruction, which is applied to the whole collection of input
+  terms simultaneously, the filtering stage only treats each given
+  term in isolation.  Filtering is also not attempted for individual
+  types or raw ASTs (as required for @{command translations}).
+
+  Certain warning or error messages are printed, depending on the
+  situation and the given configuration options.  Parsing ultimately
+  fails, if multiple results remain after the filtering phase.
+
+  \begin{description}
+
+  \item @{attribute syntax_ambiguity_level} determines the number of
+  parser results that are tolerated without printing a detailed
+  message.
+
+  \item @{ML Syntax.ambiguity_limit} determines the number of
+  resulting parse trees that are shown as part of the printed message
+  in case of an ambiguity.
+
+  \end{description}
+*}
+
+
+section {* Raw syntax and translations \label{sec:syn-trans} *}
+
+text {*
+  \begin{matharray}{rcl}
+    @{command_def "nonterminal"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "syntax"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "no_syntax"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "translations"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "no_translations"} & : & @{text "theory \<rightarrow> theory"} \\
+  \end{matharray}
+
+  Unlike mixfix notation for existing formal entities
+  (\secref{sec:notation}), raw syntax declarations provide full access
+  to the priority grammar of the inner syntax.  This includes
+  additional syntactic categories (via @{command nonterminal}) and
+  free-form grammar productions (via @{command syntax}).  Additional
+  syntax translations (or macros, via @{command translations}) are
+  required to turn resulting parse trees into proper representations
+  of formal entities again.
+
+  @{rail "
+    @@{command nonterminal} (@{syntax name} + @'and')
+    ;
+    (@@{command syntax} | @@{command no_syntax}) @{syntax mode}? (@{syntax constdecl} +)
+    ;
+    (@@{command translations} | @@{command no_translations})
+      (transpat ('==' | '=>' | '<=' | '\<rightleftharpoons>' | '\<rightharpoonup>' | '\<leftharpoondown>') transpat +)
+    ;
+
+    mode: ('(' ( @{syntax name} | @'output' | @{syntax name} @'output' ) ')')
+    ;
+    transpat: ('(' @{syntax nameref} ')')? @{syntax string}
+  "}
+
+  \begin{description}
+
+  \item @{command "nonterminal"}~@{text c} declares a type
+  constructor @{text c} (without arguments) to act as purely syntactic
+  type: a nonterminal symbol of the inner syntax.
+
+  \item @{command "syntax"}~@{text "(mode) c :: \<sigma> (mx)"} augments the
+  priority grammar and the pretty printer table for the given print
+  mode (default @{verbatim "\"\""}). An optional keyword @{keyword_ref
+  "output"} means that only the pretty printer table is affected.
+
+  Following \secref{sec:mixfix}, the mixfix annotation @{text "mx =
+  template ps q"} together with type @{text "\<sigma> = \<tau>\<^sub>1 \<Rightarrow> \<dots> \<tau>\<^sub>n \<Rightarrow> \<tau>"} and
+  specify a grammar production.  The @{text template} contains
+  delimiter tokens that surround @{text "n"} argument positions
+  (@{verbatim "_"}).  The latter correspond to nonterminal symbols
+  @{text "A\<^sub>i"} derived from the argument types @{text "\<tau>\<^sub>i"} as
+  follows:
+  \begin{itemize}
+
+  \item @{text "prop"} if @{text "\<tau>\<^sub>i = prop"}
+
+  \item @{text "logic"} if @{text "\<tau>\<^sub>i = (\<dots>)\<kappa>"} for logical type
+  constructor @{text "\<kappa> \<noteq> prop"}
+
+  \item @{text any} if @{text "\<tau>\<^sub>i = \<alpha>"} for type variables
+
+  \item @{text "\<kappa>"} if @{text "\<tau>\<^sub>i = \<kappa>"} for nonterminal @{text "\<kappa>"}
+  (syntactic type constructor)
+
+  \end{itemize}
+
+  Each @{text "A\<^sub>i"} is decorated by priority @{text "p\<^sub>i"} from the
+  given list @{text "ps"}; misssing priorities default to 0.
+
+  The resulting nonterminal of the production is determined similarly
+  from type @{text "\<tau>"}, with priority @{text "q"} and default 1000.
+
+  \medskip Parsing via this production produces parse trees @{text
+  "t\<^sub>1, \<dots>, t\<^sub>n"} for the argument slots.  The resulting parse tree is
+  composed as @{text "c t\<^sub>1 \<dots> t\<^sub>n"}, by using the syntax constant @{text
+  "c"} of the syntax declaration.
+
+  Such syntactic constants are invented on the spot, without formal
+  check wrt.\ existing declarations.  It is conventional to use plain
+  identifiers prefixed by a single underscore (e.g.\ @{text
+  "_foobar"}).  Names should be chosen with care, to avoid clashes
+  with unrelated syntax declarations.
+
+  \medskip The special case of copy production is specified by @{text
+  "c = "}@{verbatim "\"\""} (empty string).  It means that the
+  resulting parse tree @{text "t"} is copied directly, without any
+  further decoration.
+
+  \item @{command "no_syntax"}~@{text "(mode) decls"} removes grammar
+  declarations (and translations) resulting from @{text decls}, which
+  are interpreted in the same manner as for @{command "syntax"} above.
+
+  \item @{command "translations"}~@{text rules} specifies syntactic
+  translation rules (i.e.\ macros): parse~/ print rules (@{text "\<rightleftharpoons>"}),
+  parse rules (@{text "\<rightharpoonup>"}), or print rules (@{text "\<leftharpoondown>"}).
+  Translation patterns may be prefixed by the syntactic category to be
+  used for parsing; the default is @{text logic}.
+
+  \item @{command "no_translations"}~@{text rules} removes syntactic
+  translation rules, which are interpreted in the same manner as for
+  @{command "translations"} above.
+
+  \end{description}
+
+  Raw syntax and translations provides a slightly more low-level
+  access to the grammar and the form of resulting parse trees.  It is
+  often possible to avoid this untyped macro mechanism, and use
+  type-safe @{command abbreviation} or @{command notation} instead.
+  Some important situations where @{command syntax} and @{command
+  translations} are really need are as follows:
+
+  \begin{itemize}
+
+  \item Iterated replacement via recursive @{command translations}.
+  For example, consider list enumeration @{term "[a, b, c, d]"} as
+  defined in theory @{theory List} in Isabelle/HOL.
+
+  \item Change of binding status of variables: anything beyond the
+  built-in @{keyword "binder"} mixfix annotation requires explicit
+  syntax translations.  For example, consider list filter
+  comprehension @{term "[x \<leftarrow> xs . P]"} as defined in theory @{theory
+  List} in Isabelle/HOL.
+
+  \end{itemize}
+*}
+
+
+section {* Syntax translation functions \label{sec:tr-funs} *}
+
+text {*
+  \begin{matharray}{rcl}
+    @{command_def "parse_ast_translation"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "parse_translation"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "print_translation"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "typed_print_translation"} & : & @{text "theory \<rightarrow> theory"} \\
+    @{command_def "print_ast_translation"} & : & @{text "theory \<rightarrow> theory"} \\
+  \end{matharray}
+
+  @{rail "
+  ( @@{command parse_ast_translation} | @@{command parse_translation} |
+    @@{command print_translation} | @@{command typed_print_translation} |
+    @@{command print_ast_translation}) ('(' @'advanced' ')')? @{syntax text}
+  "}
+
+  Syntax translation functions written in ML admit almost arbitrary
+  manipulations of Isabelle's inner syntax.  Any of the above commands
+  have a single @{syntax text} argument that refers to an ML
+  expression of appropriate type, which are as follows by default:
+
+%FIXME proper antiquotations
+\begin{ttbox}
+val parse_ast_translation   : (string * (ast list -> ast)) list
+val parse_translation       : (string * (term list -> term)) list
+val print_translation       : (string * (term list -> term)) list
+val typed_print_translation : (string * (typ -> term list -> term)) list
+val print_ast_translation   : (string * (ast list -> ast)) list
+\end{ttbox}
+
+  If the @{text "(advanced)"} option is given, the corresponding
+  translation functions may depend on the current theory or proof
+  context.  This allows to implement advanced syntax mechanisms, as
+  translations functions may refer to specific theory declarations or
+  auxiliary proof data.
+
+%FIXME proper antiquotations
+\begin{ttbox}
+val parse_ast_translation:
+  (string * (Proof.context -> ast list -> ast)) list
+val parse_translation:
+  (string * (Proof.context -> term list -> term)) list
+val print_translation:
+  (string * (Proof.context -> term list -> term)) list
+val typed_print_translation:
+  (string * (Proof.context -> typ -> term list -> term)) list
+val print_ast_translation:
+  (string * (Proof.context -> ast list -> ast)) list
+\end{ttbox}
+
+  \medskip See also the chapter on ``Syntax Transformations'' in old
+  \cite{isabelle-ref} for further details on translations on parse
+  trees.
 *}
 
 end

@@ -356,7 +356,7 @@ text {*
 text %mlref {*
   \begin{mldecls}
   @{index_ML_type term} \\
-  @{index_ML "op aconv": "term * term -> bool"} \\
+  @{index_ML_op "aconv": "term * term -> bool"} \\
   @{index_ML Term.map_types: "(typ -> typ) -> term -> term"} \\
   @{index_ML Term.fold_types: "(typ -> 'a -> 'a) -> term -> 'a -> 'a"} \\
   @{index_ML Term.map_aterms: "(term -> term) -> term -> term"} \\
@@ -380,7 +380,7 @@ text %mlref {*
   \item Type @{ML_type term} represents de-Bruijn terms, with comments
   in abstractions, and explicitly named free variables and constants;
   this is a datatype with constructors @{ML Bound}, @{ML Free}, @{ML
-  Var}, @{ML Const}, @{ML Abs}, @{ML "op $"}.
+  Var}, @{ML Const}, @{ML Abs}, @{ML_op "$"}.
 
   \item @{text "t"}~@{ML_text aconv}~@{text "u"} checks @{text
   "\<alpha>"}-equivalence of two terms.  This is the basic equality relation
@@ -633,10 +633,18 @@ text {*
 
 text %mlref {*
   \begin{mldecls}
+  @{index_ML Logic.all: "term -> term -> term"} \\
+  @{index_ML Logic.mk_implies: "term * term -> term"} \\
+  \end{mldecls}
+  \begin{mldecls}
   @{index_ML_type ctyp} \\
   @{index_ML_type cterm} \\
   @{index_ML Thm.ctyp_of: "theory -> typ -> ctyp"} \\
   @{index_ML Thm.cterm_of: "theory -> term -> cterm"} \\
+  @{index_ML Thm.capply: "cterm -> cterm -> cterm"} \\
+  @{index_ML Thm.cabs: "cterm -> cterm -> cterm"} \\
+  @{index_ML Thm.all: "cterm -> cterm -> cterm"} \\
+  @{index_ML Drule.mk_implies: "cterm * cterm -> cterm"} \\
   \end{mldecls}
   \begin{mldecls}
   @{index_ML_type thm} \\
@@ -663,20 +671,40 @@ text %mlref {*
 
   \begin{description}
 
+  \item @{ML Logic.all}~@{text "a B"} produces a Pure quantification
+  @{text "\<And>a. B"}, where occurrences of the atomic term @{text "a"} in
+  the body proposition @{text "B"} are replaced by bound variables.
+  (See also @{ML lambda} on terms.)
+
+  \item @{ML Logic.mk_implies}~@{text "(A, B)"} produces a Pure
+  implication @{text "A \<Longrightarrow> B"}.
+
   \item Types @{ML_type ctyp} and @{ML_type cterm} represent certified
   types and terms, respectively.  These are abstract datatypes that
   guarantee that its values have passed the full well-formedness (and
   well-typedness) checks, relative to the declarations of type
-  constructors, constants etc. in the theory.
+  constructors, constants etc.\ in the background theory.  The
+  abstract types @{ML_type ctyp} and @{ML_type cterm} are part of the
+  same inference kernel that is mainly responsible for @{ML_type thm}.
+  Thus syntactic operations on @{ML_type ctyp} and @{ML_type cterm}
+  are located in the @{ML_struct Thm} module, even though theorems are
+  not yet involved at that stage.
 
   \item @{ML Thm.ctyp_of}~@{text "thy \<tau>"} and @{ML
   Thm.cterm_of}~@{text "thy t"} explicitly checks types and terms,
   respectively.  This also involves some basic normalizations, such
   expansion of type and term abbreviations from the theory context.
+  Full re-certification is relatively slow and should be avoided in
+  tight reasoning loops.
 
-  Re-certification is relatively slow and should be avoided in tight
-  reasoning loops.  There are separate operations to decompose
-  certified entities (including actual theorems).
+  \item @{ML Thm.capply}, @{ML Thm.cabs}, @{ML Thm.all}, @{ML
+  Drule.mk_implies} etc.\ compose certified terms (or propositions)
+  incrementally.  This is equivalent to @{ML Thm.cterm_of} after
+  unchecked @{ML_op "$"}, @{ML lambda}, @{ML Logic.all}, @{ML
+  Logic.mk_implies} etc., but there can be a big difference in
+  performance when large existing entities are composed by a few extra
+  constructions on top.  There are separate operations to decompose
+  certified terms and theorems to produce certified terms again.
 
   \item Type @{ML_type thm} represents proven propositions.  This is
   an abstract datatype that guarantees that its values have been
@@ -802,12 +830,13 @@ text %mlantiq {*
 *}
 
 
-subsection {* Auxiliary definitions \label{sec:logic-aux} *}
+subsection {* Auxiliary connectives \label{sec:logic-aux} *}
 
-text {*
-  Theory @{text "Pure"} provides a few auxiliary definitions, see
-  \figref{fig:pure-aux}.  These special constants are normally not
-  exposed to the user, but appear in internal encodings.
+text {* Theory @{text "Pure"} provides a few auxiliary connectives
+  that are defined on top of the primitive ones, see
+  \figref{fig:pure-aux}.  These special constants are useful in
+  certain internal encodings, and are normally not directly exposed to
+  the user.
 
   \begin{figure}[htb]
   \begin{center}
@@ -1055,23 +1084,50 @@ text {*
 
 text %mlref {*
   \begin{mldecls}
-  @{index_ML "op RS": "thm * thm -> thm"} \\
-  @{index_ML "op OF": "thm * thm list -> thm"} \\
+  @{index_ML_op "RSN": "thm * (int * thm) -> thm"} \\
+  @{index_ML_op "RS": "thm * thm -> thm"} \\
+
+  @{index_ML_op "RLN": "thm list * (int * thm list) -> thm list"} \\
+  @{index_ML_op "RL": "thm list * thm list -> thm list"} \\
+
+  @{index_ML_op "MRS": "thm list * thm -> thm"} \\
+  @{index_ML_op "OF": "thm * thm list -> thm"} \\
   \end{mldecls}
 
   \begin{description}
 
-  \item @{text "rule\<^sub>1 RS rule\<^sub>2"} resolves @{text "rule\<^sub>1"} with @{text
-  "rule\<^sub>2"} according to the @{inference resolution} principle
-  explained above.  Note that the corresponding rule attribute in the
-  Isar language is called @{attribute THEN}.
+  \item @{text "rule\<^sub>1 RSN (i, rule\<^sub>2)"} resolves the conclusion of
+  @{text "rule\<^sub>1"} with the @{text i}-th premise of @{text "rule\<^sub>2"},
+  according to the @{inference resolution} principle explained above.
+  Unless there is precisely one resolvent it raises exception @{ML
+  THM}.
 
-  \item @{text "rule OF rules"} resolves a list of rules with the
-  first rule, addressing its premises @{text "1, \<dots>, length rules"}
-  (operating from last to first).  This means the newly emerging
-  premises are all concatenated, without interfering.  Also note that
-  compared to @{text "RS"}, the rule argument order is swapped: @{text
-  "rule\<^sub>1 RS rule\<^sub>2 = rule\<^sub>2 OF [rule\<^sub>1]"}.
+  This corresponds to the rule attribute @{attribute THEN} in Isar
+  source language.
+
+  \item @{text "rule\<^sub>1 RS rule\<^sub>2"} abbreviates @{text "rule\<^sub>1 RS (1,
+  rule\<^sub>2)"}.
+
+  \item @{text "rules\<^sub>1 RLN (i, rules\<^sub>2)"} joins lists of rules.  For
+  every @{text "rule\<^sub>1"} in @{text "rules\<^sub>1"} and @{text "rule\<^sub>2"} in
+  @{text "rules\<^sub>2"}, it resolves the conclusion of @{text "rule\<^sub>1"} with
+  the @{text "i"}-th premise of @{text "rule\<^sub>2"}, accumulating multiple
+  results in one big list.  Note that such strict enumerations of
+  higher-order unifications can be inefficient compared to the lazy
+  variant seen in elementary tactics like @{ML resolve_tac}.
+
+  \item @{text "rules\<^sub>1 RL rules\<^sub>2"} abbreviates @{text "rules\<^sub>1 RLN (1,
+  rules\<^sub>2)"}.
+
+  \item @{text "[rule\<^sub>1, \<dots>, rule\<^sub>n] MRS rule"} resolves @{text "rule\<^isub>i"}
+  against premise @{text "i"} of @{text "rule"}, for @{text "i = n, \<dots>,
+  1"}.  By working from right to left, newly emerging premises are
+  concatenated in the result, without interfering.
+
+  \item @{text "rule OF rules"} abbreviates @{text "rules MRS rule"}.
+
+  This corresponds to the rule attribute @{attribute OF} in Isar
+  source language.
 
   \end{description}
 *}

@@ -394,7 +394,7 @@ The language of terms is that of simply-typed \isa{{\isaliteral{5C3C6C616D626461
 \begin{isamarkuptext}%
 \begin{mldecls}
   \indexdef{}{ML type}{term}\verb|type term| \\
-  \indexdef{}{ML}{aconv}\verb|op aconv: term * term -> bool| \\
+  \indexdef{}{ML infix}{aconv}\verb|infix aconv: term * term -> bool| \\
   \indexdef{}{ML}{Term.map\_types}\verb|Term.map_types: (typ -> typ) -> term -> term| \\
   \indexdef{}{ML}{Term.fold\_types}\verb|Term.fold_types: (typ -> 'a -> 'a) -> term -> 'a -> 'a| \\
   \indexdef{}{ML}{Term.map\_aterms}\verb|Term.map_aterms: (term -> term) -> term -> term| \\
@@ -417,7 +417,7 @@ The language of terms is that of simply-typed \isa{{\isaliteral{5C3C6C616D626461
 
   \item Type \verb|term| represents de-Bruijn terms, with comments
   in abstractions, and explicitly named free variables and constants;
-  this is a datatype with constructors \verb|Bound|, \verb|Free|, \verb|Var|, \verb|Const|, \verb|Abs|, \verb|op $|.
+  this is a datatype with constructors \verb|Bound|, \verb|Free|, \verb|Var|, \verb|Const|, \verb|Abs|, \verb|$|.
 
   \item \isa{t}~\verb|aconv|~\isa{u} checks \isa{{\isaliteral{5C3C616C7068613E}{\isasymalpha}}}-equivalence of two terms.  This is the basic equality relation
   on type \verb|term|; raw datatype equality should only be used
@@ -704,10 +704,18 @@ The theory \isa{Pure} contains constant declarations for the
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
+  \indexdef{}{ML}{Logic.all}\verb|Logic.all: term -> term -> term| \\
+  \indexdef{}{ML}{Logic.mk\_implies}\verb|Logic.mk_implies: term * term -> term| \\
+  \end{mldecls}
+  \begin{mldecls}
   \indexdef{}{ML type}{ctyp}\verb|type ctyp| \\
   \indexdef{}{ML type}{cterm}\verb|type cterm| \\
   \indexdef{}{ML}{Thm.ctyp\_of}\verb|Thm.ctyp_of: theory -> typ -> ctyp| \\
   \indexdef{}{ML}{Thm.cterm\_of}\verb|Thm.cterm_of: theory -> term -> cterm| \\
+  \indexdef{}{ML}{Thm.capply}\verb|Thm.capply: cterm -> cterm -> cterm| \\
+  \indexdef{}{ML}{Thm.cabs}\verb|Thm.cabs: cterm -> cterm -> cterm| \\
+  \indexdef{}{ML}{Thm.all}\verb|Thm.all: cterm -> cterm -> cterm| \\
+  \indexdef{}{ML}{Drule.mk\_implies}\verb|Drule.mk_implies: cterm * cterm -> cterm| \\
   \end{mldecls}
   \begin{mldecls}
   \indexdef{}{ML type}{thm}\verb|type thm| \\
@@ -734,19 +742,37 @@ The theory \isa{Pure} contains constant declarations for the
 
   \begin{description}
 
+  \item \verb|Logic.all|~\isa{a\ B} produces a Pure quantification
+  \isa{{\isaliteral{5C3C416E643E}{\isasymAnd}}a{\isaliteral{2E}{\isachardot}}\ B}, where occurrences of the atomic term \isa{a} in
+  the body proposition \isa{B} are replaced by bound variables.
+  (See also \verb|lambda| on terms.)
+
+  \item \verb|Logic.mk_implies|~\isa{{\isaliteral{28}{\isacharparenleft}}A{\isaliteral{2C}{\isacharcomma}}\ B{\isaliteral{29}{\isacharparenright}}} produces a Pure
+  implication \isa{A\ {\isaliteral{5C3C4C6F6E6772696768746172726F773E}{\isasymLongrightarrow}}\ B}.
+
   \item Types \verb|ctyp| and \verb|cterm| represent certified
   types and terms, respectively.  These are abstract datatypes that
   guarantee that its values have passed the full well-formedness (and
   well-typedness) checks, relative to the declarations of type
-  constructors, constants etc. in the theory.
+  constructors, constants etc.\ in the background theory.  The
+  abstract types \verb|ctyp| and \verb|cterm| are part of the
+  same inference kernel that is mainly responsible for \verb|thm|.
+  Thus syntactic operations on \verb|ctyp| and \verb|cterm|
+  are located in the \verb|Thm| module, even though theorems are
+  not yet involved at that stage.
 
   \item \verb|Thm.ctyp_of|~\isa{thy\ {\isaliteral{5C3C7461753E}{\isasymtau}}} and \verb|Thm.cterm_of|~\isa{thy\ t} explicitly checks types and terms,
   respectively.  This also involves some basic normalizations, such
   expansion of type and term abbreviations from the theory context.
+  Full re-certification is relatively slow and should be avoided in
+  tight reasoning loops.
 
-  Re-certification is relatively slow and should be avoided in tight
-  reasoning loops.  There are separate operations to decompose
-  certified entities (including actual theorems).
+  \item \verb|Thm.capply|, \verb|Thm.cabs|, \verb|Thm.all|, \verb|Drule.mk_implies| etc.\ compose certified terms (or propositions)
+  incrementally.  This is equivalent to \verb|Thm.cterm_of| after
+  unchecked \verb|$|, \verb|lambda|, \verb|Logic.all|, \verb|Logic.mk_implies| etc., but there can be a big difference in
+  performance when large existing entities are composed by a few extra
+  constructions on top.  There are separate operations to decompose
+  certified terms and theorems to produce certified terms again.
 
   \item Type \verb|thm| represents proven propositions.  This is
   an abstract datatype that guarantees that its values have been
@@ -917,14 +943,16 @@ The theory \isa{Pure} contains constant declarations for the
 %
 \endisadelimmlantiq
 %
-\isamarkupsubsection{Auxiliary definitions \label{sec:logic-aux}%
+\isamarkupsubsection{Auxiliary connectives \label{sec:logic-aux}%
 }
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-Theory \isa{Pure} provides a few auxiliary definitions, see
-  \figref{fig:pure-aux}.  These special constants are normally not
-  exposed to the user, but appear in internal encodings.
+Theory \isa{Pure} provides a few auxiliary connectives
+  that are defined on top of the primitive ones, see
+  \figref{fig:pure-aux}.  These special constants are useful in
+  certain internal encodings, and are normally not directly exposed to
+  the user.
 
   \begin{figure}[htb]
   \begin{center}
@@ -1198,21 +1226,46 @@ The rule calculus of Isabelle/Pure provides two main inferences:
 %
 \begin{isamarkuptext}%
 \begin{mldecls}
-  \indexdef{}{ML}{RS}\verb|op RS: thm * thm -> thm| \\
-  \indexdef{}{ML}{OF}\verb|op OF: thm * thm list -> thm| \\
+  \indexdef{}{ML infix}{RSN}\verb|infix RSN: thm * (int * thm) -> thm| \\
+  \indexdef{}{ML infix}{RS}\verb|infix RS: thm * thm -> thm| \\
+
+  \indexdef{}{ML infix}{RLN}\verb|infix RLN: thm list * (int * thm list) -> thm list| \\
+  \indexdef{}{ML infix}{RL}\verb|infix RL: thm list * thm list -> thm list| \\
+
+  \indexdef{}{ML infix}{MRS}\verb|infix MRS: thm list * thm -> thm| \\
+  \indexdef{}{ML infix}{OF}\verb|infix OF: thm * thm list -> thm| \\
   \end{mldecls}
 
   \begin{description}
 
-  \item \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RS\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}} resolves \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}} with \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}} according to the \hyperlink{inference.resolution}{\mbox{\isa{resolution}}} principle
-  explained above.  Note that the corresponding rule attribute in the
-  Isar language is called \hyperlink{attribute.THEN}{\mbox{\isa{THEN}}}.
+  \item \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RSN\ {\isaliteral{28}{\isacharparenleft}}i{\isaliteral{2C}{\isacharcomma}}\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}{\isaliteral{29}{\isacharparenright}}} resolves the conclusion of
+  \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}} with the \isa{i}-th premise of \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}},
+  according to the \hyperlink{inference.resolution}{\mbox{\isa{resolution}}} principle explained above.
+  Unless there is precisely one resolvent it raises exception \verb|THM|.
 
-  \item \isa{rule\ OF\ rules} resolves a list of rules with the
-  first rule, addressing its premises \isa{{\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ length\ rules}
-  (operating from last to first).  This means the newly emerging
-  premises are all concatenated, without interfering.  Also note that
-  compared to \isa{RS}, the rule argument order is swapped: \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RS\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}\ {\isaliteral{3D}{\isacharequal}}\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}\ OF\ {\isaliteral{5B}{\isacharbrackleft}}rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{5D}{\isacharbrackright}}}.
+  This corresponds to the rule attribute \hyperlink{attribute.THEN}{\mbox{\isa{THEN}}} in Isar
+  source language.
+
+  \item \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RS\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}} abbreviates \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RS\ {\isaliteral{28}{\isacharparenleft}}{\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}{\isaliteral{29}{\isacharparenright}}}.
+
+  \item \isa{rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RLN\ {\isaliteral{28}{\isacharparenleft}}i{\isaliteral{2C}{\isacharcomma}}\ rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}{\isaliteral{29}{\isacharparenright}}} joins lists of rules.  For
+  every \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}} in \isa{rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}} and \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}} in
+  \isa{rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}}, it resolves the conclusion of \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}} with
+  the \isa{i}-th premise of \isa{rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}}, accumulating multiple
+  results in one big list.  Note that such strict enumerations of
+  higher-order unifications can be inefficient compared to the lazy
+  variant seen in elementary tactics like \verb|resolve_tac|.
+
+  \item \isa{rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RL\ rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}} abbreviates \isa{rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ RLN\ {\isaliteral{28}{\isacharparenleft}}{\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ rules\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}{\isaliteral{29}{\isacharparenright}}}.
+
+  \item \isa{{\isaliteral{5B}{\isacharbrackleft}}rule\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ rule\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{5D}{\isacharbrackright}}\ MRS\ rule} resolves \isa{rule\isaliteral{5C3C5E697375623E}{}\isactrlisub i}
+  against premise \isa{i} of \isa{rule}, for \isa{i\ {\isaliteral{3D}{\isacharequal}}\ n{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ {\isadigit{1}}}.  By working from right to left, newly emerging premises are
+  concatenated in the result, without interfering.
+
+  \item \isa{rule\ OF\ rules} abbreviates \isa{rules\ MRS\ rule}.
+
+  This corresponds to the rule attribute \hyperlink{attribute.OF}{\mbox{\isa{OF}}} in Isar
+  source language.
 
   \end{description}%
 \end{isamarkuptext}%

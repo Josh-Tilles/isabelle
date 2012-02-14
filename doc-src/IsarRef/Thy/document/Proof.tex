@@ -167,11 +167,7 @@ Proof commands perform transitions of Isar/VM machine
   Thus partial or even wrong proof attempts can be discussed in a
   logically sound manner.  Note that the Isabelle {\LaTeX} macros can
   be easily adapted to print something like ``\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}}'' instead of
-  the keyword ``\hyperlink{command.oops}{\mbox{\isa{\isacommand{oops}}}}''.
-
-  \medskip The \hyperlink{command.oops}{\mbox{\isa{\isacommand{oops}}}} command is undo-able, unlike
-  \indexref{}{command}{kill}\hyperlink{command.kill}{\mbox{\isa{\isacommand{kill}}}} (see \secref{sec:history}).  The effect is to
-  get back to the theory just before the opening of the proof.%
+  the keyword ``\hyperlink{command.oops}{\mbox{\isa{\isacommand{oops}}}}''.%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -1113,7 +1109,7 @@ The following proof methods and attributes refer to basic logical
   
   \item \hyperlink{attribute.OF}{\mbox{\isa{OF}}}~\isa{{\isaliteral{22}{\isachardoublequote}}a\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ a\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{22}{\isachardoublequote}}} applies some
   theorem to all of the given rules \isa{{\isaliteral{22}{\isachardoublequote}}a\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ a\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{22}{\isachardoublequote}}}
-  (in parallel).  This corresponds to the \verb|op MRS| operation in
+  (in parallel).  This corresponds to the \verb|MRS| operation in
   ML, but note the reversed order.  Positions may be effectively
   skipped by including ``\isa{{\isaliteral{5F}{\isacharunderscore}}}'' (underscore) as argument.
   

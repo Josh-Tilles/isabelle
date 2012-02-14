@@ -22,11 +22,35 @@
 }
 \isamarkuptrue%
 %
+\begin{isamarkuptext}%
+The inner syntax of Isabelle provides concrete notation for
+  the main entities of the logical framework, notably \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6C616D6264613E}{\isasymlambda}}{\isaliteral{22}{\isachardoublequote}}}-terms with types and type classes.  Applications may either
+  extend existing syntactic categories by additional notation, or
+  define new sub-languages that are linked to the standard term
+  language via some explicit markers.  For example \verb|FOO|~\isa{{\isaliteral{22}{\isachardoublequote}}foo{\isaliteral{22}{\isachardoublequote}}} could embed the syntax corresponding for some
+  user-defined nonterminal \isa{{\isaliteral{22}{\isachardoublequote}}foo{\isaliteral{22}{\isachardoublequote}}} --- within the bounds of the
+  given lexical syntax of Isabelle/Pure.
+
+  The most basic way to specify concrete syntax for logical entities
+  works via mixfix annotations (\secref{sec:mixfix}), which may be
+  usually given as part of the original declaration or via explicit
+  notation commands later on (\secref{sec:notation}).  This already
+  covers many needs of concrete syntax without having to understand
+  the full complexity of inner syntax layers.
+
+  Further details of the syntax engine involves the classical
+  distinction of lexical language versus context-free grammar (see
+  \secref{sec:pure-syntax}), and various mechanisms for \emph{syntax
+  translations} --- either as rewrite systems on first-order ASTs
+  (\secref{sec:syn-trans}) or ML functions on ASTs or \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6C616D6264613E}{\isasymlambda}}{\isaliteral{22}{\isachardoublequote}}}-terms that represent parse trees (\secref{sec:tr-funs}).%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
 \isamarkupsection{Printing logical entities%
 }
 \isamarkuptrue%
 %
-\isamarkupsubsection{Diagnostic commands%
+\isamarkupsubsection{Diagnostic commands \label{sec:print-diag}%
 }
 \isamarkuptrue%
 %
@@ -152,10 +176,11 @@
 
   All of the diagnostic commands above admit a list of \isa{modes}
   to be specified, which is appended to the current print mode; see
-  \secref{sec:print-modes}.  Thus the output behavior may be modified
-  according particular print mode features.  For example, \hyperlink{command.pr}{\mbox{\isa{\isacommand{pr}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}latex\ xsymbols{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} would print the current proof state
-  with mathematical symbols and special characters represented in
-  {\LaTeX} source, according to the Isabelle style
+  also \secref{sec:print-modes}.  Thus the output behavior may be
+  modified according particular print mode features.  For example,
+  \hyperlink{command.pr}{\mbox{\isa{\isacommand{pr}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}latex\ xsymbols{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} would print the current
+  proof state with mathematical symbols and special characters
+  represented in {\LaTeX} source, according to the Isabelle style
   \cite{isabelle-sys}.
 
   Note that antiquotations (cf.\ \secref{sec:antiq}) provide a more
@@ -277,6 +302,79 @@
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
+\isamarkupsubsection{Alternative print modes \label{sec:print-modes}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{mldecls}
+    \indexdef{}{ML}{print\_mode\_value}\verb|print_mode_value: unit -> string list| \\
+    \indexdef{}{ML}{Print\_Mode.with\_modes}\verb|Print_Mode.with_modes: string list -> ('a -> 'b) -> 'a -> 'b| \\
+  \end{mldecls}
+
+  The \emph{print mode} facility allows to modify various operations
+  for printing.  Commands like \hyperlink{command.typ}{\mbox{\isa{\isacommand{typ}}}}, \hyperlink{command.term}{\mbox{\isa{\isacommand{term}}}},
+  \hyperlink{command.thm}{\mbox{\isa{\isacommand{thm}}}} (see \secref{sec:print-diag}) take additional print
+  modes as optional argument.  The underlying ML operations are as
+  follows.
+
+  \begin{description}
+
+  \item \verb|print_mode_value ()| yields the list of currently
+  active print mode names.  This should be understood as symbolic
+  representation of certain individual features for printing (with
+  precedence from left to right).
+
+  \item \verb|Print_Mode.with_modes|~\isa{{\isaliteral{22}{\isachardoublequote}}modes\ f\ x{\isaliteral{22}{\isachardoublequote}}} evaluates
+  \isa{{\isaliteral{22}{\isachardoublequote}}f\ x{\isaliteral{22}{\isachardoublequote}}} in an execution context where the print mode is
+  prepended by the given \isa{{\isaliteral{22}{\isachardoublequote}}modes{\isaliteral{22}{\isachardoublequote}}}.  This provides a thread-safe
+  way to augment print modes.  It is also monotonic in the set of mode
+  names: it retains the default print mode that certain
+  user-interfaces might have installed for their proper functioning!
+
+  \end{description}
+
+  \begin{warn}
+  The old global reference \verb|print_mode| should never be used
+  directly in applications.  Its main reason for being publicly
+  accessible is to support historic versions of Proof~General.
+  \end{warn}
+
+  \medskip The pretty printer for inner syntax maintains alternative
+  mixfix productions for any print mode name invented by the user, say
+  in commands like \hyperlink{command.notation}{\mbox{\isa{\isacommand{notation}}}} or \hyperlink{command.abbreviation}{\mbox{\isa{\isacommand{abbreviation}}}}.
+  Mode names can be arbitrary, but the following ones have a specific
+  meaning by convention:
+
+  \begin{itemize}
+
+  \item \verb|""| (the empty string): default mode;
+  implicitly active as last element in the list of modes.
+
+  \item \verb|input|: dummy print mode that is never active; may
+  be used to specify notation that is only available for input.
+
+  \item \verb|internal| dummy print mode that is never active;
+  used internally in Isabelle/Pure.
+
+  \item \verb|xsymbols|: enable proper mathematical symbols
+  instead of ASCII art.\footnote{This traditional mode name stems from
+  the ``X-Symbol'' package for old versions Proof~General with XEmacs,
+  although that package has been superseded by Unicode in recent
+  years.}
+
+  \item \verb|HTML|: additional mode that is active in HTML
+  presentation of Isabelle theory sources; allows to provide
+  alternative output notation.
+
+  \item \verb|latex|: additional mode that is active in {\LaTeX}
+  document preparation of Isabelle theory sources; allows to provide
+  alternative output notation.
+
+  \end{itemize}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
 \isamarkupsubsection{Printing limits%
 }
 \isamarkuptrue%
@@ -307,65 +405,71 @@
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
-\isamarkupsection{Mixfix annotations%
+\isamarkupsection{Mixfix annotations \label{sec:mixfix}%
 }
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
 Mixfix annotations specify concrete \emph{inner syntax} of
   Isabelle types and terms.  Locally fixed parameters in toplevel
-  theorem statements, locale specifications etc.\ also admit mixfix
-  annotations.
+  theorem statements, locale and class specifications also admit
+  mixfix annotations in a fairly uniform manner.  A mixfix annotation
+  describes describes the concrete syntax, the translation to abstract
+  syntax, and the pretty printing.  Special case annotations provide a
+  simple means of specifying infix operators and binders.
+
+  Isabelle mixfix syntax is inspired by {\OBJ} \cite{OBJ}.  It allows
+  to specify any context-free priority grammar, which is more general
+  than the fixity declarations of ML and Prolog.
 
   \begin{railoutput}
-\rail@begin{3}{\indexdef{}{syntax}{infix}\hypertarget{syntax.infix}{\hyperlink{syntax.infix}{\mbox{\isa{infix}}}}}
+\rail@begin{1}{\indexdef{}{syntax}{mixfix}\hypertarget{syntax.mixfix}{\hyperlink{syntax.mixfix}{\mbox{\isa{mixfix}}}}}
 \rail@term{\isa{{\isaliteral{28}{\isacharparenleft}}}}[]
-\rail@bar
-\rail@term{\isa{\isakeyword{infix}}}[]
-\rail@nextbar{1}
-\rail@term{\isa{\isakeyword{infixl}}}[]
-\rail@nextbar{2}
-\rail@term{\isa{\isakeyword{infixr}}}[]
-\rail@endbar
-\rail@nont{\hyperlink{syntax.string}{\mbox{\isa{string}}}}[]
-\rail@nont{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}}[]
+\rail@nont{\isa{mfix}}[]
 \rail@term{\isa{{\isaliteral{29}{\isacharparenright}}}}[]
-\rail@end
-\rail@begin{5}{\indexdef{}{syntax}{mixfix}\hypertarget{syntax.mixfix}{\hyperlink{syntax.mixfix}{\mbox{\isa{mixfix}}}}}
-\rail@bar
-\rail@nont{\hyperlink{syntax.infix}{\mbox{\isa{infix}}}}[]
-\rail@nextbar{1}
-\rail@term{\isa{{\isaliteral{28}{\isacharparenleft}}}}[]
-\rail@nont{\hyperlink{syntax.string}{\mbox{\isa{string}}}}[]
-\rail@bar
-\rail@nextbar{2}
-\rail@nont{\isa{prios}}[]
-\rail@endbar
-\rail@bar
-\rail@nextbar{2}
-\rail@nont{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}}[]
-\rail@endbar
-\rail@term{\isa{{\isaliteral{29}{\isacharparenright}}}}[]
-\rail@nextbar{3}
-\rail@term{\isa{{\isaliteral{28}{\isacharparenleft}}}}[]
-\rail@term{\isa{\isakeyword{binder}}}[]
-\rail@nont{\hyperlink{syntax.string}{\mbox{\isa{string}}}}[]
-\rail@bar
-\rail@nextbar{4}
-\rail@nont{\isa{prios}}[]
-\rail@endbar
-\rail@nont{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}}[]
-\rail@term{\isa{{\isaliteral{29}{\isacharparenright}}}}[]
-\rail@endbar
 \rail@end
 \rail@begin{2}{\indexdef{}{syntax}{struct\_mixfix}\hypertarget{syntax.struct-mixfix}{\hyperlink{syntax.struct-mixfix}{\mbox{\isa{struct{\isaliteral{5F}{\isacharunderscore}}mixfix}}}}}
-\rail@bar
-\rail@nont{\hyperlink{syntax.mixfix}{\mbox{\isa{mixfix}}}}[]
-\rail@nextbar{1}
 \rail@term{\isa{{\isaliteral{28}{\isacharparenleft}}}}[]
+\rail@bar
+\rail@nont{\isa{mfix}}[]
+\rail@nextbar{1}
 \rail@term{\isa{\isakeyword{structure}}}[]
-\rail@term{\isa{{\isaliteral{29}{\isacharparenright}}}}[]
 \rail@endbar
+\rail@term{\isa{{\isaliteral{29}{\isacharparenright}}}}[]
+\rail@end
+\rail@begin{7}{\isa{mfix}}
+\rail@bar
+\rail@nont{\hyperlink{syntax.template}{\mbox{\isa{template}}}}[]
+\rail@bar
+\rail@nextbar{1}
+\rail@nont{\isa{prios}}[]
+\rail@endbar
+\rail@bar
+\rail@nextbar{1}
+\rail@nont{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}}[]
+\rail@endbar
+\rail@nextbar{2}
+\rail@bar
+\rail@term{\isa{\isakeyword{infix}}}[]
+\rail@nextbar{3}
+\rail@term{\isa{\isakeyword{infixl}}}[]
+\rail@nextbar{4}
+\rail@term{\isa{\isakeyword{infixr}}}[]
+\rail@endbar
+\rail@nont{\hyperlink{syntax.template}{\mbox{\isa{template}}}}[]
+\rail@nont{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}}[]
+\rail@nextbar{5}
+\rail@term{\isa{\isakeyword{binder}}}[]
+\rail@nont{\hyperlink{syntax.template}{\mbox{\isa{template}}}}[]
+\rail@bar
+\rail@nextbar{6}
+\rail@nont{\isa{prios}}[]
+\rail@endbar
+\rail@nont{\hyperlink{syntax.nat}{\mbox{\isa{nat}}}}[]
+\rail@endbar
+\rail@end
+\rail@begin{1}{\isa{template}}
+\rail@nont{\isa{string}}[]
 \rail@end
 \rail@begin{2}{\isa{prios}}
 \rail@term{\isa{{\isaliteral{5B}{\isacharbrackleft}}}}[]
@@ -379,28 +483,36 @@ Mixfix annotations specify concrete \emph{inner syntax} of
 \end{railoutput}
 
 
-  Here the \hyperlink{syntax.string}{\mbox{\isa{string}}} specifications refer to the actual mixfix
-  template, which may include literal text, spacing, blocks, and
-  arguments (denoted by ``\isa{{\isaliteral{5F}{\isacharunderscore}}}''); the special symbol
-  ``\verb|\<index>|'' (printed as ``\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C696E6465783E}{\isasymindex}}{\isaliteral{22}{\isachardoublequote}}}'') represents an index
-  argument that specifies an implicit structure reference (see also
-  \secref{sec:locale}).  Infix and binder declarations provide common
-  abbreviations for particular mixfix declarations.  So in practice,
-  mixfix templates mostly degenerate to literal text for concrete
-  syntax, such as ``\verb|++|'' for an infix symbol.
-
-  \medskip In full generality, mixfix declarations work as follows.
-  Suppose a constant \isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub n\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}} is
-  annotated by \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}mixfix\ {\isaliteral{5B}{\isacharbrackleft}}p\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ p\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{5D}{\isacharbrackright}}\ p{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}}, where \isa{{\isaliteral{22}{\isachardoublequote}}mixfix{\isaliteral{22}{\isachardoublequote}}} is a string \isa{{\isaliteral{22}{\isachardoublequote}}d\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{0}}\ {\isaliteral{5F}{\isacharunderscore}}\ d\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5F}{\isacharunderscore}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{5F}{\isacharunderscore}}\ d\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{22}{\isachardoublequote}}} consisting of
-  delimiters that surround argument positions as indicated by
-  underscores.
+  The string given as \isa{template} may include literal text,
+  spacing, blocks, and arguments (denoted by ``\isa{{\isaliteral{5F}{\isacharunderscore}}}''); the
+  special symbol ``\verb|\<index>|'' (printed as ``\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C696E6465783E}{\isasymindex}}{\isaliteral{22}{\isachardoublequote}}}'')
+  represents an index argument that specifies an implicit structure
+  reference (see also \secref{sec:locale}).  Infix and binder
+  declarations provide common abbreviations for particular mixfix
+  declarations.  So in practice, mixfix templates mostly degenerate to
+  literal text for concrete syntax, such as ``\verb|++|'' for
+  an infix symbol.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{The general mixfix form%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+In full generality, mixfix declarations work as follows.
+  Suppose a constant \isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub n\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}} is annotated by
+  \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}mixfix\ {\isaliteral{5B}{\isacharbrackleft}}p\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ p\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{5D}{\isacharbrackright}}\ p{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}}, where \isa{{\isaliteral{22}{\isachardoublequote}}mixfix{\isaliteral{22}{\isachardoublequote}}} is a string
+  \isa{{\isaliteral{22}{\isachardoublequote}}d\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{0}}\ {\isaliteral{5F}{\isacharunderscore}}\ d\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5F}{\isacharunderscore}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{5F}{\isacharunderscore}}\ d\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{22}{\isachardoublequote}}} consisting of delimiters that surround
+  argument positions as indicated by underscores.
 
   Altogether this determines a production for a context-free priority
   grammar, where for each argument \isa{{\isaliteral{22}{\isachardoublequote}}i{\isaliteral{22}{\isachardoublequote}}} the syntactic category
-  is determined by \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}} (with priority \isa{{\isaliteral{22}{\isachardoublequote}}p\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}}), and
-  the result category is determined from \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}} (with
-  priority \isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}).  Priority specifications are optional, with
-  default 0 for arguments and 1000 for the result.
+  is determined by \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}} (with priority \isa{{\isaliteral{22}{\isachardoublequote}}p\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}}), and the
+  result category is determined from \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}} (with priority \isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}).  Priority specifications are optional, with default 0 for
+  arguments and 1000 for the result.\footnote{Omitting priorities is
+  prone to syntactic ambiguities unless the delimiter tokens determine
+  fully bracketed notation, as in \isa{{\isaliteral{22}{\isachardoublequote}}if\ {\isaliteral{5F}{\isacharunderscore}}\ then\ {\isaliteral{5F}{\isacharunderscore}}\ else\ {\isaliteral{5F}{\isacharunderscore}}\ fi{\isaliteral{22}{\isachardoublequote}}}.}
 
   Since \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}} may be again a function type, the constant
   type scheme may have more argument positions than the mixfix
@@ -464,17 +576,87 @@ Mixfix annotations specify concrete \emph{inner syntax} of
 
   \end{description}
 
-  For example, the template \verb|(_ +/ _)| specifies an infix
-  operator.  There are two argument positions; the delimiter
-  \verb|+| is preceded by a space and followed by a space or
-  line break; the entire phrase is a pretty printing block.
-
   The general idea of pretty printing with blocks and breaks is also
-  described in \cite{paulson-ml2}.%
+  described in \cite{paulson-ml2}; it goes back to \cite{Oppen:1980}.%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
-\isamarkupsection{Explicit notation%
+\isamarkupsubsection{Infixes%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+Infix operators are specified by convenient short forms that
+  abbreviate general mixfix annotations as follows:
+
+  \begin{center}
+  \begin{tabular}{lll}
+
+  \verb|(|\indexdef{}{keyword}{infix}\hypertarget{keyword.infix}{\hyperlink{keyword.infix}{\mbox{\isa{\isakeyword{infix}}}}}~\verb|"|\isa{sy}\verb|"| \isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|)|
+  & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6D617073746F3E}{\isasymmapsto}}{\isaliteral{22}{\isachardoublequote}}} &
+  \verb|("(_ |\isa{sy}\verb|/ _)" [|\isa{{\isaliteral{22}{\isachardoublequote}}p\ {\isaliteral{2B}{\isacharplus}}\ {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}}\verb|, |\isa{{\isaliteral{22}{\isachardoublequote}}p\ {\isaliteral{2B}{\isacharplus}}\ {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}}\verb|]|\isa{{\isaliteral{22}{\isachardoublequote}}\ p{\isaliteral{22}{\isachardoublequote}}}\verb|)| \\
+  \verb|(|\indexdef{}{keyword}{infixl}\hypertarget{keyword.infixl}{\hyperlink{keyword.infixl}{\mbox{\isa{\isakeyword{infixl}}}}}~\verb|"|\isa{sy}\verb|"| \isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|)|
+  & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6D617073746F3E}{\isasymmapsto}}{\isaliteral{22}{\isachardoublequote}}} &
+  \verb|("(_ |\isa{sy}\verb|/ _)" [|\isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|, |\isa{{\isaliteral{22}{\isachardoublequote}}p\ {\isaliteral{2B}{\isacharplus}}\ {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}}\verb|]|\isa{{\isaliteral{22}{\isachardoublequote}}\ p{\isaliteral{22}{\isachardoublequote}}}\verb|)| \\
+  \verb|(|\indexdef{}{keyword}{infixr}\hypertarget{keyword.infixr}{\hyperlink{keyword.infixr}{\mbox{\isa{\isakeyword{infixr}}}}}~\verb|"|\isa{sy}\verb|"| \isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|)|
+  & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6D617073746F3E}{\isasymmapsto}}{\isaliteral{22}{\isachardoublequote}}} &
+  \verb|("(_ |\isa{sy}\verb|/ _)" [|\isa{{\isaliteral{22}{\isachardoublequote}}p\ {\isaliteral{2B}{\isacharplus}}\ {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}}\verb|, |\isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|]|\isa{{\isaliteral{22}{\isachardoublequote}}\ p{\isaliteral{22}{\isachardoublequote}}}\verb|)| \\
+
+  \end{tabular}
+  \end{center}
+
+  The mixfix template \verb|"(_ |\isa{sy}\verb|/ _)"|
+  specifies two argument positions; the delimiter is preceded by a
+  space and followed by a space or line break; the entire phrase is a
+  pretty printing block.
+
+  The alternative notation \verb|op|~\isa{sy} is introduced
+  in addition.  Thus any infix operator may be written in prefix form
+  (as in ML), independently of the number of arguments in the term.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsubsection{Binders%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+A \emph{binder} is a variable-binding construct such as a
+  quantifier.  The idea to formalize \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C666F72616C6C3E}{\isasymforall}}x{\isaliteral{2E}{\isachardot}}\ b{\isaliteral{22}{\isachardoublequote}}} as \isa{{\isaliteral{22}{\isachardoublequote}}All\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C6C616D6264613E}{\isasymlambda}}x{\isaliteral{2E}{\isachardot}}\ b{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} for \isa{{\isaliteral{22}{\isachardoublequote}}All\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{27}{\isacharprime}}a\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ bool{\isaliteral{29}{\isacharparenright}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ bool{\isaliteral{22}{\isachardoublequote}}} already goes back
+  to \cite{church40}.  Isabelle declarations of certain higher-order
+  operators may be annotated with \indexdef{}{keyword}{binder}\hypertarget{keyword.binder}{\hyperlink{keyword.binder}{\mbox{\isa{\isakeyword{binder}}}}} annotations
+  as follows:
+
+  \begin{center}
+  \isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{22}{\isachardoublequote}}}\verb|"|\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}{\isaliteral{29}{\isacharparenright}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{3}}{\isaliteral{22}{\isachardoublequote}}}\verb|"  (|\hyperlink{keyword.binder}{\mbox{\isa{\isakeyword{binder}}}}\verb| "|\isa{{\isaliteral{22}{\isachardoublequote}}sy{\isaliteral{22}{\isachardoublequote}}}\verb|" [|\isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|] |\isa{{\isaliteral{22}{\isachardoublequote}}q{\isaliteral{22}{\isachardoublequote}}}\verb|)|
+  \end{center}
+
+  This introduces concrete binder syntax \isa{{\isaliteral{22}{\isachardoublequote}}sy\ x{\isaliteral{2E}{\isachardot}}\ b{\isaliteral{22}{\isachardoublequote}}}, where
+  \isa{x} is a bound variable of type \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}}, the body \isa{b} has type \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}{\isaliteral{22}{\isachardoublequote}}} and the whole term has type \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{3}}{\isaliteral{22}{\isachardoublequote}}}.
+  The optional integer \isa{p} specifies the syntactic priority of
+  the body; the default is \isa{{\isaliteral{22}{\isachardoublequote}}q{\isaliteral{22}{\isachardoublequote}}}, which is also the priority of
+  the whole construct.
+
+  Internally, the binder syntax is expanded to something like this:
+  \begin{center}
+  \isa{{\isaliteral{22}{\isachardoublequote}}c{\isaliteral{5F}{\isacharunderscore}}binder\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{22}{\isachardoublequote}}}\verb|"|\isa{{\isaliteral{22}{\isachardoublequote}}idts\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{2}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{3}}{\isaliteral{22}{\isachardoublequote}}}\verb|"  ("(3|\isa{sy}\verb|_./ _)" [0, |\isa{{\isaliteral{22}{\isachardoublequote}}p{\isaliteral{22}{\isachardoublequote}}}\verb|] |\isa{{\isaliteral{22}{\isachardoublequote}}q{\isaliteral{22}{\isachardoublequote}}}\verb|)|
+  \end{center}
+
+  Here \hyperlink{syntax.inner.idts}{\mbox{\isa{idts}}} is the nonterminal symbol for a list of
+  identifiers with optional type constraints (see also
+  \secref{sec:pure-grammar}).  The mixfix template \verb|"(3|\isa{sy}\verb|_./ _)"| defines argument positions
+  for the bound identifiers and the body, separated by a dot with
+  optional line break; the entire phrase is a pretty printing block of
+  indentation level 3.  Note that there is no extra space after \isa{{\isaliteral{22}{\isachardoublequote}}sy{\isaliteral{22}{\isachardoublequote}}}, so it needs to be included user specification if the binder
+  syntax ends with a token that may be continued by an identifier
+  token at the start of \hyperlink{syntax.inner.idts}{\mbox{\isa{idts}}}.
+
+  Furthermore, a syntax translation to transforms \isa{{\isaliteral{22}{\isachardoublequote}}c{\isaliteral{5F}{\isacharunderscore}}binder\ x\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ x\isaliteral{5C3C5E7375623E}{}\isactrlsub n\ b{\isaliteral{22}{\isachardoublequote}}} into iterated application \isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C6C616D6264613E}{\isasymlambda}}x\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{2E}{\isachardot}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ c\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C6C616D6264613E}{\isasymlambda}}x\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{2E}{\isachardot}}\ b{\isaliteral{29}{\isacharparenright}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}}.
+  This works in both directions, for parsing and printing.%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Explicit notation \label{sec:notation}%
 }
 \isamarkuptrue%
 %
@@ -486,6 +668,13 @@ Mixfix annotations specify concrete \emph{inner syntax} of
     \indexdef{}{command}{no\_notation}\hypertarget{command.no-notation}{\hyperlink{command.no-notation}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}notation}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
     \indexdef{}{command}{write}\hypertarget{command.write}{\hyperlink{command.write}{\mbox{\isa{\isacommand{write}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}proof{\isaliteral{28}{\isacharparenleft}}state{\isaliteral{29}{\isacharparenright}}\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ proof{\isaliteral{28}{\isacharparenleft}}state{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
   \end{matharray}
+
+  Commands that introduce new logical entities (terms or types)
+  usually allow to provide mixfix annotations on the spot, which is
+  convenient for default notation.  Nonetheless, the syntax may be
+  modified later on by declarations for explicit notation.  This
+  allows to add or delete mixfix annotations for of existing logical
+  entities within the current context.
 
   \begin{railoutput}
 \rail@begin{5}{}
@@ -553,14 +742,14 @@ Mixfix annotations specify concrete \emph{inner syntax} of
   \item \hyperlink{command.type-notation}{\mbox{\isa{\isacommand{type{\isaliteral{5F}{\isacharunderscore}}notation}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{28}{\isacharparenleft}}mx{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} associates mixfix
   syntax with an existing type constructor.  The arity of the
   constructor is retrieved from the context.
-  
+
   \item \hyperlink{command.no-type-notation}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}type{\isaliteral{5F}{\isacharunderscore}}notation}}}} is similar to \hyperlink{command.type-notation}{\mbox{\isa{\isacommand{type{\isaliteral{5F}{\isacharunderscore}}notation}}}}, but removes the specified syntax annotation from
   the present context.
 
   \item \hyperlink{command.notation}{\mbox{\isa{\isacommand{notation}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{28}{\isacharparenleft}}mx{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} associates mixfix
   syntax with an existing constant or fixed variable.  The type
   declaration of the given entity is retrieved from the context.
-  
+
   \item \hyperlink{command.no-notation}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}notation}}}} is similar to \hyperlink{command.notation}{\mbox{\isa{\isacommand{notation}}}},
   but removes the specified syntax annotation from the present
   context.
@@ -568,16 +757,65 @@ Mixfix annotations specify concrete \emph{inner syntax} of
   \item \hyperlink{command.write}{\mbox{\isa{\isacommand{write}}}} is similar to \hyperlink{command.notation}{\mbox{\isa{\isacommand{notation}}}}, but
   works within an Isar proof body.
 
-  \end{description}
-
-  Note that the more primitive commands \hyperlink{command.syntax}{\mbox{\isa{\isacommand{syntax}}}} and
-  \hyperlink{command.no-syntax}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}syntax}}}} (\secref{sec:syn-trans}) provide raw access
-  to the syntax tables of a global theory.%
+  \end{description}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
 \isamarkupsection{The Pure syntax \label{sec:pure-syntax}%
 }
+\isamarkuptrue%
+%
+\isamarkupsubsection{Lexical matters \label{sec:inner-lex}%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+The inner lexical syntax vaguely resembles the outer one
+  (\secref{sec:outer-lex}), but some details are different.  There are
+  two main categories of inner syntax tokens:
+
+  \begin{enumerate}
+
+  \item \emph{delimiters} --- the literal tokens occurring in
+  productions of the given priority grammar (cf.\
+  \secref{sec:priority-grammar});
+
+  \item \emph{named tokens} --- various categories of identifiers etc.
+
+  \end{enumerate}
+
+  Delimiters override named tokens and may thus render certain
+  identifiers inaccessible.  Sometimes the logical context admits
+  alternative ways to refer to the same entity, potentially via
+  qualified names.
+
+  \medskip The categories for named tokens are defined once and for
+  all as follows, reusing some categories of the outer token syntax
+  (\secref{sec:outer-lex}).
+
+  \begin{center}
+  \begin{supertabular}{rcl}
+    \indexdef{inner}{syntax}{id}\hypertarget{syntax.inner.id}{\hyperlink{syntax.inner.id}{\mbox{\isa{id}}}} & = & \indexref{}{syntax}{ident}\hyperlink{syntax.ident}{\mbox{\isa{ident}}} \\
+    \indexdef{inner}{syntax}{longid}\hypertarget{syntax.inner.longid}{\hyperlink{syntax.inner.longid}{\mbox{\isa{longid}}}} & = & \indexref{}{syntax}{longident}\hyperlink{syntax.longident}{\mbox{\isa{longident}}} \\
+    \indexdef{inner}{syntax}{var}\hypertarget{syntax.inner.var}{\hyperlink{syntax.inner.var}{\mbox{\isa{var}}}} & = & \indexref{}{syntax}{var}\hyperlink{syntax.var}{\mbox{\isa{var}}} \\
+    \indexdef{inner}{syntax}{tid}\hypertarget{syntax.inner.tid}{\hyperlink{syntax.inner.tid}{\mbox{\isa{tid}}}} & = & \indexref{}{syntax}{typefree}\hyperlink{syntax.typefree}{\mbox{\isa{typefree}}} \\
+    \indexdef{inner}{syntax}{tvar}\hypertarget{syntax.inner.tvar}{\hyperlink{syntax.inner.tvar}{\mbox{\isa{tvar}}}} & = & \indexref{}{syntax}{typevar}\hyperlink{syntax.typevar}{\mbox{\isa{typevar}}} \\
+    \indexdef{inner}{syntax}{num\_token}\hypertarget{syntax.inner.num-token}{\hyperlink{syntax.inner.num-token}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}token}}}} & = & \indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|-|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}} \\
+    \indexdef{inner}{syntax}{float\_token}\hypertarget{syntax.inner.float-token}{\hyperlink{syntax.inner.float-token}{\mbox{\isa{float{\isaliteral{5F}{\isacharunderscore}}token}}}} & = & \indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\verb|.|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|-|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\verb|.|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}} \\
+    \indexdef{inner}{syntax}{xnum\_token}\hypertarget{syntax.inner.xnum-token}{\hyperlink{syntax.inner.xnum-token}{\mbox{\isa{xnum{\isaliteral{5F}{\isacharunderscore}}token}}}} & = & \verb|#|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|#-|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}} \\
+
+    \indexdef{inner}{syntax}{xstr}\hypertarget{syntax.inner.xstr}{\hyperlink{syntax.inner.xstr}{\mbox{\isa{xstr}}}} & = & \verb|''| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|''| \\
+  \end{supertabular}
+  \end{center}
+
+  The token categories \hyperlink{syntax.inner.num-token}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}token}}}, \hyperlink{syntax.inner.float-token}{\mbox{\isa{float{\isaliteral{5F}{\isacharunderscore}}token}}}, \hyperlink{syntax.inner.xnum-token}{\mbox{\isa{xnum{\isaliteral{5F}{\isacharunderscore}}token}}}, and \hyperlink{syntax.inner.xstr}{\mbox{\isa{xstr}}} are not used in Pure.  Object-logics may implement numerals
+  and string constants by adding appropriate syntax declarations,
+  together with some translation functions (e.g.\ see Isabelle/HOL).
+
+  The derived categories \indexdef{inner}{syntax}{num\_const}\hypertarget{syntax.inner.num-const}{\hyperlink{syntax.inner.num-const}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}const}}}}, \indexdef{inner}{syntax}{float\_const}\hypertarget{syntax.inner.float-const}{\hyperlink{syntax.inner.float-const}{\mbox{\isa{float{\isaliteral{5F}{\isacharunderscore}}const}}}}, and \indexdef{inner}{syntax}{num\_const}\hypertarget{syntax.inner.num-const}{\hyperlink{syntax.inner.num-const}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}const}}}} provide
+  robust access to the respective tokens: the syntax tree holds a
+  syntactic constant instead of a free variable.%
+\end{isamarkuptext}%
 \isamarkuptrue%
 %
 \isamarkupsubsection{Priority grammars \label{sec:priority-grammar}%
@@ -655,15 +893,13 @@ A context-free grammar consists of a set of \emph{terminal
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
-\isamarkupsubsection{The Pure grammar%
+\isamarkupsubsection{The Pure grammar \label{sec:pure-grammar}%
 }
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-The priority grammar of the \isa{{\isaliteral{22}{\isachardoublequote}}Pure{\isaliteral{22}{\isachardoublequote}}} theory is defined as follows:
-
-  %FIXME syntax for "index" (?)
-  %FIXME "op" versions of ==> etc. (?)
+The priority grammar of the \isa{{\isaliteral{22}{\isachardoublequote}}Pure{\isaliteral{22}{\isachardoublequote}}} theory is defined
+  approximately like this:
 
   \begin{center}
   \begin{supertabular}{rclr}
@@ -689,20 +925,27 @@ The priority grammar of the \isa{{\isaliteral{22}{\isachardoublequote}}Pure{\isa
   \indexdef{inner}{syntax}{aprop}\hypertarget{syntax.inner.aprop}{\hyperlink{syntax.inner.aprop}{\mbox{\isa{aprop}}}} & = & \verb|(| \isa{aprop} \verb|)| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ longid\ \ {\isaliteral{7C}{\isacharbar}}\ \ var\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|_|\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|...| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|CONST| \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|CONST| \isa{{\isaliteral{22}{\isachardoublequote}}longid{\isaliteral{22}{\isachardoublequote}}} \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|XCONST| \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|XCONST| \isa{{\isaliteral{22}{\isachardoublequote}}longid{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}logic\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ \ any\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ any\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{9}}{\isadigit{9}}{\isadigit{9}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\\\
 
   \indexdef{inner}{syntax}{logic}\hypertarget{syntax.inner.logic}{\hyperlink{syntax.inner.logic}{\mbox{\isa{logic}}}} & = & \verb|(| \isa{logic} \verb|)| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}logic\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{4}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \verb|::| \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{3}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ longid\ \ {\isaliteral{7C}{\isacharbar}}\ \ var\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|_|\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|...| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|CONST| \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|CONST| \isa{{\isaliteral{22}{\isachardoublequote}}longid{\isaliteral{22}{\isachardoublequote}}} \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|XCONST| \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|XCONST| \isa{{\isaliteral{22}{\isachardoublequote}}longid{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}logic\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ \ any\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ any\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{9}}{\isadigit{9}}{\isadigit{9}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7374727563743E}{\isasymstruct}}\ index\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|%| \isa{pttrns} \verb|.| \isa{{\isaliteral{22}{\isachardoublequote}}any\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{3}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{3}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{5C3C6C616D6264613E}{\isasymlambda}}} \isa{pttrns} \verb|.| \isa{{\isaliteral{22}{\isachardoublequote}}any\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{3}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{3}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|op| \verb|==|\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|op| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C65717569763E}{\isasymequiv}}{\isaliteral{22}{\isachardoublequote}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|op| \verb|&&&| \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|op| \verb|==>|\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|op| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C4C6F6E6772696768746172726F773E}{\isasymLongrightarrow}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|TYPE| \verb|(| \isa{type} \verb|)| \\\\
 
   \indexdef{inner}{syntax}{idt}\hypertarget{syntax.inner.idt}{\hyperlink{syntax.inner.idt}{\mbox{\isa{idt}}}} & = & \verb|(| \isa{idt} \verb|)|\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ id\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|_| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{id} \verb|::| \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|_| \verb|::| \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\\\
+
+  \indexdef{inner}{syntax}{index}\hypertarget{syntax.inner.index}{\hyperlink{syntax.inner.index}{\mbox{\isa{index}}}} & = & \verb|\<^bsub>| \isa{{\isaliteral{22}{\isachardoublequote}}logic\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \verb|\<^esub>|\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{5C3C696E6465783E}{\isasymindex}}{\isaliteral{22}{\isachardoublequote}}} \\\\
 
   \indexdef{inner}{syntax}{idts}\hypertarget{syntax.inner.idts}{\hyperlink{syntax.inner.idts}{\mbox{\isa{idts}}}} & = & \isa{{\isaliteral{22}{\isachardoublequote}}idt\ \ {\isaliteral{7C}{\isacharbar}}\ \ idt\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ idts{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\\\
 
@@ -713,16 +956,17 @@ The priority grammar of the \isa{{\isaliteral{22}{\isachardoublequote}}Pure{\isa
   \indexdef{inner}{syntax}{type}\hypertarget{syntax.inner.type}{\hyperlink{syntax.inner.type}{\mbox{\isa{type}}}} & = & \verb|(| \isa{type} \verb|)| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}tid\ \ {\isaliteral{7C}{\isacharbar}}\ \ tvar\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|_| \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}tid{\isaliteral{22}{\isachardoublequote}}} \verb|::| \isa{{\isaliteral{22}{\isachardoublequote}}sort\ \ {\isaliteral{7C}{\isacharbar}}\ \ tvar\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|::| \isa{{\isaliteral{22}{\isachardoublequote}}sort\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|_| \verb|::| \isa{{\isaliteral{22}{\isachardoublequote}}sort{\isaliteral{22}{\isachardoublequote}}} \\
-    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ type\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ id\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|(| \isa{type} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{type} \verb|)| \isa{id} \\
-    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}longid\ \ {\isaliteral{7C}{\isacharbar}}\ \ type\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ longid{\isaliteral{22}{\isachardoublequote}}} \\
-    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|(| \isa{type} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{type} \verb|)| \isa{longid} \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}type{\isaliteral{5F}{\isacharunderscore}}name\ \ {\isaliteral{7C}{\isacharbar}}\ \ type\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{0}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}\ type{\isaliteral{5F}{\isacharunderscore}}name{\isaliteral{22}{\isachardoublequote}}} \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|(| \isa{type} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{type} \verb|)| \isa{type{\isaliteral{5F}{\isacharunderscore}}name} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}type\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \verb|=>| \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}type\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isadigit{1}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}{\isaliteral{22}{\isachardoublequote}}} \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|[| \isa{type} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{type} \verb|]| \verb|=>| \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
-    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|[| \isa{type} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{type} \verb|]| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}{\isaliteral{22}{\isachardoublequote}}} \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\\\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|[| \isa{type} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{type} \verb|]| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}{\isaliteral{22}{\isachardoublequote}}} \isa{type} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}{\isadigit{0}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
+  \indexdef{inner}{syntax}{type\_name}\hypertarget{syntax.inner.type-name}{\hyperlink{syntax.inner.type-name}{\mbox{\isa{type{\isaliteral{5F}{\isacharunderscore}}name}}}} & = & \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ longid{\isaliteral{22}{\isachardoublequote}}} \\\\
 
-  \indexdef{inner}{syntax}{sort}\hypertarget{syntax.inner.sort}{\hyperlink{syntax.inner.sort}{\mbox{\isa{sort}}}} & = & \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ longid\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|{}| \\
-    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|{| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}id\ {\isaliteral{7C}{\isacharbar}}\ longid{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}id\ {\isaliteral{7C}{\isacharbar}}\ longid{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \verb|}| \\
+  \indexdef{inner}{syntax}{sort}\hypertarget{syntax.inner.sort}{\hyperlink{syntax.inner.sort}{\mbox{\isa{sort}}}} & = & \hyperlink{syntax.class-name}{\mbox{\isa{class{\isaliteral{5F}{\isacharunderscore}}name}}}~\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|{}| \\
+    & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{7C}{\isacharbar}}{\isaliteral{22}{\isachardoublequote}}} & \verb|{| \hyperlink{syntax.class-name}{\mbox{\isa{class{\isaliteral{5F}{\isacharunderscore}}name}}} \verb|,| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|,| \hyperlink{syntax.class-name}{\mbox{\isa{class{\isaliteral{5F}{\isacharunderscore}}name}}} \verb|}| \\
+  \indexdef{inner}{syntax}{class\_name}\hypertarget{syntax.inner.class-name}{\hyperlink{syntax.inner.class-name}{\mbox{\isa{class{\isaliteral{5F}{\isacharunderscore}}name}}}} & = & \isa{{\isaliteral{22}{\isachardoublequote}}id\ \ {\isaliteral{7C}{\isacharbar}}\ \ longid{\isaliteral{22}{\isachardoublequote}}} \\
   \end{supertabular}
   \end{center}
 
@@ -758,6 +1002,10 @@ The priority grammar of the \isa{{\isaliteral{22}{\isachardoublequote}}Pure{\isa
   When specifying notation for logical entities, all logical types
   (excluding \isa{prop}) are \emph{collapsed} to this single category
   of \hyperlink{syntax.inner.logic}{\mbox{\isa{logic}}}.
+
+  \item \indexref{inner}{syntax}{index}\hyperlink{syntax.inner.index}{\mbox{\isa{index}}} denotes an optional index term for
+  indexed syntax.  If omitted, it refers to the first \hyperlink{keyword.structure}{\mbox{\isa{\isakeyword{structure}}}} variable in the context.  The special dummy ``\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C696E6465783E}{\isasymindex}}{\isaliteral{22}{\isachardoublequote}}}'' serves as pattern variable in mixfix annotations that
+  introduce indexed notation.
 
   \item \indexref{inner}{syntax}{idt}\hyperlink{syntax.inner.idt}{\mbox{\isa{idt}}} denotes identifiers, possibly
   constrained by types.
@@ -827,64 +1075,121 @@ The priority grammar of the \isa{{\isaliteral{22}{\isachardoublequote}}Pure{\isa
   context.  This special term abbreviation works nicely with
   calculational reasoning (\secref{sec:calculation}).
 
+  \item \verb|CONST| ensures that the given identifier is treated
+  as constant term, and passed through the parse tree in fully
+  internalized form.  This is particularly relevant for translation
+  rules (\secref{sec:syn-trans}), notably on the RHS.
+
+  \item \verb|XCONST| is similar to \verb|CONST|, but
+  retains the constant name as given.  This is only relevant to
+  translation rules (\secref{sec:syn-trans}), notably on the LHS.
+
   \end{itemize}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
-\isamarkupsection{Lexical matters \label{sec:inner-lex}%
+\isamarkupsubsection{Inspecting the syntax%
 }
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-The inner lexical syntax vaguely resembles the outer one
-  (\secref{sec:outer-lex}), but some details are different.  There are
-  two main categories of inner syntax tokens:
+\begin{matharray}{rcl}
+    \indexdef{}{command}{print\_syntax}\hypertarget{command.print-syntax}{\hyperlink{command.print-syntax}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}syntax}}}}}\isa{{\isaliteral{22}{\isachardoublequote}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{2A}{\isacharasterisk}}{\isaliteral{22}{\isachardoublequote}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}context\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}{\isaliteral{22}{\isachardoublequote}}} \\
+  \end{matharray}
 
-  \begin{enumerate}
+  \begin{description}
 
-  \item \emph{delimiters} --- the literal tokens occurring in
-  productions of the given priority grammar (cf.\
-  \secref{sec:priority-grammar});
+  \item \hyperlink{command.print-syntax}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}syntax}}}} prints the inner syntax of the
+  current context.  The output can be quite large; the most important
+  sections are explained below.
 
-  \item \emph{named tokens} --- various categories of identifiers etc.
+  \begin{description}
 
-  \end{enumerate}
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}lexicon{\isaliteral{22}{\isachardoublequote}}} lists the delimiters of the inner token
+  language; see \secref{sec:inner-lex}.
 
-  Delimiters override named tokens and may thus render certain
-  identifiers inaccessible.  Sometimes the logical context admits
-  alternative ways to refer to the same entity, potentially via
-  qualified names.
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}prods{\isaliteral{22}{\isachardoublequote}}} lists the productions of the underlying
+  priority grammar; see \secref{sec:priority-grammar}.
 
-  \medskip The categories for named tokens are defined once and for
-  all as follows, reusing some categories of the outer token syntax
-  (\secref{sec:outer-lex}).
+  The nonterminal \isa{{\isaliteral{22}{\isachardoublequote}}A\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup p\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} is rendered in plain text as \isa{{\isaliteral{22}{\isachardoublequote}}A{\isaliteral{5B}{\isacharbrackleft}}p{\isaliteral{5D}{\isacharbrackright}}{\isaliteral{22}{\isachardoublequote}}}; delimiters are quoted.  Many productions have an extra
+  \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{3D}{\isacharequal}}{\isaliteral{3E}{\isachargreater}}\ name{\isaliteral{22}{\isachardoublequote}}}.  These names later become the heads of parse
+  trees; they also guide the pretty printer.
 
-  \begin{center}
-  \begin{supertabular}{rcl}
-    \indexdef{inner}{syntax}{id}\hypertarget{syntax.inner.id}{\hyperlink{syntax.inner.id}{\mbox{\isa{id}}}} & = & \indexref{}{syntax}{ident}\hyperlink{syntax.ident}{\mbox{\isa{ident}}} \\
-    \indexdef{inner}{syntax}{longid}\hypertarget{syntax.inner.longid}{\hyperlink{syntax.inner.longid}{\mbox{\isa{longid}}}} & = & \indexref{}{syntax}{longident}\hyperlink{syntax.longident}{\mbox{\isa{longident}}} \\
-    \indexdef{inner}{syntax}{var}\hypertarget{syntax.inner.var}{\hyperlink{syntax.inner.var}{\mbox{\isa{var}}}} & = & \indexref{}{syntax}{var}\hyperlink{syntax.var}{\mbox{\isa{var}}} \\
-    \indexdef{inner}{syntax}{tid}\hypertarget{syntax.inner.tid}{\hyperlink{syntax.inner.tid}{\mbox{\isa{tid}}}} & = & \indexref{}{syntax}{typefree}\hyperlink{syntax.typefree}{\mbox{\isa{typefree}}} \\
-    \indexdef{inner}{syntax}{tvar}\hypertarget{syntax.inner.tvar}{\hyperlink{syntax.inner.tvar}{\mbox{\isa{tvar}}}} & = & \indexref{}{syntax}{typevar}\hyperlink{syntax.typevar}{\mbox{\isa{typevar}}} \\
-    \indexdef{inner}{syntax}{num\_token}\hypertarget{syntax.inner.num-token}{\hyperlink{syntax.inner.num-token}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}token}}}} & = & \indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|-|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}} \\
-    \indexdef{inner}{syntax}{float\_token}\hypertarget{syntax.inner.float-token}{\hyperlink{syntax.inner.float-token}{\mbox{\isa{float{\isaliteral{5F}{\isacharunderscore}}token}}}} & = & \indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\verb|.|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|-|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\verb|.|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}} \\
-    \indexdef{inner}{syntax}{xnum\_token}\hypertarget{syntax.inner.xnum-token}{\hyperlink{syntax.inner.xnum-token}{\mbox{\isa{xnum{\isaliteral{5F}{\isacharunderscore}}token}}}} & = & \verb|#|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}}\isa{{\isaliteral{22}{\isachardoublequote}}\ \ {\isaliteral{7C}{\isacharbar}}\ \ {\isaliteral{22}{\isachardoublequote}}}\verb|#-|\indexref{}{syntax}{nat}\hyperlink{syntax.nat}{\mbox{\isa{nat}}} \\
+  Productions without such parse tree names are called \emph{copy
+  productions}.  Their right-hand side must have exactly one
+  nonterminal symbol (or named token).  The parser does not create a
+  new parse tree node for copy productions, but simply returns the
+  parse tree of the right-hand symbol.
 
-    \indexdef{inner}{syntax}{xstr}\hypertarget{syntax.inner.xstr}{\hyperlink{syntax.inner.xstr}{\mbox{\isa{xstr}}}} & = & \verb|''| \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{22}{\isachardoublequote}}} \verb|''| \\
-  \end{supertabular}
-  \end{center}
+  If the right-hand side of a copy production consists of a single
+  nonterminal without any delimiters, then it is called a \emph{chain
+  production}.  Chain productions act as abbreviations: conceptually,
+  they are removed from the grammar by adding new productions.
+  Priority information attached to chain productions is ignored; only
+  the dummy value \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{2D}{\isacharminus}}{\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}} is displayed.
 
-  The token categories \hyperlink{syntax.inner.num-token}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}token}}}, \hyperlink{syntax.inner.float-token}{\mbox{\isa{float{\isaliteral{5F}{\isacharunderscore}}token}}}, \hyperlink{syntax.inner.xnum-token}{\mbox{\isa{xnum{\isaliteral{5F}{\isacharunderscore}}token}}}, and \hyperlink{syntax.inner.xstr}{\mbox{\isa{xstr}}} are not used in Pure.  Object-logics may implement numerals
-  and string constants by adding appropriate syntax declarations,
-  together with some translation functions (e.g.\ see Isabelle/HOL).
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}print\ modes{\isaliteral{22}{\isachardoublequote}}} lists the alternative print modes
+  provided by this grammar; see \secref{sec:print-modes}.
 
-  The derived categories \indexdef{inner}{syntax}{num\_const}\hypertarget{syntax.inner.num-const}{\hyperlink{syntax.inner.num-const}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}const}}}}, \indexdef{inner}{syntax}{float\_const}\hypertarget{syntax.inner.float-const}{\hyperlink{syntax.inner.float-const}{\mbox{\isa{float{\isaliteral{5F}{\isacharunderscore}}const}}}}, and \indexdef{inner}{syntax}{num\_const}\hypertarget{syntax.inner.num-const}{\hyperlink{syntax.inner.num-const}{\mbox{\isa{num{\isaliteral{5F}{\isacharunderscore}}const}}}} provide
-  robust access to the respective tokens: the syntax tree holds a
-  syntactic constant instead of a free variable.%
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}parse{\isaliteral{5F}{\isacharunderscore}}rules{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}print{\isaliteral{5F}{\isacharunderscore}}rules{\isaliteral{22}{\isachardoublequote}}} relate to
+  syntax translations (macros); see \secref{sec:syn-trans}.
+
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}parse{\isaliteral{5F}{\isacharunderscore}}ast{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}print{\isaliteral{5F}{\isacharunderscore}}ast{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}} list sets of constants that invoke
+  translation functions for abstract syntax trees, which are only
+  required in very special situations; see \secref{sec:tr-funs}.
+
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}parse{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}print{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}}
+  list the sets of constants that invoke regular translation
+  functions; see \secref{sec:tr-funs}.
+
+  \end{description}
+
+  \end{description}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
-\isamarkupsection{Syntax and translations \label{sec:syn-trans}%
+\isamarkupsubsection{Ambiguity of parsed expressions%
+}
+\isamarkuptrue%
+%
+\begin{isamarkuptext}%
+\begin{tabular}{rcll}
+    \indexdef{}{attribute}{syntax\_ambiguity\_level}\hypertarget{attribute.syntax-ambiguity-level}{\hyperlink{attribute.syntax-ambiguity-level}{\mbox{\isa{syntax{\isaliteral{5F}{\isacharunderscore}}ambiguity{\isaliteral{5F}{\isacharunderscore}}level}}}} & : & \isa{attribute} & default \isa{{\isadigit{1}}} \\
+  \end{tabular}
+
+  \begin{mldecls}
+    \indexdef{}{ML}{Syntax.ambiguity\_limit}\verb|Syntax.ambiguity_limit: int Config.T| \\  %FIXME attribute
+  \end{mldecls}
+
+  Depending on the grammar and the given input, parsing may be
+  ambiguous.  Isabelle lets the Earley parser enumerate all possible
+  parse trees, and then tries to make the best out of the situation.
+  Terms that cannot be type-checked are filtered out, which often
+  leads to a unique result in the end.  Unlike regular type
+  reconstruction, which is applied to the whole collection of input
+  terms simultaneously, the filtering stage only treats each given
+  term in isolation.  Filtering is also not attempted for individual
+  types or raw ASTs (as required for \hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}}).
+
+  Certain warning or error messages are printed, depending on the
+  situation and the given configuration options.  Parsing ultimately
+  fails, if multiple results remain after the filtering phase.
+
+  \begin{description}
+
+  \item \hyperlink{attribute.syntax-ambiguity-level}{\mbox{\isa{syntax{\isaliteral{5F}{\isacharunderscore}}ambiguity{\isaliteral{5F}{\isacharunderscore}}level}}} determines the number of
+  parser results that are tolerated without printing a detailed
+  message.
+
+  \item \verb|Syntax.ambiguity_limit| determines the number of
+  resulting parse trees that are shown as part of the printed message
+  in case of an ambiguity.
+
+  \end{description}%
+\end{isamarkuptext}%
+\isamarkuptrue%
+%
+\isamarkupsection{Raw syntax and translations \label{sec:syn-trans}%
 }
 \isamarkuptrue%
 %
@@ -896,6 +1201,15 @@ The inner lexical syntax vaguely resembles the outer one
     \indexdef{}{command}{translations}\hypertarget{command.translations}{\hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ theory{\isaliteral{22}{\isachardoublequote}}} \\
     \indexdef{}{command}{no\_translations}\hypertarget{command.no-translations}{\hyperlink{command.no-translations}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}translations}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ theory{\isaliteral{22}{\isachardoublequote}}} \\
   \end{matharray}
+
+  Unlike mixfix notation for existing formal entities
+  (\secref{sec:notation}), raw syntax declarations provide full access
+  to the priority grammar of the inner syntax.  This includes
+  additional syntactic categories (via \hyperlink{command.nonterminal}{\mbox{\isa{\isacommand{nonterminal}}}}) and
+  free-form grammar productions (via \hyperlink{command.syntax}{\mbox{\isa{\isacommand{syntax}}}}).  Additional
+  syntax translations (or macros, via \hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}}) are
+  required to turn resulting parse trees into proper representations
+  of formal entities again.
 
   \begin{railoutput}
 \rail@begin{2}{}
@@ -971,34 +1285,87 @@ The inner lexical syntax vaguely resembles the outer one
 
 
   \begin{description}
-  
+
   \item \hyperlink{command.nonterminal}{\mbox{\isa{\isacommand{nonterminal}}}}~\isa{c} declares a type
   constructor \isa{c} (without arguments) to act as purely syntactic
   type: a nonterminal symbol of the inner syntax.
 
-  \item \hyperlink{command.syntax}{\mbox{\isa{\isacommand{syntax}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}mode{\isaliteral{29}{\isacharparenright}}\ decls{\isaliteral{22}{\isachardoublequote}}} is similar to
-  \hyperlink{command.consts}{\mbox{\isa{\isacommand{consts}}}}~\isa{decls}, except that the actual logical
-  signature extension is omitted.  Thus the context free grammar of
-  Isabelle's inner syntax may be augmented in arbitrary ways,
-  independently of the logic.  The \isa{mode} argument refers to the
-  print mode that the grammar rules belong; unless the \indexref{}{keyword}{output}\hyperlink{keyword.output}{\mbox{\isa{\isakeyword{output}}}} indicator is given, all productions are added both to the
-  input and output grammar.
-  
+  \item \hyperlink{command.syntax}{\mbox{\isa{\isacommand{syntax}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}mode{\isaliteral{29}{\isacharparenright}}\ c\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{5C3C7369676D613E}{\isasymsigma}}\ {\isaliteral{28}{\isacharparenleft}}mx{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} augments the
+  priority grammar and the pretty printer table for the given print
+  mode (default \verb|""|). An optional keyword \indexref{}{keyword}{output}\hyperlink{keyword.output}{\mbox{\isa{\isakeyword{output}}}} means that only the pretty printer table is affected.
+
+  Following \secref{sec:mixfix}, the mixfix annotation \isa{{\isaliteral{22}{\isachardoublequote}}mx\ {\isaliteral{3D}{\isacharequal}}\ template\ ps\ q{\isaliteral{22}{\isachardoublequote}}} together with type \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7369676D613E}{\isasymsigma}}\ {\isaliteral{3D}{\isacharequal}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub n\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}} and
+  specify a grammar production.  The \isa{template} contains
+  delimiter tokens that surround \isa{{\isaliteral{22}{\isachardoublequote}}n{\isaliteral{22}{\isachardoublequote}}} argument positions
+  (\verb|_|).  The latter correspond to nonterminal symbols
+  \isa{{\isaliteral{22}{\isachardoublequote}}A\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}} derived from the argument types \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}} as
+  follows:
+  \begin{itemize}
+
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}prop{\isaliteral{22}{\isachardoublequote}}} if \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i\ {\isaliteral{3D}{\isacharequal}}\ prop{\isaliteral{22}{\isachardoublequote}}}
+
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}logic{\isaliteral{22}{\isachardoublequote}}} if \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i\ {\isaliteral{3D}{\isacharequal}}\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{29}{\isacharparenright}}{\isaliteral{5C3C6B617070613E}{\isasymkappa}}{\isaliteral{22}{\isachardoublequote}}} for logical type
+  constructor \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6B617070613E}{\isasymkappa}}\ {\isaliteral{5C3C6E6F7465713E}{\isasymnoteq}}\ prop{\isaliteral{22}{\isachardoublequote}}}
+
+  \item \isa{any} if \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i\ {\isaliteral{3D}{\isacharequal}}\ {\isaliteral{5C3C616C7068613E}{\isasymalpha}}{\isaliteral{22}{\isachardoublequote}}} for type variables
+
+  \item \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6B617070613E}{\isasymkappa}}{\isaliteral{22}{\isachardoublequote}}} if \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}\isaliteral{5C3C5E7375623E}{}\isactrlsub i\ {\isaliteral{3D}{\isacharequal}}\ {\isaliteral{5C3C6B617070613E}{\isasymkappa}}{\isaliteral{22}{\isachardoublequote}}} for nonterminal \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6B617070613E}{\isasymkappa}}{\isaliteral{22}{\isachardoublequote}}}
+  (syntactic type constructor)
+
+  \end{itemize}
+
+  Each \isa{{\isaliteral{22}{\isachardoublequote}}A\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}} is decorated by priority \isa{{\isaliteral{22}{\isachardoublequote}}p\isaliteral{5C3C5E7375623E}{}\isactrlsub i{\isaliteral{22}{\isachardoublequote}}} from the
+  given list \isa{{\isaliteral{22}{\isachardoublequote}}ps{\isaliteral{22}{\isachardoublequote}}}; misssing priorities default to 0.
+
+  The resulting nonterminal of the production is determined similarly
+  from type \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7461753E}{\isasymtau}}{\isaliteral{22}{\isachardoublequote}}}, with priority \isa{{\isaliteral{22}{\isachardoublequote}}q{\isaliteral{22}{\isachardoublequote}}} and default 1000.
+
+  \medskip Parsing via this production produces parse trees \isa{{\isaliteral{22}{\isachardoublequote}}t\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ t\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{22}{\isachardoublequote}}} for the argument slots.  The resulting parse tree is
+  composed as \isa{{\isaliteral{22}{\isachardoublequote}}c\ t\isaliteral{5C3C5E7375623E}{}\isactrlsub {\isadigit{1}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ t\isaliteral{5C3C5E7375623E}{}\isactrlsub n{\isaliteral{22}{\isachardoublequote}}}, by using the syntax constant \isa{{\isaliteral{22}{\isachardoublequote}}c{\isaliteral{22}{\isachardoublequote}}} of the syntax declaration.
+
+  Such syntactic constants are invented on the spot, without formal
+  check wrt.\ existing declarations.  It is conventional to use plain
+  identifiers prefixed by a single underscore (e.g.\ \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5F}{\isacharunderscore}}foobar{\isaliteral{22}{\isachardoublequote}}}).  Names should be chosen with care, to avoid clashes
+  with unrelated syntax declarations.
+
+  \medskip The special case of copy production is specified by \isa{{\isaliteral{22}{\isachardoublequote}}c\ {\isaliteral{3D}{\isacharequal}}\ {\isaliteral{22}{\isachardoublequote}}}\verb|""| (empty string).  It means that the
+  resulting parse tree \isa{{\isaliteral{22}{\isachardoublequote}}t{\isaliteral{22}{\isachardoublequote}}} is copied directly, without any
+  further decoration.
+
   \item \hyperlink{command.no-syntax}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}syntax}}}}~\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{28}{\isacharparenleft}}mode{\isaliteral{29}{\isacharparenright}}\ decls{\isaliteral{22}{\isachardoublequote}}} removes grammar
   declarations (and translations) resulting from \isa{decls}, which
   are interpreted in the same manner as for \hyperlink{command.syntax}{\mbox{\isa{\isacommand{syntax}}}} above.
-  
+
   \item \hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}}~\isa{rules} specifies syntactic
   translation rules (i.e.\ macros): parse~/ print rules (\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C72696768746C656674686172706F6F6E733E}{\isasymrightleftharpoons}}{\isaliteral{22}{\isachardoublequote}}}),
   parse rules (\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7269676874686172706F6F6E75703E}{\isasymrightharpoonup}}{\isaliteral{22}{\isachardoublequote}}}), or print rules (\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6C656674686172706F6F6E646F776E3E}{\isasymleftharpoondown}}{\isaliteral{22}{\isachardoublequote}}}).
   Translation patterns may be prefixed by the syntactic category to be
   used for parsing; the default is \isa{logic}.
-  
+
   \item \hyperlink{command.no-translations}{\mbox{\isa{\isacommand{no{\isaliteral{5F}{\isacharunderscore}}translations}}}}~\isa{rules} removes syntactic
   translation rules, which are interpreted in the same manner as for
   \hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}} above.
 
-  \end{description}%
+  \end{description}
+
+  Raw syntax and translations provides a slightly more low-level
+  access to the grammar and the form of resulting parse trees.  It is
+  often possible to avoid this untyped macro mechanism, and use
+  type-safe \hyperlink{command.abbreviation}{\mbox{\isa{\isacommand{abbreviation}}}} or \hyperlink{command.notation}{\mbox{\isa{\isacommand{notation}}}} instead.
+  Some important situations where \hyperlink{command.syntax}{\mbox{\isa{\isacommand{syntax}}}} and \hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}} are really need are as follows:
+
+  \begin{itemize}
+
+  \item Iterated replacement via recursive \hyperlink{command.translations}{\mbox{\isa{\isacommand{translations}}}}.
+  For example, consider list enumeration \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5B}{\isacharbrackleft}}a{\isaliteral{2C}{\isacharcomma}}\ b{\isaliteral{2C}{\isacharcomma}}\ c{\isaliteral{2C}{\isacharcomma}}\ d{\isaliteral{5D}{\isacharbrackright}}{\isaliteral{22}{\isachardoublequote}}} as
+  defined in theory \hyperlink{theory.List}{\mbox{\isa{List}}} in Isabelle/HOL.
+
+  \item Change of binding status of variables: anything beyond the
+  built-in \hyperlink{keyword.binder}{\mbox{\isa{\isakeyword{binder}}}} mixfix annotation requires explicit
+  syntax translations.  For example, consider list filter
+  comprehension \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5B}{\isacharbrackleft}}x\ {\isaliteral{5C3C6C6566746172726F773E}{\isasymleftarrow}}\ xs\ {\isaliteral{2E}{\isachardot}}\ P{\isaliteral{5D}{\isacharbrackright}}{\isaliteral{22}{\isachardoublequote}}} as defined in theory \hyperlink{theory.List}{\mbox{\isa{List}}} in Isabelle/HOL.
+
+  \end{itemize}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -1059,9 +1426,6 @@ val print_ast_translation   : (string * (ast list -> ast)) list
   translations functions may refer to specific theory declarations or
   auxiliary proof data.
 
-  See also \cite{isabelle-ref} for more information on the general
-  concept of syntax transformations in Isabelle.
-
 %FIXME proper antiquotations
 \begin{ttbox}
 val parse_ast_translation:
@@ -1074,67 +1438,11 @@ val typed_print_translation:
   (string * (Proof.context -> typ -> term list -> term)) list
 val print_ast_translation:
   (string * (Proof.context -> ast list -> ast)) list
-\end{ttbox}%
-\end{isamarkuptext}%
-\isamarkuptrue%
-%
-\isamarkupsection{Inspecting the syntax%
-}
-\isamarkuptrue%
-%
-\begin{isamarkuptext}%
-\begin{matharray}{rcl}
-    \indexdef{}{command}{print\_syntax}\hypertarget{command.print-syntax}{\hyperlink{command.print-syntax}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}syntax}}}}}\isa{{\isaliteral{22}{\isachardoublequote}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{2A}{\isacharasterisk}}{\isaliteral{22}{\isachardoublequote}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}context\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}{\isaliteral{22}{\isachardoublequote}}} \\
-  \end{matharray}
+\end{ttbox}
 
-  \begin{description}
-
-  \item \hyperlink{command.print-syntax}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}syntax}}}} prints the inner syntax of the
-  current context.  The output can be quite large; the most important
-  sections are explained below.
-
-  \begin{description}
-
-  \item \isa{{\isaliteral{22}{\isachardoublequote}}lexicon{\isaliteral{22}{\isachardoublequote}}} lists the delimiters of the inner token
-  language; see \secref{sec:inner-lex}.
-
-  \item \isa{{\isaliteral{22}{\isachardoublequote}}prods{\isaliteral{22}{\isachardoublequote}}} lists the productions of the underlying
-  priority grammar; see \secref{sec:priority-grammar}.
-
-  The nonterminal \isa{{\isaliteral{22}{\isachardoublequote}}A\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{28}{\isacharparenleft}}\isaliteral{5C3C5E7375703E}{}\isactrlsup p\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} is rendered in plain text as \isa{{\isaliteral{22}{\isachardoublequote}}A{\isaliteral{5B}{\isacharbrackleft}}p{\isaliteral{5D}{\isacharbrackright}}{\isaliteral{22}{\isachardoublequote}}}; delimiters are quoted.  Many productions have an extra
-  \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{3D}{\isacharequal}}{\isaliteral{3E}{\isachargreater}}\ name{\isaliteral{22}{\isachardoublequote}}}.  These names later become the heads of parse
-  trees; they also guide the pretty printer.
-
-  Productions without such parse tree names are called \emph{copy
-  productions}.  Their right-hand side must have exactly one
-  nonterminal symbol (or named token).  The parser does not create a
-  new parse tree node for copy productions, but simply returns the
-  parse tree of the right-hand symbol.
-
-  If the right-hand side of a copy production consists of a single
-  nonterminal without any delimiters, then it is called a \emph{chain
-  production}.  Chain productions act as abbreviations: conceptually,
-  they are removed from the grammar by adding new productions.
-  Priority information attached to chain productions is ignored; only
-  the dummy value \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{2D}{\isacharminus}}{\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}} is displayed.
-
-  \item \isa{{\isaliteral{22}{\isachardoublequote}}print\ modes{\isaliteral{22}{\isachardoublequote}}} lists the alternative print modes
-  provided by this grammar; see \secref{sec:print-modes}.
-
-  \item \isa{{\isaliteral{22}{\isachardoublequote}}parse{\isaliteral{5F}{\isacharunderscore}}rules{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}print{\isaliteral{5F}{\isacharunderscore}}rules{\isaliteral{22}{\isachardoublequote}}} relate to
-  syntax translations (macros); see \secref{sec:syn-trans}.
-
-  \item \isa{{\isaliteral{22}{\isachardoublequote}}parse{\isaliteral{5F}{\isacharunderscore}}ast{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}print{\isaliteral{5F}{\isacharunderscore}}ast{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}} list sets of constants that invoke
-  translation functions for abstract syntax trees, which are only
-  required in very special situations; see \secref{sec:tr-funs}.
-
-  \item \isa{{\isaliteral{22}{\isachardoublequote}}parse{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}print{\isaliteral{5F}{\isacharunderscore}}translation{\isaliteral{22}{\isachardoublequote}}}
-  list the sets of constants that invoke regular translation
-  functions; see \secref{sec:tr-funs}.
-
-  \end{description}
-  
-  \end{description}%
+  \medskip See also the chapter on ``Syntax Transformations'' in old
+  \cite{isabelle-ref} for further details on translations on parse
+  trees.%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %

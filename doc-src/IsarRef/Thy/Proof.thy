@@ -138,10 +138,6 @@ text {*
   logically sound manner.  Note that the Isabelle {\LaTeX} macros can
   be easily adapted to print something like ``@{text "\<dots>"}'' instead of
   the keyword ``@{command "oops"}''.
-
-  \medskip The @{command "oops"} command is undo-able, unlike
-  @{command_ref "kill"} (see \secref{sec:history}).  The effect is to
-  get back to the theory just before the opening of the proof.
 *}
 
 
@@ -790,7 +786,7 @@ text {*
   
   \item @{attribute OF}~@{text "a\<^sub>1 \<dots> a\<^sub>n"} applies some
   theorem to all of the given rules @{text "a\<^sub>1, \<dots>, a\<^sub>n"}
-  (in parallel).  This corresponds to the @{ML "op MRS"} operation in
+  (in parallel).  This corresponds to the @{ML_op "MRS"} operation in
   ML, but note the reversed order.  Positions may be effectively
   skipped by including ``@{text _}'' (underscore) as argument.
   
