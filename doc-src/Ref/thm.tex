@@ -11,57 +11,6 @@ new proof procedures.
 
 \section{Basic operations on theorems}
 
-\subsection{Forward proof: joining rules by resolution}
-\index{theorems!joining by resolution}
-\index{resolution}\index{forward proof}
-\begin{ttbox} 
-RSN : thm * (int * thm) -> thm                 \hfill\textbf{infix}
-RS  : thm * thm -> thm                         \hfill\textbf{infix}
-MRS : thm list * thm -> thm                    \hfill\textbf{infix}
-OF  : thm * thm list -> thm                    \hfill\textbf{infix}
-RLN : thm list * (int * thm list) -> thm list  \hfill\textbf{infix}
-RL  : thm list * thm list -> thm list          \hfill\textbf{infix}
-MRL : thm list list * thm list -> thm list     \hfill\textbf{infix}
-\end{ttbox}
-Joining rules together is a simple way of deriving new rules.  These
-functions are especially useful with destruction rules.  To store
-the result in the theorem database, use \ttindex{bind_thm}
-(\S\ref{ExtractingAndStoringTheProvedTheorem}). 
-\begin{ttdescription}
-\item[\tt$thm@1$ RSN $(i,thm@2)$] \indexbold{*RSN} 
-  resolves the conclusion of $thm@1$ with the $i$th premise of~$thm@2$.
-  Unless there is precisely one resolvent it raises exception
-  \xdx{THM}; in that case, use {\tt RLN}.
-
-\item[\tt$thm@1$ RS $thm@2$] \indexbold{*RS} 
-abbreviates \hbox{\tt$thm@1$ RSN $(1,thm@2)$}.  Thus, it resolves the
-conclusion of $thm@1$ with the first premise of~$thm@2$.
-
-\item[\tt {$[thm@1,\ldots,thm@n]$} MRS $thm$] \indexbold{*MRS} 
-  uses {\tt RSN} to resolve $thm@i$ against premise~$i$ of $thm$, for
-  $i=n$, \ldots,~1.  This applies $thm@n$, \ldots, $thm@1$ to the first $n$
-  premises of $thm$.  Because the theorems are used from right to left, it
-  does not matter if the $thm@i$ create new premises.  {\tt MRS} is useful
-  for expressing proof trees.
-  
-\item[\tt {$thm$ OF $[thm@1,\ldots,thm@n]$}] \indexbold{*OF} is the same as
-  \texttt{$[thm@1,\ldots,thm@n]$ MRS $thm$}, with slightly more readable
-  argument order, though.
-
-\item[\tt$thms@1$ RLN $(i,thms@2)$] \indexbold{*RLN} 
-  joins lists of theorems.  For every $thm@1$ in $thms@1$ and $thm@2$ in
-  $thms@2$, it resolves the conclusion of $thm@1$ with the $i$th premise
-  of~$thm@2$, accumulating the results. 
-
-\item[\tt$thms@1$ RL $thms@2$] \indexbold{*RL} 
-abbreviates \hbox{\tt$thms@1$ RLN $(1,thms@2)$}. 
-
-\item[\tt {$[thms@1,\ldots,thms@n]$} MRL $thms$] \indexbold{*MRL} 
-is analogous to {\tt MRS}, but combines theorem lists rather than theorems.
-It too is useful for expressing proof trees.
-\end{ttdescription}
-
-
 \subsection{Expanding definitions in theorems}
 \index{meta-rewriting!in theorems}
 \begin{ttbox} 
@@ -193,13 +142,7 @@ prems_of      : thm -> term list
 cprems_of     : thm -> cterm list
 nprems_of     : thm -> int
 tpairs_of     : thm -> (term*term) list
-sign_of_thm   : thm -> Sign.sg
 theory_of_thm : thm -> theory
-dest_state : thm * int -> (term*term) list * term list * term * term
-rep_thm    : thm -> \{sign_ref: Sign.sg_ref, der: bool * deriv, maxidx: int,
-                     shyps: sort list, hyps: term list, prop: term\}
-crep_thm   : thm -> \{sign_ref: Sign.sg_ref, der: bool * deriv, maxidx: int,
-                     shyps: sort list, hyps: cterm list, prop:{\ts}cterm\}
 \end{ttbox}
 \begin{ttdescription}
 \item[\ttindexbold{cprop_of} $thm$] returns the statement of $thm$ as
@@ -221,27 +164,9 @@ returns the number of premises in $thm$, and is equivalent to {\tt
 \item[\ttindexbold{tpairs_of} $thm$] returns the flex-flex constraints
   of $thm$.
   
-\item[\ttindexbold{sign_of_thm} $thm$] returns the signature
-  associated with $thm$.
-  
 \item[\ttindexbold{theory_of_thm} $thm$] returns the theory associated
   with $thm$.  Note that this does a lookup in Isabelle's global
   database of loaded theories.
-
-\item[\ttindexbold{dest_state} $(thm,i)$] 
-decomposes $thm$ as a tuple containing a list of flex-flex constraints, a
-list of the subgoals~1 to~$i-1$, subgoal~$i$, and the rest of the theorem
-(this will be an implication if there are more than $i$ subgoals).
-
-\item[\ttindexbold{rep_thm} $thm$] decomposes $thm$ as a record
-  containing the statement of~$thm$ ({\tt prop}), its list of
-  meta-assumptions ({\tt hyps}), its derivation ({\tt der}), a bound
-  on the maximum subscript of its unknowns ({\tt maxidx}), and a
-  reference to its signature ({\tt sign_ref}).  The {\tt shyps} field
-  is discussed below.
-  
-\item[\ttindexbold{crep_thm} $thm$] like \texttt{rep_thm}, but returns
-  the hypotheses and statement as certified terms.
 
 \end{ttdescription}
 
@@ -403,21 +328,6 @@ g(b)$.
 Most of these rules have the sole purpose of implementing particular
 tactics.  There are few occasions for applying them directly to a theorem.
 
-\subsection{Proof by assumption}
-\index{meta-assumptions}
-\begin{ttbox} 
-assumption    : int -> thm -> thm Seq.seq
-eq_assumption : int -> thm -> thm
-\end{ttbox}
-\begin{ttdescription}
-\item[\ttindexbold{assumption} {\it i} $thm$] 
-attempts to solve premise~$i$ of~$thm$ by assumption.
-
-\item[\ttindexbold{eq_assumption}] 
-is like {\tt assumption} but does not use unification.
-\end{ttdescription}
-
-
 \subsection{Resolution}
 \index{resolution}
 \begin{ttbox} 
@@ -475,20 +385,9 @@ assumption.  If $match$ is~{\tt true}, the $state$ is not instantiated.
 
 \subsection{Other meta-rules}
 \begin{ttbox} 
-trivial            : cterm -> thm
-lift_rule          : (thm * int) -> thm -> thm
 rename_params_rule : string list * int -> thm -> thm
-flexflex_rule      : thm -> thm Seq.seq
 \end{ttbox}
 \begin{ttdescription}
-\item[\ttindexbold{trivial} $ct$] 
-makes the theorem \(\phi\Imp\phi\), where $\phi$ is the value of~$ct$.
-This is the initial state for a goal-directed proof of~$\phi$.  The rule
-checks that $ct$ has type~$prop$.
-
-\item[\ttindexbold{lift_rule} ($state$, $i$) $rule$] \index{lifting}
-prepares $rule$ for resolution by lifting it over the parameters and
-assumptions of subgoal~$i$ of~$state$.
 
 \item[\ttindexbold{rename_params_rule} ({\it names}, {\it i}) $thm$] 
 uses the $names$ to rename the parameters of premise~$i$ of $thm$.  The
@@ -497,8 +396,6 @@ rule renames the innermost parameters and may modify the remaining ones to
 ensure that all the parameters are distinct.
 \index{parameters!renaming}
 
-\item[\ttindexbold{flexflex_rule} $thm$]  \index{flex-flex constraints}
-removes all flex-flex pairs from $thm$ using the trivial unifier.
 \end{ttdescription}
 \index{meta-rules|)}
 

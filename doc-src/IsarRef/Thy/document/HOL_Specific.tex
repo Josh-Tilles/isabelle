@@ -83,11 +83,19 @@ Isabelle/HOL is based on Higher-Order Logic, a polymorphic
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-An \emph{inductive definition} specifies the least predicate
-  or set \isa{R} closed under given rules: applying a rule to
-  elements of \isa{R} yields a result within \isa{R}.  For
-  example, a structural operational semantics is an inductive
-  definition of an evaluation relation.
+\begin{matharray}{rcl}
+    \indexdef{HOL}{command}{inductive}\hypertarget{command.HOL.inductive}{\hyperlink{command.HOL.inductive}{\mbox{\isa{\isacommand{inductive}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
+    \indexdef{HOL}{command}{inductive\_set}\hypertarget{command.HOL.inductive-set}{\hyperlink{command.HOL.inductive-set}{\mbox{\isa{\isacommand{inductive{\isaliteral{5F}{\isacharunderscore}}set}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
+    \indexdef{HOL}{command}{coinductive}\hypertarget{command.HOL.coinductive}{\hyperlink{command.HOL.coinductive}{\mbox{\isa{\isacommand{coinductive}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
+    \indexdef{HOL}{command}{coinductive\_set}\hypertarget{command.HOL.coinductive-set}{\hyperlink{command.HOL.coinductive-set}{\mbox{\isa{\isacommand{coinductive{\isaliteral{5F}{\isacharunderscore}}set}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
+    \indexdef{HOL}{attribute}{mono}\hypertarget{attribute.HOL.mono}{\hyperlink{attribute.HOL.mono}{\mbox{\isa{mono}}}} & : & \isa{attribute} \\
+  \end{matharray}
+
+  An \emph{inductive definition} specifies the least predicate or set
+  \isa{R} closed under given rules: applying a rule to elements of
+  \isa{R} yields a result within \isa{R}.  For example, a
+  structural operational semantics is an inductive definition of an
+  evaluation relation.
 
   Dually, a \emph{coinductive definition} specifies the greatest
   predicate or set \isa{R} that is consistent with given rules:
@@ -108,14 +116,6 @@ An \emph{inductive definition} specifies the least predicate
   \isa{{\isaliteral{22}{\isachardoublequote}}A\ {\isaliteral{5C3C6C653E}{\isasymle}}\ B\ {\isaliteral{5C3C4C6F6E6772696768746172726F773E}{\isasymLongrightarrow}}\ {\isaliteral{5C3C4D3E}{\isasymM}}\ A\ {\isaliteral{5C3C6C653E}{\isasymle}}\ {\isaliteral{5C3C4D3E}{\isasymM}}\ B{\isaliteral{22}{\isachardoublequote}}}, for each premise \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C4D3E}{\isasymM}}\ R\ t{\isaliteral{22}{\isachardoublequote}}} in an
   introduction rule.  The default rule declarations of Isabelle/HOL
   already take care of most common situations.
-
-  \begin{matharray}{rcl}
-    \indexdef{HOL}{command}{inductive}\hypertarget{command.HOL.inductive}{\hyperlink{command.HOL.inductive}{\mbox{\isa{\isacommand{inductive}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
-    \indexdef{HOL}{command}{inductive\_set}\hypertarget{command.HOL.inductive-set}{\hyperlink{command.HOL.inductive-set}{\mbox{\isa{\isacommand{inductive{\isaliteral{5F}{\isacharunderscore}}set}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
-    \indexdef{HOL}{command}{coinductive}\hypertarget{command.HOL.coinductive}{\hyperlink{command.HOL.coinductive}{\mbox{\isa{\isacommand{coinductive}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
-    \indexdef{HOL}{command}{coinductive\_set}\hypertarget{command.HOL.coinductive-set}{\hyperlink{command.HOL.coinductive-set}{\mbox{\isa{\isacommand{coinductive{\isaliteral{5F}{\isacharunderscore}}set}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ local{\isaliteral{5F}{\isacharunderscore}}theory{\isaliteral{22}{\isachardoublequote}}} \\
-    \indexdef{HOL}{attribute}{mono}\hypertarget{attribute.HOL.mono}{\hyperlink{attribute.HOL.mono}{\mbox{\isa{mono}}}} & : & \isa{attribute} \\
-  \end{matharray}
 
   \begin{railoutput}
 \rail@begin{10}{}
@@ -784,10 +784,10 @@ Here is a simple composition lemma for \isa{map{\isaliteral{5F}{\isacharundersco
   accepted (as for \hyperlink{method.auto}{\mbox{\isa{auto}}}).
 
   \item \hyperlink{method.HOL.induction-schema}{\mbox{\isa{induction{\isaliteral{5F}{\isacharunderscore}}schema}}} derives user-specified
-   induction rules from well-founded induction and completeness of
-   patterns. This factors out some operations that are done internally
-   by the function package and makes them available separately. See
-   \verb|~~/src/HOL/ex/Induction_Schema.thy| for examples.
+  induction rules from well-founded induction and completeness of
+  patterns. This factors out some operations that are done internally
+  by the function package and makes them available separately. See
+  \verb|~~/src/HOL/ex/Induction_Schema.thy| for examples.
 
   \end{description}%
 \end{isamarkuptext}%
@@ -851,10 +851,11 @@ Here is a simple composition lemma for \isa{map{\isaliteral{5F}{\isacharundersco
   defined:
 
   \begin{description}
+
   \item \isa{option} defines functions that map into the \isa{option} type. Here, the value \isa{None} is used to model a
-  non-terminating computation. Monotonicity requires that if \isa{None} is returned by a recursive call, then the overall result
-  must also be \isa{None}. This is best achieved through the use of
-  the monadic operator \isa{{\isaliteral{22}{\isachardoublequote}}Option{\isaliteral{2E}{\isachardot}}bind{\isaliteral{22}{\isachardoublequote}}}.
+  non-terminating computation. Monotonicity requires that if \isa{None} is returned by a recursive call, then the overall result must
+  also be \isa{None}. This is best achieved through the use of the
+  monadic operator \isa{{\isaliteral{22}{\isachardoublequote}}Option{\isaliteral{2E}{\isachardot}}bind{\isaliteral{22}{\isachardoublequote}}}.
 
   \item \isa{tailrec} defines functions with an arbitrary result
   type and uses the slightly degenerated partial order where \isa{{\isaliteral{22}{\isachardoublequote}}undefined{\isaliteral{22}{\isachardoublequote}}} is the bottom element.  Now, monotonicity requires that
@@ -863,6 +864,7 @@ Here is a simple composition lemma for \isa{map{\isaliteral{5F}{\isacharundersco
   only satisfied when each recursive call is a tail call, whose result
   is directly returned. Thus, this mode of operation allows the
   definition of arbitrary tail-recursive functions.
+
   \end{description}
 
   Experienced users may define new modes by instantiating the locale
@@ -881,12 +883,12 @@ Here is a simple composition lemma for \isa{map{\isaliteral{5F}{\isacharundersco
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-The old TFL commands \hyperlink{command.HOL.recdef}{\mbox{\isa{\isacommand{recdef}}}} and \hyperlink{command.HOL.recdef-tc}{\mbox{\isa{\isacommand{recdef{\isaliteral{5F}{\isacharunderscore}}tc}}}} for defining recursive are mostly obsolete; \hyperlink{command.HOL.function}{\mbox{\isa{\isacommand{function}}}} or \hyperlink{command.HOL.fun}{\mbox{\isa{\isacommand{fun}}}} should be used instead.
-
-  \begin{matharray}{rcl}
+\begin{matharray}{rcl}
     \indexdef{HOL}{command}{recdef}\hypertarget{command.HOL.recdef}{\hyperlink{command.HOL.recdef}{\mbox{\isa{\isacommand{recdef}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ theory{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
     \indexdef{HOL}{command}{recdef\_tc}\hypertarget{command.HOL.recdef-tc}{\hyperlink{command.HOL.recdef-tc}{\mbox{\isa{\isacommand{recdef{\isaliteral{5F}{\isacharunderscore}}tc}}}}}\isa{{\isaliteral{22}{\isachardoublequote}}\isaliteral{5C3C5E7375703E}{}\isactrlsup {\isaliteral{2A}{\isacharasterisk}}{\isaliteral{22}{\isachardoublequote}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ proof{\isaliteral{28}{\isacharparenleft}}prove{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
   \end{matharray}
+
+  The old TFL commands \hyperlink{command.HOL.recdef}{\mbox{\isa{\isacommand{recdef}}}} and \hyperlink{command.HOL.recdef-tc}{\mbox{\isa{\isacommand{recdef{\isaliteral{5F}{\isacharunderscore}}tc}}}} for defining recursive are mostly obsolete; \hyperlink{command.HOL.function}{\mbox{\isa{\isacommand{function}}}} or \hyperlink{command.HOL.fun}{\mbox{\isa{\isacommand{fun}}}} should be used instead.
 
   \begin{railoutput}
 \rail@begin{5}{}
@@ -1487,8 +1489,12 @@ See \verb|~~/src/HOL/ex/Records.thy|, for example.%
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-A Gordon/HOL-style type definition is a certain axiom scheme
-  that identifies a new type with a subset of an existing type.  More
+\begin{matharray}{rcl}
+    \indexdef{HOL}{command}{typedef}\hypertarget{command.HOL.typedef}{\hyperlink{command.HOL.typedef}{\mbox{\isa{\isacommand{typedef}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ proof{\isaliteral{28}{\isacharparenleft}}prove{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
+  \end{matharray}
+
+  A Gordon/HOL-style type definition is a certain axiom scheme that
+  identifies a new type with a subset of an existing type.  More
   precisely, the new type is defined by exhibiting an existing type
   \isa{{\isaliteral{5C3C7461753E}{\isasymtau}}}, a set \isa{{\isaliteral{22}{\isachardoublequote}}A\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{5C3C7461753E}{\isasymtau}}\ set{\isaliteral{22}{\isachardoublequote}}}, and a theorem that proves
   \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C6578697374733E}{\isasymexists}}x{\isaliteral{2E}{\isachardot}}\ x\ {\isaliteral{5C3C696E3E}{\isasymin}}\ A{\isaliteral{22}{\isachardoublequote}}}.  Thus \isa{A} is a non-empty subset of \isa{{\isaliteral{5C3C7461753E}{\isasymtau}}}, and the new type denotes this subset.  New functions are
@@ -1506,10 +1512,6 @@ A Gordon/HOL-style type definition is a certain axiom scheme
   of HOL models by construction.  Note that \indexref{}{command}{type\_synonym}\hyperlink{command.type-synonym}{\mbox{\isa{\isacommand{type{\isaliteral{5F}{\isacharunderscore}}synonym}}}} from Isabelle/Pure merely introduces syntactic
   abbreviations, without any logical significance.
   
-  \begin{matharray}{rcl}
-    \indexdef{HOL}{command}{typedef}\hypertarget{command.HOL.typedef}{\hyperlink{command.HOL.typedef}{\mbox{\isa{\isacommand{typedef}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ proof{\isaliteral{28}{\isacharparenleft}}prove{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}} \\
-  \end{matharray}
-
   \begin{railoutput}
 \rail@begin{2}{}
 \rail@term{\hyperlink{command.HOL.typedef}{\mbox{\isa{\isacommand{typedef}}}}}[]
@@ -1768,13 +1770,7 @@ This avoids re-doing basic definitions and proofs from the
 \isamarkuptrue%
 %
 \begin{isamarkuptext}%
-The quotient package defines a new quotient type given a raw type
-  and a partial equivalence relation.
-  It also includes automation for transporting definitions and theorems.
-  It can automatically produce definitions and theorems on the quotient type,
-  given the corresponding constants and facts on the raw type.
-
-  \begin{matharray}{rcl}
+\begin{matharray}{rcl}
     \indexdef{HOL}{command}{quotient\_type}\hypertarget{command.HOL.quotient-type}{\hyperlink{command.HOL.quotient-type}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}type}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ proof{\isaliteral{28}{\isacharparenleft}}prove{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}}\\
     \indexdef{HOL}{command}{quotient\_definition}\hypertarget{command.HOL.quotient-definition}{\hyperlink{command.HOL.quotient-definition}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}definition}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}local{\isaliteral{5F}{\isacharunderscore}}theory\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}\ proof{\isaliteral{28}{\isacharparenleft}}prove{\isaliteral{29}{\isacharparenright}}{\isaliteral{22}{\isachardoublequote}}}\\
     \indexdef{HOL}{command}{print\_quotmaps}\hypertarget{command.HOL.print-quotmaps}{\hyperlink{command.HOL.print-quotmaps}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}quotmaps}}}}} & : & \isa{{\isaliteral{22}{\isachardoublequote}}context\ {\isaliteral{5C3C72696768746172726F773E}{\isasymrightarrow}}{\isaliteral{22}{\isachardoublequote}}}\\
@@ -1794,6 +1790,12 @@ The quotient package defines a new quotient type given a raw type
     \indexdef{HOL}{attribute}{quot\_respect}\hypertarget{attribute.HOL.quot-respect}{\hyperlink{attribute.HOL.quot-respect}{\mbox{\isa{quot{\isaliteral{5F}{\isacharunderscore}}respect}}}} & : & \isa{attribute} \\
     \indexdef{HOL}{attribute}{quot\_preserve}\hypertarget{attribute.HOL.quot-preserve}{\hyperlink{attribute.HOL.quot-preserve}{\mbox{\isa{quot{\isaliteral{5F}{\isacharunderscore}}preserve}}}} & : & \isa{attribute} \\
   \end{matharray}
+
+  The quotient package defines a new quotient type given a raw type
+  and a partial equivalence relation.  It also includes automation for
+  transporting definitions and theorems.  It can automatically produce
+  definitions and theorems on the quotient type, given the
+  corresponding constants and facts on the raw type.
 
   \begin{railoutput}
 \rail@begin{2}{}
@@ -1882,16 +1884,18 @@ The quotient package defines a new quotient type given a raw type
 
   \begin{description}
 
-  \item \hyperlink{command.HOL.quotient-type}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}type}}}} defines quotient types. The injection from a quotient type 
-  to a raw type is called \isa{rep{\isaliteral{5F}{\isacharunderscore}}t}, its inverse \isa{abs{\isaliteral{5F}{\isacharunderscore}}t} unless explicit \hyperlink{keyword.HOL.morphisms}{\mbox{\isa{\isakeyword{morphisms}}}} specification provides alternative names. \hyperlink{command.HOL.quotient-type}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}type}}}} requires
-  the user to prove that the relation is an equivalence relation (predicate \isa{equivp}), unless
-  the user specifies explicitely \isa{partial} in which case the obligation is \isa{part{\isaliteral{5F}{\isacharunderscore}}equivp}.
-  A quotient defined with \isa{partial} is weaker in the sense that less things can be proved
+  \item \hyperlink{command.HOL.quotient-type}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}type}}}} defines quotient types. The
+  injection from a quotient type to a raw type is called \isa{rep{\isaliteral{5F}{\isacharunderscore}}t}, its inverse \isa{abs{\isaliteral{5F}{\isacharunderscore}}t} unless explicit \hyperlink{keyword.HOL.morphisms}{\mbox{\isa{\isakeyword{morphisms}}}} specification provides alternative names. \hyperlink{command.HOL.quotient-type}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}type}}}} requires the user to prove that the relation
+  is an equivalence relation (predicate \isa{equivp}), unless the
+  user specifies explicitely \isa{partial} in which case the
+  obligation is \isa{part{\isaliteral{5F}{\isacharunderscore}}equivp}.  A quotient defined with \isa{partial} is weaker in the sense that less things can be proved
   automatically.
 
-  \item \hyperlink{command.HOL.quotient-definition}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}definition}}}} defines a constant on the quotient type.
+  \item \hyperlink{command.HOL.quotient-definition}{\mbox{\isa{\isacommand{quotient{\isaliteral{5F}{\isacharunderscore}}definition}}}} defines a constant on
+  the quotient type.
 
-  \item \hyperlink{command.HOL.print-quotmaps}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}quotmaps}}}} prints quotient map functions.
+  \item \hyperlink{command.HOL.print-quotmaps}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}quotmaps}}}} prints quotient map
+  functions.
 
   \item \hyperlink{command.HOL.print-quotients}{\mbox{\isa{\isacommand{print{\isaliteral{5F}{\isacharunderscore}}quotients}}}} prints quotients.
 
@@ -1967,6 +1971,11 @@ The quotient package defines a new quotient type given a raw type
     \indexdef{HOL}{attribute}{coercion\_map}\hypertarget{attribute.HOL.coercion-map}{\hyperlink{attribute.HOL.coercion-map}{\mbox{\isa{coercion{\isaliteral{5F}{\isacharunderscore}}map}}}} & : & \isa{attribute} \\
   \end{matharray}
 
+  Coercive subtyping allows the user to omit explicit type
+  conversions, also called \emph{coercions}.  Type inference will add
+  them as necessary when parsing a term. See
+  \cite{traytel-berghofer-nipkow-2011} for details.
+
   \begin{railoutput}
 \rail@begin{2}{}
 \rail@term{\hyperlink{attribute.HOL.coercion}{\mbox{\isa{coercion}}}}[]
@@ -1988,35 +1997,28 @@ The quotient package defines a new quotient type given a raw type
 \end{railoutput}
 
 
-  Coercive subtyping allows the user to omit explicit type conversions,
-  also called \emph{coercions}.  Type inference will add them as
-  necessary when parsing a term. See
-  \cite{traytel-berghofer-nipkow-2011} for details.
-
   \begin{description}
 
   \item \hyperlink{attribute.HOL.coercion}{\mbox{\isa{coercion}}}~\isa{{\isaliteral{22}{\isachardoublequote}}f{\isaliteral{22}{\isachardoublequote}}} registers a new
-  coercion function \isa{{\isaliteral{22}{\isachardoublequote}}f\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{2}}{\isaliteral{22}{\isachardoublequote}}} where \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}} and \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{2}}{\isaliteral{22}{\isachardoublequote}}} are nullary type constructors. Coercions are
-  composed by the inference algorithm if needed. Note that the type
-  inference algorithm is complete only if the registered coercions form
-  a lattice.
+  coercion function \isa{{\isaliteral{22}{\isachardoublequote}}f\ {\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}\ {\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{2}}{\isaliteral{22}{\isachardoublequote}}} where \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}{\isaliteral{22}{\isachardoublequote}}} and
+  \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C7369676D613E}{\isasymsigma}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{2}}{\isaliteral{22}{\isachardoublequote}}} are type constructors without arguments.  Coercions are
+  composed by the inference algorithm if needed.  Note that the type
+  inference algorithm is complete only if the registered coercions
+  form a lattice.
 
-
-  \item \hyperlink{attribute.HOL.coercion-map}{\mbox{\isa{coercion{\isaliteral{5F}{\isacharunderscore}}map}}}~\isa{{\isaliteral{22}{\isachardoublequote}}map{\isaliteral{22}{\isachardoublequote}}} registers a new
-  map function to lift coercions through type constructors. The function
-  \isa{{\isaliteral{22}{\isachardoublequote}}map{\isaliteral{22}{\isachardoublequote}}} must conform to the following type pattern
+  \item \hyperlink{attribute.HOL.coercion-map}{\mbox{\isa{coercion{\isaliteral{5F}{\isacharunderscore}}map}}}~\isa{{\isaliteral{22}{\isachardoublequote}}map{\isaliteral{22}{\isachardoublequote}}} registers a
+  new map function to lift coercions through type constructors. The
+  function \isa{{\isaliteral{22}{\isachardoublequote}}map{\isaliteral{22}{\isachardoublequote}}} must conform to the following type pattern
 
   \begin{matharray}{lll}
     \isa{{\isaliteral{22}{\isachardoublequote}}map{\isaliteral{22}{\isachardoublequote}}} & \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{3A}{\isacharcolon}}{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}} &
       \isa{{\isaliteral{22}{\isachardoublequote}}f\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ f\isaliteral{5C3C5E697375623E}{}\isactrlisub n\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C616C7068613E}{\isasymalpha}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C616C7068613E}{\isasymalpha}}\isaliteral{5C3C5E697375623E}{}\isactrlisub n{\isaliteral{29}{\isacharparenright}}\ t\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{28}{\isacharparenleft}}{\isaliteral{5C3C626574613E}{\isasymbeta}}\isaliteral{5C3C5E697375623E}{}\isactrlisub {\isadigit{1}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C646F74733E}{\isasymdots}}{\isaliteral{2C}{\isacharcomma}}\ {\isaliteral{5C3C626574613E}{\isasymbeta}}\isaliteral{5C3C5E697375623E}{}\isactrlisub n{\isaliteral{29}{\isacharparenright}}\ t{\isaliteral{22}{\isachardoublequote}}} \\
   \end{matharray}
 
-  where \isa{{\isaliteral{22}{\isachardoublequote}}t{\isaliteral{22}{\isachardoublequote}}} is a type constructor and \isa{{\isaliteral{22}{\isachardoublequote}}f\isaliteral{5C3C5E697375623E}{}\isactrlisub i{\isaliteral{22}{\isachardoublequote}}} is of
-  type \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C616C7068613E}{\isasymalpha}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C626574613E}{\isasymbeta}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i{\isaliteral{22}{\isachardoublequote}}} or
-  \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C626574613E}{\isasymbeta}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C616C7068613E}{\isasymalpha}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i{\isaliteral{22}{\isachardoublequote}}}.
-  Registering a map function overwrites any existing map function for
-  this particular type constructor.
-
+  where \isa{{\isaliteral{22}{\isachardoublequote}}t{\isaliteral{22}{\isachardoublequote}}} is a type constructor and \isa{{\isaliteral{22}{\isachardoublequote}}f\isaliteral{5C3C5E697375623E}{}\isactrlisub i{\isaliteral{22}{\isachardoublequote}}} is of type
+  \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C616C7068613E}{\isasymalpha}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C626574613E}{\isasymbeta}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i{\isaliteral{22}{\isachardoublequote}}} or \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C626574613E}{\isasymbeta}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i\ {\isaliteral{5C3C52696768746172726F773E}{\isasymRightarrow}}\ {\isaliteral{5C3C616C7068613E}{\isasymalpha}}\isaliteral{5C3C5E697375623E}{}\isactrlisub i{\isaliteral{22}{\isachardoublequote}}}.  Registering a map function
+  overwrites any existing map function for this particular type
+  constructor.
 
   \item \hyperlink{attribute.HOL.coercion-enabled}{\mbox{\isa{coercion{\isaliteral{5F}{\isacharunderscore}}enabled}}} enables the coercion
   inference algorithm.
@@ -2036,18 +2038,22 @@ The quotient package defines a new quotient type given a raw type
     \indexdef{HOL}{attribute}{arith\_split}\hypertarget{attribute.HOL.arith-split}{\hyperlink{attribute.HOL.arith-split}{\mbox{\isa{arith{\isaliteral{5F}{\isacharunderscore}}split}}}} & : & \isa{attribute} \\
   \end{matharray}
 
-  The \hyperlink{method.HOL.arith}{\mbox{\isa{arith}}} method decides linear arithmetic problems
-  (on types \isa{nat}, \isa{int}, \isa{real}).  Any current
-  facts are inserted into the goal before running the procedure.
+  \begin{description}
 
-  The \hyperlink{attribute.HOL.arith}{\mbox{\isa{arith}}} attribute declares facts that are
-  always supplied to the arithmetic provers implicitly.
+  \item \hyperlink{method.HOL.arith}{\mbox{\isa{arith}}} decides linear arithmetic problems (on
+  types \isa{nat}, \isa{int}, \isa{real}).  Any current facts
+  are inserted into the goal before running the procedure.
 
-  The \hyperlink{attribute.HOL.arith-split}{\mbox{\isa{arith{\isaliteral{5F}{\isacharunderscore}}split}}} attribute declares case split
+  \item \hyperlink{attribute.HOL.arith}{\mbox{\isa{arith}}} declares facts that are supplied to
+  the arithmetic provers implicitly.
+
+  \item \hyperlink{attribute.HOL.arith-split}{\mbox{\isa{arith{\isaliteral{5F}{\isacharunderscore}}split}}} attribute declares case split
   rules to be expanded before \hyperlink{method.HOL.arith}{\mbox{\isa{arith}}} is invoked.
 
-  Note that a simpler (but faster) arithmetic prover is
-  already invoked by the Simplifier.%
+  \end{description}
+
+  Note that a simpler (but faster) arithmetic prover is already
+  invoked by the Simplifier.%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -2071,10 +2077,12 @@ The quotient package defines a new quotient type given a raw type
 \end{railoutput}
 
 
-  The \hyperlink{method.HOL.iprover}{\mbox{\isa{iprover}}} method performs intuitionistic proof
-  search, depending on specifically declared rules from the context,
-  or given as explicit arguments.  Chained facts are inserted into the
-  goal before commencing proof search.
+  \begin{description}
+
+  \item \hyperlink{method.HOL.iprover}{\mbox{\isa{iprover}}} performs intuitionistic proof search,
+  depending on specifically declared rules from the context, or given
+  as explicit arguments.  Chained facts are inserted into the goal
+  before commencing proof search.
 
   Rules need to be classified as \hyperlink{attribute.Pure.intro}{\mbox{\isa{intro}}},
   \hyperlink{attribute.Pure.elim}{\mbox{\isa{elim}}}, or \hyperlink{attribute.Pure.dest}{\mbox{\isa{dest}}}; here the
@@ -2083,7 +2091,9 @@ The quotient package defines a new quotient type given a raw type
   Rules declared with ``\isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{3F}{\isacharquery}}{\isaliteral{22}{\isachardoublequote}}}'' are ignored in proof search (the
   single-step \hyperlink{method.Pure.rule}{\mbox{\isa{rule}}} method still observes these).  An
   explicit weight annotation may be given as well; otherwise the
-  number of rule premises will be taken into account here.%
+  number of rule premises will be taken into account here.
+
+  \end{description}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -2129,15 +2139,19 @@ The quotient package defines a new quotient type given a raw type
 \end{railoutput}
 
 
-  The \hyperlink{method.HOL.meson}{\mbox{\isa{meson}}} method implements Loveland's model elimination
-  procedure \cite{loveland-78}. See \verb|~~/src/HOL/ex/Meson_Test.thy| for
-  examples.
+  \begin{description}
 
-  The \hyperlink{method.HOL.metis}{\mbox{\isa{metis}}} method combines ordered resolution and ordered
-  paramodulation to find first-order (or mildly higher-order) proofs. The first
-  optional argument specifies a type encoding; see the Sledgehammer manual
-  \cite{isabelle-sledgehammer} for details. The \verb|~~/src/HOL/Metis_Examples| directory contains several small theories
-  developed to a large extent using Metis.%
+  \item \hyperlink{method.HOL.meson}{\mbox{\isa{meson}}} implements Loveland's model elimination
+  procedure \cite{loveland-78}.  See \verb|~~/src/HOL/ex/Meson_Test.thy| for examples.
+
+  \item \hyperlink{method.HOL.metis}{\mbox{\isa{metis}}} combines ordered resolution and ordered
+  paramodulation to find first-order (or mildly higher-order) proofs.
+  The first optional argument specifies a type encoding; see the
+  Sledgehammer manual \cite{isabelle-sledgehammer} for details.  The
+  directory \verb|~~/src/HOL/Metis_Examples| contains several small
+  theories developed to a large extent using \hyperlink{method.HOL.metis}{\mbox{\isa{metis}}}.
+
+  \end{description}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -2161,11 +2175,14 @@ The quotient package defines a new quotient type given a raw type
 \end{railoutput}
 
 
-  The \hyperlink{method.HOL.coherent}{\mbox{\isa{coherent}}} method solves problems of
-  \emph{Coherent Logic} \cite{Bezem-Coquand:2005}, which covers
-  applications in confluence theory, lattice theory and projective
-  geometry.  See \verb|~~/src/HOL/ex/Coherent.thy| for some
-  examples.%
+  \begin{description}
+
+  \item \hyperlink{method.HOL.coherent}{\mbox{\isa{coherent}}} solves problems of \emph{Coherent
+  Logic} \cite{Bezem-Coquand:2005}, which covers applications in
+  confluence theory, lattice theory and projective geometry.  See
+  \verb|~~/src/HOL/ex/Coherent.thy| for some examples.
+
+  \end{description}%
 \end{isamarkuptext}%
 \isamarkuptrue%
 %
@@ -2274,27 +2291,24 @@ In addition to the standard proof methods, a number of diagnosis
 
   \begin{description}
 
-  \item \hyperlink{command.HOL.solve-direct}{\mbox{\isa{\isacommand{solve{\isaliteral{5F}{\isacharunderscore}}direct}}}} checks whether the current subgoals can
-    be solved directly by an existing theorem. Duplicate lemmas can be detected
-    in this way.
+  \item \hyperlink{command.HOL.solve-direct}{\mbox{\isa{\isacommand{solve{\isaliteral{5F}{\isacharunderscore}}direct}}}} checks whether the current
+  subgoals can be solved directly by an existing theorem. Duplicate
+  lemmas can be detected in this way.
 
-  \item \hyperlink{command.HOL.try-methods}{\mbox{\isa{\isacommand{try{\isaliteral{5F}{\isacharunderscore}}methods}}}} attempts to prove a subgoal using a combination
-    of standard proof methods (\isa{auto}, \isa{simp}, \isa{blast}, etc.).
-    Additional facts supplied via \isa{{\isaliteral{22}{\isachardoublequote}}simp{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}}, \isa{{\isaliteral{22}{\isachardoublequote}}intro{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}},
-    \isa{{\isaliteral{22}{\isachardoublequote}}elim{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}}, and \isa{{\isaliteral{22}{\isachardoublequote}}dest{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}} are passed to the appropriate proof
-    methods.
+  \item \hyperlink{command.HOL.try-methods}{\mbox{\isa{\isacommand{try{\isaliteral{5F}{\isacharunderscore}}methods}}}} attempts to prove a subgoal
+  using a combination of standard proof methods (\hyperlink{method.auto}{\mbox{\isa{auto}}},
+  \hyperlink{method.simp}{\mbox{\isa{simp}}}, \hyperlink{method.blast}{\mbox{\isa{blast}}}, etc.).  Additional facts supplied
+  via \isa{{\isaliteral{22}{\isachardoublequote}}simp{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}}, \isa{{\isaliteral{22}{\isachardoublequote}}intro{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}}, \isa{{\isaliteral{22}{\isachardoublequote}}elim{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}}, and \isa{{\isaliteral{22}{\isachardoublequote}}dest{\isaliteral{3A}{\isacharcolon}}{\isaliteral{22}{\isachardoublequote}}} are passed to the appropriate proof methods.
 
   \item \hyperlink{command.HOL.try}{\mbox{\isa{\isacommand{try}}}} attempts to prove or disprove a subgoal
-    using a combination of provers and disprovers (\isa{{\isaliteral{22}{\isachardoublequote}}solve{\isaliteral{5F}{\isacharunderscore}}direct{\isaliteral{22}{\isachardoublequote}}},
-    \isa{{\isaliteral{22}{\isachardoublequote}}quickcheck{\isaliteral{22}{\isachardoublequote}}}, \isa{{\isaliteral{22}{\isachardoublequote}}try{\isaliteral{5F}{\isacharunderscore}}methods{\isaliteral{22}{\isachardoublequote}}}, \isa{{\isaliteral{22}{\isachardoublequote}}sledgehammer{\isaliteral{22}{\isachardoublequote}}},
-    \isa{{\isaliteral{22}{\isachardoublequote}}nitpick{\isaliteral{22}{\isachardoublequote}}}).
+  using a combination of provers and disprovers (\hyperlink{command.HOL.solve-direct}{\mbox{\isa{\isacommand{solve{\isaliteral{5F}{\isacharunderscore}}direct}}}}, \hyperlink{command.HOL.quickcheck}{\mbox{\isa{\isacommand{quickcheck}}}}, \hyperlink{command.HOL.try-methods}{\mbox{\isa{\isacommand{try{\isaliteral{5F}{\isacharunderscore}}methods}}}}, \hyperlink{command.HOL.sledgehammer}{\mbox{\isa{\isacommand{sledgehammer}}}}, \hyperlink{command.HOL.nitpick}{\mbox{\isa{\isacommand{nitpick}}}}).
 
-  \item \hyperlink{command.HOL.sledgehammer}{\mbox{\isa{\isacommand{sledgehammer}}}} attempts to prove a subgoal using external
-    automatic provers (resolution provers and SMT solvers). See the Sledgehammer
-    manual \cite{isabelle-sledgehammer} for details.
+  \item \hyperlink{command.HOL.sledgehammer}{\mbox{\isa{\isacommand{sledgehammer}}}} attempts to prove a subgoal
+  using external automatic provers (resolution provers and SMT
+  solvers). See the Sledgehammer manual \cite{isabelle-sledgehammer}
+  for details.
 
-  \item \hyperlink{command.HOL.sledgehammer-params}{\mbox{\isa{\isacommand{sledgehammer{\isaliteral{5F}{\isacharunderscore}}params}}}} changes
-    \hyperlink{command.HOL.sledgehammer}{\mbox{\isa{\isacommand{sledgehammer}}}} configuration options persistently.
+  \item \hyperlink{command.HOL.sledgehammer-params}{\mbox{\isa{\isacommand{sledgehammer{\isaliteral{5F}{\isacharunderscore}}params}}}} changes \hyperlink{command.HOL.sledgehammer}{\mbox{\isa{\isacommand{sledgehammer}}}} configuration options persistently.
 
   \end{description}%
 \end{isamarkuptext}%
@@ -2415,54 +2429,51 @@ Identifying incorrect propositions usually involves evaluation of
   \begin{description}
 
   \item \hyperlink{command.HOL.value}{\mbox{\isa{\isacommand{value}}}}~\isa{t} evaluates and prints a
-    term; optionally \isa{modes} can be specified, which are
-    appended to the current print mode; see \secref{sec:print-modes}.
-    Internally, the evaluation is performed by registered evaluators,
-    which are invoked sequentially until a result is returned.
-    Alternatively a specific evaluator can be selected using square
-    brackets; typical evaluators use the current set of code equations
-    to normalize and include \isa{simp} for fully symbolic
-    evaluation using the simplifier, \isa{nbe} for
-    \emph{normalization by evaluation} and \emph{code} for code
-    generation in SML.
+  term; optionally \isa{modes} can be specified, which are appended
+  to the current print mode; see \secref{sec:print-modes}.
+  Internally, the evaluation is performed by registered evaluators,
+  which are invoked sequentially until a result is returned.
+  Alternatively a specific evaluator can be selected using square
+  brackets; typical evaluators use the current set of code equations
+  to normalize and include \isa{simp} for fully symbolic evaluation
+  using the simplifier, \isa{nbe} for \emph{normalization by
+  evaluation} and \emph{code} for code generation in SML.
 
-  \item \hyperlink{command.HOL.values}{\mbox{\isa{\isacommand{values}}}}~\isa{t} enumerates a set comprehension
-    by evaluation and prints its values up to the given number of solutions;  
-    optionally \isa{modes} can be specified, which are
-    appended to the current print mode; see \secref{sec:print-modes}.
+  \item \hyperlink{command.HOL.values}{\mbox{\isa{\isacommand{values}}}}~\isa{t} enumerates a set
+  comprehension by evaluation and prints its values up to the given
+  number of solutions; optionally \isa{modes} can be specified,
+  which are appended to the current print mode; see
+  \secref{sec:print-modes}.
 
   \item \hyperlink{command.HOL.quickcheck}{\mbox{\isa{\isacommand{quickcheck}}}} tests the current goal for
-    counterexamples using a series of assignments for its
-    free variables; by default the first subgoal is tested, an other
-    can be selected explicitly using an optional goal index.
-    Assignments can be chosen exhausting the search space upto a given
-    size, or using a fixed number of random assignments in the search space,
-    or exploring the search space symbolically using narrowing.
-    By default, quickcheck uses exhaustive testing.
-    A number of configuration options are supported for
-    \hyperlink{command.HOL.quickcheck}{\mbox{\isa{\isacommand{quickcheck}}}}, notably:
+  counterexamples using a series of assignments for its free
+  variables; by default the first subgoal is tested, an other can be
+  selected explicitly using an optional goal index.  Assignments can
+  be chosen exhausting the search space upto a given size, or using a
+  fixed number of random assignments in the search space, or exploring
+  the search space symbolically using narrowing.  By default,
+  quickcheck uses exhaustive testing.  A number of configuration
+  options are supported for \hyperlink{command.HOL.quickcheck}{\mbox{\isa{\isacommand{quickcheck}}}}, notably:
 
     \begin{description}
 
     \item[\isa{tester}] specifies which testing approach to apply.
-      There are three testers, \isa{exhaustive},
-      \isa{random}, and \isa{narrowing}.
-      An unknown configuration option is treated as an argument to tester,
-      making \isa{{\isaliteral{22}{\isachardoublequote}}tester\ {\isaliteral{3D}{\isacharequal}}{\isaliteral{22}{\isachardoublequote}}} optional.
-      When multiple testers are given, these are applied in parallel. 
-      If no tester is specified, quickcheck uses the testers that are
-      set active, i.e., configurations
-      \isa{quickcheck{\isaliteral{5F}{\isacharunderscore}}exhaustive{\isaliteral{5F}{\isacharunderscore}}active}, \isa{quickcheck{\isaliteral{5F}{\isacharunderscore}}random{\isaliteral{5F}{\isacharunderscore}}active},
-      \isa{quickcheck{\isaliteral{5F}{\isacharunderscore}}narrowing{\isaliteral{5F}{\isacharunderscore}}active} are set to true.
+    There are three testers, \isa{exhaustive}, \isa{random}, and
+    \isa{narrowing}.  An unknown configuration option is treated as
+    an argument to tester, making \isa{{\isaliteral{22}{\isachardoublequote}}tester\ {\isaliteral{3D}{\isacharequal}}{\isaliteral{22}{\isachardoublequote}}} optional.  When
+    multiple testers are given, these are applied in parallel.  If no
+    tester is specified, quickcheck uses the testers that are set
+    active, i.e., configurations \hyperlink{attribute.quickcheck-exhaustive-active}{\mbox{\isa{quickcheck{\isaliteral{5F}{\isacharunderscore}}exhaustive{\isaliteral{5F}{\isacharunderscore}}active}}}, \hyperlink{attribute.quickcheck-random-active}{\mbox{\isa{quickcheck{\isaliteral{5F}{\isacharunderscore}}random{\isaliteral{5F}{\isacharunderscore}}active}}}, \hyperlink{attribute.quickcheck-narrowing-active}{\mbox{\isa{quickcheck{\isaliteral{5F}{\isacharunderscore}}narrowing{\isaliteral{5F}{\isacharunderscore}}active}}} are set to true.
+
     \item[\isa{size}] specifies the maximum size of the search space
     for assignment values.
 
     \item[\isa{genuine{\isaliteral{5F}{\isacharunderscore}}only}] sets quickcheck only to return genuine
-      counterexample, but not potentially spurious counterexamples due
-      to underspecified functions.
+    counterexample, but not potentially spurious counterexamples due
+    to underspecified functions.
     
     \item[\isa{eval}] takes a term or a list of terms and evaluates
-      these terms under the variable assignment found by quickcheck.
+    these terms under the variable assignment found by quickcheck.
 
     \item[\isa{iterations}] sets how many sets of assignments are
     generated for each particular size.
@@ -2481,39 +2492,38 @@ Identifying incorrect propositions usually involves evaluation of
     \item[\isa{quiet}] if set quickcheck does not output anything
     while testing.
     
-    \item[\isa{verbose}] if set quickcheck informs about the
-    current size and cardinality while testing.
+    \item[\isa{verbose}] if set quickcheck informs about the current
+    size and cardinality while testing.
 
     \item[\isa{expect}] can be used to check if the user's
     expectation was met (\isa{no{\isaliteral{5F}{\isacharunderscore}}expectation}, \isa{no{\isaliteral{5F}{\isacharunderscore}}counterexample}, or \isa{counterexample}).
 
     \end{description}
 
-    These option can be given within square brackets.
+  These option can be given within square brackets.
 
-  \item \hyperlink{command.HOL.quickcheck-params}{\mbox{\isa{\isacommand{quickcheck{\isaliteral{5F}{\isacharunderscore}}params}}}} changes
-    \hyperlink{command.HOL.quickcheck}{\mbox{\isa{\isacommand{quickcheck}}}} configuration options persistently.
+  \item \hyperlink{command.HOL.quickcheck-params}{\mbox{\isa{\isacommand{quickcheck{\isaliteral{5F}{\isacharunderscore}}params}}}} changes \hyperlink{command.HOL.quickcheck}{\mbox{\isa{\isacommand{quickcheck}}}} configuration options persistently.
 
   \item \hyperlink{command.HOL.quickcheck-generator}{\mbox{\isa{\isacommand{quickcheck{\isaliteral{5F}{\isacharunderscore}}generator}}}} creates random and
-    exhaustive value generators for a given type and operations.
-    It generates values by using the operations as if they were
-    constructors of that type.
+  exhaustive value generators for a given type and operations.  It
+  generates values by using the operations as if they were
+  constructors of that type.
 
   \item \hyperlink{command.HOL.refute}{\mbox{\isa{\isacommand{refute}}}} tests the current goal for
-    counterexamples using a reduction to SAT. The following configuration
-    options are supported:
+  counterexamples using a reduction to SAT. The following
+  configuration options are supported:
 
     \begin{description}
 
-    \item[\isa{minsize}] specifies the minimum size (cardinality) of the
-      models to search for.
+    \item[\isa{minsize}] specifies the minimum size (cardinality) of
+    the models to search for.
 
-    \item[\isa{maxsize}] specifies the maximum size (cardinality) of the
-      models to search for. Nonpositive values mean $\infty$.
+    \item[\isa{maxsize}] specifies the maximum size (cardinality) of
+    the models to search for. Nonpositive values mean \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C696E66696E6974793E}{\isasyminfinity}}{\isaliteral{22}{\isachardoublequote}}}.
 
-    \item[\isa{maxvars}] specifies the maximum number of Boolean variables
-    to use when transforming the term into a propositional formula.
-    Nonpositive values mean $\infty$.
+    \item[\isa{maxvars}] specifies the maximum number of Boolean
+    variables to use when transforming the term into a propositional
+    formula.  Nonpositive values mean \isa{{\isaliteral{22}{\isachardoublequote}}{\isaliteral{5C3C696E66696E6974793E}{\isasyminfinity}}{\isaliteral{22}{\isachardoublequote}}}.
 
     \item[\isa{satsolver}] specifies the SAT solver to use.
 
@@ -2523,22 +2533,19 @@ Identifying incorrect propositions usually involves evaluation of
     \item[\isa{maxtime}] sets the time limit in seconds.
 
     \item[\isa{expect}] can be used to check if the user's
-    expectation was met (\isa{genuine}, \isa{potential},
-    \isa{none}, or \isa{unknown}).
+    expectation was met (\isa{genuine}, \isa{potential}, \isa{none}, or \isa{unknown}).
 
     \end{description}
 
-    These option can be given within square brackets.
+  These option can be given within square brackets.
 
-  \item \hyperlink{command.HOL.refute-params}{\mbox{\isa{\isacommand{refute{\isaliteral{5F}{\isacharunderscore}}params}}}} changes
-    \hyperlink{command.HOL.refute}{\mbox{\isa{\isacommand{refute}}}} configuration options persistently.
+  \item \hyperlink{command.HOL.refute-params}{\mbox{\isa{\isacommand{refute{\isaliteral{5F}{\isacharunderscore}}params}}}} changes \hyperlink{command.HOL.refute}{\mbox{\isa{\isacommand{refute}}}} configuration options persistently.
 
-  \item \hyperlink{command.HOL.nitpick}{\mbox{\isa{\isacommand{nitpick}}}} tests the current goal for counterexamples
-    using a reduction to first-order relational logic. See the Nitpick manual
-    \cite{isabelle-nitpick} for details.
+  \item \hyperlink{command.HOL.nitpick}{\mbox{\isa{\isacommand{nitpick}}}} tests the current goal for
+  counterexamples using a reduction to first-order relational
+  logic. See the Nitpick manual \cite{isabelle-nitpick} for details.
 
-  \item \hyperlink{command.HOL.nitpick-params}{\mbox{\isa{\isacommand{nitpick{\isaliteral{5F}{\isacharunderscore}}params}}}} changes
-    \hyperlink{command.HOL.nitpick}{\mbox{\isa{\isacommand{nitpick}}}} configuration options persistently.
+  \item \hyperlink{command.HOL.nitpick-params}{\mbox{\isa{\isacommand{nitpick{\isaliteral{5F}{\isacharunderscore}}params}}}} changes \hyperlink{command.HOL.nitpick}{\mbox{\isa{\isacommand{nitpick}}}} configuration options persistently.
 
   \end{description}%
 \end{isamarkuptext}%

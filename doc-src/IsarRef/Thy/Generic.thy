@@ -160,8 +160,8 @@ text {*
   compose rules by resolution.  @{attribute THEN} resolves with the
   first premise of @{text a} (an alternative position may be also
   specified); the @{attribute COMP} version skips the automatic
-  lifting process that is normally intended (cf.\ @{ML "op RS"} and
-  @{ML "op COMP"} in \cite{isabelle-implementation}).
+  lifting process that is normally intended (cf.\ @{ML_op "RS"} and
+  @{ML_op "COMP"} in \cite{isabelle-implementation}).
   
   \item @{attribute unfolded}~@{text "a\<^sub>1 \<dots> a\<^sub>n"} and @{attribute
   folded}~@{text "a\<^sub>1 \<dots> a\<^sub>n"} expand and fold back again the given
@@ -335,23 +335,25 @@ text {*
   may be given as well, see also ML tactic @{ML cut_inst_tac} in
   \cite{isabelle-implementation}.
 
-  \item @{method thin_tac}~@{text \<phi>} deletes the specified assumption
-  from a subgoal; note that @{text \<phi>} may contain schematic variables.
-  See also @{ML thin_tac} in \cite{isabelle-implementation}.
+  \item @{method thin_tac}~@{text \<phi>} deletes the specified premise
+  from a subgoal.  Note that @{text \<phi>} may contain schematic
+  variables, to abbreviate the intended proposition; the first
+  matching subgoal premise will be deleted.  Removing useless premises
+  from a subgoal increases its readability and can make search tactics
+  run faster.
 
-  \item @{method subgoal_tac}~@{text \<phi>} adds @{text \<phi>} as an
-  assumption to a subgoal.  See also @{ML subgoal_tac} and @{ML
-  subgoals_tac} in \cite{isabelle-implementation}.
+  \item @{method subgoal_tac}~@{text "\<phi>\<^sub>1 \<dots> \<phi>\<^sub>n"} adds the propositions
+  @{text "\<phi>\<^sub>1 \<dots> \<phi>\<^sub>n"} as local premises to a subgoal, and poses the same
+  as new subgoals (in the original context).
 
   \item @{method rename_tac}~@{text "x\<^sub>1 \<dots> x\<^sub>n"} renames parameters of a
   goal according to the list @{text "x\<^sub>1, \<dots>, x\<^sub>n"}, which refers to the
   \emph{suffix} of variables.
 
-  \item @{method rotate_tac}~@{text n} rotates the assumptions of a
-  goal by @{text n} positions: from right to left if @{text n} is
+  \item @{method rotate_tac}~@{text n} rotates the premises of a
+  subgoal by @{text n} positions: from right to left if @{text n} is
   positive, and from left to right if @{text n} is negative; the
-  default value is 1.  See also @{ML rotate_tac} in
-  \cite{isabelle-implementation}.
+  default value is 1.
 
   \item @{method tactic}~@{text "text"} produces a proof method from
   any ML text of type @{ML_type tactic}.  Apart from the usual ML
