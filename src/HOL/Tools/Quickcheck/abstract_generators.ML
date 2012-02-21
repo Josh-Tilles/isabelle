@@ -6,7 +6,7 @@ Quickcheck generators for abstract types.
 
 signature ABSTRACT_GENERATORS =
 sig
-  val quickcheck_generator : string -> term list -> theory -> theory
+  val quickcheck_generator : string -> term option -> term list -> theory -> theory
 end;
 
 structure Abstract_Generators : ABSTRACT_GENERATORS =
@@ -28,19 +28,20 @@ fun check_constrs ctxt tyco constrs =
     map check_type constrs
   end
   
-fun gen_quickcheck_generator prep_tyco prep_term tyco_raw constrs_raw thy =
+fun gen_quickcheck_generator prep_tyco prep_term tyco_raw opt_pred_raw constrs_raw thy =
   let
     val ctxt = Proof_Context.init_global thy
     val tyco = prep_tyco ctxt tyco_raw
+    val opt_pred = Option.map (prep_term ctxt) opt_pred_raw
     val constrs = map (prep_term ctxt) constrs_raw
-    val _ = check_constrs ctxt tyco constrs 
+    val _ = check_constrs ctxt tyco constrs
     val vs = map dest_TFree (snd (dest_Type (body_type (fastype_of (hd constrs)))))
     val name = Long_Name.base_name tyco 
     fun mk_dconstrs (Const (s, T)) =
         (s, map (Datatype_Aux.dtyp_of_typ [(tyco, vs)]) (binder_types T))
       | mk_dconstrs t = error (Syntax.string_of_term ctxt t ^
           " is not a valid constructor for quickcheck_generator, which expects a constant.")
-    fun the_descr thy _ =
+    fun the_descr _ _ =
       let
         val descr = [(0, (tyco, map Datatype_Aux.DtTFree vs, map mk_dconstrs constrs))]
       in
@@ -53,7 +54,9 @@ fun gen_quickcheck_generator prep_tyco prep_term tyco_raw constrs_raw thy =
   in
     thy
     |> ensure_sort (@{sort full_exhaustive}, Exhaustive_Generators.instantiate_full_exhaustive_datatype)
+    |> ensure_sort (@{sort exhaustive}, Exhaustive_Generators.instantiate_exhaustive_datatype)
     |> ensure_sort (@{sort random}, Random_Generators.instantiate_random_datatype)
+    |> (case opt_pred of NONE => I | SOME t => Context.theory_map (Quickcheck_Common.register_predicate (t, tyco)))
   end
 
 val quickcheck_generator = gen_quickcheck_generator (K I) (K I)
@@ -62,7 +65,10 @@ val quickcheck_generator_cmd = gen_quickcheck_generator
   (fn ctxt => fst o dest_Type o Proof_Context.read_type_name_proper ctxt false) Syntax.read_term
   
 val _ = Outer_Syntax.command "quickcheck_generator" "define quickcheck generators for abstract types"
-    Keyword.thy_decl (Parse.type_const -- (Args.$$$ "constructors" |-- Parse.$$$ ":" |-- Parse.list1 Parse.term)
-      >> (fn (tyco, constrs) => Toplevel.theory (quickcheck_generator_cmd tyco constrs)))
+    Keyword.thy_decl ((Parse.type_const --
+      Scan.option (Args.$$$ "predicate" |-- Parse.$$$ ":" |-- Parse.term)) --
+      (Args.$$$ "constructors" |-- Parse.$$$ ":" |-- Parse.list1 Parse.term)
+      >> (fn ((tyco, opt_pred), constrs) =>
+        Toplevel.theory (quickcheck_generator_cmd tyco opt_pred constrs)))
 
 end;
