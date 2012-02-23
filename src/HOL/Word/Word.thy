@@ -561,7 +561,7 @@ lemma sint_lt: "sint (x::'a::len word) < 2 ^ (len_of TYPE('a) - 1)"
   using word_sint.Rep [of x] by (simp add: sints_num)
 
 lemma sign_uint_Pls [simp]: 
-  "bin_sign (uint x) = Int.Pls"
+  "bin_sign (uint x) = 0"
   by (simp add: sign_Pls_ge_0 number_of_eq)
 
 lemma uint_m2p_neg: "uint (x::'a::len0 word) - 2 ^ len_of TYPE('a) < 0"
@@ -587,7 +587,7 @@ lemma uint_number_of:
   by (simp only: int_word_uint)
 
 lemma unat_number_of: 
-  "bin_sign b = Int.Pls \<Longrightarrow> 
+  "bin_sign (number_of b) = 0 \<Longrightarrow> 
   unat (number_of b::'a::len0 word) = number_of b mod 2 ^ len_of TYPE ('a)"
   apply (unfold unat_def)
   apply (clarsimp simp only: uint_number_of)
@@ -789,14 +789,6 @@ lemma uint_bl_bin:
   fixes x :: "'a::len0 word"
   shows "bl_to_bin (bin_to_bl (len_of TYPE('a)) (uint x)) = uint x"
   by (rule trans [OF bin_bl_bin word_ubin.norm_Rep])
-
-(* FIXME: the next two lemmas should be unnecessary, because the lhs
-terms should never occur in practice *)
-lemma num_AB_u [simp]: "number_of (uint x) = x"
-  unfolding word_number_of_def by (rule word_uint.Rep_inverse)
-
-lemma num_AB_s [simp]: "number_of (sint x) = x"
-  unfolding word_number_of_def by (rule word_sint.Rep_inverse)
 
 (* naturals *)
 lemma uints_unats: "uints n = int ` unats n"
@@ -1653,16 +1645,6 @@ lemma rtb_rbl_ariths:
 
 subsection "Arithmetic type class instantiations"
 
-(* note that iszero_def is only for class comm_semiring_1_cancel,
-   which requires word length >= 1, ie 'a :: len word *) 
-lemma zero_bintrunc:
-  "iszero (number_of x :: 'a :: len word) = 
-    (bintrunc (len_of TYPE('a)) x = Int.Pls)"
-  apply (unfold iszero_def word_0_wi word_no_wi)
-  apply (rule word_ubin.norm_eq_iff [symmetric, THEN trans])
-  apply (simp add : Pls_def [symmetric])
-  done
-
 lemmas word_le_0_iff [simp] =
   word_zero_le [THEN leD, THEN linorder_antisym_conv1]
 
@@ -1670,14 +1652,14 @@ lemma word_of_int_nat:
   "0 <= x \<Longrightarrow> word_of_int x = of_nat (nat x)"
   by (simp add: of_nat_nat word_of_int)
 
-lemma iszero_word_no [simp] : 
+(* note that iszero_def is only for class comm_semiring_1_cancel,
+   which requires word length >= 1, ie 'a :: len word *) 
+lemma iszero_word_no [simp]:
   "iszero (number_of bin :: 'a :: len word) = 
     iszero (bintrunc (len_of TYPE('a)) (number_of bin))"
-  apply (simp add: zero_bintrunc number_of_is_id)
-  apply (unfold iszero_def Pls_def)
-  apply (rule refl)
-  done
-    
+  using word_ubin.norm_eq_iff [where 'a='a, of "number_of bin" 0]
+  by (simp add: iszero_def [symmetric])
+
 
 subsection "Word and nat"
 
@@ -2317,8 +2299,7 @@ lemma word_lsb_int: "lsb w = (uint w mod 2 = 1)"
   unfolding word_lsb_def bin_last_def by auto
 
 lemma word_msb_sint: "msb w = (sint w < 0)" 
-  unfolding word_msb_def
-  by (simp add : sign_Min_lt_0 number_of_is_id)
+  unfolding word_msb_def sign_Min_lt_0 ..
 
 lemma msb_word_of_int:
   "msb (word_of_int x::'a::len word) = bin_nth x (len_of TYPE('a) - 1)"

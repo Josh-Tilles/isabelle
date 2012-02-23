@@ -279,14 +279,15 @@ lemma plus_and_or [rule_format]:
   done
 
 lemma le_int_or:
-  "bin_sign (y::int) = Int.Pls ==> x <= x OR y"
+  "bin_sign (y::int) = 0 ==> x <= x OR y"
   apply (induct y arbitrary: x rule: bin_induct)
     apply clarsimp
+   apply (simp only: Min_def)
    apply clarsimp
   apply (case_tac x rule: bin_exhaust)
   apply (case_tac b)
    apply (case_tac [!] bit)
-     apply (auto simp: less_eq_int_code BIT_simps)
+     apply (auto simp: le_Bits)
   done
 
 lemmas int_and_le =
@@ -374,18 +375,14 @@ lemma bin_clr_le:
   "bin_sc n 0 w <= w"
   apply (induct n arbitrary: w)
    apply (case_tac [!] w rule: bin_exhaust)
-   apply (auto simp del: BIT_simps)
-   apply (unfold Bit_def)
-   apply (simp_all add: bitval_def split: bit.split)
+   apply (auto simp: le_Bits)
   done
 
 lemma bin_set_ge:
   "bin_sc n 1 w >= w"
   apply (induct n arbitrary: w)
    apply (case_tac [!] w rule: bin_exhaust)
-   apply (auto simp del: BIT_simps)
-   apply (unfold Bit_def)
-   apply (simp_all add: bitval_def split: bit.split)
+   apply (auto simp: le_Bits)
   done
 
 lemma bintr_bin_clr_le:
@@ -394,9 +391,7 @@ lemma bintr_bin_clr_le:
    apply simp
   apply (case_tac w rule: bin_exhaust)
   apply (case_tac m)
-   apply (auto simp del: BIT_simps)
-   apply (unfold Bit_def)
-   apply (simp_all add: bitval_def split: bit.split)
+   apply (auto simp: le_Bits)
   done
 
 lemma bintr_bin_set_ge:
@@ -405,16 +400,14 @@ lemma bintr_bin_set_ge:
    apply simp
   apply (case_tac w rule: bin_exhaust)
   apply (case_tac m)
-   apply (auto simp del: BIT_simps)
-   apply (unfold Bit_def)
-   apply (simp_all add: bitval_def split: bit.split)
+   apply (auto simp: le_Bits)
   done
 
-lemma bin_sc_FP [simp]: "bin_sc n 0 Int.Pls = Int.Pls"
-  by (induct n) (auto simp: BIT_simps)
+lemma bin_sc_FP [simp]: "bin_sc n 0 0 = 0"
+  by (induct n) auto
 
-lemma bin_sc_TM [simp]: "bin_sc n 1 Int.Min = Int.Min"
-  by (induct n) (auto simp: BIT_simps)
+lemma bin_sc_TM [simp]: "bin_sc n 1 -1 = -1"
+  by (induct n) auto
   
 lemmas bin_sc_simps = bin_sc.Z bin_sc.Suc bin_sc_TM bin_sc_FP
 
@@ -495,9 +488,6 @@ lemma bin_cat_assoc_sym:
 lemma bin_cat_zero [simp]: "bin_cat 0 n w = bintrunc n w"
   by (induct n arbitrary: w) auto
 
-lemma bin_cat_Pls [simp]: "bin_cat Int.Pls n w = bintrunc n w"
-  unfolding Pls_def by (rule bin_cat_zero)
-
 lemma bintr_cat1: 
   "bintrunc (k + n) (bin_cat a n b) = bin_cat (bintrunc k a) n b"
   by (induct n arbitrary: b) auto
@@ -529,13 +519,9 @@ lemma bin_split_cat:
 lemma bin_split_zero [simp]: "bin_split n 0 = (0, 0)"
   by (induct n) auto
 
-lemma bin_split_Pls [simp]:
-  "bin_split n Int.Pls = (Int.Pls, Int.Pls)"
-  unfolding Pls_def by (rule bin_split_zero)
-
-lemma bin_split_Min [simp]:
-  "bin_split n Int.Min = (Int.Min, bintrunc n Int.Min)"
-  by (induct n) (auto simp: Let_def split: ls_splits)
+lemma bin_split_minus1 [simp]:
+  "bin_split n -1 = (-1, bintrunc n -1)"
+  by (induct n) auto
 
 lemma bin_split_trunc:
   "bin_split (min m n) c = (a, b) ==> 
@@ -563,7 +549,7 @@ lemma bin_cat_num:
 
 lemma bin_split_num:
   "bin_split n b = (b div 2 ^ n, b mod 2 ^ n)"
-  apply (induct n arbitrary: b, simp add: Pls_def)
+  apply (induct n arbitrary: b, simp)
   apply (simp add: bin_rest_def zdiv_zmult2_eq)
   apply (case_tac b rule: bin_exhaust)
   apply simp
