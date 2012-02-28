@@ -1,5 +1,6 @@
 (*  Title:      Pure/Tools/find_theorems.ML
     Author:     Rafal Kolanski and Gerwin Klein, NICTA
+    Author:     Lars Noschinski and Alexander Krauss, TU Muenchen
 
 Retrieve theorems from proof context.
 *)
@@ -7,8 +8,7 @@ Retrieve theorems from proof context.
 signature FIND_THEOREMS =
 sig
   datatype 'term criterion =
-    Name of string | Intro | IntroIff | Elim | Dest | Solves | Simp of 'term |
-    Pattern of 'term
+    Name of string | Intro | Elim | Dest | Solves | Simp of 'term | Pattern of 'term
 
   datatype theorem =
     Internal of Facts.ref * thm | External of Facts.ref * term
@@ -52,8 +52,7 @@ struct
 (** search criteria **)
 
 datatype 'term criterion =
-  Name of string | Intro | IntroIff | Elim | Dest | Solves | Simp of 'term |
-  Pattern of 'term;
+  Name of string | Intro | Elim | Dest | Solves | Simp of 'term | Pattern of 'term;
 
 fun apply_dummies tm =
   let
@@ -76,7 +75,6 @@ fun parse_pattern ctxt nm =
 
 fun read_criterion _ (Name name) = Name name
   | read_criterion _ Intro = Intro
-  | read_criterion _ IntroIff = IntroIff
   | read_criterion _ Elim = Elim
   | read_criterion _ Dest = Dest
   | read_criterion _ Solves = Solves
@@ -90,7 +88,6 @@ fun pretty_criterion ctxt (b, c) =
     (case c of
       Name name => Pretty.str (prfx "name: " ^ quote name)
     | Intro => Pretty.str (prfx "intro")
-    | IntroIff => Pretty.str (prfx "introiff")
     | Elim => Pretty.str (prfx "elim")
     | Dest => Pretty.str (prfx "dest")
     | Solves => Pretty.str (prfx "solves")
@@ -112,11 +109,10 @@ type 'term query = {
 };
 
 fun map_criteria f {goal, limit, rem_dups, criteria} =
-  {goal=goal, limit=limit, rem_dups=rem_dups, criteria=f criteria};
+  {goal = goal, limit = limit, rem_dups = rem_dups, criteria = f criteria};
 
 fun xml_of_criterion (Name name) = XML.Elem (("Name", [("val", name)]), [])
   | xml_of_criterion Intro = XML.Elem (("Intro", []) , [])
-  | xml_of_criterion IntroIff = XML.Elem (("IntroIff", []) , [])
   | xml_of_criterion Elim = XML.Elem (("Elim", []) , [])
   | xml_of_criterion Dest = XML.Elem (("Dest", []) , [])
   | xml_of_criterion Solves = XML.Elem (("Solves", []) , [])
@@ -125,7 +121,6 @@ fun xml_of_criterion (Name name) = XML.Elem (("Name", [("val", name)]), [])
 
 fun criterion_of_xml (XML.Elem (("Name", [("val", name)]), [])) = Name name
   | criterion_of_xml (XML.Elem (("Intro", []) , [])) = Intro
-  | criterion_of_xml (XML.Elem (("IntroIff", []) , [])) = IntroIff
   | criterion_of_xml (XML.Elem (("Elim", []) , [])) = Elim
   | criterion_of_xml (XML.Elem (("Dest", []) , [])) = Dest
   | criterion_of_xml (XML.Elem (("Solves", []) , [])) = Solves
@@ -133,7 +128,7 @@ fun criterion_of_xml (XML.Elem (("Name", [("val", name)]), [])) = Name name
   | criterion_of_xml (XML.Elem (("Pattern", []) , [tree])) = Pattern (XML_Syntax.term_of_xml tree)
   | criterion_of_xml tree = raise XML_Syntax.XML ("criterion_of_xml: bad tree", tree);
 
-fun xml_of_query {goal=NONE, limit, rem_dups, criteria} =
+fun xml_of_query {goal = NONE, limit, rem_dups, criteria} =
       let
         val properties = []
           |> (if rem_dups then cons ("rem_dups", "") else I)
@@ -152,7 +147,7 @@ fun query_of_xml (XML.Elem (("Query", properties), body)) =
           XML.Decode.list (XML.Decode.pair XML.Decode.bool
             (criterion_of_xml o the_single)) body;
       in
-        {goal=NONE, limit=limit, rem_dups=rem_dups, criteria=criteria}
+        {goal = NONE, limit = limit, rem_dups = rem_dups, criteria = criteria}
       end
   | query_of_xml tree = raise XML_Syntax.XML ("query_of_xml: bad tree", tree);
 
@@ -178,8 +173,9 @@ fun theorem_of_xml (XML.Elem (("External", properties), [tree])) =
       let
         val name = the (Properties.get properties "name");
         val pos = Position.of_properties properties;
-        val intvs_opt = Option.map (single o Facts.Single o Markup.parse_int)
-          (Properties.get properties "index");
+        val intvs_opt =
+          Option.map (single o Facts.Single o Markup.parse_int)
+            (Properties.get properties "index");
       in
         External (Facts.Named ((name, pos), intvs_opt), XML_Syntax.term_of_xml tree)
       end
@@ -234,32 +230,17 @@ fun fact_ref_of (Internal (fact_ref, _)) = fact_ref
 
 fun is_nontrivial thy = Term.is_Const o Term.head_of o Object_Logic.drop_judgment thy;
 
-(*educated guesses on HOL*)  (* FIXME utterly broken *)
-val boolT = Type ("bool", []);
-val iff_const = Const ("op =", boolT --> boolT --> boolT);
-
 (*extract terms from term_src, refine them to the parts that concern us,
   if po try match them against obj else vice versa.
   trivial matches are ignored.
   returns: smallest substitution size*)
-fun is_matching_thm doiff (extract_terms, refine_term) ctxt po obj term_src =
+fun is_matching_thm (extract_terms, refine_term) ctxt po obj term_src =
   let
     val thy = Proof_Context.theory_of ctxt;
 
-    fun check_match pat = Pattern.matches thy (if po then (pat, obj) else (obj, pat));
     fun matches pat =
-      let
-        val jpat = Object_Logic.drop_judgment thy pat;
-        val c = Term.head_of jpat;
-        val pats =
-          if Term.is_Const c
-          then
-            if doiff andalso c = iff_const then
-              (pat :: map (Object_Logic.ensure_propT thy) (snd (strip_comb jpat)))
-                |> filter (is_nontrivial thy)
-            else [pat]
-          else [];
-      in filter check_match pats end;
+      is_nontrivial thy pat andalso
+      Pattern.matches thy (if po then (pat, obj) else (obj, pat));
 
     fun substsize pat =
       let val (_, subst) =
@@ -271,8 +252,7 @@ fun is_matching_thm doiff (extract_terms, refine_term) ctxt po obj term_src =
 
     val match_thm = matches o refine_term;
   in
-    maps match_thm (extract_terms term_src)
-    |> map substsize
+    map (substsize o refine_term) (filter match_thm (extract_terms term_src))
     |> bestmatch
   end;
 
@@ -293,7 +273,7 @@ fun filter_dest ctxt goal theorem =
       hd o Logic.strip_imp_prems);
     val prems = Logic.prems_of_goal goal 1;
 
-    fun try_subst prem = is_matching_thm false extract_dest ctxt true prem theorem;
+    fun try_subst prem = is_matching_thm extract_dest ctxt true prem theorem;
     val successful = prems |> map_filter try_subst;
   in
     (*if possible, keep best substitution (one with smallest size)*)
@@ -303,11 +283,11 @@ fun filter_dest ctxt goal theorem =
     then SOME (nprems_of theorem - 1, foldl1 Int.min successful) else NONE
   end;
 
-fun filter_intro doiff ctxt goal theorem =
+fun filter_intro ctxt goal theorem =
   let
     val extract_intro = (single o prop_of, Logic.strip_imp_concl);
     val concl = Logic.concl_of_goal goal 1;
-    val ss = is_matching_thm doiff extract_intro ctxt true concl theorem;
+    val ss = is_matching_thm extract_intro ctxt true concl theorem;
   in
     if is_some ss then SOME (nprems_of theorem, the ss) else NONE
   end;
@@ -323,8 +303,7 @@ fun filter_elim ctxt goal theorem =
       fun combine t1 t2 = Const ("*combine*", dummyT --> dummyT) $ (t1 $ t2);
       val rule_tree = combine rule_mp rule_concl;
       fun goal_tree prem = combine prem goal_concl;
-      fun try_subst prem =
-        is_matching_thm false (single, I) ctxt true (goal_tree prem) rule_tree;
+      fun try_subst prem = is_matching_thm (single, I) ctxt true (goal_tree prem) rule_tree;
       val successful = prems |> map_filter try_subst;
     in
       (*elim rules always have assumptions, so an elim with one
@@ -333,7 +312,7 @@ fun filter_elim ctxt goal theorem =
         andalso not (null successful)
       then SOME (nprems_of theorem - 1, foldl1 Int.min successful) else NONE
     end
-  else NONE
+  else NONE;
 
 val tac_limit = Unsynchronized.ref 5;
 
@@ -358,7 +337,7 @@ fun filter_simp ctxt t (Internal (_, thm)) =
         val mksimps = Simplifier.mksimps (simpset_of ctxt);
         val extract_simp =
           (map Thm.full_prop_of o mksimps, #1 o Logic.dest_equals o Logic.strip_imp_concl);
-        val ss = is_matching_thm false extract_simp ctxt false t thm;
+        val ss = is_matching_thm extract_simp ctxt false t thm;
       in
         if is_some ss then SOME (Thm.nprems_of thm, the ss) else NONE
       end
@@ -403,12 +382,10 @@ val fix_goal = Thm.prop_of;
 
 fun filter_crit _ _ (Name name) = apfst (filter_name name)
   | filter_crit _ NONE Intro = err_no_goal "intro"
-  | filter_crit _ NONE IntroIff = err_no_goal "introiff"
   | filter_crit _ NONE Elim = err_no_goal "elim"
   | filter_crit _ NONE Dest = err_no_goal "dest"
   | filter_crit _ NONE Solves = err_no_goal "solves"
-  | filter_crit ctxt (SOME goal) Intro = apfst (filter_intro false ctxt (fix_goal goal))
-  | filter_crit ctxt (SOME goal) IntroIff = apfst (filter_intro true ctxt (fix_goal goal))
+  | filter_crit ctxt (SOME goal) Intro = apfst (filter_intro ctxt (fix_goal goal))
   | filter_crit ctxt (SOME goal) Elim = apfst (filter_elim ctxt (fix_goal goal))
   | filter_crit ctxt (SOME goal) Dest = apfst (filter_dest ctxt (fix_goal goal))
   | filter_crit ctxt (SOME goal) Solves = apfst (filter_solves ctxt goal)
@@ -448,7 +425,6 @@ fun sorted_filter filters theorems =
 fun lazy_filter filters =
   let
     fun lazy_match thms = Seq.make (fn () => first_match thms)
-
     and first_match [] = NONE
       | first_match (thm :: thms) =
           (case app_filters thm (SOME (0, 0), NONE, filters) of
@@ -489,7 +465,7 @@ in
 
 fun nicer_shortest ctxt =
   let
-    (* FIXME global name space!? *)
+    (* FIXME Why global name space!?? *)
     val space = Facts.space_of (Global_Theory.facts_of (Proof_Context.theory_of ctxt));
 
     val shorten =
@@ -532,7 +508,7 @@ val limit = Unsynchronized.ref 40;
 
 fun filter_theorems ctxt theorems query =
   let
-    val {goal=opt_goal, limit=opt_limit, rem_dups, criteria} = query
+    val {goal = opt_goal, limit = opt_limit, rem_dups, criteria} = query;
     val filters = map (filter_criterion ctxt opt_goal) criteria;
 
     fun find_all theorems =
@@ -555,8 +531,8 @@ fun filter_theorems ctxt theorems query =
 
   in find theorems end;
 
-fun filter_theorems_cmd ctxt theorems raw_query = 
-  filter_theorems ctxt theorems (map_criteria 
+fun filter_theorems_cmd ctxt theorems raw_query =
+  filter_theorems ctxt theorems (map_criteria
     (map (apsnd (read_criterion ctxt))) raw_query);
 
 fun gen_find_theorems filter ctxt opt_goal opt_limit rem_dups raw_criteria =
@@ -567,8 +543,8 @@ fun gen_find_theorems filter ctxt opt_goal opt_limit rem_dups raw_criteria =
     val add_prems = Seq.hd o TRY (Method.insert_tac assms 1);
     val opt_goal' = Option.map add_prems opt_goal;
   in
-    filter ctxt (map Internal (all_facts_of ctxt)) 
-      {goal=opt_goal', limit=opt_limit, rem_dups=rem_dups, criteria=raw_criteria}
+    filter ctxt (map Internal (all_facts_of ctxt))
+      {goal = opt_goal', limit = opt_limit, rem_dups = rem_dups, criteria = raw_criteria}
     |> apsnd (map (fn Internal f => f))
   end;
 
@@ -586,11 +562,9 @@ fun pretty_thm ctxt (thmref, thm) = pretty_theorem ctxt (Internal (thmref, thm))
 
 fun gen_print_theorems find ctxt opt_goal opt_limit rem_dups raw_criteria =
   let
-    val start = Timing.start ();
-
     val criteria = map (apsnd (read_criterion ctxt)) raw_criteria;
     val (foundo, theorems) = find
-      {goal=opt_goal, limit=opt_limit, rem_dups=rem_dups, criteria=criteria};
+      {goal = opt_goal, limit = opt_limit, rem_dups = rem_dups, criteria = criteria};
     val returned = length theorems;
 
     val tally_msg =
@@ -601,19 +575,18 @@ fun gen_print_theorems find ctxt opt_goal opt_limit rem_dups raw_criteria =
             (if returned < found
              then " (" ^ string_of_int returned ^ " displayed)"
              else ""));
-
-    val end_msg = " in " ^ Time.toString (#cpu (Timing.result start)) ^ " secs";
   in
     Pretty.big_list "searched for:" (map (pretty_criterion ctxt) criteria) ::
     Pretty.str "" ::
-    (if null theorems then [Pretty.str ("nothing found" ^ end_msg)]
+    (if null theorems then [Pretty.str "nothing found"]
      else
-      [Pretty.str (tally_msg ^ end_msg ^ ":"), Pretty.str ""] @
+      [Pretty.str (tally_msg ^ ":"), Pretty.str ""] @
         map (pretty_theorem ctxt) theorems)
   end |> Pretty.chunks |> Pretty.writeln;
 
 fun print_theorems ctxt =
   gen_print_theorems (filter_theorems ctxt (map Internal (all_facts_of ctxt))) ctxt;
+
 
 
 (** command syntax **)
@@ -623,7 +596,6 @@ local
 val criterion =
   Parse.reserved "name" |-- Parse.!!! (Parse.$$$ ":" |-- Parse.xname) >> Name ||
   Parse.reserved "intro" >> K Intro ||
-  Parse.reserved "introiff" >> K IntroIff ||
   Parse.reserved "elim" >> K Elim ||
   Parse.reserved "dest" >> K Dest ||
   Parse.reserved "solves" >> K Solves ||

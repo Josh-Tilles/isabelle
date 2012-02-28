@@ -61,7 +61,6 @@ test: \
   HOL-Nitpick_Examples \
   HOL-Number_Theory \
   HOL-Old_Number_Theory \
-  HOL-Quickcheck_Examples \
   HOL-Quotient_Examples \
   HOL-Predicate_Compile_Examples \
   HOL-Prolog \
@@ -96,7 +95,7 @@ test-no-smlnj: \
   HOL-Nominal-Examples
 
 all: test-no-smlnj test images-no-smlnj images
-full: all benchmark
+full: all benchmark HOL-Quickcheck_Examples
 smlnj: test images
 
 
@@ -964,11 +963,10 @@ $(LOG)/HOL-Prolog.gz: $(OUT)/HOL Prolog/ROOT.ML Prolog/prolog.ML	\
 
 HOL-MicroJava: HOL $(LOG)/HOL-MicroJava.gz
 
-$(LOG)/HOL-MicroJava.gz: $(OUT)/HOL					\
-  MicroJava/ROOT.ML MicroJava/Comp/AuxLemmas.thy			\
-  MicroJava/Comp/CorrComp.thy MicroJava/Comp/CorrCompTp.thy		\
-  MicroJava/Comp/DefsComp.thy MicroJava/Comp/Index.thy			\
-  MicroJava/Comp/LemmasComp.thy MicroJava/Comp/NatCanonify.thy		\
+$(LOG)/HOL-MicroJava.gz: $(OUT)/HOL MicroJava/ROOT.ML			\
+  MicroJava/Comp/AuxLemmas.thy MicroJava/Comp/CorrComp.thy		\
+  MicroJava/Comp/CorrCompTp.thy MicroJava/Comp/DefsComp.thy		\
+  MicroJava/Comp/Index.thy MicroJava/Comp/LemmasComp.thy		\
   MicroJava/Comp/TranslComp.thy MicroJava/Comp/TranslCompTp.thy		\
   MicroJava/Comp/TypeInf.thy MicroJava/J/Conform.thy			\
   MicroJava/J/Eval.thy MicroJava/J/JBasis.thy				\
@@ -985,7 +983,8 @@ $(LOG)/HOL-MicroJava.gz: $(OUT)/HOL					\
   MicroJava/DFA/LBVSpec.thy MicroJava/DFA/Listn.thy			\
   MicroJava/DFA/Opt.thy MicroJava/DFA/Product.thy			\
   MicroJava/DFA/SemilatAlg.thy MicroJava/DFA/Semilat.thy		\
-  MicroJava/DFA/Semilattices.thy MicroJava/DFA/Typing_Framework_err.thy	\
+  MicroJava/DFA/Semilattices.thy					\
+  MicroJava/DFA/Typing_Framework_err.thy				\
   MicroJava/DFA/Typing_Framework.thy MicroJava/BV/BVSpec.thy		\
   MicroJava/BV/BVSpecTypeSafe.thy MicroJava/BV/Correct.thy		\
   MicroJava/BV/JType.thy MicroJava/BV/JVM.thy MicroJava/BV/JVMType.thy	\

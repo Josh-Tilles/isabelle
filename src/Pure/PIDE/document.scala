@@ -29,7 +29,7 @@ object Document
 
   /** document structure **/
 
-  /* named nodes -- development graph */
+  /* individual nodes */
 
   type Edit[A, B] = (Node.Name, Node.Edit[A, B])
   type Edit_Text = Edit[Text.Edit, Text.Perspective]
@@ -48,6 +48,11 @@ object Document
         val dir = path.dir.implode
         val theory = Thy_Header.thy_name(node) getOrElse error("Bad theory file name: " + path)
         Name(node, dir, theory)
+      }
+
+      object Ordering extends scala.math.Ordering[Name]
+      {
+        def compare(name1: Name, name2: Name): Int = name1.node compare name2.node
       }
     }
     sealed case class Name(node: String, dir: String, theory: String)
@@ -98,7 +103,7 @@ object Document
     val empty: Node = new Node()
   }
 
-  class Node private(
+  final class Node private(
     val header: Node_Header = Exn.Exn(ERROR("Bad theory header")),
     val perspective: Command.Perspective = Command.Perspective.empty,
     val blobs: Map[String, Blob] = Map.empty,
@@ -169,12 +174,49 @@ object Document
   }
 
 
+  /* development graph */
+
+  object Nodes
+  {
+    val empty: Nodes = new Nodes(Graph.empty(Node.Name.Ordering))
+  }
+
+  final class Nodes private(graph: Graph[Node.Name, Node])
+  {
+    def get_name(s: String): Option[Node.Name] =
+      graph.keys.find(name => name.node == s)
+
+    def apply(name: Node.Name): Node =
+      graph.default_node(name, Node.empty).get_node(name)
+
+    def + (entry: (Node.Name, Node)): Nodes =
+    {
+      val (name, node) = entry
+      val parents =
+        node.header match {
+          case Exn.Res(header) =>
+            // FIXME official names of yet unknown nodes!?
+            for (imp <- header.imports; imp_name <- get_name(imp)) yield imp_name
+          case _ => Nil
+        }
+      val graph1 =
+        (graph.default_node(name, Node.empty) /: parents)((g, p) => g.default_node(p, Node.empty))
+      val graph2 = (graph1 /: graph1.imm_preds(name))((g, dep) => g.del_edge(dep, name))
+      val graph3 = (graph2 /: parents)((g, dep) => g.add_edge(dep, name))
+      new Nodes(graph3.map_node(name, _ => node))
+    }
+
+    def entries: Iterator[(Node.Name, Node)] =
+      graph.entries.map({ case (name, (node, _)) => (name, node) })
+
+    def topological_order: List[Node.Name] = graph.topological_order
+  }
+
+
 
   /** versioning **/
 
   /* particular document versions */
-
-  type Nodes = Map[Node.Name, Node]
 
   object Version
   {
@@ -183,22 +225,9 @@ object Document
     def make(nodes: Nodes): Version = new Version(new_id(), nodes)
   }
 
-  class Version private(
+  final class Version private(
     val id: Version_ID = no_id,
-    val nodes: Nodes = Map.empty.withDefaultValue(Node.empty))
-  {
-    def topological_order: List[Node.Name] =
-    {
-      val names = nodes.map({ case (name, node) => (name.node -> name) })
-      def next(x: Node.Name): List[Node.Name] =
-        nodes(x).header match {
-          case Exn.Res(header) =>
-            for (imp <- header.imports; name <- names.get(imp)) yield(name)
-          case Exn.Exn(_) => Nil
-        }
-      Library.topological_order(next, nodes.keys.toList.sortBy(_.node))
-    }
-  }
+    val nodes: Nodes = Nodes.empty)
 
 
   /* changes of plain text, eventually resulting in document edits */
@@ -211,7 +240,7 @@ object Document
       new Change(Some(previous), edits, version)
   }
 
-  class Change private(
+  final class Change private(
     val previous: Option[Future[Version]] = Some(Future.value(Version.init)),
     val edits: List[Edit_Text] = Nil,
     val version: Future[Version] = Future.value(Version.init))
@@ -231,7 +260,7 @@ object Document
     val init: History = new History()
   }
 
-  class History private(
+  final class History private(
     val undo_list: List[Change] = List(Change.init))  // non-empty list
   {
     def tip: Change = undo_list.head
@@ -282,7 +311,7 @@ object Document
       val init: Assignment = new Assignment()
     }
 
-    class Assignment private(
+    final class Assignment private(
       val command_execs: Map[Command_ID, Exec_ID] = Map.empty,
       val last_execs: Map[String, Option[Command_ID]] = Map.empty,
       val is_finished: Boolean = false)
@@ -307,7 +336,7 @@ object Document
       State().define_version(Version.init, Assignment.init).assign(Version.init.id)._2
   }
 
-  sealed case class State private(
+  final case class State private(
     val versions: Map[Version_ID, Version] = Map.empty,
     val commands: Map[Command_ID, Command.State] = Map.empty,  // static markup from define_command
     val execs: Map[Exec_ID, Command.State] = Map.empty,  // dynamic markup from execution
@@ -440,7 +469,7 @@ object Document
       for {
         (version_id, version) <- versions1.iterator
         val command_execs = assignments1(version_id).command_execs
-        (_, node) <- version.nodes.iterator
+        (_, node) <- version.nodes.entries
         command <- node.commands.iterator
       } {
         val id = command.id
