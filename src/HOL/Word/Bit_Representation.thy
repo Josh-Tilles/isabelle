@@ -613,8 +613,7 @@ lemma sbintrunc_inc:
 
 lemma sb_dec_lem:
   "(0::int) <= - (2^k) + a ==> (a + 2^k) mod (2 * 2 ^ k) <= - (2 ^ k) + a"
-  by (rule int_mod_le' [where n = "2 ^ (Suc k)" and b = "a + 2 ^ k",
-    simplified zless2p, OF _ TrueI, simplified])
+  by (rule int_mod_le' [where n = "2 ^ (Suc k)" and b = "a + 2 ^ k", simplified])
 
 lemma sb_dec_lem':
   "(2::int) ^ k <= a ==> (a + 2 ^ k) mod (2 * 2 ^ k) <= - (2 ^ k) + a"
@@ -624,22 +623,22 @@ lemma sbintrunc_dec:
   "x >= (2 ^ n) ==> x - 2 ^ (Suc n) >= sbintrunc n x"
   unfolding no_sbintr_alt2 by (drule sb_dec_lem') simp
 
-lemmas zmod_uminus' = zmod_uminus [where b=c] for c
-lemmas zpower_zmod' = zpower_zmod [where m=c and y=k] for c k
+lemmas zmod_uminus' = zminus_zmod [where m=c] for c
+lemmas zpower_zmod' = power_mod [where b=c and n=k] for c k
 
-lemmas brdmod1s' [symmetric] = 
-  mod_add_left_eq mod_add_right_eq 
-  zmod_zsub_left_eq zmod_zsub_right_eq 
-  zmod_zmult1_eq zmod_zmult1_eq_rev 
+lemmas brdmod1s' [symmetric] =
+  mod_add_left_eq mod_add_right_eq
+  mod_diff_left_eq mod_diff_right_eq
+  mod_mult_left_eq mod_mult_right_eq
 
 lemmas brdmods' [symmetric] = 
   zpower_zmod' [symmetric]
   trans [OF mod_add_left_eq mod_add_right_eq] 
-  trans [OF zmod_zsub_left_eq zmod_zsub_right_eq] 
-  trans [OF zmod_zmult1_eq zmod_zmult1_eq_rev] 
+  trans [OF mod_diff_left_eq mod_diff_right_eq] 
+  trans [OF mod_mult_right_eq mod_mult_left_eq] 
   zmod_uminus' [symmetric]
   mod_add_left_eq [where b = "1::int"]
-  zmod_zsub_left_eq [where b = "1"]
+  mod_diff_left_eq [where b = "1::int"]
 
 lemmas bintr_arith1s =
   brdmod1s' [where c="2^n::int", folded bintrunc_mod2p] for n

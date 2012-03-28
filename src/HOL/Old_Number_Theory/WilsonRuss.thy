@@ -35,7 +35,7 @@ lemma inv_is_inv:
     "zprime p \<Longrightarrow> 0 < a \<Longrightarrow> a < p ==> [a * inv p a = 1] (mod p)"
   apply (unfold inv_def)
   apply (subst zcong_zmod)
-  apply (subst zmod_zmult1_eq [symmetric])
+  apply (subst mod_mult_right_eq [symmetric])
   apply (subst zcong_zmod [symmetric])
   apply (subst power_Suc [symmetric])
   apply (subst inv_is_inv_aux)
@@ -137,7 +137,7 @@ lemma zcong_zpower_zmult:
 lemma inv_inv: "zprime p \<Longrightarrow>
     5 \<le> p \<Longrightarrow> 0 < a \<Longrightarrow> a < p ==> inv p (inv p a) = a"
   apply (unfold inv_def)
-  apply (subst zpower_zmod)
+  apply (subst power_mod)
   apply (subst zpower_zpower)
   apply (rule zcong_zless_imp_eq)
       prefer 5

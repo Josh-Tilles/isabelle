@@ -33,8 +33,8 @@ lemma sum_imp_diff: "j = k + i ==> j - i = (k :: nat)" by arith
 
 lemma zless2: "0 < (2 :: int)" by arith
 
-lemmas zless2p [simp] = zless2 [THEN zero_less_power]
-lemmas zle2p [simp] = zless2p [THEN order_less_imp_le]
+lemmas zless2p = zless2 [THEN zero_less_power]
+lemmas zle2p = zless2p [THEN order_less_imp_le]
 
 lemmas pos_mod_sign2 = zless2 [THEN pos_mod_sign [where b = "2::int"]]
 lemmas pos_mod_bound2 = zless2 [THEN pos_mod_bound [where b = "2::int"]]
@@ -96,38 +96,13 @@ lemmas zadd_diff_inverse = trans [OF diff_add_cancel [symmetric] add_commute]
 
 lemmas add_diff_cancel2 = add_commute [THEN diff_eq_eq [THEN iffD2]]
 
-lemma zmod_uminus: "- ((a :: int) mod b) mod b = -a mod b"
-  by (simp add : zmod_zminus1_eq_if)
-
-lemma zmod_zsub_distrib: "((a::int) - b) mod c = (a mod c - b mod c) mod c"
-  apply (unfold diff_int_def)
-  apply (rule trans [OF _ mod_add_eq [symmetric]])
-  apply (simp add: zmod_uminus mod_add_eq [symmetric])
-  done
-
-lemma zmod_zsub_right_eq: "((a::int) - b) mod c = (a - b mod c) mod c"
-  apply (unfold diff_int_def)
-  apply (rule trans [OF _ mod_add_right_eq [symmetric]])
-  apply (simp add : zmod_uminus mod_add_right_eq [symmetric])
-  done
-
-lemma zmod_zsub_left_eq: "((a::int) - b) mod c = (a mod c - b) mod c"
-  by (rule mod_add_left_eq [where b = "- b", simplified diff_int_def [symmetric]])
-
 lemma zmod_zsub_self [simp]: 
   "((b :: int) - a) mod a = b mod a"
-  by (simp add: zmod_zsub_right_eq)
+  by (simp add: mod_diff_right_eq)
 
-lemma zmod_zmult1_eq_rev:
-  "b * a mod c = b mod c * a mod (c::int)"
-  apply (simp add: mult_commute)
-  apply (subst zmod_zmult1_eq)
-  apply simp
-  done
-
-lemmas rdmods [symmetric] = zmod_uminus [symmetric]
-  zmod_zsub_left_eq zmod_zsub_right_eq mod_add_left_eq
-  mod_add_right_eq zmod_zmult1_eq zmod_zmult1_eq_rev
+lemmas rdmods [symmetric] = mod_minus_eq
+  mod_diff_left_eq mod_diff_right_eq mod_add_left_eq
+  mod_add_right_eq mod_mult_right_eq mod_mult_left_eq
 
 lemma mod_plus_right:
   "((a + x) mod m = (b + x) mod m) = (a mod m = b mod (m :: nat))"
@@ -143,8 +118,8 @@ lemmas nat_minus_mod_plus_right = trans [OF nat_minus_mod mod_0 [symmetric],
   THEN mod_plus_right [THEN iffD2], simplified]
 
 lemmas push_mods' = mod_add_eq
-  mod_mult_eq zmod_zsub_distrib
-  zmod_uminus [symmetric]
+  mod_mult_eq mod_diff_eq
+  mod_minus_eq
 
 lemmas push_mods = push_mods' [THEN eq_reflection]
 lemmas pull_mods = push_mods [symmetric] rdmods [THEN eq_reflection]
@@ -197,13 +172,11 @@ lemma int_mod_eq:
 
 lemmas int_mod_eq' = refl [THEN [3] int_mod_eq]
 
-lemma int_mod_le: "0 <= a ==> 0 < (n :: int) ==> a mod n <= a"
-  apply (cases "a < n")
-   apply (auto dest: mod_pos_pos_trivial pos_mod_bound [where a=a])
-  done
+lemma int_mod_le: "(0::int) <= a ==> a mod n <= a"
+  by (fact zmod_le_nonneg_dividend) (* FIXME: delete *)
 
-lemma int_mod_le': "0 <= b - n ==> 0 < (n :: int) ==> b mod n <= b - n"
-  by (rule int_mod_le [where a = "b - n" and n = n, simplified])
+lemma int_mod_le': "(0::int) <= b - n ==> b mod n <= b - n"
+  using zmod_le_nonneg_dividend [of "b - n" "n"] by simp
 
 lemma int_mod_ge: "a < n ==> 0 < (n :: int) ==> a <= a mod n"
   apply (cases "0 <= a")
@@ -289,11 +262,7 @@ lemma td_gal:
 lemmas td_gal_lt = td_gal [simplified not_less [symmetric], simplified]
 
 lemma div_mult_le: "(a :: nat) div b * b <= a"
-  apply (cases b)
-   prefer 2
-   apply (rule order_refl [THEN th2])
-  apply auto
-  done
+  by (fact dtle)
 
 lemmas sdl = split_div_lemma [THEN iffD1, symmetric]
 
