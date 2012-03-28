@@ -1,11 +1,11 @@
 # -*- shell-script -*- :mode=shellscript:
 #
-# Isabelle settings -- site defaults.
+# Isabelle settings -- distribution defaults.
 #
 # Important notes:
-#   * See the system manual for explanations on Isabelle settings
+#   * See the "system" manual for explanations on Isabelle settings
 #   * DO NOT EDIT the repository copy of this file!
-#   * DO NOT COPY this file into your personal isabelle directory!
+#   * DO NOT COPY this file into your ~/.isabelle directory!
 
 ###
 ### ML compiler settings (ESSENTIAL!)
@@ -53,14 +53,6 @@ ML_SOURCES="$ML_HOME/../src"
 ###
 ### JVM components (Scala or Java)
 ###
-
-if [ -z "$ISABELLE_JDK_HOME" -a -n "$JAVA_HOME" ]; then
-  if [ "$(basename "$JAVA_HOME")" = jre -a -e "$(dirname "$JAVA_HOME")"/bin/javac ]; then
-    ISABELLE_JDK_HOME="$(dirname "$JAVA_HOME")"
-  else
-    ISABELLE_JDK_HOME="$JAVA_HOME"
-  fi
-fi
 
 ISABELLE_SCALA_BUILD_OPTIONS="-nowarn -target:jvm-1.5"
 
