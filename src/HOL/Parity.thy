@@ -45,11 +45,20 @@ lemma even_zero_nat[simp]: "even (0::nat)" by presburger
 
 lemma odd_1_nat [simp]: "odd (1::nat)" by presburger
 
+lemma even_numeral_int [simp]: "even (numeral (Num.Bit0 k) :: int)"
+  unfolding even_def by simp
+
+lemma odd_numeral_int [simp]: "odd (numeral (Num.Bit1 k) :: int)"
+  unfolding even_def by simp
+
 (* TODO: proper simp rules for Num.Bit0, Num.Bit1 *)
-declare even_def[of "numeral v", simp] for v
 declare even_def[of "neg_numeral v", simp] for v
 
-declare even_nat_def[of "numeral v", simp] for v
+lemma even_numeral_nat [simp]: "even (numeral (Num.Bit0 k) :: nat)"
+  unfolding even_nat_def by simp
+
+lemma odd_numeral_nat [simp]: "odd (numeral (Num.Bit1 k) :: nat)"
+  unfolding even_nat_def by simp
 
 subsection {* Even and odd are mutually exclusive *}
 
@@ -348,10 +357,6 @@ lemma lemma_even_mod_4_div_2: "n mod 4 = (1::nat) ==> even ((n - 1) div 2)"
   by presburger
 
 text {* Simplify, when the exponent is a numeral *}
-
-lemma power_0_left_numeral [simp]:
-  "0 ^ numeral w = (0::'a::{power,semiring_0})"
-by (simp add: power_0_left)
 
 lemmas zero_le_power_eq_numeral [simp] =
     zero_le_power_eq [of _ "numeral w"] for w

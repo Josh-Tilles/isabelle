@@ -61,17 +61,6 @@ lemma power_numeral_odd:
 lemmas zpower_numeral_even = power_numeral_even [where 'a=int]
 lemmas zpower_numeral_odd = power_numeral_odd [where 'a=int]
 
-lemma nat_numeral_Bit0:
-  "numeral (Num.Bit0 w) = (let n::nat = numeral w in n + n)"
-  unfolding numeral_Bit0 Let_def ..
-
-lemma nat_numeral_Bit1:
-  "numeral (Num.Bit1 w) = (let n = numeral w in Suc (n + n))"
-  unfolding numeral_Bit1 Let_def by simp
-
-lemmas eval_nat_numeral =
-  nat_numeral_Bit0 nat_numeral_Bit1
-
 lemmas nat_arith =
   diff_nat_numeral
 
@@ -101,45 +90,13 @@ text{*Where K above is a literal*}
 lemma Suc_diff_eq_diff_pred: "0 < n ==> Suc m - n = m - (n - Numeral1)"
 by (simp split: nat_diff_split)
 
-text{*No longer required as a simprule because of the @{text inverse_fold}
-   simproc*}
-lemma Suc_diff_numeral: "Suc m - (numeral v) = m - (numeral v - 1)"
-  by (subst expand_Suc, simp only: diff_Suc_Suc)
-
 lemma diff_Suc_eq_diff_pred: "m - Suc n = (m - 1) - n"
 by (simp split: nat_diff_split)
-
-
-subsubsection{*For @{term nat_case} and @{term nat_rec}*}
-
-lemma nat_case_numeral [simp]:
-  "nat_case a f (numeral v) = (let pv = nat (numeral v - 1) in f pv)"
-  by (subst expand_Suc, simp only: nat.cases nat_numeral_diff_1 Let_def)
-
-lemma nat_case_add_eq_if [simp]:
-  "nat_case a f ((numeral v) + n) = (let pv = nat (numeral v - 1) in f (pv + n))"
-  by (subst expand_Suc, simp only: nat.cases nat_numeral_diff_1 Let_def add_Suc)
-
-lemma nat_rec_numeral [simp]:
-  "nat_rec a f (numeral v) = (let pv = nat (numeral v - 1) in f pv (nat_rec a f pv))"
-  by (subst expand_Suc, simp only: nat_rec_Suc nat_numeral_diff_1 Let_def)
-
-lemma nat_rec_add_eq_if [simp]:
-  "nat_rec a f (numeral v + n) =
-    (let pv = nat (numeral v - 1) in f (pv + n) (nat_rec a f (pv + n)))"
-  by (subst expand_Suc, simp only: nat_rec_Suc nat_numeral_diff_1 Let_def add_Suc)
 
 
 subsubsection{*Various Other Lemmas*}
 
 text {*Evens and Odds, for Mutilated Chess Board*}
-
-text{*Lemmas for specialist use, NOT as default simprules*}
-lemma nat_mult_2: "2 * z = (z+z::nat)"
-by (rule mult_2) (* FIXME: duplicate *)
-
-lemma nat_mult_2_right: "z * 2 = (z+z::nat)"
-by (rule mult_2_right) (* FIXME: duplicate *)
 
 text{*Case analysis on @{term "n<2"}*}
 lemma less_2_cases: "(n::nat) < 2 ==> n = 0 | n = Suc 0"

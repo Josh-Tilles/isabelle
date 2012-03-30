@@ -7,6 +7,8 @@ header {* Binary Numerals *}
 
 theory Num
 imports Datatype
+uses
+  ("Tools/numeral.ML")
 begin
 
 subsection {* The @{text num} type *}
@@ -331,6 +333,9 @@ in [(@{const_syntax numeral}, num_tr' ""),
     (@{const_syntax neg_numeral}, num_tr' "-")] end
 *}
 
+use "Tools/numeral.ML"
+
+
 subsection {* Class-specific numeral rules *}
 
 text {*
@@ -507,7 +512,7 @@ subclass numeral ..
 lemma numeral_mult: "numeral (m * n) = numeral m * numeral n"
   apply (induct n rule: num_induct)
   apply (simp add: numeral_One)
-  apply (simp add: mult_inc numeral_inc numeral_add numeral_inc right_distrib)
+  apply (simp add: mult_inc numeral_inc numeral_add right_distrib)
   done
 
 lemma numeral_times_numeral: "numeral m * numeral n = numeral (m * n)"
@@ -869,8 +874,7 @@ definition pred_numeral :: "num \<Rightarrow> nat"
 lemma numeral_eq_Suc: "numeral k = Suc (pred_numeral k)"
   unfolding pred_numeral_def by simp
 
-lemma nat_number:
-  "1 = Suc 0"
+lemma eval_nat_numeral:
   "numeral One = Suc 0"
   "numeral (Bit0 n) = Suc (numeral (BitM n))"
   "numeral (Bit1 n) = Suc (numeral (Bit0 n))"
@@ -880,14 +884,14 @@ lemma pred_numeral_simps [simp]:
   "pred_numeral Num.One = 0"
   "pred_numeral (Num.Bit0 k) = numeral (Num.BitM k)"
   "pred_numeral (Num.Bit1 k) = numeral (Num.Bit0 k)"
-  unfolding pred_numeral_def nat_number
+  unfolding pred_numeral_def eval_nat_numeral
   by (simp_all only: diff_Suc_Suc diff_0)
 
 lemma numeral_2_eq_2: "2 = Suc (Suc 0)"
-  by (simp add: nat_number(2-4))
+  by (simp add: eval_nat_numeral)
 
 lemma numeral_3_eq_3: "3 = Suc (Suc (Suc 0))"
-  by (simp add: nat_number(2-4))
+  by (simp add: eval_nat_numeral)
 
 lemma numeral_1_eq_Suc_0: "Numeral1 = Suc 0"
   by (simp only: numeral_One One_nat_def)
@@ -919,6 +923,12 @@ lemma le_numeral_Suc [simp]: "numeral k \<le> Suc n \<longleftrightarrow> pred_n
 lemma le_Suc_numeral [simp]: "Suc n \<le> numeral k \<longleftrightarrow> n \<le> pred_numeral k"
   by (simp add: numeral_eq_Suc)
 
+lemma diff_Suc_numeral [simp]: "Suc n - numeral k = n - pred_numeral k"
+  by (simp add: numeral_eq_Suc)
+
+lemma diff_numeral_Suc [simp]: "numeral k - Suc n = pred_numeral k - n"
+  by (simp add: numeral_eq_Suc)
+
 lemma max_Suc_numeral [simp]:
   "max (Suc n) (numeral k) = Suc (max n (pred_numeral k))"
   by (simp add: numeral_eq_Suc)
@@ -935,6 +945,26 @@ lemma min_numeral_Suc [simp]:
   "min (numeral k) (Suc n) = Suc (min (pred_numeral k) n)"
   by (simp add: numeral_eq_Suc)
 
+text {* For @{term nat_case} and @{term nat_rec}. *}
+
+lemma nat_case_numeral [simp]:
+  "nat_case a f (numeral v) = (let pv = pred_numeral v in f pv)"
+  by (simp add: numeral_eq_Suc)
+
+lemma nat_case_add_eq_if [simp]:
+  "nat_case a f ((numeral v) + n) = (let pv = pred_numeral v in f (pv + n))"
+  by (simp add: numeral_eq_Suc)
+
+lemma nat_rec_numeral [simp]:
+  "nat_rec a f (numeral v) =
+    (let pv = pred_numeral v in f pv (nat_rec a f pv))"
+  by (simp add: numeral_eq_Suc Let_def)
+
+lemma nat_rec_add_eq_if [simp]:
+  "nat_rec a f (numeral v + n) =
+    (let pv = pred_numeral v in f (pv + n) (nat_rec a f (pv + n)))"
+  by (simp add: numeral_eq_Suc Let_def)
+
 
 subsection {* Numeral equations as default simplification rules *}
 
@@ -949,10 +979,6 @@ declare (in semiring_numeral) numeral_times_numeral [simp]
 declare (in ring_1) mult_neg_numeral_simps [simp]
 
 subsection {* Setting up simprocs *}
-
-lemma numeral_reorient:
-  "(numeral w = x) = (x = numeral w)"
-  by auto
 
 lemma mult_numeral_1: "Numeral1 * a = (a::'a::semiring_numeral)"
   by simp
@@ -973,6 +999,16 @@ numeral for 1 reduces the number of special cases.*}
 lemmas mult_1s =
   mult_numeral_1 mult_numeral_1_right 
   mult_minus1 mult_minus1_right
+
+setup {*
+  Reorient_Proc.add
+    (fn Const (@{const_name numeral}, _) $ _ => true
+    | Const (@{const_name neg_numeral}, _) $ _ => true
+    | _ => false)
+*}
+
+simproc_setup reorient_numeral
+  ("numeral w = x" | "neg_numeral w = y") = Reorient_Proc.proc
 
 
 subsubsection {* Simplification of arithmetic operations on integer constants. *}
