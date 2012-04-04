@@ -1,270 +1,176 @@
 (*  Title:      HOL/Tools/transfer.ML
-    Author:     Amine Chaieb, University of Cambridge, 2009
-                Jeremy Avigad, Carnegie Mellon University
-                Florian Haftmann, TU Muenchen
+    Author:     Brian Huffman, TU Muenchen
 
-Simple transfer principle on theorems.
+Generic theorem transfer method.
 *)
 
 signature TRANSFER =
 sig
-  datatype selection = Direction of term * term | Hints of string list | Prop
-  val transfer: Context.generic -> selection -> string list -> thm -> thm list
-  type entry
-  val add: thm -> bool -> entry -> Context.generic -> Context.generic
-  val del: thm -> entry -> Context.generic -> Context.generic
-  val drop: thm -> Context.generic -> Context.generic
+  val fo_conv: Proof.context -> conv
+  val prep_conv: conv
+  val transfer_add: attribute
+  val transfer_del: attribute
+  val transfer_tac: Proof.context -> int -> tactic
+  val correspondence_tac: Proof.context -> int -> tactic
   val setup: theory -> theory
-end;
+end
 
 structure Transfer : TRANSFER =
 struct
 
-(* data administration *)
-
-val direction_of = Thm.dest_binop o Thm.dest_arg o cprop_of;
-
-val transfer_morphism_key = Drule.strip_imp_concl (Thm.cprop_of @{thm transfer_morphismI});
-
-fun check_morphism_key ctxt key =
-  let
-    val _ = Thm.match (transfer_morphism_key, Thm.cprop_of key)
-      handle Pattern.MATCH => error ("Transfer: expected theorem of the form "
-        ^ quote (Syntax.string_of_term ctxt (Thm.term_of transfer_morphism_key)));
-  in direction_of key end;
-
-type entry = { inj : thm list, embed : thm list, return : thm list, cong : thm list,
-  hints : string list };
-
-val empty_entry = { inj = [], embed = [], return = [], cong = [], hints = [] };
-fun merge_entry ({ inj = inj1, embed = embed1, return = return1, cong = cong1, hints = hints1 } : entry,
-  { inj = inj2, embed = embed2, return = return2, cong = cong2, hints = hints2 } : entry) =
-    { inj = merge Thm.eq_thm (inj1, inj2), embed = merge Thm.eq_thm (embed1, embed2),
-      return = merge Thm.eq_thm (return1, return2), cong = merge Thm.eq_thm (cong1, cong2),
-      hints = merge (op =) (hints1, hints2) };
-
-structure Data = Generic_Data
+structure Data = Named_Thms
 (
-  type T = (thm * entry) list;
-  val empty = [];
-  val extend = I;
-  val merge = AList.join Thm.eq_thm (K merge_entry);
-);
+  val name = @{binding transfer_raw}
+  val description = "raw correspondence rule for transfer method"
+)
+
+(** Conversions **)
+
+val App_rule = Thm.symmetric @{thm App_def}
+val Abs_rule = Thm.symmetric @{thm Abs_def}
+val Rel_rule = Thm.symmetric @{thm Rel_def}
+
+fun dest_funcT cT =
+  (case Thm.dest_ctyp cT of [T, U] => (T, U)
+    | _ => raise TYPE ("dest_funcT", [Thm.typ_of cT], []))
+
+fun App_conv ct =
+  let val (cT, cU) = dest_funcT (Thm.ctyp_of_term ct)
+  in Drule.instantiate' [SOME cT, SOME cU] [SOME ct] App_rule end
+
+fun Abs_conv ct =
+  let val (cT, cU) = dest_funcT (Thm.ctyp_of_term ct)
+  in Drule.instantiate' [SOME cT, SOME cU] [SOME ct] Abs_rule end
+
+fun Rel_conv ct =
+  let val (cT, cT') = dest_funcT (Thm.ctyp_of_term ct)
+      val (cU, _) = dest_funcT cT'
+  in Drule.instantiate' [SOME cT, SOME cU] [SOME ct] Rel_rule end
+
+fun Trueprop_conv cv ct =
+  (case Thm.term_of ct of
+    Const (@{const_name Trueprop}, _) $ _ => Conv.arg_conv cv ct
+  | _ => raise CTERM ("Trueprop_conv", [ct]))
+
+(* Conversion to insert tags on every application and abstraction. *)
+fun fo_conv ctxt ct = (
+      Conv.combination_conv (fo_conv ctxt then_conv App_conv) (fo_conv ctxt)
+      else_conv
+      Conv.abs_conv (fo_conv o snd) ctxt then_conv Abs_conv
+      else_conv
+      Conv.all_conv) ct
+
+(* Conversion to preprocess a correspondence rule *)
+fun prep_conv ct = (
+      Conv.implies_conv Conv.all_conv prep_conv
+      else_conv
+      Trueprop_conv (Conv.fun_conv (Conv.fun_conv Rel_conv))
+      else_conv
+      Conv.all_conv) ct
+
+(* Conversion to prep a proof goal containing a correspondence rule *)
+fun correspond_conv ctxt ct = (
+      Conv.forall_conv (correspond_conv o snd) ctxt
+      else_conv
+      Conv.implies_conv Conv.all_conv (correspond_conv ctxt)
+      else_conv
+      Trueprop_conv
+      (Conv.combination_conv
+         (Conv.combination_conv Rel_conv (fo_conv ctxt)) (fo_conv ctxt))
+      else_conv
+      Conv.all_conv) ct
 
 
-(* data lookup *)
+(** Transfer proof method **)
 
-fun transfer_rules_of ({ inj, embed, return, cong, ... } : entry) =
-  (inj, embed, return, cong);
+fun bnames (t $ u) = bnames t @ bnames u
+  | bnames (Abs (x,_,t)) = x :: bnames t
+  | bnames _ = []
 
-fun get_by_direction context (a, D) =
+fun rename [] t = (t, [])
+  | rename (x::xs) ((c as Const (@{const_name Abs}, _)) $ Abs (_, T, t)) =
+    let val (t', xs') = rename xs t
+    in (c $ Abs (x, T, t'), xs') end
+  | rename xs0 (t $ u) =
+    let val (t', xs1) = rename xs0 t
+        val (u', xs2) = rename xs1 u
+    in (t' $ u', xs2) end
+  | rename xs t = (t, xs)
+
+fun cert ctxt t = cterm_of (Proof_Context.theory_of ctxt) t
+
+fun RelT (Const (@{const_name Rel}, _) $ _ $ _ $ y) = fastype_of y
+
+(* Tactic to correspond a value to itself *)
+fun eq_tac ctxt = SUBGOAL (fn (t, i) =>
   let
-    val ctxt = Context.proof_of context;
-    val certify = Thm.cterm_of (Context.theory_of context);
-    val a0 = certify a;
-    val D0 = certify D;
-    fun eq_direction ((a, D), thm') =
-      let
-        val (a', D') = direction_of thm';
-      in a aconvc a' andalso D aconvc D' end;
-  in case AList.lookup eq_direction (Data.get context) (a0, D0) of
-      SOME e => ((a0, D0), transfer_rules_of e)
-    | NONE => error ("Transfer: no such instance: ("
-        ^ Syntax.string_of_term ctxt a ^ ", " ^ Syntax.string_of_term ctxt D ^ ")")
-  end;
-
-fun get_by_hints context hints =
-  let
-    val insts = map_filter (fn (k, e) => if exists (member (op =) (#hints e)) hints
-      then SOME (direction_of k, transfer_rules_of e) else NONE) (Data.get context);
-    val _ = if null insts then error ("Transfer: no such labels: " ^ commas_quote hints) else ();
-  in insts end;
-
-fun splits P [] = []
-  | splits P (xs as (x :: _)) =
-      let
-        val (pss, qss) = List.partition (P x) xs;
-      in if null pss then [qss] else if null qss then [pss] else pss :: splits P qss end;
-
-fun get_by_prop context t =
-  let
-    val tys = map snd (Term.add_vars t []);
-    val _ = if null tys then error "Transfer: unable to guess instance" else ();
-    val tyss = splits (curry Type.could_unify) tys;
-    val get_ty = typ_of o ctyp_of_term o fst o direction_of;
-    val insts = map_filter (fn tys => get_first (fn (k, e) =>
-      if Type.could_unify (hd tys, range_type (get_ty k))
-      then SOME (direction_of k, transfer_rules_of e)
-      else NONE) (Data.get context)) tyss;
-    val _ = if null insts then
-      error "Transfer: no instances, provide direction or hints explicitly" else ();
-  in insts end;
-
-
-(* applying transfer data *)
-
-fun transfer_thm ((raw_a, raw_D), (inj, embed, return, cong)) leave ctxt1 thm =
-  let
-    (* identify morphism function *)
-    val ([a, D], ctxt2) = ctxt1
-      |> Variable.import true (map Drule.mk_term [raw_a, raw_D])
-      |>> map Drule.dest_term o snd;
-    val transform = Thm.apply @{cterm "Trueprop"} o Thm.apply D;
-    val T = Thm.typ_of (Thm.ctyp_of_term a);
-    val (aT, bT) = (Term.range_type T, Term.domain_type T);
-    
-    (* determine variables to transfer *)
-    val ctxt3 = ctxt2
-      |> Variable.declare_thm thm
-      |> Variable.declare_term (term_of a)
-      |> Variable.declare_term (term_of D);
-    val certify = Thm.cterm_of (Proof_Context.theory_of ctxt3);
-    val vars = filter (fn ((v, _), T) => Type.could_unify (T, aT) andalso
-      not (member (op =) leave v)) (Term.add_vars (Thm.prop_of thm) []);
-    val c_vars = map (certify o Var) vars;
-    val (vs', ctxt4) = Variable.variant_fixes (map (fst o fst) vars) ctxt3;
-    val c_vars' = map (certify o (fn v => Free (v, bT))) vs';
-    val c_exprs' = map (Thm.apply a) c_vars';
-
-    (* transfer *)
-    val (hyps, ctxt5) = ctxt4
-      |> Assumption.add_assumes (map transform c_vars');
-    val simpset =
-      Simplifier.context ctxt5 HOL_ss addsimps (inj @ embed @ return)
-      |> fold Simplifier.add_cong cong;
-    val thm' = thm
-      |> Drule.cterm_instantiate (c_vars ~~ c_exprs')
-      |> fold_rev Thm.implies_intr (map cprop_of hyps)
-      |> Simplifier.asm_full_simplify simpset
-  in singleton (Variable.export ctxt5 ctxt1) thm' end;
-
-fun transfer_thm_multiple insts leave ctxt thm =
-  map (fn inst => transfer_thm inst leave ctxt thm) insts;
-
-datatype selection = Direction of term * term | Hints of string list | Prop;
-
-fun insts_for context thm (Direction direction) = [get_by_direction context direction]
-  | insts_for context thm (Hints hints) = get_by_hints context hints
-  | insts_for context thm Prop = get_by_prop context (Thm.prop_of thm);
-
-fun transfer context selection leave thm =
-  transfer_thm_multiple (insts_for context thm selection) leave (Context.proof_of context) thm;
-
-
-(* maintaining transfer data *)
-
-fun extend_entry ctxt (a, D) guess
-    { inj = inj1, embed = embed1, return = return1, cong = cong1, hints = hints1 }
-    { inj = inj2, embed = embed2, return = return2, cong = cong2, hints = hints2 } =
-  let
-    fun add_del eq del add = union eq add #> subtract eq del;
-    val guessed = if guess
-      then map (fn thm => transfer_thm
-        ((a, D), (if null inj1 then inj2 else inj1, [], [], cong1)) [] ctxt thm RS sym) embed1
-      else [];
+    val T = RelT (HOLogic.dest_Trueprop (Logic.strip_assums_concl t))
+    val cT = ctyp_of (Proof_Context.theory_of ctxt) T
+    val rews = [@{thm fun_rel_eq [symmetric, THEN eq_reflection]}]
+    val thm1 = Drule.instantiate' [SOME cT] [] @{thm Rel_eq_refl}
+    val thm2 = Raw_Simplifier.rewrite_rule rews thm1
   in
-    { inj = union Thm.eq_thm inj1 inj2, embed = union Thm.eq_thm embed1 embed2,
-      return = union Thm.eq_thm guessed (union Thm.eq_thm return1 return2),
-      cong = union Thm.eq_thm cong1 cong2, hints = union (op =) hints1 hints2 }
-  end;
+    rtac thm2 i
+  end handle Match => no_tac | TERM _ => no_tac)
 
-fun diminish_entry 
-    { inj = inj0, embed = embed0, return = return0, cong = cong0, hints = hints0 }
-    { inj = inj2, embed = embed2, return = return2, cong = cong2, hints = hints2 } =
-  { inj = subtract Thm.eq_thm inj0 inj2, embed = subtract Thm.eq_thm embed0 embed2,
-    return = subtract Thm.eq_thm return0 return2, cong = subtract Thm.eq_thm cong0 cong2,
-    hints = subtract (op =) hints0 hints2 };
-
-fun add key guess entry context =
+fun transfer_tac ctxt = SUBGOAL (fn (t, i) =>
   let
-    val ctxt = Context.proof_of context;
-    val a_D = check_morphism_key ctxt key;
+    val bs = bnames t
+    val rules = Data.get ctxt
   in
-    context
-    |> Data.map (AList.map_default Thm.eq_thm
-         (key, empty_entry) (extend_entry ctxt a_D guess entry))
-  end;
+    EVERY
+      [rewrite_goal_tac @{thms transfer_forall_eq transfer_implies_eq} i,
+       CONVERSION (Trueprop_conv (fo_conv ctxt)) i,
+       rtac @{thm transfer_start [rotated]} i,
+       REPEAT_ALL_NEW (resolve_tac rules ORELSE' atac ORELSE' eq_tac ctxt) (i + 1),
+       (* Alpha-rename bound variables in goal *)
+       SUBGOAL (fn (u, i) =>
+         rtac @{thm equal_elim_rule1} i THEN
+         rtac (Thm.reflexive (cert ctxt (fst (rename bs u)))) i) i,
+       (* FIXME: rewrite_goal_tac does unwanted eta-contraction *)
+       rewrite_goal_tac @{thms App_def Abs_def} i,
+       rewrite_goal_tac @{thms transfer_forall_eq [symmetric] transfer_implies_eq [symmetric]} i,
+       rtac @{thm _} i]
+  end)
 
-fun del key entry = Data.map (AList.map_entry Thm.eq_thm key (diminish_entry entry));
+fun correspondence_tac ctxt i =
+  let
+    val rules = Data.get ctxt
+  in
+    EVERY
+      [CONVERSION (correspond_conv ctxt) i,
+       REPEAT_ALL_NEW
+         (resolve_tac rules ORELSE' atac ORELSE' eq_tac ctxt) i]
+  end
 
-fun drop key = Data.map (AList.delete Thm.eq_thm key);
+val transfer_method =
+  Scan.succeed (fn ctxt => SIMPLE_METHOD' (transfer_tac ctxt))
 
+val correspondence_method =
+  Scan.succeed (fn ctxt => SIMPLE_METHOD' (correspondence_tac ctxt))
 
-(* syntax *)
+(* Attribute for correspondence rules *)
 
-local
+val prep_rule = Conv.fconv_rule prep_conv
 
-fun these scan = Scan.optional scan [];
-fun these_pair scan = Scan.optional scan ([], []);
+val transfer_add =
+  Thm.declaration_attribute (Data.add_thm o prep_rule)
 
-fun keyword k = Scan.lift (Args.$$$ k) >> K ();
-fun keyword_colon k = Scan.lift (Args.$$$ k -- Args.colon) >> K ();
+val transfer_del =
+  Thm.declaration_attribute (Data.del_thm o prep_rule)
 
-val addN = "add";
-val delN = "del";
-val keyN = "key";
-val modeN = "mode";
-val automaticN = "automatic";
-val manualN = "manual";
-val injN = "inj";
-val embedN = "embed";
-val returnN = "return";
-val congN = "cong";
-val labelsN = "labels";
+val transfer_attribute =
+  Attrib.add_del transfer_add transfer_del
 
-val leavingN = "leaving";
-val directionN = "direction";
-
-val any_keyword = keyword_colon addN || keyword_colon delN || keyword_colon keyN
-  || keyword_colon modeN || keyword_colon injN || keyword_colon embedN || keyword_colon returnN
-  || keyword_colon congN || keyword_colon labelsN
-  || keyword_colon leavingN || keyword_colon directionN;
-
-val thms = Scan.repeat (Scan.unless any_keyword Attrib.multi_thm) >> flat;
-val names = Scan.repeat (Scan.unless any_keyword (Scan.lift Args.name))
-
-val mode = keyword_colon modeN |-- ((Scan.lift (Args.$$$ manualN) >> K false)
-  || (Scan.lift (Args.$$$ automaticN) >> K true));
-val inj = (keyword_colon injN |-- thms) -- these (keyword_colon delN |-- thms);
-val embed = (keyword_colon embedN |-- thms) -- these (keyword_colon delN |-- thms);
-val return = (keyword_colon returnN |-- thms) -- these (keyword_colon delN |-- thms);
-val cong = (keyword_colon congN |-- thms) -- these (keyword_colon delN |-- thms);
-val labels = (keyword_colon labelsN |-- names) -- these (keyword_colon delN |-- names);
-
-val entry_pair = these_pair inj -- these_pair embed
-  -- these_pair return -- these_pair cong -- these_pair labels
-  >> (fn (((((inja, injd), (embeda, embedd)), (returna, returnd)), (conga, congd)),
-       (hintsa, hintsd)) =>
-      ({ inj = inja, embed = embeda, return = returna, cong = conga, hints = hintsa },
-        { inj = injd, embed = embedd, return = returnd, cong = congd, hints = hintsd }));
-
-val selection = (keyword_colon directionN |-- (Args.term -- Args.term) >> Direction)
-  || these names >> (fn hints => if null hints then Prop else Hints hints);
-
-in
-
-val transfer_attribute = keyword delN >> K (Thm.declaration_attribute drop)
-  || keyword addN |-- Scan.optional mode true -- entry_pair
-    >> (fn (guess, (entry_add, entry_del)) => Thm.declaration_attribute
-      (fn thm => add thm guess entry_add #> del thm entry_del))
-  || keyword_colon keyN |-- Attrib.thm
-    >> (fn key => Thm.declaration_attribute
-      (fn thm => add key false
-        { inj = [], embed = [], return = [thm], cong = [], hints = [] }));
-
-val transferred_attribute = selection -- these (keyword_colon leavingN |-- names)
-  >> (fn (selection, leave) => Thm.rule_attribute (fn context =>
-      Conjunction.intr_balanced o transfer context selection leave));
-
-end;
-
-
-(* theory setup *)
+(* Theory setup *)
 
 val setup =
-  Attrib.setup @{binding transfer} transfer_attribute
-    "Installs transfer data" #>
-  Attrib.setup @{binding transferred} transferred_attribute
-    "Transfers theorems";
+  Data.setup
+  #> Attrib.setup @{binding transfer_rule} transfer_attribute
+     "correspondence rule for transfer method"
+  #> Method.setup @{binding transfer} transfer_method
+     "generic theorem transfer method"
+  #> Method.setup @{binding correspondence} correspondence_method
+     "for proving correspondence rules"
 
-end;
+end
