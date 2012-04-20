@@ -78,7 +78,7 @@ lemma bi_unique_option_rel [transfer_rule]:
   "bi_unique R \<Longrightarrow> bi_unique (option_rel R)"
   unfolding bi_unique_def split_option_all by simp
 
-subsection {* Correspondence rules for transfer package *}
+subsection {* Transfer rules for transfer package *}
 
 lemma None_transfer [transfer_rule]: "(option_rel A) None None"
   by simp
@@ -92,7 +92,7 @@ lemma option_case_transfer [transfer_rule]:
 
 lemma option_map_transfer [transfer_rule]:
   "((A ===> B) ===> option_rel A ===> option_rel B) Option.map Option.map"
-  unfolding Option.map_def by correspondence
+  unfolding Option.map_def by transfer_prover
 
 lemma option_bind_transfer [transfer_rule]:
   "(option_rel A ===> (A ===> option_rel B) ===> option_rel B)
@@ -109,6 +109,22 @@ lemma Quotient_option:
   by (simp split: option.split)
 
 declare [[map option = (option_rel, Quotient_option)]]
+
+fun option_pred :: "('a \<Rightarrow> bool) \<Rightarrow> 'a option \<Rightarrow> bool"
+where
+  "option_pred R None = True"
+| "option_pred R (Some x) = R x"
+
+lemma option_invariant_commute [invariant_commute]:
+  "option_rel (Lifting.invariant P) = Lifting.invariant (option_pred P)"
+  apply (simp add: fun_eq_iff Lifting.invariant_def)
+  apply (intro allI) 
+  apply (case_tac x rule: option.exhaust)
+  apply (case_tac xa rule: option.exhaust)
+  apply auto[2]
+  apply (case_tac xa rule: option.exhaust)
+  apply auto
+done
 
 subsection {* Rules for quotient package *}
 

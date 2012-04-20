@@ -78,7 +78,7 @@ lemma bi_unique_sum_rel [transfer_rule]:
   "bi_unique R1 \<Longrightarrow> bi_unique R2 \<Longrightarrow> bi_unique (sum_rel R1 R2)"
   using assms unfolding bi_unique_def split_sum_all by simp
 
-subsection {* Correspondence rules for transfer package *}
+subsection {* Transfer rules for transfer package *}
 
 lemma Inl_transfer [transfer_rule]: "(A ===> sum_rel A B) Inl Inl"
   unfolding fun_rel_def by simp
@@ -101,6 +101,22 @@ lemma Quotient_sum:
   by (simp add: split_sum_all)
 
 declare [[map sum = (sum_rel, Quotient_sum)]]
+
+fun sum_pred :: "('a \<Rightarrow> bool) \<Rightarrow> ('b \<Rightarrow> bool) \<Rightarrow> 'a + 'b \<Rightarrow> bool"
+where
+  "sum_pred R1 R2 (Inl a) = R1 a"
+| "sum_pred R1 R2 (Inr a) = R2 a"
+
+lemma sum_invariant_commute [invariant_commute]: 
+  "sum_rel (Lifting.invariant P1) (Lifting.invariant P2) = Lifting.invariant (sum_pred P1 P2)"
+  apply (simp add: fun_eq_iff Lifting.invariant_def)
+  apply (intro allI) 
+  apply (case_tac x rule: sum.exhaust)
+  apply (case_tac xa rule: sum.exhaust)
+  apply auto[2]
+  apply (case_tac xa rule: sum.exhaust)
+  apply auto
+done
 
 subsection {* Rules for quotient package *}
 
