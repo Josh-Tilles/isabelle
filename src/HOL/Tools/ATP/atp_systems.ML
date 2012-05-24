@@ -363,10 +363,10 @@ val satallax_config : atp_config =
    proof_delims =
      [("% Higher-Order Unsat Core BEGIN", "% Higher-Order Unsat Core END")],
    known_failures = known_szs_status_failures,
-   prem_role = Definition (* motivated by "isabelle tptp_sledgehammer" tool *),
+   prem_role = Hypothesis,
    best_slices =
      (* FUDGE *)
-     K [(1.0, (true, ((120, satallax_thf0, "mono_native_higher", keep_lamsN, false), "")))],
+     K [(1.0, (true, ((60, satallax_thf0, "mono_native_higher", keep_lamsN, false), "")))],
    best_max_mono_iters = default_max_mono_iters - 1 (* FUDGE *),
    best_max_new_mono_instances = default_max_new_mono_instances div 2 (* FUDGE *)}
 
