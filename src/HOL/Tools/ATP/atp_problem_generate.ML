@@ -26,8 +26,8 @@ sig
   datatype constr_optim = With_Constr_Optim | Without_Constr_Optim
   datatype type_level =
     All_Types |
-    Nonmono_Types of strictness * uniformity |
     Undercover_Types |
+    Nonmono_Types of strictness * uniformity |
     Const_Types of constr_optim |
     No_Types
   type type_enc
@@ -137,8 +137,8 @@ datatype uniformity = Uniform | Non_Uniform
 datatype constr_optim = With_Constr_Optim | Without_Constr_Optim
 datatype type_level =
   All_Types |
-  Nonmono_Types of strictness * uniformity |
   Undercover_Types |
+  Nonmono_Types of strictness * uniformity |
   Const_Types of constr_optim |
   No_Types
 
@@ -161,6 +161,9 @@ fun is_type_enc_polymorphic type_enc =
     Raw_Polymorphic _ => true
   | Type_Class_Polymorphic => true
   | _ => false
+
+fun is_type_enc_mangling type_enc =
+  polymorphism_of_type_enc type_enc = Mangled_Monomorphic
 
 fun level_of_type_enc (Native (_, _, level)) = level
   | level_of_type_enc (Guards (_, level)) = level
@@ -832,41 +835,56 @@ fun insert_type thy get_T x xs =
     else x :: filter_out (type_generalization thy T o get_T) xs
   end
 
-(* The Booleans indicate whether all type arguments should be kept. *)
-datatype type_arg_policy =
-  Mangled_Type_Args |
-  All_Type_Args |
-  Not_Input_Type_Args |
-  Only_In_Or_Output_Type_Args |
-  Constr_Input_Type_Args |
-  No_Type_Args
+fun chop_fun 0 T = ([], T)
+  | chop_fun n (Type (@{type_name fun}, [dom_T, ran_T])) =
+    chop_fun (n - 1) ran_T |>> cons dom_T
+  | chop_fun _ T = ([], T)
 
-fun type_arg_policy constrs type_enc s =
+fun filter_type_args thy constrs type_enc s ary T_args =
   let val poly = polymorphism_of_type_enc type_enc in
-    if s = type_tag_name then
-      if poly = Mangled_Monomorphic then Mangled_Type_Args else All_Type_Args
+    if s = type_tag_name then (* ### FIXME: why not "type_guard_name" as well? *)
+      T_args
     else case type_enc of
-      Native (_, Raw_Polymorphic _, _) => All_Type_Args
-    | Native (_, Type_Class_Polymorphic, _) => All_Type_Args
-    | Tags (_, All_Types) => No_Type_Args
+      Native (_, Raw_Polymorphic _, _) => T_args
+    | Native (_, Type_Class_Polymorphic, _) => T_args
     | _ =>
-      let val level = level_of_type_enc type_enc in
+      let
+        fun gen_type_args _ _ [] = []
+          | gen_type_args keep strip_ty T_args =
+            let
+              val U = robust_const_type thy s
+              val (binder_Us, body_U) = strip_ty U
+              val in_U_vars = fold Term.add_tvarsT binder_Us []
+              val out_U_vars = Term.add_tvarsT body_U []
+              fun filt (U_var, T) =
+                if keep (member (op =) in_U_vars U_var,
+                         member (op =) out_U_vars U_var) then
+                  T
+                else
+                  dummyT
+              val U_args = (s, U) |> robust_const_typargs thy
+            in map (filt o apfst dest_TVar) (U_args ~~ T_args) end
+            handle TYPE _ => T_args
+        val noninfer_type_args = gen_type_args (not o fst) (chop_fun ary)
+        val constr_infer_type_args = gen_type_args fst strip_type
+        val level = level_of_type_enc type_enc
+      in
         if level = No_Types orelse s = @{const_name HOL.eq} orelse
            (case level of Const_Types _ => s = app_op_name | _ => false) then
-          No_Type_Args
+          []
         else if poly = Mangled_Monomorphic then
-          Mangled_Type_Args
+          T_args
         else if level = All_Types then
-          Not_Input_Type_Args
-        else if level = Undercover_Types then
           case type_enc of
-            Tags _ => Only_In_Or_Output_Type_Args
-          | _ => Not_Input_Type_Args
+            Guards _ => noninfer_type_args T_args
+          | Tags _ => []
+        else if level = Undercover_Types then
+          noninfer_type_args T_args
         else if member (op =) constrs s andalso
                 level <> Const_Types Without_Constr_Optim then
-          Constr_Input_Type_Args
+          constr_infer_type_args T_args
         else
-          All_Type_Args
+          T_args
       end
   end
 
@@ -1122,14 +1140,12 @@ fun introduce_proxies_in_iterm type_enc =
   in intro true [] end
 
 fun mangle_type_args_in_const type_enc (name as (s, _)) T_args =
-  case unprefix_and_unascii const_prefix s of
-    NONE => (name, T_args)
-  | SOME s'' =>
-    case type_arg_policy [] type_enc (invert_const s'') of
-      Mangled_Type_Args => (mangled_const_name type_enc T_args name, [])
-    | _ => (name, T_args)
+  if String.isPrefix const_prefix s andalso is_type_enc_mangling type_enc then
+    (mangled_const_name type_enc T_args name, [])
+  else
+    (name, T_args)
 fun mangle_type_args_in_iterm type_enc =
-  if polymorphism_of_type_enc type_enc = Mangled_Monomorphic then
+  if is_type_enc_mangling type_enc then
     let
       fun mangle (IApp (tm1, tm2)) = IApp (mangle tm1, mangle tm2)
         | mangle (tm as IConst (_, _, [])) = tm
@@ -1142,28 +1158,6 @@ fun mangle_type_args_in_iterm type_enc =
   else
     I
 
-fun chop_fun 0 T = ([], T)
-  | chop_fun n (Type (@{type_name fun}, [dom_T, ran_T])) =
-    chop_fun (n - 1) ran_T |>> cons dom_T
-  | chop_fun _ T = ([], T)
-
-fun filter_type_args _ _ _ _ [] = []
-  | filter_type_args keep thy s strip_ty T_args =
-    let
-      val U = robust_const_type thy s
-      val (binder_Us, body_U) = strip_ty U
-      val in_U_vars = fold Term.add_tvarsT binder_Us []
-      val out_U_vars = Term.add_tvarsT body_U []
-      fun filt (U_var, T) =
-        if keep (member (op =) in_U_vars U_var,
-                 member (op =) out_U_vars U_var) then
-          T
-        else
-          dummyT
-      val U_args = (s, U) |> robust_const_typargs thy
-    in map (filt o apfst dest_TVar) (U_args ~~ T_args) end
-    handle TYPE _ => T_args
-
 fun filter_type_args_in_const _ _ _ _ _ [] = []
   | filter_type_args_in_const thy constrs type_enc ary s T_args =
     case unprefix_and_unascii const_prefix s of
@@ -1171,18 +1165,7 @@ fun filter_type_args_in_const _ _ _ _ _ [] = []
       if level_of_type_enc type_enc = No_Types orelse s = tptp_choice then []
       else T_args
     | SOME s'' =>
-      let val s'' = invert_const s'' in
-        case type_arg_policy constrs type_enc s'' of
-          Mangled_Type_Args => raise Fail "unexpected (un)mangled symbol"
-        | All_Type_Args => T_args
-        | Not_Input_Type_Args =>
-          filter_type_args (not o fst) thy s'' (chop_fun ary) T_args
-        | Only_In_Or_Output_Type_Args =>
-          filter_type_args (op <>) thy s'' (chop_fun ary) T_args
-        | Constr_Input_Type_Args =>
-          filter_type_args fst thy s'' strip_type T_args
-        | No_Type_Args => []
-      end
+      filter_type_args thy constrs type_enc (invert_const s'') ary T_args
 fun filter_type_args_in_iterm thy constrs type_enc =
   let
     fun filt ary (IApp (tm1, tm2)) = IApp (filt (ary + 1) tm1, filt 0 tm2)
@@ -1347,8 +1330,10 @@ fun make_conjecture ctxt format type_enc =
 fun tvar_footprint thy s ary =
   (case unprefix_and_unascii const_prefix s of
      SOME s =>
-     s |> invert_const |> robust_const_type thy |> chop_fun ary |> fst
-       |> map (fn T => Term.add_tvarsT T [] |> map fst)
+     let fun tvars_of T = [] |> Term.add_tvarsT T |> map fst in
+       s |> invert_const |> robust_const_type thy |> chop_fun ary |> fst
+         |> map tvars_of
+     end
    | NONE => [])
   handle TYPE _ => []
 
@@ -1391,9 +1376,8 @@ fun is_type_kind_of_surely_infinite ctxt strictness cached_Ts T =
    proofs. On the other hand, all HOL infinite types can be given the same
    models in first-order logic (via Löwenheim-Skolem). *)
 
-fun should_encode_type _ (_ : monotonicity_info) All_Types _ = true
-  | should_encode_type ctxt {maybe_finite_Ts, surely_infinite_Ts,
-                             maybe_nonmono_Ts, ...}
+fun should_encode_type ctxt {maybe_finite_Ts, surely_infinite_Ts,
+                             maybe_nonmono_Ts}
                        (Nonmono_Types (strictness, _)) T =
     let val thy = Proof_Context.theory_of ctxt in
       (exists (type_intersect thy T) maybe_nonmono_Ts andalso
@@ -1402,16 +1386,18 @@ fun should_encode_type _ (_ : monotonicity_info) All_Types _ = true
              is_type_kind_of_surely_infinite ctxt strictness surely_infinite_Ts
                                              T)))
     end
-  | should_encode_type _ _ Undercover_Types _ = true
-  | should_encode_type _ _ _ _ = false
+  | should_encode_type _ _ level _ =
+    (level = All_Types orelse level = Undercover_Types)
 
 fun should_guard_type ctxt mono (Guards (_, level)) should_guard_var T =
     should_guard_var () andalso should_encode_type ctxt mono level T
   | should_guard_type _ _ _ _ _ = false
 
-fun is_maybe_universal_var (IConst ((s, _), _, _)) =
-    String.isPrefix bound_var_prefix s orelse
-    String.isPrefix all_bound_var_prefix s
+fun is_maybe_universal_name s =
+  String.isPrefix bound_var_prefix s orelse
+  String.isPrefix all_bound_var_prefix s
+
+fun is_maybe_universal_var (IConst ((s, _), _, _)) = is_maybe_universal_name s
   | is_maybe_universal_var (IVar _) = true
   | is_maybe_universal_var _ = false
 
@@ -1516,8 +1502,7 @@ fun add_iterm_syms_to_sym_table ctxt app_op_level conj_fact =
       let val (head, args) = strip_iterm_comb tm in
         (case head of
            IConst ((s, _), T, _) =>
-           if String.isPrefix bound_var_prefix s orelse
-              String.isPrefix all_bound_var_prefix s then
+           if is_maybe_universal_name s then
              add_universal_var T accum
            else if String.isPrefix exist_bound_var_prefix s then
              accum
@@ -2010,11 +1995,11 @@ fun is_var_undercover_in_term thy name pos tm accum =
 fun should_guard_var_in_formula thy level pos phi (SOME true) name =
     (case level of
        All_Types => true
+     | Undercover_Types =>
+       formula_fold pos (is_var_undercover_in_term thy name) phi false
      | Nonmono_Types (_, Uniform) => true
      | Nonmono_Types (_, Non_Uniform) =>
        formula_fold pos (is_var_positively_naked_in_term name) phi false
-     | Undercover_Types =>
-       formula_fold pos (is_var_undercover_in_term thy name) phi false
      | _ => false)
   | should_guard_var_in_formula _ _ _ _ _ _ = true
 
@@ -2054,6 +2039,7 @@ and ho_term_from_iterm ctxt mono type_enc pos =
             Top_Level pos => pos
           | Eq_Arg pos => pos
           | _ => NONE
+        val T = ityp_of u
         val t =
           case head of
             IConst (name as (s, _), _, T_args) =>
@@ -2074,13 +2060,8 @@ and ho_term_from_iterm ctxt mono type_enc pos =
             else
               raise Fail "unexpected lambda-abstraction"
           | IApp _ => raise Fail "impossible \"IApp\""
-        val T = ityp_of u
-      in
-        if should_tag_with_type ctxt mono type_enc site u T then
-          tag_with_type ctxt mono type_enc pos T t
-        else
-          t
-      end
+        val tag = should_tag_with_type ctxt mono type_enc site u T
+      in t |> tag ? tag_with_type ctxt mono type_enc pos T end
   in term (Top_Level pos) end
 and formula_from_iformula ctxt mono type_enc should_guard_var =
   let
@@ -2263,11 +2244,10 @@ fun sym_decl_table_for_facts thy type_enc sym_tab (conjs, facts, extra_tms) =
       else fold (ifact_lift add_formula_var_types) (conjs @ facts) []
     fun add_undefined_const T =
       let
+        (* FIXME: make sure type arguments are filtered / clean up code *)
         val (s, s') =
           `(make_fixed_const NONE) @{const_name undefined}
-          |> (case type_arg_policy [] type_enc @{const_name undefined} of
-                Mangled_Type_Args => mangled_const_name type_enc [T]
-              | _ => I)
+          |> (is_type_enc_mangling type_enc ? mangled_const_name type_enc [T])
       in
         Symtab.map_default (s, [])
                            (insert_type thy #3 (s', [T], T, false, 0, false))
@@ -2455,27 +2435,22 @@ fun lines_for_tags_sym_decl ctxt mono type_enc n s
     val bounds = bound_names |> map (fn name => ATerm ((name, []), []))
     val cst = mk_aterm type_enc (s, s') T_args
     val eq = maybe_negate oo eq_formula type_enc (atomic_types_of T) [] pred_sym
-    val should_encode = should_encode_type ctxt mono level
     val tag_with = tag_with_type ctxt mono type_enc NONE
-    val add_formula_for_res =
-      if should_encode res_T then
-        let
-          val tagged_bounds =
-            if level = Undercover_Types then
-              let val cover = type_arg_cover thy NONE s ary in
-                map2 (fn (j, arg_T) => member (op =) cover j ? tag_with arg_T)
-                     (0 upto ary - 1 ~~ arg_Ts) bounds
-              end
-            else
-              bounds
-        in
-          cons (Formula (ident, role,
-                         eq (tag_with res_T (cst bounds)) (cst tagged_bounds),
-                         NONE, isabelle_info defN helper_rank))
-        end
-      else
-        I
-  in [] |> not pred_sym ? add_formula_for_res end
+    fun formula c =
+      [Formula (ident, role, eq (tag_with res_T c) c, NONE, isabelle_info
+                defN helper_rank)]
+  in
+    if pred_sym orelse not (should_encode_type ctxt mono level res_T) then
+      []
+    else if level = Undercover_Types then
+      let
+        val cover = type_arg_cover thy NONE s ary
+        fun maybe_tag (j, arg_T) = member (op =) cover j ? tag_with arg_T
+        val bounds = bounds |> map2 maybe_tag (0 upto ary - 1 ~~ arg_Ts)
+      in formula (cst bounds) end
+    else
+      formula (cst bounds)
+  end
 
 fun result_type_of_decl (_, _, T, _, ary, _) = chop_fun ary T |> snd
 
