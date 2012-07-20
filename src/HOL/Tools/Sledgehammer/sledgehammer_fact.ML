@@ -23,12 +23,14 @@ sig
   val fact_from_ref :
     Proof.context -> unit Symtab.table -> thm list -> status Termtab.table
     -> Facts.ref * Attrib.src list -> ((string * stature) * thm) list
+  val is_likely_tautology_or_too_meta : thm -> bool
+  val backquote_thm : thm -> string
   val clasimpset_rule_table_of : Proof.context -> status Termtab.table
   val maybe_instantiate_inducts :
     Proof.context -> term list -> term -> (((unit -> string) * 'a) * thm) list
     -> (((unit -> string) * 'a) * thm) list
   val maybe_filter_no_atps : Proof.context -> ('a * thm) list -> ('a * thm) list
-  val all_facts_of : theory -> status Termtab.table -> fact list
+  val all_facts_of : Proof.context -> status Termtab.table -> fact list
   val nearly_all_facts :
     Proof.context -> bool -> fact_override -> unit Symtab.table
     -> status Termtab.table -> thm list -> term list -> term -> fact list
@@ -84,10 +86,10 @@ fun is_rec_def (@{const Trueprop} $ t) = is_rec_def t
   | is_rec_def _ = false
 
 fun is_assum assms th = exists (fn ct => prop_of th aconv term_of ct) assms
-fun is_chained chained_ths = member Thm.eq_thm_prop chained_ths
+fun is_chained chained = member Thm.eq_thm_prop chained
 
-fun scope_of_thm global assms chained_ths th =
-  if is_chained chained_ths th then Chained
+fun scope_of_thm global assms chained th =
+  if is_chained chained th then Chained
   else if global then Global
   else if is_assum assms th then Assum
   else Local
@@ -97,20 +99,20 @@ val may_be_induction =
                      body_type T = @{typ bool}
                    | _ => false)
 
-fun status_of_thm css_table name th =
+fun status_of_thm css name th =
   (* FIXME: use structured name *)
   if (String.isSubstring ".induct" name orelse
       String.isSubstring ".inducts" name) andalso
      may_be_induction (prop_of th) then
     Induction
-  else case Termtab.lookup css_table (prop_of th) of
+  else case Termtab.lookup css (prop_of th) of
     SOME status => status
   | NONE => General
 
-fun stature_of_thm global assms chained_ths css_table name th =
-  (scope_of_thm global assms chained_ths th, status_of_thm css_table name th)
+fun stature_of_thm global assms chained css name th =
+  (scope_of_thm global assms chained th, status_of_thm css name th)
 
-fun fact_from_ref ctxt reserved chained_ths css_table (xthm as (xref, args)) =
+fun fact_from_ref ctxt reserved chained css (xthm as (xref, args)) =
   let
     val ths = Attrib.eval_thms ctxt [xthm]
     val bracket =
@@ -126,15 +128,12 @@ fun fact_from_ref ctxt reserved chained_ths css_table (xthm as (xref, args)) =
         make_name reserved true
                  (nth (maps (explode_interval (length ths)) intervals) j) name ^
         bracket
-  in
-    (ths, (0, []))
-    |-> fold (fn th => fn (j, rest) =>
-                 let val name = nth_name j in
-                   (j + 1, ((name, stature_of_thm false [] chained_ths
-                                             css_table name th), th) :: rest)
-                 end)
-    |> snd
-  end
+    fun add_nth th (j, rest) =
+      let val name = nth_name j in
+        (j + 1, ((name, stature_of_thm false [] chained css name th), th)
+                :: rest)
+      end
+  in (0, []) |> fold add_nth ths |> snd end
 
 (* Reject theorems with names like "List.filter.filter_list_def" or
   "Accessible_Part.acc.defs", as these are definitions arising from packages. *)
@@ -212,9 +211,27 @@ fun is_theorem_bad_for_atps ho_atp thm =
     is_that_fact thm
   end
 
-fun hackish_string_for_term ctxt t =
+fun is_likely_tautology_or_too_meta th =
+  let
+    val is_boring_const = member (op =) atp_widely_irrelevant_consts
+    fun is_boring_bool t =
+      not (exists_Const (not o is_boring_const o fst) t) orelse
+      exists_type (exists_subtype (curry (op =) @{typ prop})) t
+    fun is_boring_prop (@{const Trueprop} $ t) = is_boring_bool t
+      | is_boring_prop (@{const "==>"} $ t $ u) =
+        is_boring_prop t andalso is_boring_prop u
+      | is_boring_prop (Const (@{const_name all}, _) $ (Abs (_, _, t)) $ u) =
+        is_boring_prop t andalso is_boring_prop u
+      | is_boring_prop (Const (@{const_name "=="}, _) $ t $ u) =
+        is_boring_bool t andalso is_boring_bool u
+      | is_boring_prop _ = true
+  in
+    is_boring_prop (prop_of th) andalso not (Thm.eq_thm_prop (@{thm ext}, th))
+  end
+
+fun hackish_string_for_term thy t =
   Print_Mode.setmp (filter (curry (op =) Symbol.xsymbolsN)
-                   (print_mode_value ())) (Syntax.string_of_term ctxt) t
+                   (print_mode_value ())) (Syntax.string_of_term_global thy) t
   |> String.translate (fn c => if Char.isPrint c then str c else "")
   |> simplify_spaces
 
@@ -239,6 +256,13 @@ fun close_form t =
               end)
           (Term.add_vars t [] |> sort_wrt (fst o fst))
   |> fst
+
+fun backquote_term thy t =
+  t |> close_form
+    |> hackish_string_for_term thy
+    |> backquote
+
+fun backquote_thm th = backquote_term (theory_of_thm th) (prop_of th)
 
 fun clasimpset_rule_table_of ctxt =
   let
@@ -302,13 +326,14 @@ fun struct_induct_rule_on th =
 
 fun instantiate_induct_rule ctxt concl_prop p_name ((name, stature), th) ind_x =
   let
+    val thy = Proof_Context.theory_of ctxt
     fun varify_noninducts (t as Free (s, T)) =
         if (s, T) = ind_x orelse can dest_funT T then t else Var ((s, 0), T)
       | varify_noninducts t = t
     val p_inst =
       concl_prop |> map_aterms varify_noninducts |> close_form
                  |> lambda (Free ind_x)
-                 |> hackish_string_for_term ctxt
+                 |> hackish_string_for_term thy
   in
     ((fn () => name () ^ "[where " ^ p_name ^ " = " ^ quote p_inst ^ "]",
       stature), th |> read_instantiate ctxt [((p_name, 0), p_inst)])
@@ -345,7 +370,7 @@ fun maybe_instantiate_inducts ctxt hyp_ts concl_t =
 fun maybe_filter_no_atps ctxt =
   not (Config.get ctxt ignore_no_atp) ? filter_out (No_ATPs.member ctxt o snd)
 
-fun all_facts ctxt ho_atp reserved add_ths chained_ths css_table =
+fun all_facts ctxt ho_atp reserved add_ths chained css =
   let
     val thy = Proof_Context.theory_of ctxt
     val global_facts = Global_Theory.facts_of thy
@@ -356,7 +381,7 @@ fun all_facts ctxt ho_atp reserved add_ths chained_ths css_table =
       not (Thm.has_name_hint th) andalso
       forall (fn (_, ths) => not (member Thm.eq_thm_prop ths th)) named_locals
     val unnamed_locals =
-      union Thm.eq_thm_prop (Facts.props local_facts) chained_ths
+      union Thm.eq_thm_prop (Facts.props local_facts) chained
       |> filter is_good_unnamed_local |> map (pair "" o single)
     val full_space =
       Name_Space.merge (Facts.space_of global_facts, Facts.space_of local_facts)
@@ -374,8 +399,6 @@ fun all_facts ctxt ho_atp reserved add_ths chained_ths css_table =
         else
           let
             val multi = length ths > 1
-            val backquote_thm =
-              backquote o hackish_string_for_term ctxt o close_form o prop_of
             fun check_thms a =
               case try (Proof_Context.get_thms ctxt) a of
                 NONE => false
@@ -392,15 +415,15 @@ fun all_facts ctxt ho_atp reserved add_ths chained_ths css_table =
                              val new =
                                (((fn () =>
                                      if name0 = "" then
-                                       th |> backquote_thm
+                                       backquote_thm th
                                      else
                                        [Facts.extern ctxt facts name0,
                                         Name_Space.extern ctxt full_space name0]
                                        |> find_first check_thms
                                        |> the_default name0
                                        |> make_name reserved multi j),
-                                  stature_of_thm global assms chained_ths
-                                                 css_table name0 th), th)
+                                  stature_of_thm global assms chained css name0
+                                                 th), th)
                            in
                              if multi then (new :: multis, unis)
                              else (multis, new :: unis)
@@ -415,28 +438,27 @@ fun all_facts ctxt ho_atp reserved add_ths chained_ths css_table =
              |> op @
   end
 
-fun all_facts_of thy css_table =
-  let val ctxt = Proof_Context.init_global thy in
-    all_facts ctxt false Symtab.empty [] [] css_table
-    |> rev (* try to restore the original order of facts, for MaSh *)
-  end
+fun all_facts_of ctxt css =
+  all_facts ctxt false Symtab.empty [] [] css
+  |> rev (* partly restore the original order of facts, for MaSh *)
 
-fun nearly_all_facts ctxt ho_atp {add, del, only} reserved css_table chained_ths
-                     hyp_ts concl_t =
+fun nearly_all_facts ctxt ho_atp {add, del, only} reserved css chained hyp_ts
+                     concl_t =
   if only andalso null add then
     []
   else
     let
-      val chained_ths =
-        chained_ths
+      val chained =
+        chained
         |> maps (fn th => insert Thm.eq_thm_prop (zero_var_indexes th) [th])
     in
       (if only then
          maps (map (fn ((name, stature), th) => ((K name, stature), th))
-               o fact_from_ref ctxt reserved chained_ths css_table) add
+               o fact_from_ref ctxt reserved chained css) add
        else
          let val (add, del) = pairself (Attrib.eval_thms ctxt) (add, del) in
-           all_facts ctxt ho_atp reserved add chained_ths css_table
+           all_facts ctxt ho_atp reserved add chained css
+           |> filter_out (is_likely_tautology_or_too_meta o snd)
            |> filter_out (member Thm.eq_thm_prop del o snd)
            |> maybe_filter_no_atps ctxt
            |> uniquify

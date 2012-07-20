@@ -17,15 +17,15 @@ sig
   val auto_minimize_min_facts : int Config.T
   val auto_minimize_max_time : real Config.T
   val minimize_facts :
-    (thm list -> unit) -> string -> params -> bool -> int -> int -> Proof.state
-    -> ((string * stature) * thm list) list
+    (string -> thm list -> unit) -> string -> params -> bool -> int -> int
+    -> Proof.state -> ((string * stature) * thm list) list
     -> ((string * stature) * thm list) list option
        * ((unit -> play) * (play -> string) * string)
   val get_minimizing_prover :
-    Proof.context -> mode -> (thm list -> unit) -> string -> prover
+    Proof.context -> mode -> (string -> thm list -> unit) -> string -> prover
   val run_minimize :
-    params -> (thm list -> unit) -> int -> (Facts.ref * Attrib.src list) list
-    -> Proof.state -> unit
+    params -> (string -> thm list -> unit) -> int
+    -> (Facts.ref * Attrib.src list) list -> Proof.state -> unit
 end;
 
 structure Sledgehammer_Minimize : SLEDGEHAMMER_MINIMIZE =
@@ -211,7 +211,7 @@ fun minimize_facts do_learn prover_name (params as {learn, timeout, ...}) silent
                               |> length of
                  0 => ""
                | n => "\n(including " ^ string_of_int n ^ " chained)") ^ ".");
-         (if learn then do_learn (maps snd min_facts) else ());
+         (if learn then do_learn prover_name (maps snd min_facts) else ());
          (SOME min_facts, (preplay, message, message_tail))
        end
      | {outcome = SOME TimedOut, preplay, ...} =>
@@ -255,11 +255,11 @@ fun adjust_reconstructor_params override_params
      expect = expect}
   end
 
-fun minimize ctxt mode do_learn name
-             (params as {debug, verbose, isar_proof, minimize, ...})
-             ({state, subgoal, subgoal_count, facts, ...} : prover_problem)
-             (result as {outcome, used_facts, run_time, preplay, message,
-                         message_tail} : prover_result) =
+fun maybe_minimize ctxt mode do_learn name
+        (params as {verbose, isar_proof, minimize, ...})
+        ({state, subgoal, subgoal_count, facts, ...} : prover_problem)
+        (result as {outcome, used_facts, run_time, preplay, message,
+                    message_tail} : prover_result) =
   if is_some outcome orelse null used_facts then
     result
   else
@@ -299,7 +299,8 @@ fun minimize ctxt mode do_learn name
       val minimize = minimize |> the_default perhaps_minimize
       val (used_facts, (preplay, message, _)) =
         if minimize then
-          minimize_facts do_learn minimize_name params (not verbose) subgoal
+          minimize_facts do_learn minimize_name params
+                         (mode <> Normal orelse not verbose) subgoal
                          subgoal_count state
                          (filter_used_facts used_facts
                               (map (apsnd single o untranslated_fact) facts))
@@ -309,36 +310,25 @@ fun minimize ctxt mode do_learn name
     in
       case used_facts of
         SOME used_facts =>
-        (if debug andalso not (null used_facts) then
-           tag_list 1 facts
-           |> map (fn (j, fact) => fact |> untranslated_fact |> apsnd (K j))
-           |> filter_used_facts used_facts
-           |> map (fn ((name, _), j) => name ^ "@" ^ string_of_int j)
-           |> commas
-           |> enclose ("Fact" ^ plural_s (length facts) ^ " in " ^ quote name ^
-                       " proof (of " ^ string_of_int (length facts) ^ "): ") "."
-           |> Output.urgent_message
-         else
-           ();
-         {outcome = NONE, used_facts = used_facts, run_time = run_time,
-          preplay = preplay, message = message, message_tail = message_tail})
+        {outcome = NONE, used_facts = used_facts, run_time = run_time,
+         preplay = preplay, message = message, message_tail = message_tail}
       | NONE => result
     end
 
 fun get_minimizing_prover ctxt mode do_learn name params minimize_command
                           problem =
   get_prover ctxt mode name params minimize_command problem
-  |> minimize ctxt mode do_learn name params problem
+  |> maybe_minimize ctxt mode do_learn name params problem
 
 fun run_minimize (params as {provers, ...}) do_learn i refs state =
   let
     val ctxt = Proof.context_of state
     val reserved = reserved_isar_keyword_table ()
     val chained_ths = #facts (Proof.goal state)
-    val css_table = clasimpset_rule_table_of ctxt
+    val css = clasimpset_rule_table_of ctxt
     val facts =
       refs |> maps (map (apsnd single)
-                    o fact_from_ref ctxt reserved chained_ths css_table)
+                    o fact_from_ref ctxt reserved chained_ths css)
   in
     case subgoal_count state of
       0 => Output.urgent_message "No subgoal!"

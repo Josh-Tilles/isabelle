@@ -106,10 +106,10 @@ The supported ATPs are E \cite{schulz-2002}, E-SInE \cite{sine}, E-ToFoF
 SNARK \cite{snark}, SPASS \cite{weidenbach-et-al-2009}, Vampire
 \cite{riazanov-voronkov-2002}, and Waldmeister \cite{waldmeister}. The ATPs are
 run either locally or remotely via the System\-On\-TPTP web service
-\cite{sutcliffe-2000}. In addition to the ATPs, the SMT solvers Z3 \cite{z3} is
-used by default, and you can tell Sledgehammer to try Alt-Ergo \cite{alt-ergo},
-CVC3 \cite{cvc3}, and Yices \cite{yices} as well; these are run either locally
-or (for CVC3 and Z3) on a server at the TU M\"unchen.
+\cite{sutcliffe-2000}. In addition to the ATPs, a selection of the SMT solvers
+CVC3 \cite{cvc3}, Yices \cite{yices}, and Z3 \cite{z3} are run by default, and
+you can tell Sledgehammer to try Alt-Ergo \cite{alt-ergo} as well; these are run
+either locally or (for CVC3 and Z3) on a server at the TU M\"unchen.
 
 The problem passed to the automatic provers consists of your current goal
 together with a heuristic selection of hundreds of facts (theorems) from the
@@ -152,7 +152,7 @@ directed to the author at \authoremail.
 \section{Installation}
 \label{installation}
 
-Sledgehammer is part of Isabelle, so you don't need to install it. However, it
+Sledgehammer is part of Isabelle, so you do not need to install it. However, it
 relies on third-party automatic provers (ATPs and SMT solvers).
 
 Among the ATPs, E, LEO-II, Satallax, SPASS, and Vampire can be run locally; in
@@ -161,11 +161,10 @@ Vampire, and Waldmeister are available remotely via System\-On\-TPTP
 \cite{sutcliffe-2000}. If you want better performance, you should at least
 install E and SPASS locally.
 
-Among the SMT solvers, Alt-Ergo, CVC3, Yices, and Z3 can be run locally, and
-CVC3 and Z3 can be run remotely on a TU M\"unchen server. If you want better
-performance and get the ability to replay proofs that rely on the \emph{smt}
-proof method without an Internet connection, you should at least install Z3
-locally.
+The SMT solvers Alt-Ergo, CVC3, Yices, and Z3 can be run locally, and CVC3 and
+Z3 can be run remotely on a TU M\"unchen server. If you want better performance
+and get the ability to replay proofs that rely on the \emph{smt} proof method
+without an Internet connection, you should at least have Z3 locally installed.
 
 There are three main ways to install automatic provers on your machine:
 
@@ -220,12 +219,16 @@ Yices or Z3 executable somewhere (e.g.,
 \url{http://research.microsoft.com/en-us/um/redmond/projects/z3/download.html}),
 set the environment variable \texttt{CVC3\_\allowbreak SOLVER},
 \texttt{YICES\_SOLVER}, or \texttt{Z3\_SOLVER} to the complete path of
-the executable, \emph{including the file name}. Sledgehammer has been tested
-with Alt-Ergo 0.93, CVC3 2.2 and 2.4.1, Yices 1.0.28 and 1.0.33, and Z3 3.0,
-3.1, 3.2, and 4.0. Since the SMT solvers' output formats are somewhat unstable,
-other versions of the solvers might not work well with Sledgehammer. Ideally,
-also set \texttt{CVC3\_VERSION}, \texttt{YICES\_VERSION}, or
-\texttt{Z3\_VERSION} to the solver's version number (e.g., ``4.0'').
+the executable, \emph{including the file name};
+for Alt-Ergo, set the
+environment variable \texttt{WHY3\_HOME} to the directory that contains the
+\texttt{why3} executable.
+Sledgehammer has been tested with Alt-Ergo 0.93 and 0.94, CVC3 2.2 and 2.4.1,
+Yices 1.0.28 and 1.0.33, and Z3 3.0 to 4.0. Since the SMT solvers' output
+formats are somewhat unstable, other versions of the solvers might not work well
+with Sledgehammer. Ideally, also set \texttt{CVC3\_VERSION},
+\texttt{YICES\_VERSION}, or \texttt{Z3\_VERSION} to the solver's version number
+(e.g., ``4.0'').
 \end{enum}
 \end{sloppy}
 
@@ -301,10 +304,9 @@ available, some of the provers might be missing or present with a
 \textit{remote\_} prefix. Waldmeister is run only for unit equational problems,
 where the goal's conclusion is a (universally quantified) equation.
 
-For each successful prover, Sledgehammer gives a one-liner proof that uses
-the \textit{metis} or \textit{smt} proof method. Approximate timings are shown
-in parentheses, indicating how fast the call is. You can click the proof to
-insert it into the theory text.
+For each successful prover, Sledgehammer gives a one-liner \textit{metis} or
+\textit{smt} method call. Rough timings are shown in parentheses, indicating how
+fast the call is. You can click the proof to insert it into the theory text.
 
 In addition, you can ask Sledgehammer for an Isar text proof by passing the
 \textit{isar\_proof} option (\S\ref{output-format}):
@@ -386,21 +388,41 @@ to force Sledgehammer to run only with $\textit{my\_facts}$.
 \label{frequently-asked-questions}
 
 This sections answers frequently (and infrequently) asked questions about
-Sledgehammer. It is a good idea to skim over it now even if you don't have any
+Sledgehammer. It is a good idea to skim over it now even if you do not have any
 questions at this stage. And if you have any further questions not listed here,
 send them to the author at \authoremail.
 
 \point{Which facts are passed to the automatic provers?}
 
-The relevance filter assigns a score to every available fact (lemma, theorem,
-definition, or axiom) based upon how many constants that fact shares with the
-conjecture. This process iterates to include facts relevant to those just
-accepted, but with a decay factor to ensure termination. The constants are
-weighted to give unusual ones greater significance. The relevance filter copes
-best when the conjecture contains some unusual constants; if all the constants
-are common, it is unable to discriminate among the hundreds of facts that are
-picked up. The relevance filter is also memoryless: It has no information about
-how many times a particular fact has been used in a proof, and it cannot learn.
+Sledgehammer heuristically selects a few hundred relevant lemmas from the
+currently loaded libraries. The component that performs this selection is
+called \emph{relevance filter}.
+
+\begin{enum}
+\item[\labelitemi]
+The traditional relevance filter, called \emph{MePo}
+(\underline{Me}ng--\underline{Pau}lson), assigns a score to every available fact
+(lemma, theorem, definition, or axiom) based upon how many constants that fact
+shares with the conjecture. This process iterates to include facts relevant to
+those just accepted. The constants are weighted to give unusual ones greater
+significance. MePo copes best when the conjecture contains some unusual
+constants; if all the constants are common, it is unable to discriminate among
+the hundreds of facts that are picked up. The filter is also memoryless: It has
+no information about how many times a particular fact has been used in a proof,
+and it cannot learn.
+
+\item[\labelitemi]
+An experimental, memoryful alternative to MePo is \emph{MaSh}
+(\underline{Ma}chine Learner for \underline{S}ledge\underline{h}ammer). It
+relies on an external tool called \texttt{mash} that applies machine learning to
+the problem of finding relevant facts.
+
+\item[\labelitemi] The \emph{Mesh} filter combines MePo and MaSh.
+\end{enum}
+
+The default is either MePo or Mesh, depending on whether \texttt{mash} is
+installed and what class of provers the target prover belongs to
+(\S\ref{relevance-filter}).
 
 The number of facts included in a problem varies from prover to prover, since
 some provers get overwhelmed more easily than others. You can show the number of
@@ -453,8 +475,8 @@ obtain a step-by-step Isar proof where each step is justified by \textit{metis}.
 Since the steps are fairly small, \textit{metis} is more likely to be able to
 replay them.
 
-\item[\labelitemi] Try the \textit{smt} proof method instead of \textit{metis}. It
-is usually stronger, but you need to either have Z3 available to replay the
+\item[\labelitemi] Try the \textit{smt} proof method instead of \textit{metis}.
+It is usually stronger, but you need to either have Z3 available to replay the
 proofs, trust the SMT solver, or use certificates. See the documentation in the
 \emph{SMT} theory (\texttt{\$ISABELLE\_HOME/src/HOL/SMT.thy}) for details.
 
@@ -599,9 +621,10 @@ want to report this to the Isabelle developers.
 \point{Auto can solve it---why not Sledgehammer?}
 
 Problems can be easy for \textit{auto} and difficult for automatic provers, but
-the reverse is also true, so don't be discouraged if your first attempts fail.
+the reverse is also true, so do not be discouraged if your first attempts fail.
 Because the system refers to all theorems known to Isabelle, it is particularly
-suitable when your goal has a short proof from lemmas that you don't know about.
+suitable when your goal has a short proof from lemmas that you do not know
+about.
 
 \point{Why are there so many options?}
 
@@ -657,6 +680,40 @@ automatic provers.
 
 \item[\labelitemi] \textbf{\textit{refresh\_tptp}:} Refreshes the list of remote
 ATPs available at System\-On\-TPTP \cite{sutcliffe-2000}.
+\end{enum}
+
+In addition, the following subcommands provide fine control over machine
+learning with MaSh:
+
+\begin{enum}
+\item[\labelitemi] \textbf{\textit{unlearn}:} Resets MaSh, erasing any
+persistent state.
+
+\item[\labelitemi] \textbf{\textit{learn\_isar}:} Invokes MaSh on the current
+theory to process all the available facts, learning from their Isabelle/Isar
+proofs. This happens automatically at Sledgehammer invocations if the
+\textit{learn} option (\S\ref{relevance-filter}) is enabled.
+
+\item[\labelitemi] \textbf{\textit{learn\_atp}:} Invokes MaSh on the current
+theory to process all the available facts, learning from ATP-generated proofs.
+The ATP to use and its timeout can be set using the
+\textit{prover} (\S\ref{mode-of-operation}) and \textit{timeout}
+(\S\ref{timeouts}) options. It is recommended to perform learning using an
+efficient first-order ATP (such as E, SPASS, and Vampire) as opposed to a
+higher-order ATP or an SMT solver.
+
+\item[\labelitemi] \textbf{\textit{relearn\_isar}:} Same as \textit{unlearn}
+followed by \textit{learn\_isar}.
+
+\item[\labelitemi] \textbf{\textit{relearn\_atp}:} Same as \textit{unlearn}
+followed by \textit{learn\_atp}.
+
+\item[\labelitemi] \textbf{\textit{running\_learners}:} Prints information about
+currently running machine learners, including elapsed runtime and remaining
+time until timeout.
+
+\item[\labelitemi] \textbf{\textit{kill\_learners}:} Terminates all running
+machine learners.
 \end{enum}
 
 Sledgehammer's behavior can be influenced by various \qty{options}, which can be
@@ -718,9 +775,9 @@ The supported $\lambda$ translation schemes are \textit{hide\_lams},
 All the untyped type encodings listed in \S\ref{problem-encoding} are supported.
 For convenience, the following aliases are provided:
 \begin{enum}
-\item[\labelitemi] \textbf{\textit{full\_types}:} Synonym for \textit{poly\_guards\_query}.
-\item[\labelitemi] \textbf{\textit{partial\_types}:} Synonym for \textit{poly\_args}.
-\item[\labelitemi] \textbf{\textit{no\_types}:} Synonym for \textit{erased}.
+\item[\labelitemi] \textbf{\textit{full\_types}:} Alias for \textit{poly\_guards\_query}.
+\item[\labelitemi] \textbf{\textit{partial\_types}:} Alias for \textit{poly\_args}.
+\item[\labelitemi] \textbf{\textit{no\_types}:} Alias for \textit{erased}.
 \end{enum}
 
 \section{Option Reference}
@@ -916,12 +973,11 @@ point).
 with TPTP syntax'' runs on Geoff Sutcliffe's Miami servers.
 \end{enum}
 
-By default, Sledgehammer runs E, E-SInE, SPASS, Vampire, Z3 (or whatever
-the SMT module's \textit{smt\_solver} configuration option is set to), and (if
-appropriate) Waldmeister in parallel---either locally or remotely, depending on
-the number of processor cores available. For historical reasons, the default
-value of this option can be overridden using the option ``Sledgehammer:
-Provers'' in Proof General's ``Isabelle'' menu.
+By default, Sledgehammer runs a selection of CVC3, E, E-SInE, SPASS, Vampire,
+Yices, Z3, and (if appropriate) Waldmeister in parallel---either locally or
+remotely, depending on the number of processor cores available. For historical
+reasons, the default value of this option can be overridden using the option
+``Sledgehammer: Provers'' in Proof General's ``Isabelle'' menu.
 
 It is generally a good idea to run several provers in parallel. Running E,
 SPASS, and Vampire for 5~seconds yields a similar success rate to running the
@@ -971,11 +1027,77 @@ and \textit{dont\_preplay} (\S\ref{timeouts}).}
 Specifies whether Sledgehammer should put its temporary files in
 \texttt{\$ISA\-BELLE\_\allowbreak HOME\_\allowbreak USER}, which is useful for
 debugging Sledgehammer but also unsafe if several instances of the tool are run
-simultaneously. The files are identified by the prefix \texttt{prob\_}; you may
-safely remove them after Sledgehammer has run.
+simultaneously. The files are identified by the prefixes \texttt{prob\_} and
+\texttt{mash\_}; you may safely remove them after Sledgehammer has run.
 
 \nopagebreak
 {\small See also \textit{debug} (\S\ref{output-format}).}
+\end{enum}
+
+\subsection{Relevance Filter}
+\label{relevance-filter}
+
+\begin{enum}
+\opdefault{fact\_filter}{string}{smart}
+Specifies the relevance filter to use. The following filters are available:
+
+\begin{enum}
+\item[\labelitemi] \textbf{\textit{mepo}:}
+The traditional memoryless MePo relevance filter.
+
+\item[\labelitemi] \textbf{\textit{mash}:}
+The memoryful MaSh machine learner. MaSh relies on the external program
+\texttt{mash}, which can be obtained from the author at \authoremail. To install
+it, set the environment variable \texttt{MASH\_HOME} to the directory that
+contains the \texttt{mash} executable.
+Persistent data is stored in the \texttt{\$ISABELLE\_HOME\_USER/mash} directory.
+
+\item[\labelitemi] \textbf{\textit{mesh}:} A combination of MePo and MaSh.
+
+\item[\labelitemi] \textbf{\textit{smart}:} Use Mesh if \texttt{mash} is
+installed and the target prover is an ATP; otherwise, use MePo.
+\end{enum}
+
+\opdefault{max\_facts}{smart\_int}{smart}
+Specifies the maximum number of facts that may be returned by the relevance
+filter. If the option is set to \textit{smart}, it is set to a value that was
+empirically found to be appropriate for the prover. Typical values range between
+50 and 1000.
+
+\opdefault{fact\_thresholds}{float\_pair}{\upshape 0.45~0.85}
+Specifies the thresholds above which facts are considered relevant by the
+relevance filter. The first threshold is used for the first iteration of the
+relevance filter and the second threshold is used for the last iteration (if it
+is reached). The effective threshold is quadratically interpolated for the other
+iterations. Each threshold ranges from 0 to 1, where 0 means that all theorems
+are relevant and 1 only theorems that refer to previously seen constants.
+
+\optrue{learn}{dont\_learn}
+Specifies whether MaSh should be run automatically by Sledgehammer to learn the
+available theories (and hence provide more accurate results). Learning only
+takes place if \texttt{mash} is installed.
+
+\opdefault{max\_new\_mono\_instances}{int}{smart}
+Specifies the maximum number of monomorphic instances to generate beyond
+\textit{max\_facts}. The higher this limit is, the more monomorphic instances
+are potentially generated. Whether monomorphization takes place depends on the
+type encoding used. If the option is set to \textit{smart}, it is set to a value
+that was empirically found to be appropriate for the prover. For most provers,
+this value is 200.
+
+\nopagebreak
+{\small See also \textit{type\_enc} (\S\ref{problem-encoding}).}
+
+\opdefault{max\_mono\_iters}{int}{smart}
+Specifies the maximum number of iterations for the monomorphization fixpoint
+construction. The higher this limit is, the more monomorphic instances are
+potentially generated. Whether monomorphization takes place depends on the
+type encoding used. If the option is set to \textit{smart}, it is set to a value
+that was empirically found to be appropriate for the prover. For most provers,
+this value is 3.
+
+\nopagebreak
+{\small See also \textit{type\_enc} (\S\ref{problem-encoding}).}
 \end{enum}
 
 \subsection{Problem Encoding}
@@ -1141,47 +1263,6 @@ sound type encodings marked with an asterisk (*) above are made complete
 for reconstruction with \textit{metis}, at the cost of some clutter in the
 generated problems. This option has no effect if \textit{type\_enc} is
 deliberately set to an unsound encoding.
-\end{enum}
-
-\subsection{Relevance Filter}
-\label{relevance-filter}
-
-\begin{enum}
-\opdefault{max\_facts}{smart\_int}{smart}
-Specifies the maximum number of facts that may be returned by the relevance
-filter. If the option is set to \textit{smart}, it is set to a value that was
-empirically found to be appropriate for the prover. Typical values range between
-50 and 1000.
-
-\opdefault{fact\_thresholds}{float\_pair}{\upshape 0.45~0.85}
-Specifies the thresholds above which facts are considered relevant by the
-relevance filter. The first threshold is used for the first iteration of the
-relevance filter and the second threshold is used for the last iteration (if it
-is reached). The effective threshold is quadratically interpolated for the other
-iterations. Each threshold ranges from 0 to 1, where 0 means that all theorems
-are relevant and 1 only theorems that refer to previously seen constants.
-
-\opdefault{max\_new\_mono\_instances}{int}{smart}
-Specifies the maximum number of monomorphic instances to generate beyond
-\textit{max\_facts}. The higher this limit is, the more monomorphic instances
-are potentially generated. Whether monomorphization takes place depends on the
-type encoding used. If the option is set to \textit{smart}, it is set to a value
-that was empirically found to be appropriate for the prover. For most provers,
-this value is 200.
-
-\nopagebreak
-{\small See also \textit{type\_enc} (\S\ref{problem-encoding}).}
-
-\opdefault{max\_mono\_iters}{int}{smart}
-Specifies the maximum number of iterations for the monomorphization fixpoint
-construction. The higher this limit is, the more monomorphic instances are
-potentially generated. Whether monomorphization takes place depends on the
-type encoding used. If the option is set to \textit{smart}, it is set to a value
-that was empirically found to be appropriate for the prover. For most provers,
-this value is 3.
-
-\nopagebreak
-{\small See also \textit{type\_enc} (\S\ref{problem-encoding}).}
 \end{enum}
 
 \subsection{Output Format}

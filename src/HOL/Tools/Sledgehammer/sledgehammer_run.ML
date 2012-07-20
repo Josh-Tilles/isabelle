@@ -33,7 +33,7 @@ open Sledgehammer_Util
 open Sledgehammer_Fact
 open Sledgehammer_Provers
 open Sledgehammer_Minimize
-open Sledgehammer_Filter_MaSh
+open Sledgehammer_MaSh
 
 val someN = "some"
 val noneN = "none"
@@ -64,8 +64,8 @@ fun prover_description ctxt ({verbose, blocking, ...} : params) name num_facts i
 
 fun launch_prover (params as {debug, verbose, blocking, max_facts, slice,
                               timeout, expect, ...})
-        mode minimize_command only {state, goal, subgoal, subgoal_count, facts}
-        name =
+                  mode minimize_command only learn
+                  {state, goal, subgoal, subgoal_count, facts} name =
   let
     val ctxt = Proof.context_of state
     val hard_timeout = Time.+ (timeout, timeout)
@@ -84,12 +84,21 @@ fun launch_prover (params as {debug, verbose, blocking, max_facts, slice,
                   ? filter_out (curry (op =) Induction o snd o snd o fst
                                 o untranslated_fact)
                |> take num_facts}
+    fun print_used_facts used_facts =
+      tag_list 1 facts
+      |> map (fn (j, fact) => fact |> untranslated_fact |> apsnd (K j))
+      |> filter_used_facts used_facts
+      |> map (fn ((name, _), j) => name ^ "@" ^ string_of_int j)
+      |> commas
+      |> enclose ("Fact" ^ plural_s (length facts) ^ " in " ^ quote name ^
+                  " proof (of " ^ string_of_int (length facts) ^ "): ") "."
+      |> Output.urgent_message
     fun really_go () =
       problem
-      |> get_minimizing_prover ctxt mode
-             (mash_learn_proof ctxt params (prop_of goal)
-                               (map untranslated_fact facts))
-             name params minimize_command
+      |> get_minimizing_prover ctxt mode learn name params minimize_command
+      |> verbose ? tap (fn {outcome = NONE, used_facts as _ :: _, ...} =>
+                           print_used_facts used_facts
+                         | _ => ())
       |> (fn {outcome, preplay, message, message_tail, ...} =>
              (if outcome = SOME ATP_Proof.TimedOut then timeoutN
               else if is_some outcome then noneN
@@ -171,14 +180,14 @@ fun run_sledgehammer (params as {debug, verbose, blocking, provers, max_facts,
       val state =
         state |> Proof.map_context (Config.put SMT_Config.verbose debug)
       val ctxt = Proof.context_of state
-      val {facts = chained_ths, goal, ...} = Proof.goal state
+      val {facts = chained, goal, ...} = Proof.goal state
       val (_, hyp_ts, concl_t) = strip_subgoal ctxt goal i
       val ho_atp = exists (Sledgehammer_Provers.is_ho_atp ctxt) provers
       val reserved = reserved_isar_keyword_table ()
-      val css_table = clasimpset_rule_table_of ctxt
-      val facts =
-        nearly_all_facts ctxt ho_atp fact_override reserved css_table
-                         chained_ths hyp_ts concl_t
+      val css = clasimpset_rule_table_of ctxt
+      val all_facts =
+        nearly_all_facts ctxt ho_atp fact_override reserved css chained hyp_ts
+                         concl_t
       val _ = () |> not blocking ? kill_provers
       val _ = case find_first (not o is_prover_supported ctxt) provers of
                 SOME name => error ("No such prover: " ^ name ^ ".")
@@ -196,7 +205,9 @@ fun run_sledgehammer (params as {debug, verbose, blocking, provers, max_facts,
           val problem =
             {state = state, goal = goal, subgoal = i, subgoal_count = n,
              facts = facts}
-          val launch = launch_prover params mode minimize_command only
+          fun learn prover =
+            mash_learn_proof ctxt params prover (prop_of goal) all_facts
+          val launch = launch_prover params mode minimize_command only learn
         in
           if mode = Auto_Try orelse mode = Try then
             (unknownN, state)
@@ -220,7 +231,7 @@ fun run_sledgehammer (params as {debug, verbose, blocking, provers, max_facts,
                         provers
                 |> mode = Auto_Try ? (fn n => n div auto_try_max_facts_divisor)
         in
-          facts
+          all_facts
           |> (case is_appropriate_prop of
                 SOME is_app => filter (is_app o prop_of o snd)
               | NONE => I)
@@ -228,7 +239,7 @@ fun run_sledgehammer (params as {debug, verbose, blocking, provers, max_facts,
                             hyp_ts concl_t
           |> map (apfst (apfst (fn name => name ())))
           |> tap (fn facts =>
-                     if debug then
+                     if verbose then
                        label ^ plural_s (length provers) ^ ": " ^
                        (if null facts then
                           "Found no relevant facts."

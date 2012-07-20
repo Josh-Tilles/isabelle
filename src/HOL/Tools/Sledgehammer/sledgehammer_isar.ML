@@ -26,8 +26,12 @@ open Sledgehammer_Util
 open Sledgehammer_Fact
 open Sledgehammer_Provers
 open Sledgehammer_Minimize
-open Sledgehammer_Filter_MaSh
+open Sledgehammer_MaSh
 open Sledgehammer_Run
+
+val cvc3N = "cvc3"
+val yicesN = "yices"
+val z3N = "z3"
 
 val runN = "run"
 val minN = "min"
@@ -37,7 +41,6 @@ val kill_proversN = "kill_provers"
 val running_proversN = "running_provers"
 val kill_learnersN = "kill_learners"
 val running_learnersN = "running_learners"
-val unlearnN = "unlearn"
 val refresh_tptpN = "refresh_tptp"
 
 val auto = Unsynchronized.ref false
@@ -152,8 +155,8 @@ fun unalias_raw_param (name, value) =
 
 val any_type_enc = type_enc_from_string Strict "erased"
 
-(* "provers =", "type_enc =", "lam_trans =", and "fact_filter =" can be omitted.
-   For the last three, this is a secret feature. *)
+(* "provers =", "type_enc =", "lam_trans =", "fact_filter =", and "max_facts ="
+   can be omitted. For the last four, this is a secret feature. *)
 fun normalize_raw_param ctxt =
   unalias_raw_param
   #> (fn (name, value) =>
@@ -168,6 +171,8 @@ fun normalize_raw_param ctxt =
            ("lam_trans", [name])
          else if member (op =) fact_filters name then
            ("fact_filter", [name])
+         else if can Int.fromString name then
+           ("max_facts", [name])
          else
            error ("Unknown parameter: " ^ quote name ^ "."))
 
@@ -213,16 +218,15 @@ fun avoid_too_many_threads _ _ [] = []
       val max_local_and_remote =
         max_local_and_remote
         |> (if String.isPrefix remote_prefix prover then apsnd else apfst)
-              (Integer.add ~1)
+               (Integer.add ~1)
     in prover :: avoid_too_many_threads ctxt max_local_and_remote provers end
 
 val max_default_remote_threads = 4
 
 (* The first ATP of the list is used by Auto Sledgehammer. Because of the low
-   timeout, it makes sense to put SPASS first. *)
+   timeout, it makes sense to put E first. *)
 fun default_provers_param_value ctxt =
-  [spassN, eN, vampireN, SMT_Solver.solver_name_of ctxt, e_sineN,
-   waldmeisterN]
+  [eN, spassN, vampireN, z3N, e_sineN, waldmeisterN, yicesN, cvc3N]
   |> map_filter (remotify_prover_if_not_installed ctxt)
   |> avoid_too_many_threads ctxt (Multithreading.max_threads_value (),
                                   max_default_remote_threads)
@@ -245,8 +249,7 @@ fun default_raw_params ctxt =
                          end)]
   end
 
-val infinity_time_in_secs = 60 * 60 * 24 * 365
-val the_timeout = the_default (Time.fromSeconds infinity_time_in_secs)
+val the_timeout = the_default infinite_timeout
 
 fun extract_params mode default_params override_params =
   let
@@ -322,7 +325,7 @@ fun extract_params mode default_params override_params =
      lam_trans = lam_trans, uncurried_aliases = uncurried_aliases,
      learn = learn, fact_filter = fact_filter, max_facts = max_facts,
      fact_thresholds = fact_thresholds, max_mono_iters = max_mono_iters,
-     max_new_mono_instances = max_new_mono_instances,  isar_proof = isar_proof,
+     max_new_mono_instances = max_new_mono_instances, isar_proof = isar_proof,
      isar_shrink_factor = isar_shrink_factor, slice = slice,
      minimize = minimize, timeout = timeout, preplay_timeout = preplay_timeout,
      expect = expect}
@@ -352,11 +355,13 @@ fun minimize_command override_params i more_override_params prover_name
       |> (if prover_name = default_minimize_prover then I else cons prover_name)
       |> space_implode ", "
   in
-    "sledgehammer" ^ " " ^ minN ^
+    sledgehammerN ^ " " ^ minN ^
     (if params = "" then "" else enclose " [" "]" params) ^
     " (" ^ space_implode " " fact_names ^ ")" ^
     (if i = 1 then "" else " " ^ string_of_int i)
   end
+
+val default_learn_atp_timeout = 0.5
 
 fun hammer_away override_params subcommand opt_i fact_override state =
   let
@@ -371,10 +376,17 @@ fun hammer_away override_params subcommand opt_i fact_override state =
         |> K ()
       end
     else if subcommand = minN then
-      run_minimize (get_params Minimize ctxt
-                               (("provers", [default_minimize_prover]) ::
-                                override_params))
-                   (K ()) (the_default 1 opt_i) (#add fact_override) state
+      let
+        val ctxt = ctxt |> Config.put instantiate_inducts false
+        val i = the_default 1 opt_i
+        val params =
+          get_params Minimize ctxt (("provers", [default_minimize_prover]) ::
+                                    override_params)
+        val goal = prop_of (#goal (Proof.goal state))
+        val facts = nearly_all_facts ctxt false fact_override Symtab.empty
+                                     Termtab.empty [] [] goal
+        fun learn prover = mash_learn_proof ctxt params prover goal facts
+      in run_minimize params learn i (#add fact_override) state end
     else if subcommand = messagesN then
       messages opt_i
     else if subcommand = supported_proversN then
@@ -383,12 +395,27 @@ fun hammer_away override_params subcommand opt_i fact_override state =
       kill_provers ()
     else if subcommand = running_proversN then
       running_provers ()
+    else if subcommand = unlearnN then
+      mash_unlearn ctxt
+    else if subcommand = learn_isarN orelse subcommand = learn_atpN orelse
+            subcommand = relearn_isarN orelse subcommand = relearn_atpN then
+      (if subcommand = relearn_isarN orelse subcommand = relearn_atpN then
+         mash_unlearn ctxt
+       else
+         ();
+       mash_learn ctxt (get_params Normal ctxt
+                           (("timeout",
+                             [string_of_real default_learn_atp_timeout]) ::
+                            override_params @
+                            [("slice", ["false"]),
+                             ("minimize", ["true"]),
+                             ("preplay_timeout", ["0"])]))
+                  fact_override (#facts (Proof.goal state))
+                  (subcommand = learn_atpN orelse subcommand = relearn_atpN))
     else if subcommand = kill_learnersN then
       kill_learners ()
     else if subcommand = running_learnersN then
       running_learners ()
-    else if subcommand = unlearnN then
-      mash_unlearn ctxt
     else if subcommand = refresh_tptpN then
       refresh_systems_on_tptp ()
     else
@@ -452,6 +479,6 @@ fun try_sledgehammer auto state =
                      (minimize_command [] i) state
   end
 
-val setup = Try.register_tool ("sledgehammer", (40, auto, try_sledgehammer))
+val setup = Try.register_tool (sledgehammerN, (40, auto, try_sledgehammer))
 
 end;

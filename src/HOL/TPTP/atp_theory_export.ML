@@ -66,7 +66,7 @@ fun run_some_atp ctxt format problem =
     val ord = effective_term_order ctxt atp
     val _ = problem |> lines_for_atp_problem format ord (K [])
                     |> File.write_list prob_file
-    val path = getenv (List.last (fst exec)) ^ "/" ^ snd exec
+    val path = getenv (List.last (fst exec)) ^ "/" ^ List.last (snd exec)
     val command =
       File.shell_path (Path.explode path) ^
       " " ^ arguments ctxt false "" (seconds 1.0) (ord, K [], K []) ^ " " ^
@@ -114,8 +114,8 @@ fun monomorphize_term ctxt t =
   end
 
 fun all_non_tautological_facts_of thy css_table =
-  Sledgehammer_Fact.all_facts_of thy css_table
-  |> filter_out (Sledgehammer_Filter_MaSh.is_likely_tautology_or_too_meta o snd)
+  Sledgehammer_Fact.all_facts_of (Proof_Context.init_global thy) css_table
+  |> filter_out (Sledgehammer_Fact.is_likely_tautology_or_too_meta o snd)
 
 fun generate_atp_inference_file_for_theory ctxt thy format type_enc file_name =
   let

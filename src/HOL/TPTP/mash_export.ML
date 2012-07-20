@@ -17,7 +17,7 @@ sig
   val generate_atp_dependencies :
     Proof.context -> params -> theory -> bool -> string -> unit
   val generate_commands : Proof.context -> string -> theory -> string -> unit
-  val generate_iter_suggestions :
+  val generate_mepo_suggestions :
     Proof.context -> params -> theory -> int -> string -> unit
 end;
 
@@ -25,14 +25,14 @@ structure MaSh_Export : MASH_EXPORT =
 struct
 
 open Sledgehammer_Fact
-open Sledgehammer_Filter_Iter
-open Sledgehammer_Filter_MaSh
+open Sledgehammer_MePo
+open Sledgehammer_MaSh
 
 fun thy_map_from_facts ths =
   ths |> sort (thm_ord o swap o pairself snd)
       |> map (snd #> `(theory_of_thm #> Context.theory_name))
       |> AList.coalesce (op =)
-      |> map (apsnd (map Thm.get_name_hint))
+      |> map (apsnd (map nickname_of))
 
 fun has_thy thy th =
   Context.theory_name thy = Context.theory_name (theory_of_thm th)
@@ -51,7 +51,7 @@ fun thy_of_fact thy = Context.this_theory thy o thy_name_of_fact
 
 val all_names =
   filter_out is_likely_tautology_or_too_meta
-  #> map (rpair () o Thm.get_name_hint) #> Symtab.make
+  #> map (rpair () o nickname_of) #> Symtab.make
 
 fun generate_accessibility thy include_thy file_name =
   let
@@ -63,7 +63,7 @@ fun generate_accessibility thy include_thy file_name =
         val _ = File.append path s
       in [fact] end
     val thy_map =
-      all_facts_of thy Termtab.empty
+      all_facts_of (Proof_Context.init_global thy) Termtab.empty
       |> not include_thy ? filter_out (has_thy thy o snd)
       |> thy_map_from_facts
     fun do_thy facts =
@@ -79,13 +79,13 @@ fun generate_features ctxt prover thy include_thy file_name =
     val _ = File.write path ""
     val css_table = clasimpset_rule_table_of ctxt
     val facts =
-      all_facts_of thy css_table
+      all_facts_of (Proof_Context.init_global thy) css_table
       |> not include_thy ? filter_out (has_thy thy o snd)
-    fun do_fact ((_, (_, status)), th) =
+    fun do_fact ((_, stature), th) =
       let
-        val name = Thm.get_name_hint th
+        val name = nickname_of th
         val feats =
-          features_of ctxt prover (theory_of_thm th) status [prop_of th]
+          features_of ctxt prover (theory_of_thm th) stature [prop_of th]
         val s = escape_meta name ^ ": " ^ escape_metas feats ^ "\n"
       in File.append path s end
   in List.app do_fact facts end
@@ -95,62 +95,36 @@ fun generate_isar_dependencies thy include_thy file_name =
     val path = file_name |> Path.explode
     val _ = File.write path ""
     val ths =
-      all_facts_of thy Termtab.empty
+      all_facts_of (Proof_Context.init_global thy) Termtab.empty
       |> not include_thy ? filter_out (has_thy thy o snd)
       |> map snd
     val all_names = all_names ths
     fun do_thm th =
       let
-        val name = Thm.get_name_hint th
-        val deps = isabelle_dependencies_of all_names th
+        val name = nickname_of th
+        val deps = isar_dependencies_of all_names th |> these
         val s = escape_meta name ^ ": " ^ escape_metas deps ^ "\n"
       in File.append path s end
   in List.app do_thm ths end
 
-fun generate_atp_dependencies ctxt (params as {provers, max_facts, ...}) thy
-                              include_thy file_name =
+fun generate_atp_dependencies ctxt (params as {provers, ...}) thy include_thy
+                              file_name =
   let
     val path = file_name |> Path.explode
     val _ = File.write path ""
     val prover = hd provers
     val facts =
-      all_facts_of thy Termtab.empty
+      all_facts_of (Proof_Context.init_global thy) Termtab.empty
       |> not include_thy ? filter_out (has_thy thy o snd)
     val ths = facts |> map snd
     val all_names = all_names ths
-    fun is_dep dep (_, th) = Thm.get_name_hint th = dep
-    fun add_isar_dep facts dep accum =
-      if exists (is_dep dep) accum then
-        accum
-      else case find_first (is_dep dep) facts of
-        SOME ((name, status), th) => accum @ [((name, status), th)]
-      | NONE => accum (* shouldn't happen *)
-    fun fix_name ((_, stature), th) =
-      ((fn () => th |> Thm.get_name_hint, stature), th)
     fun do_thm th =
       let
-        val name = Thm.get_name_hint th
-        val goal = goal_of_thm thy th
-        val (_, hyp_ts, concl_t) = ATP_Util.strip_subgoal ctxt goal 1
+        val name = nickname_of th
         val deps =
-          case isabelle_dependencies_of all_names th of
-            [] => []
-          | isar_dep as [_] => isar_dep (* can hardly beat that *)
-          | isar_deps =>
-            let
-              val facts =
-                facts |> filter (fn (_, th') => thm_ord (th', th) = LESS)
-              val facts =
-                facts |> iterative_relevant_facts ctxt params prover
-                             (the max_facts) NONE hyp_ts concl_t
-                      |> fold (add_isar_dep facts) isar_deps
-                      |> map fix_name
-            in
-              case run_prover_for_mash ctxt params prover facts goal of
-                {outcome = NONE, used_facts, ...} =>
-                used_facts |> map fst |> sort string_ord
-              | _ => isar_deps
-            end
+          case atp_dependencies_of ctxt params prover 0 facts all_names th of
+            SOME deps => deps
+          | NONE => isar_dependencies_of all_names th |> these
         val s = escape_meta name ^ ": " ^ escape_metas deps ^ "\n"
       in File.append path s end
   in List.app do_thm ths end
@@ -160,17 +134,17 @@ fun generate_commands ctxt prover thy file_name =
     val path = file_name |> Path.explode
     val _ = File.write path ""
     val css_table = Sledgehammer_Fact.clasimpset_rule_table_of ctxt
-    val facts = all_facts_of thy css_table
+    val facts = all_facts_of (Proof_Context.init_global thy) css_table
     val (new_facts, old_facts) =
       facts |> List.partition (has_thy thy o snd)
             |>> sort (thm_ord o pairself snd)
     val ths = facts |> map snd
     val all_names = all_names ths
-    fun do_fact ((_, (_, status)), th) prevs =
+    fun do_fact ((_, stature), th) prevs =
       let
-        val name = Thm.get_name_hint th
-        val feats = features_of ctxt prover thy status [prop_of th]
-        val deps = isabelle_dependencies_of all_names th
+        val name = nickname_of th
+        val feats = features_of ctxt prover thy stature [prop_of th]
+        val deps = isar_dependencies_of all_names th |> these
         val kind = Thm.legacy_get_kind th
         val core = escape_metas prevs ^ "; " ^ escape_metas feats
         val query = if kind <> "" then "? " ^ core ^ "\n" else ""
@@ -183,20 +157,20 @@ fun generate_commands ctxt prover thy file_name =
     val parents = parent_facts thy thy_map
   in fold do_fact new_facts parents; () end
 
-fun generate_iter_suggestions ctxt (params as {provers, ...}) thy max_relevant
+fun generate_mepo_suggestions ctxt (params as {provers, ...}) thy max_relevant
                               file_name =
   let
     val path = file_name |> Path.explode
     val _ = File.write path ""
     val prover = hd provers
     val css_table = Sledgehammer_Fact.clasimpset_rule_table_of ctxt
-    val facts = all_facts_of thy css_table
+    val facts = all_facts_of (Proof_Context.init_global thy) css_table
     val (new_facts, old_facts) =
       facts |> List.partition (has_thy thy o snd)
             |>> sort (thm_ord o pairself snd)
     fun do_fact (fact as (_, th)) old_facts =
       let
-        val name = Thm.get_name_hint th
+        val name = nickname_of th
         val goal = goal_of_thm thy th
         val (_, hyp_ts, concl_t) = ATP_Util.strip_subgoal ctxt goal 1
         val kind = Thm.legacy_get_kind th
@@ -205,10 +179,9 @@ fun generate_iter_suggestions ctxt (params as {provers, ...}) thy max_relevant
             let
               val suggs =
                 old_facts
-                |> Sledgehammer_Filter_Iter.iterative_relevant_facts ctxt params
-                                prover max_relevant NONE hyp_ts concl_t
+                |> Sledgehammer_MePo.mepo_suggested_facts ctxt params prover
+                       max_relevant NONE hyp_ts concl_t
                 |> map (fn ((name, _), _) => name ())
-                |> sort string_ord
               val s = escape_meta name ^ ": " ^ escape_metas suggs ^ "\n"
             in File.append path s end
           else
