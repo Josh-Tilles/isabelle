@@ -60,6 +60,7 @@ test: \
   HOL-NSA-Examples \
   HOL-Number_Theory \
   HOL-Old_Number_Theory \
+  HOL-Quickcheck_Examples \
   HOL-Quotient_Examples \
   HOL-Predicate_Compile_Examples \
   HOL-Prolog \
@@ -82,6 +83,7 @@ test: \
 
 benchmark: \
   HOL-Datatype_Benchmark \
+  HOL-Quickcheck_Benchmark \
   HOL-Record_Benchmark
 
 images-no-smlnj: \
@@ -94,7 +96,7 @@ test-no-smlnj: \
   HOL-Nominal-Examples
 
 all: test-no-smlnj test images-no-smlnj images
-full: all benchmark HOL-Quickcheck_Examples
+full: all benchmark
 smlnj: test images
 
 
@@ -1509,8 +1511,8 @@ $(LOG)/HOL-Mutabelle.gz: $(OUT)/HOL Mutabelle/MutabelleExtra.thy	\
 HOL-Quickcheck_Examples: HOL $(LOG)/HOL-Quickcheck_Examples.gz
 
 $(LOG)/HOL-Quickcheck_Examples.gz: $(OUT)/HOL				\
+  Quickcheck_Examples/ROOT.ML						\
   Quickcheck_Examples/Completeness.thy					\
-  Quickcheck_Examples/Find_Unused_Assms_Examples.thy			\
   Quickcheck_Examples/Hotel_Example.thy					\
   Quickcheck_Examples/Needham_Schroeder_Base.thy			\
   Quickcheck_Examples/Needham_Schroeder_No_Attacker_Example.thy		\
@@ -1815,6 +1817,15 @@ $(LOG)/HOL-Record_Benchmark.gz: $(OUT)/HOL Record_Benchmark/ROOT.ML	\
    Record_Benchmark/Record_Benchmark.thy
 	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Record_Benchmark
 
+
+## HOL-Quickcheck_Benchmark
+
+HOL-Quickcheck_Benchmark: HOL $(LOG)/HOL-Quickcheck_Benchmark.gz
+
+$(LOG)/HOL-Quickcheck_Benchmark.gz: $(OUT)/HOL				\
+  Quickcheck_Benchmark/ROOT.ML						\
+  Quickcheck_Benchmark/Find_Unused_Assms_Examples.thy
+	@$(ISABELLE_TOOL) usedir $(OUT)/HOL Quickcheck_Benchmark
 
 
 ## clean
