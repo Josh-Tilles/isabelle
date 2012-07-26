@@ -26,7 +26,7 @@ val prover = hd provers
 
 ML {*
 if do_it then
-  generate_accessibility thy false "/tmp/mash_accessibility"
+  generate_accessibility @{context} thy false "/tmp/mash_accessibility"
 else
   ()
 *}
@@ -40,14 +40,14 @@ else
 
 ML {*
 if do_it then
-  generate_isar_dependencies thy false "/tmp/mash_dependencies"
+  generate_isar_dependencies @{context} thy false "/tmp/mash_dependencies"
 else
   ()
 *}
 
 ML {*
 if do_it then
-  generate_commands @{context} prover thy "/tmp/mash_commands"
+  generate_commands @{context} params thy "/tmp/mash_commands"
 else
   ()
 *}

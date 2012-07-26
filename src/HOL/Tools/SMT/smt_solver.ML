@@ -52,8 +52,8 @@ struct
 local
 
 fun make_cmd command options problem_path proof_path = space_implode " " (
-  map File.shell_quote (command () @ options) @
-  [File.shell_path problem_path, "2>&1", ">", File.shell_path proof_path])
+  "(exec 2>&1;" :: map File.shell_quote (command () @ options) @
+  [File.shell_path problem_path, ")", ">", File.shell_path proof_path])
 
 fun trace_and ctxt msg f x =
   let val _ = SMT_Config.trace_msg ctxt (fn () => msg) ()
@@ -99,7 +99,7 @@ fun run_solver ctxt name mk_cmd input =
     val ls = rev (snd (chop_while (equal "") (rev res)))
     val _ = SMT_Config.trace_msg ctxt (pretty "Result:") ls
 
-    val _ = null ls andalso return_code <> 0 andalso
+    val _ = return_code <> 0 andalso
       raise SMT_Failure.SMT (SMT_Failure.Abnormal_Termination return_code)
   in ls end
 
