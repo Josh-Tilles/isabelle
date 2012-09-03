@@ -10,12 +10,7 @@ The (co)datatype package.
 header {* The (Co)datatype Package *}
 
 theory Codatatype
-imports BNF_LFP BNF_GFP
-keywords
-  "bnf_sugar" :: thy_goal
-uses
-  "Tools/bnf_sugar_tactics.ML"
-  "Tools/bnf_sugar.ML"
+imports BNF_Wrap BNF_LFP BNF_GFP
 begin
 
 end
