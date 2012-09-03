@@ -14,7 +14,7 @@ begin
 
 hide_const (open) Sublist.sub
 
-bnf_codata treeFI: 'tree = "'a \<times> 'tree listF"
+codata_raw treeFI: 'tree = "'a \<times> 'tree listF"
 
 lemma treeFIBNF_listF_set[simp]: "treeFIBNF_set2 (i, xs) = listF_set xs"
 unfolding treeFIBNF_set2_def collect_def[abs_def] prod_set_defs

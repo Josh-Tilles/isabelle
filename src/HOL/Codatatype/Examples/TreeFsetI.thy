@@ -17,7 +17,7 @@ hide_const (open) Sublist.sub
 definition pair_fun (infixr "\<odot>" 50) where
   "f \<odot> g \<equiv> \<lambda>x. (f x, g x)"
 
-bnf_codata treeFsetI: 't = "'a \<times> 't fset"
+codata_raw treeFsetI: 't = "'a \<times> 't fset"
 
 (* selectors for trees *)
 definition "lab t \<equiv> fst (treeFsetI_unf t)"
