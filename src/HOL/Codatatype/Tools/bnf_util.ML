@@ -58,6 +58,7 @@ sig
     (term list * (string * typ) list) * Proof.context
   val mk_Freess': string -> typ list list -> Proof.context ->
     (term list list * (string * typ) list list) * Proof.context
+  val nonzero_string_of_int: int -> string
 
   val strip_typeN: int -> typ -> typ list * typ
 
@@ -126,6 +127,9 @@ sig
 
   val certifyT: Proof.context -> typ -> ctyp
   val certify: Proof.context -> term -> cterm
+
+  val parse_binding_colon: Token.T list -> binding * Token.T list
+  val parse_opt_binding_colon: Token.T list -> binding * Token.T list
 
   val typedef: bool -> binding option -> binding * (string * sort) list * mixfix -> term ->
     (binding * binding) option -> tactic -> local_theory -> (string * Typedef.info) * local_theory
@@ -249,6 +253,9 @@ fun fold_map7 _ [] [] [] [] [] [] [] acc = ([], acc)
 fun certify ctxt = Thm.cterm_of (Proof_Context.theory_of ctxt);
 fun certifyT ctxt = Thm.ctyp_of (Proof_Context.theory_of ctxt);
 
+val parse_binding_colon = Parse.binding --| @{keyword ":"};
+val parse_opt_binding_colon = Scan.optional parse_binding_colon Binding.empty;
+
 (*TODO: is this really different from Typedef.add_typedef_global?*)
 fun typedef def opt_name typ set opt_morphs tac lthy =
   let
@@ -285,6 +292,9 @@ fun CONJ_WRAP' gen_tac = CONJ_WRAP_GEN' (rtac conjI) gen_tac;
 (* Term construction *)
 
 (** Fresh variables **)
+
+fun nonzero_string_of_int 0 = ""
+  | nonzero_string_of_int n = string_of_int n;
 
 val mk_TFrees' = apfst (map TFree) oo Variable.invent_types;
 

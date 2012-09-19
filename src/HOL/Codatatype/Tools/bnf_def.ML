@@ -12,6 +12,8 @@ sig
   type nonemptiness_witness = {I: int list, wit: term, prop: thm list}
 
   val bnf_of: Proof.context -> string -> BNF option
+  val register_bnf: string -> (BNF * local_theory) -> (BNF * local_theory)
+
   val name_of_bnf: BNF -> binding
   val T_of_bnf: BNF -> typ
   val live_of_bnf: BNF -> int
@@ -80,7 +82,7 @@ sig
   datatype fact_policy =
     Derive_Some_Facts | Derive_All_Facts | Derive_All_Facts_Note_Most | Note_All_Facts_and_Axioms
   val bnf_note_all: bool Config.T
-  val user_policy: Proof.context -> fact_policy
+  val user_policy: fact_policy -> Proof.context -> fact_policy
 
   val print_bnfs: Proof.context -> unit
   val bnf_def: const_policy -> (Proof.context -> fact_policy) -> (binding -> binding) ->
@@ -461,9 +463,6 @@ fun unfold_defs_tac lthy defs mk_tac context = Local_Defs.unfold_tac lthy defs T
 
 (* Names *)
 
-fun nonzero_string_of_int 0 = ""
-  | nonzero_string_of_int n = string_of_int n;
-
 val mapN = "map";
 val setN = "set";
 fun mk_setN i = setN ^ nonzero_string_of_int i;
@@ -506,8 +505,8 @@ datatype fact_policy =
 
 val bnf_note_all = Attrib.setup_config_bool @{binding bnf_note_all} (K false);
 
-fun user_policy ctxt =
-  if Config.get ctxt bnf_note_all then Note_All_Facts_and_Axioms else Derive_All_Facts_Note_Most;
+fun user_policy policy ctxt =
+  if Config.get ctxt bnf_note_all then Note_All_Facts_and_Axioms else policy;
 
 val smart_max_inline_size = 25; (*FUDGE*)
 
@@ -542,6 +541,18 @@ fun prepare_def const_policy mk_fact_policy qualify prep_term Ds_opt
       Abs (_, T, t) => (T, t)
     | _ => error "Bad bound constant");
     val wit_rhss = map (prep_term no_defs_lthy) raw_wits;
+
+    fun err T =
+      error ("Trying to register the type " ^ quote (Syntax.string_of_typ no_defs_lthy T) ^
+        " as unnamed BNF");
+
+    val (b, key) =
+      if Binding.eq_name (b, Binding.empty) then
+        (case bd_rhsT of
+          Type (C, Ts) => if forall (is_some o try dest_TFree) Ts
+            then (Binding.qualified_name C, C) else err bd_rhsT
+        | T => err T)
+      else (b, Local_Theory.full_name no_defs_lthy b);
 
     val map_bind_def = (fn () => Binding.suffix_name ("_" ^ mapN) b, map_rhs);
     val set_binds_defs =
@@ -626,12 +637,6 @@ fun prepare_def const_policy mk_fact_policy qualify prep_term Ds_opt
       NONE => subtract (op =) (alphas @ betas) (map TVar (Term.add_tvars bnf_map []))
     | SOME Ds => map (Morphism.typ phi) Ds);
     val dead = length deads;
-
-    (*FIXME: check DUP here, not in after_qed*)
-    val key =
-      (case (CA, Binding.eq_name (qualify b, b)) of
-        (Type (C, _), true) => C
-      | _ => Name_Space.full_name Name_Space.default_naming b);
 
     (*TODO: further checks of type of bnf_map*)
     (*TODO: check types of bnf_sets*)
@@ -1155,18 +1160,20 @@ fun prepare_def const_policy mk_fact_policy qualify prep_term Ds_opt
                       [(thms, [])]));
                 in
                   Local_Theory.notes notes #> snd
-                  #> Local_Theory.declaration {syntax = false, pervasive = true}
-                    (fn phi => Data.map (Symtab.update_new (key, morph_bnf phi bnf)))
                 end
               else
                 I))
       end;
   in
-    (goals, wit_goalss, after_qed, lthy', one_step_defs)
+    (key, goals, wit_goalss, after_qed, lthy', one_step_defs)
   end;
 
+fun register_bnf key (bnf, lthy) =
+  (bnf, Local_Theory.declaration {syntax = false, pervasive = true}
+    (fn phi => Data.map (Symtab.update_new (key, morph_bnf phi bnf))) lthy);
+
 fun bnf_def const_policy fact_policy qualify tacs wit_tac Ds =
-  (fn (goals, wit_goalss, after_qed, lthy, defs) =>
+  (fn (_, goals, wit_goalss, after_qed, lthy, defs) =>
   let
     val wits_tac = K (TRYALL Goal.conjunction_tac) THEN' unfold_defs_tac lthy defs wit_tac;
     val wit_goals = wit_goalss |> map Logic.mk_conjunction_balanced;
@@ -1182,11 +1189,11 @@ fun bnf_def const_policy fact_policy qualify tacs wit_tac Ds =
     |> (fn thms => after_qed (map single thms @ wit_thms) lthy)
   end) oo prepare_def const_policy fact_policy qualify (K I) Ds;
 
-val bnf_def_cmd = (fn (goals, wit_goals, after_qed, lthy, defs) =>
+val bnf_def_cmd = (fn (key, goals, wit_goals, after_qed, lthy, defs) =>
   Proof.unfolding ([[(defs, [])]])
-    (Proof.theorem NONE (snd oo after_qed)
+    (Proof.theorem NONE (snd o register_bnf key oo after_qed)
       (map (single o rpair []) goals @ map (map (rpair [])) wit_goals) lthy)) oo
-  prepare_def Do_Inline user_policy I Syntax.read_term NONE;
+  prepare_def Do_Inline (user_policy Derive_All_Facts_Note_Most) I Syntax.read_term NONE;
 
 fun print_bnfs ctxt =
   let
@@ -1219,7 +1226,7 @@ val _ =
 
 val _ =
   Outer_Syntax.local_theory_to_proof @{command_spec "bnf_def"} "define a BNF for an existing type"
-    (((Parse.binding --| @{keyword "="}) -- Parse.term --
+    ((parse_opt_binding_colon -- Parse.term --
        (@{keyword "["} |-- Parse.list Parse.term --| @{keyword "]"}) -- Parse.term --
        (@{keyword "["} |-- Parse.list Parse.term --| @{keyword "]"})) >> bnf_def_cmd);
 

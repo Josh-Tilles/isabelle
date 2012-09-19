@@ -104,19 +104,20 @@ lemma sum_case_if:
 "sum_case f g (if p then Inl x else Inr y) = (if p then f x else g y)"
 by simp
 
-lemma UN_compreh_bex:
-"\<Union>{y. \<exists>x \<in> A. y = {}} = {}"
-"\<Union>{y. \<exists>x \<in> A. y = {f x}} = {y. \<exists>x \<in> A. y = f x}"
-by blast+
+lemma mem_UN_compreh_eq: "(z : \<Union>{y. \<exists>x\<in>A. y = F x}) = (\<exists>x\<in>A. z : F x)"
+by blast
 
-lemma induct_set_step: "\<lbrakk>B \<in> A; c \<in> f B\<rbrakk> \<Longrightarrow> \<exists>C. (\<exists>a \<in> A. C = f a) \<and> c \<in> C"
-apply (rule exI)
-apply (rule conjI)
- apply (rule bexI)
-  apply (rule refl)
- apply assumption
-apply assumption
-done
+lemma prod_set_simps:
+"fsts (x, y) = {x}"
+"snds (x, y) = {y}"
+unfolding fsts_def snds_def by simp+
+
+lemma sum_set_simps:
+"sum_setl (Inl x) = {x}"
+"sum_setl (Inr x) = {}"
+"sum_setr (Inl x) = {}"
+"sum_setr (Inr x) = {x}"
+unfolding sum_setl_def sum_setr_def by simp+
 
 ML_file "Tools/bnf_fp_util.ML"
 ML_file "Tools/bnf_fp_sugar_tactics.ML"

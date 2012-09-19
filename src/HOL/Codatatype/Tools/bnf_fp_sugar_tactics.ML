@@ -13,9 +13,8 @@ sig
   val mk_fld_iff_unf_tac: Proof.context -> ctyp option list -> cterm -> cterm -> thm -> thm ->
     tactic
   val mk_half_distinct_tac: Proof.context -> thm -> thm list -> tactic
-  val mk_induct_tac: Proof.context -> int list -> int list list ->
-    ((int * int) * (int * int)) list list list -> thm list -> thm -> thm list -> thm list list ->
-    tactic
+  val mk_induct_tac: Proof.context -> int list -> int list list -> int list list list -> thm list ->
+    thm -> thm list -> thm list list -> tactic
   val mk_inject_tac: Proof.context -> thm -> thm -> tactic
   val mk_iter_like_tac: thm list -> thm list -> thm list -> thm -> thm -> Proof.context -> tactic
 end;
@@ -88,53 +87,40 @@ fun mk_coiter_like_tac coiter_like_defs map_ids fld_unf_coiter_like pre_map_def 
   Local_Defs.unfold_tac ctxt @{thms id_def} THEN
   TRY ((rtac refl ORELSE' subst_tac ctxt @{thms unit_eq} THEN' rtac refl) 1);
 
-(* TODO: Get rid of "auto_tac" (or at least use a naked context) *)
-
-fun mk_induct_prem_prem_endgame_tac _ 0 = atac ORELSE' rtac @{thm singletonI}
-  | mk_induct_prem_prem_endgame_tac ctxt qq =
-    REPEAT_DETERM_N qq o
-      (SELECT_GOAL (Local_Defs.unfold_tac ctxt @{thms Union_iff bex_simps(6)}) THEN'
-       etac @{thm induct_set_step}) THEN'
-    atac ORELSE' SELECT_GOAL (auto_tac ctxt);
+val solve_prem_prem_tac =
+  REPEAT o (eresolve_tac @{thms bexE rev_bexI} ORELSE' rtac @{thm rev_bexI[OF UNIV_I]} ORELSE'
+    hyp_subst_tac ORELSE' resolve_tac @{thms disjI1 disjI2}) THEN'
+  (rtac refl ORELSE' atac ORELSE' rtac @{thm singletonI});
 
 val induct_prem_prem_thms =
-  @{thms SUP_empty Sup_empty Sup_insert UN_compreh_bex UN_insert Un_assoc[symmetric] Un_empty_left
-      Un_empty_right Union_Un_distrib collect_def[abs_def] fst_conv image_def o_apply snd_conv
-      snd_prod_fun sum.cases sup_bot_right fst_map_pair map_pair_simp sum_map.simps};
+  @{thms SUP_empty Sup_empty Sup_insert UN_insert Un_empty_left Un_empty_right Un_iff
+      Union_Un_distrib collect_def[abs_def] image_def o_apply map_pair_simp
+      mem_Collect_eq mem_UN_compreh_eq prod_set_simps sum_map.simps sum_set_simps};
 
-(* These rules interfere with the "set_natural'" properties of "sum" and "prod", so we explicitly
-   delay them. *)
-val induct_prem_prem_thms_delayed =
-  @{thms fsts_def[abs_def] snds_def[abs_def] sum_setl_def[abs_def] sum_setr_def[abs_def]};
-
-fun mk_induct_leverage_prem_prems_tac ctxt nn ppjjqqkks set_natural's pre_set_defs =
-  EVERY' (maps (fn ((pp, jj), (qq, kk)) =>
-    [select_prem_tac nn (dtac meta_spec) kk, etac meta_mp,
+fun mk_induct_leverage_prem_prems_tac ctxt nn kks set_natural's pre_set_defs =
+  EVERY' (maps (fn kk => [select_prem_tac nn (dtac meta_spec) kk, etac meta_mp,
      SELECT_GOAL (Local_Defs.unfold_tac ctxt
        (pre_set_defs @ set_natural's @ induct_prem_prem_thms)),
-     SELECT_GOAL (Local_Defs.unfold_tac ctxt
-       (induct_prem_prem_thms_delayed @ induct_prem_prem_thms)),
-     rtac (mk_UnIN pp jj) THEN' mk_induct_prem_prem_endgame_tac ctxt qq ORELSE'
-       SELECT_GOAL (auto_tac ctxt)]) (rev ppjjqqkks)) 1;
+     solve_prem_prem_tac]) (rev kks)) 1;
 
-fun mk_induct_discharge_prem_tac ctxt nn n set_natural's pre_set_defs m k ppjjqqkks =
-  let val r = length ppjjqqkks in
+fun mk_induct_discharge_prem_tac ctxt nn n set_natural's pre_set_defs m k kks =
+  let val r = length kks in
     EVERY' [select_prem_tac n (rotate_tac 1) k, rotate_tac ~1, hyp_subst_tac,
       REPEAT_DETERM_N m o (dtac meta_spec THEN' rotate_tac ~1)] 1 THEN
     EVERY [REPEAT_DETERM_N r
         (rotate_tac ~1 1 THEN dtac meta_mp 1 THEN rotate_tac 1 1 THEN prefer_tac 2),
       if r > 0 then PRIMITIVE Raw_Simplifier.norm_hhf else all_tac, atac 1,
-      mk_induct_leverage_prem_prems_tac ctxt nn ppjjqqkks set_natural's pre_set_defs]
+      mk_induct_leverage_prem_prems_tac ctxt nn kks set_natural's pre_set_defs]
   end;
 
-fun mk_induct_tac ctxt ns mss ppjjqqkksss ctr_defs fld_induct' set_natural's pre_set_defss =
+fun mk_induct_tac ctxt ns mss kkss ctr_defs fld_induct' set_natural's pre_set_defss =
   let
     val nn = length ns;
     val n = Integer.sum ns;
   in
     Local_Defs.unfold_tac ctxt ctr_defs THEN rtac fld_induct' 1 THEN inst_spurious_fs_tac ctxt THEN
     EVERY (map4 (EVERY oooo map3 o mk_induct_discharge_prem_tac ctxt nn n set_natural's)
-      pre_set_defss mss (unflat mss (1 upto n)) ppjjqqkksss)
+      pre_set_defss mss (unflat mss (1 upto n)) kkss)
   end;
 
 end;

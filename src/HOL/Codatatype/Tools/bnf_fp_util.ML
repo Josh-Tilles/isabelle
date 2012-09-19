@@ -62,6 +62,7 @@ sig
   val sel_corecsN: string
   val set_inclN: string
   val set_set_inclN: string
+  val simpsN: string
   val strTN: string
   val str_initN: string
   val sum_bdN: string
@@ -164,6 +165,7 @@ val itersN = iterN ^ "s"
 val coiterN = coN ^ iterN
 val coitersN = coiterN ^ "s"
 val uniqueN = "_unique"
+val simpsN = "simps"
 val fldN = "fld"
 val unfN = "unf"
 val fld_iterN = fldN ^ "_" ^ iterN
@@ -173,7 +175,7 @@ val unf_coitersN = unf_coiterN ^ "s"
 val fld_iter_uniqueN = fld_iterN ^ uniqueN
 val unf_coiter_uniqueN = unf_coiterN ^ uniqueN
 val fld_unf_coitersN = fldN ^ "_" ^ unf_coiterN ^ "s"
-val map_simpsN = mapN ^ "_simps"
+val map_simpsN = mapN ^ "_" ^ simpsN
 val map_uniqueN = mapN ^ uniqueN
 val min_algN = "min_alg"
 val morN = "mor"
@@ -187,7 +189,7 @@ val isNodeN = "isNode"
 val LevN = "Lev"
 val rvN = "recover"
 val behN = "beh"
-fun mk_set_simpsN i = mk_setN i ^ "_simps"
+fun mk_set_simpsN i = mk_setN i ^ "_" ^ simpsN
 fun mk_set_minimalN i = mk_setN i ^ "_minimal"
 fun mk_set_inductN i = mk_setN i ^ "_induct"
 
@@ -375,12 +377,9 @@ fun fp_sort lhss NONE Ass = Library.sort (Term_Ord.typ_ord o pairself TFree)
 fun mk_fp_bnf timer construct resBs bs sort lhss bnfs deadss livess unfold lthy =
   let
     val name = mk_common_name bs;
-    fun qualify i bind =
-      let val namei = if i > 0 then name ^ string_of_int i else name;
-      in
-        if member (op =) (#2 (Binding.dest bind)) (namei, true) then bind
-        else Binding.prefix_name namei bind
-      end;
+    fun qualify i =
+      let val namei = name ^ nonzero_string_of_int i;
+      in Binding.qualify true namei end;
 
     val Ass = map (map dest_TFree) livess;
     val resDs = (case resBs of NONE => [] | SOME Ts => fold (subtract (op =)) Ass Ts);
@@ -415,8 +414,9 @@ fun fp_bnf construct bs mixfixes resBs eqs lthy =
     val timer = time (Timer.startRealTimer ());
     val (lhss, rhss) = split_list eqs;
     val sort = fp_sort lhss (SOME resBs);
+    fun qualify b = Binding.qualify true (Binding.name_of (Binding.prefix_name rawN b));
     val ((bnfs, (Dss, Ass)), (unfold, lthy')) = apfst (apsnd split_list o split_list)
-      (fold_map2 (fn b => bnf_of_typ Smart_Inline (Binding.prefix_name rawN b) I sort) bs rhss
+      (fold_map2 (fn b => bnf_of_typ Smart_Inline (qualify b) sort) bs rhss
         (empty_unfold, lthy));
   in
     mk_fp_bnf timer (construct mixfixes) (SOME resBs) bs sort lhss bnfs Dss Ass unfold lthy'
@@ -427,9 +427,10 @@ fun fp_bnf_cmd construct (bs, (raw_lhss, raw_bnfs)) lthy =
     val timer = time (Timer.startRealTimer ());
     val lhss = map (dest_TFree o Syntax.read_typ lthy) raw_lhss;
     val sort = fp_sort lhss NONE;
+    fun qualify b = Binding.qualify true (Binding.name_of (Binding.prefix_name rawN b));
     val ((bnfs, (Dss, Ass)), (unfold, lthy')) = apfst (apsnd split_list o split_list)
       (fold_map2 (fn b => fn rawT =>
-        (bnf_of_typ Smart_Inline (Binding.prefix_name rawN b) I sort (Syntax.read_typ lthy rawT)))
+        (bnf_of_typ Smart_Inline (qualify b) sort (Syntax.read_typ lthy rawT)))
       bs raw_bnfs (empty_unfold, lthy));
   in
     snd (mk_fp_bnf timer (construct (map (K NoSyn) bs)) NONE bs sort lhss bnfs Dss Ass unfold lthy')

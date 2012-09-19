@@ -7,13 +7,13 @@ Wrapping existing datatypes.
 
 signature BNF_WRAP =
 sig
-  val no_binding: binding
   val mk_half_pairss: 'a list -> ('a * 'a) list list
   val mk_ctr: typ list -> term -> term
+  val base_name_of_ctr: term -> string
   val wrap_datatype: ({prems: thm list, context: Proof.context} -> tactic) list list ->
     ((bool * term list) * term) *
       (binding list * (binding list list * (binding * term) list list)) -> local_theory ->
-    (term list list * thm list * thm list list) * local_theory
+    (term list list * thm list * thm list * thm list * thm list * thm list list) * local_theory
   val parse_wrap_options: bool parser
   val parse_bound_term: (binding * string) parser
 end;
@@ -45,7 +45,6 @@ val splitN = "split";
 val split_asmN = "split_asm";
 val weak_case_cong_thmsN = "weak_case_cong";
 
-val no_binding = @{binding ""};
 val std_binding = @{binding _};
 
 val induct_simp_attrs = @{attributes [induct_simp]};
@@ -71,13 +70,13 @@ fun mk_ctr Ts ctr =
     Term.subst_atomic_types (Ts0 ~~ Ts) ctr
   end;
 
-fun eta_expand_case_arg xs f_xs = fold_rev Term.lambda xs f_xs;
-
 fun base_name_of_ctr c =
   Long_Name.base_name (case head_of c of
       Const (s, _) => s
     | Free (s, _) => s
     | _ => error "Cannot extract name of constructor");
+
+fun eta_expand_arg xs f_xs = fold_rev Term.lambda xs f_xs;
 
 fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
     (raw_disc_bindings, (raw_sel_bindingss, raw_sel_defaultss))) no_defs_lthy =
@@ -111,10 +110,11 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
 
     val ms = map length ctr_Tss;
 
-    val raw_disc_bindings' = pad_list no_binding n raw_disc_bindings;
+    val raw_disc_bindings' = pad_list Binding.empty n raw_disc_bindings;
 
     fun can_really_rely_on_disc k =
-      not (Binding.eq_name (nth raw_disc_bindings' (k - 1), no_binding)) orelse nth ms (k - 1) = 0;
+      not (Binding.eq_name (nth raw_disc_bindings' (k - 1), Binding.empty)) orelse
+      nth ms (k - 1) = 0;
     fun can_rely_on_disc k =
       can_really_rely_on_disc k orelse (k = 1 andalso not (can_really_rely_on_disc 2));
     fun can_omit_disc_binding k m =
@@ -127,7 +127,7 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
       raw_disc_bindings'
       |> map4 (fn k => fn m => fn ctr => fn disc =>
         Option.map (Binding.qualify false (Binding.name_of data_b))
-          (if Binding.eq_name (disc, no_binding) then
+          (if Binding.eq_name (disc, Binding.empty) then
              if can_omit_disc_binding k m then NONE else SOME (std_disc_binding ctr)
            else if Binding.eq_name (disc, std_binding) then
              SOME (std_disc_binding ctr)
@@ -143,10 +143,10 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
       pad_list [] n raw_sel_bindingss
       |> map3 (fn ctr => fn m => map2 (fn l => fn sel =>
         Binding.qualify false (Binding.name_of data_b)
-          (if Binding.eq_name (sel, no_binding) orelse Binding.eq_name (sel, std_binding) then
+          (if Binding.eq_name (sel, Binding.empty) orelse Binding.eq_name (sel, std_binding) then
             std_sel_binding m l ctr
           else
-            sel)) (1 upto m) o pad_list no_binding m) ctrs0 ms;
+            sel)) (1 upto m) o pad_list Binding.empty m) ctrs0 ms;
 
     fun mk_case Ts T =
       let
@@ -177,8 +177,8 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
     val xfs = map2 (curry Term.list_comb) fs xss;
     val xgs = map2 (curry Term.list_comb) gs xss;
 
-    val eta_fs = map2 eta_expand_case_arg xss xfs;
-    val eta_gs = map2 eta_expand_case_arg xss xgs;
+    val eta_fs = map2 eta_expand_arg xss xfs;
+    val eta_gs = map2 eta_expand_arg xss xgs;
 
     val fcase = Term.list_comb (casex, eta_fs);
     val gcase = Term.list_comb (casex, eta_gs);
@@ -326,6 +326,8 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
       let
         val ([exhaust_thm], (inject_thmss, (half_distinct_thmss, [case_thms]))) =
           (hd thmss, apsnd (chop (n * n)) (chop n (tl thmss)));
+
+        val inject_thms = flat inject_thmss;
 
         val exhaust_thm' =
           let val Tinst = map (pairself (certifyT lthy)) (map Logic.varifyT_global As ~~ As) in
@@ -558,8 +560,8 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
             (split_thm, split_asm_thm)
           end;
 
-        val cases_type_attr = Attrib.internal (K (Induct.cases_type dataT_name));
         val exhaust_case_names_attr = Attrib.internal (K (Rule_Cases.case_names exhaust_cases));
+        val cases_type_attr = Attrib.internal (K (Induct.cases_type dataT_name));
 
         val notes =
           [(case_congN, [case_cong_thm], []),
@@ -571,7 +573,7 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
            (disc_exhaustN, disc_exhaust_thms, [exhaust_case_names_attr]),
            (distinctN, distinct_thms, simp_attrs @ induct_simp_attrs),
            (exhaustN, [exhaust_thm], [exhaust_case_names_attr, cases_type_attr]),
-           (injectN, flat inject_thmss, iff_attrs @ induct_simp_attrs),
+           (injectN, inject_thms, iff_attrs @ induct_simp_attrs),
            (nchotomyN, [nchotomy_thm], []),
            (selsN, all_sel_thms, simp_attrs),
            (splitN, [split_thm], []),
@@ -586,7 +588,8 @@ fun prepare_wrap_datatype prep_term (((no_dests, raw_ctrs), raw_case),
           [(map (fn th => th RS notE) distinct_thms, safe_elim_attrs)]
           |> map (fn (thms, attrs) => ((Binding.empty, attrs), [(thms, [])]));
       in
-        ((selss, discI_thms, sel_thmss), lthy |> Local_Theory.notes (notes' @ notes) |> snd)
+        ((selss, inject_thms, distinct_thms, case_thms, discI_thms, sel_thmss),
+         lthy |> Local_Theory.notes (notes' @ notes) |> snd)
       end;
   in
     (goalss, after_qed, lthy')
