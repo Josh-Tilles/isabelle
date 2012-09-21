@@ -121,9 +121,17 @@ sig
 
   val ctrans: thm
   val o_apply: thm
+  val set_mp: thm
+  val set_rev_mp: thm
+  val Pair_eqD: thm
+  val Pair_eqI: thm
   val mk_sym: thm -> thm
   val mk_trans: thm -> thm -> thm
   val mk_unabs_def: int -> thm -> thm
+
+  val is_refl: thm -> bool
+  val no_refl: thm list -> thm list
+  val no_reflexive: thm list -> thm list
 
   val fold_defs: Proof.context -> thm list -> thm -> thm
   val unfold_defs: Proof.context -> thm list -> thm -> thm
@@ -514,6 +522,10 @@ fun mk_sym thm = sym OF [thm];
 (*TODO: antiquote heavily used theorems once*)
 val ctrans = @{thm ordLeq_transitive};
 val o_apply = @{thm o_apply};
+val set_mp = @{thm set_mp};
+val set_rev_mp = @{thm set_rev_mp};
+val Pair_eqD = @{thm iffD1[OF Pair_eq]};
+val Pair_eqI = @{thm iffD2[OF Pair_eq]};
 
 fun mk_nthN 1 t 1 = t
   | mk_nthN _ t 1 = HOLogic.mk_fst t
@@ -591,6 +603,13 @@ fun seq_conds f n k xs =
 
 fun mk_unabs_def 0 thm = thm
   | mk_unabs_def n thm = mk_unabs_def (n - 1) thm RS @{thm spec[OF iffD1[OF fun_eq_iff]]};
+
+fun is_refl thm =
+  op aconv (HOLogic.dest_eq (HOLogic.dest_Trueprop (Thm.prop_of thm)))
+  handle TERM _ => false;
+
+val no_refl = filter_out is_refl;
+val no_reflexive = filter_out Thm.is_reflexive;
 
 fun fold_defs ctxt thms = Local_Defs.fold ctxt (distinct Thm.eq_thm_prop thms);
 fun unfold_defs ctxt thms = Local_Defs.unfold ctxt (distinct Thm.eq_thm_prop thms);
