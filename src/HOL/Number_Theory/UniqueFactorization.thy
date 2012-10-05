@@ -30,72 +30,52 @@ declare One_nat_def [simp del]
      count M x > 0
 *)
 
-
-(* useful facts *)
-
-lemma setsum_Un2: "finite (A Un B) \<Longrightarrow> 
-    setsum f (A Un B) = setsum f (A - B) + setsum f (B - A) + 
-      setsum f (A Int B)"
-  apply (subgoal_tac "A Un B = (A - B) Un (B - A) Un (A Int B)")
-  apply (erule ssubst)
-  apply (subst setsum_Un_disjoint)
-  apply auto
-  apply (subst setsum_Un_disjoint)
-  apply auto
-  done
-
-lemma setprod_Un2: "finite (A Un B) \<Longrightarrow> 
-    setprod f (A Un B) = setprod f (A - B) * setprod f (B - A) * 
-      setprod f (A Int B)"
-  apply (subgoal_tac "A Un B = (A - B) Un (B - A) Un (A Int B)")
-  apply (erule ssubst)
-  apply (subst setprod_Un_disjoint)
-  apply auto
-  apply (subst setprod_Un_disjoint)
-  apply auto
-  done
- 
 (* Here is a version of set product for multisets. Is it worth moving
    to multiset.thy? If so, one should similarly define msetsum for abelian 
    semirings, using of_nat. Also, is it worth developing bounded quantifiers 
    "ALL i :# M. P i"? 
 *)
 
-definition msetprod :: "('a => ('b::{power,comm_monoid_mult})) => 'a multiset => 'b" where
-  "msetprod f M == setprod (%x. (f x)^(count M x)) (set_of M)"
+definition (in comm_monoid_mult) msetprod :: "'a multiset \<Rightarrow> 'a"
+where
+  "msetprod M = setprod (\<lambda>x. x ^ count M x) (set_of M)"
+
+abbreviation (in comm_monoid_mult) msetprod_image :: "('b \<Rightarrow> 'a) \<Rightarrow> 'b multiset \<Rightarrow> 'a"
+where
+  "msetprod_image f M \<equiv> msetprod (image_mset f M)"
 
 syntax
-  "_msetprod" :: "pttrn => 'a set => 'b => 'b::comm_monoid_mult" 
+  "_msetprod_image" :: "pttrn \<Rightarrow> 'b set \<Rightarrow> 'a \<Rightarrow> 'a::comm_monoid_mult" 
       ("(3PROD _:#_. _)" [0, 51, 10] 10)
 
 translations
-  "PROD i :# A. b" == "CONST msetprod (%i. b) A"
+  "PROD i :# A. b" == "CONST msetprod_image (\<lambda>i. b) A"
 
-lemma msetprod_empty: "msetprod f {#} = 1"
+lemma msetprod_empty: "msetprod {#} = 1"
   by (simp add: msetprod_def)
 
-lemma msetprod_singleton: "msetprod f {#x#} = f x"
+lemma msetprod_singleton: "msetprod {#x#} = x"
   by (simp add: msetprod_def)
 
-lemma msetprod_Un: "msetprod f (A+B) = msetprod f A * msetprod f B" 
+lemma msetprod_Un: "msetprod (A + B) = msetprod A * msetprod B" 
   apply (simp add: msetprod_def power_add)
   apply (subst setprod_Un2)
   apply auto
   apply (subgoal_tac 
-      "(PROD x:set_of A - set_of B. f x ^ count A x * f x ^ count B x) =
-       (PROD x:set_of A - set_of B. f x ^ count A x)")
+      "(PROD x:set_of A - set_of B. x ^ count A x * x ^ count B x) =
+       (PROD x:set_of A - set_of B. x ^ count A x)")
   apply (erule ssubst)
   apply (subgoal_tac 
-      "(PROD x:set_of B - set_of A. f x ^ count A x * f x ^ count B x) =
-       (PROD x:set_of B - set_of A. f x ^ count B x)")
+      "(PROD x:set_of B - set_of A. x ^ count A x * x ^ count B x) =
+       (PROD x:set_of B - set_of A. x ^ count B x)")
   apply (erule ssubst)
-  apply (subgoal_tac "(PROD x:set_of A. f x ^ count A x) = 
-    (PROD x:set_of A - set_of B. f x ^ count A x) *
-    (PROD x:set_of A Int set_of B. f x ^ count A x)")
+  apply (subgoal_tac "(PROD x:set_of A. x ^ count A x) = 
+    (PROD x:set_of A - set_of B. x ^ count A x) *
+    (PROD x:set_of A Int set_of B. x ^ count A x)")
   apply (erule ssubst)
-  apply (subgoal_tac "(PROD x:set_of B. f x ^ count B x) = 
-    (PROD x:set_of B - set_of A. f x ^ count B x) *
-    (PROD x:set_of A Int set_of B. f x ^ count B x)")
+  apply (subgoal_tac "(PROD x:set_of B. x ^ count B x) = 
+    (PROD x:set_of B - set_of A. x ^ count B x) *
+    (PROD x:set_of A Int set_of B. x ^ count B x)")
   apply (erule ssubst)
   apply (subst setprod_timesf)
   apply (force simp add: mult_ac)
@@ -222,7 +202,8 @@ lemma multiset_prime_factorization: "n > 0 ==>
   apply (frule multiset_prime_factorization_exists)
   apply clarify
   apply (rule theI)
-  apply (insert multiset_prime_factorization_unique, blast)+
+  apply (insert multiset_prime_factorization_unique)
+  apply auto
 done
 
 
@@ -363,29 +344,32 @@ lemma neq_zero_eq_gt_zero_nat: "((x::nat) ~= 0) = (x > 0)"
   by auto
 
 lemma prime_factorization_unique_nat: 
-    "S = { (p::nat) . f p > 0} \<Longrightarrow> finite S \<Longrightarrow> (ALL p : S. prime p) \<Longrightarrow>
-      n = (PROD p : S. p^(f p)) \<Longrightarrow>
-        S = prime_factors n & (ALL p. f p = multiplicity p n)"
-  apply (subgoal_tac "multiset_prime_factorization n = Abs_multiset f")
-  apply (unfold prime_factors_nat_def multiplicity_nat_def)
-  apply (simp add: set_of_def Abs_multiset_inverse multiset_def)
-  apply (unfold multiset_prime_factorization_def)
-  apply (subgoal_tac "n > 0")
-  prefer 2
-  apply force
-  apply (subst if_P, assumption)
-  apply (rule the1_equality)
-  apply (rule ex_ex1I)
-  apply (rule multiset_prime_factorization_exists, assumption)
-  apply (rule multiset_prime_factorization_unique)
-  apply force
-  apply force
-  apply force
-  unfolding set_of_def msetprod_def
-  apply (subgoal_tac "f : multiset")
-  apply (auto simp only: Abs_multiset_inverse)
-  unfolding multiset_def apply force 
-  done
+  fixes f :: "nat \<Rightarrow> _"
+  assumes S_eq: "S = {p. 0 < f p}" and "finite S"
+    and "\<forall>p\<in>S. prime p" "n = (\<Prod>p\<in>S. p ^ f p)"
+  shows "S = prime_factors n \<and> (\<forall>p. f p = multiplicity p n)"
+proof -
+  from assms have "f \<in> multiset"
+    by (auto simp add: multiset_def)
+  moreover from assms have "n > 0" by force
+  ultimately have "multiset_prime_factorization n = Abs_multiset f"
+    apply (unfold multiset_prime_factorization_def)
+    apply (subst if_P, assumption)
+    apply (rule the1_equality)
+    apply (rule ex_ex1I)
+    apply (rule multiset_prime_factorization_exists, assumption)
+    apply (rule multiset_prime_factorization_unique)
+    apply force
+    apply force
+    apply force
+    using assms
+    apply (simp add: Abs_multiset_inverse set_of_def msetprod_def)
+    done
+  with `f \<in> multiset` have "count (multiset_prime_factorization n) = f"
+    by (simp add: Abs_multiset_inverse)
+  with S_eq show ?thesis
+    by (simp add: set_of_def multiset_def prime_factors_nat_def multiplicity_nat_def)
+qed
 
 lemma prime_factors_characterization_nat: "S = {p. 0 < f (p::nat)} \<Longrightarrow> 
     finite S \<Longrightarrow> (ALL p:S. prime p) \<Longrightarrow> n = (PROD p:S. p ^ f p) \<Longrightarrow>
@@ -898,3 +882,4 @@ lemma gcd_lcm_distrib_int: "gcd (x::int) (lcm y z) = lcm (gcd x y) (gcd x z)"
   done
 
 end
+

@@ -13,10 +13,6 @@ sig
 
   type unfold_set
   val empty_unfolds: unfold_set
-  val map_unfolds_of: unfold_set -> thm list
-  val rel_unfolds_of: unfold_set -> thm list
-  val set_unfoldss_of: unfold_set -> thm list list
-  val srel_unfolds_of: unfold_set -> thm list
 
   val bnf_of_typ: BNF_Def.const_policy -> (binding -> binding) ->
     ((string * sort) list list -> (string * sort) list) -> typ -> unfold_set * Proof.context ->
@@ -63,11 +59,6 @@ fun add_to_unfolds map sets rel srel
 fun add_bnf_to_unfolds bnf =
   add_to_unfolds (map_def_of_bnf bnf) (set_defs_of_bnf bnf) (rel_def_of_bnf bnf)
     (srel_def_of_bnf bnf);
-
-val map_unfolds_of = #map_unfolds;
-val set_unfoldss_of = #set_unfoldss;
-val rel_unfolds_of = #rel_unfolds;
-val srel_unfolds_of = #srel_unfolds;
 
 val bdTN = "bdT";
 
@@ -185,7 +176,8 @@ fun clean_compose_bnf const_policy qualify b outer inners (unfold_set, lthy) =
       else
         map (fn goal =>
           Skip_Proof.prove lthy [] [] goal
-            (fn {context, ...} => (mk_comp_set_alt_tac context (collect_set_natural_of_bnf outer)))
+            (fn {context = ctxt, prems = _} =>
+              mk_comp_set_alt_tac ctxt (collect_set_natural_of_bnf outer))
           |> Thm.close_derivation)
         (map2 (curry (HOLogic.mk_Trueprop o HOLogic.mk_eq)) sets sets_alt);
 
@@ -206,8 +198,8 @@ fun clean_compose_bnf const_policy qualify b outer inners (unfold_set, lthy) =
           val single_set_bd_thmss =
             map ((fn f => map f (0 upto olive - 1)) o single_set_bd_thm) (0 upto ilive - 1);
         in
-          map2 (fn set_alt => fn single_set_bds => fn {context, ...} =>
-            mk_comp_set_bd_tac context set_alt single_set_bds)
+          map2 (fn set_alt => fn single_set_bds => fn {context = ctxt, prems = _} =>
+            mk_comp_set_bd_tac ctxt set_alt single_set_bds)
           set_alt_thms single_set_bd_thmss
         end;
 
@@ -218,7 +210,7 @@ fun clean_compose_bnf const_policy qualify b outer inners (unfold_set, lthy) =
         val goal = fold_rev Logic.all Asets (mk_Trueprop_eq (inx, in_alt));
       in
         Skip_Proof.prove lthy [] [] goal
-          (fn {context, ...} => mk_comp_in_alt_tac context set_alt_thms)
+          (fn {context = ctxt, prems = _} => mk_comp_in_alt_tac ctxt set_alt_thms)
         |> Thm.close_derivation
       end;
 
@@ -264,7 +256,7 @@ fun clean_compose_bnf const_policy qualify b outer inners (unfold_set, lthy) =
       |> minimize_wits
       |> map (fn (frees, t) => fold absfree frees t);
 
-    fun wit_tac {context = ctxt, ...} =
+    fun wit_tac {context = ctxt, prems = _} =
       mk_comp_wit_tac ctxt (wit_thms_of_bnf outer) (collect_set_natural_of_bnf outer)
         (maps wit_thms_of_bnf inners);
 
@@ -314,11 +306,11 @@ fun kill_bnf qualify n bnf (unfold_set, lthy) = if n = 0 then (bnf, (unfold_set,
       (Library.foldr1 (uncurry mk_csum) (map (mk_card_of o HOLogic.mk_UNIV) killedAs)) bnf_bd;
 
     fun map_id_tac _ = rtac (map_id_of_bnf bnf) 1;
-    fun map_comp_tac {context, ...} =
-      unfold_thms_tac context ((map_comp_of_bnf bnf RS sym) :: @{thms o_assoc id_o o_id}) THEN
+    fun map_comp_tac {context = ctxt, prems = _} =
+      unfold_thms_tac ctxt ((map_comp_of_bnf bnf RS sym) :: @{thms o_assoc id_o o_id}) THEN
       rtac refl 1;
-    fun map_cong_tac {context, ...} =
-      mk_kill_map_cong_tac context n (live - n) (map_cong_of_bnf bnf);
+    fun map_cong_tac {context = ctxt, prems = _} =
+      mk_kill_map_cong_tac ctxt n (live - n) (map_cong_of_bnf bnf);
     val set_natural_tacs = map (fn thm => fn _ => rtac thm 1) (drop n (set_natural_of_bnf bnf));
     fun bd_card_order_tac _ = mk_kill_bd_card_order_tac n (bd_card_order_of_bnf bnf);
     fun bd_cinfinite_tac _ = mk_kill_bd_cinfinite_tac (bd_Cinfinite_of_bnf bnf);
@@ -408,11 +400,11 @@ fun lift_bnf qualify n bnf (unfold_set, lthy) = if n = 0 then (bnf, (unfold_set,
     val bd = mk_bd_of_bnf Ds As bnf;
 
     fun map_id_tac _ = rtac (map_id_of_bnf bnf) 1;
-    fun map_comp_tac {context, ...} =
-      unfold_thms_tac context ((map_comp_of_bnf bnf RS sym) :: @{thms o_assoc id_o o_id}) THEN
+    fun map_comp_tac {context = ctxt, prems = _} =
+      unfold_thms_tac ctxt ((map_comp_of_bnf bnf RS sym) :: @{thms o_assoc id_o o_id}) THEN
       rtac refl 1;
-    fun map_cong_tac {context, ...} =
-      rtac (map_cong_of_bnf bnf) 1 THEN REPEAT_DETERM_N live (Goal.assume_rule_tac context 1);
+    fun map_cong_tac {context = ctxt, prems = _} =
+      rtac (map_cong_of_bnf bnf) 1 THEN REPEAT_DETERM_N live (Goal.assume_rule_tac ctxt 1);
     val set_natural_tacs =
       if ! quick_and_dirty then
         replicate (n + live) (K all_tac)
@@ -496,8 +488,8 @@ fun permute_bnf qualify src dest bnf (unfold_set, lthy) =
 
     fun map_id_tac _ = rtac (map_id_of_bnf bnf) 1;
     fun map_comp_tac _ = rtac (map_comp_of_bnf bnf) 1;
-    fun map_cong_tac {context, ...} =
-      rtac (map_cong_of_bnf bnf) 1 THEN REPEAT_DETERM_N live (Goal.assume_rule_tac context 1);
+    fun map_cong_tac {context = ctxt, prems = _} =
+      rtac (map_cong_of_bnf bnf) 1 THEN REPEAT_DETERM_N live (Goal.assume_rule_tac ctxt 1);
     val set_natural_tacs = permute (map (fn thm => fn _ => rtac thm 1) (set_natural_of_bnf bnf));
     fun bd_card_order_tac _ = rtac (bd_card_order_of_bnf bnf) 1;
     fun bd_cinfinite_tac _ = rtac (bd_cinfinite_of_bnf bnf) 1;
@@ -603,10 +595,10 @@ fun seal_bnf unfold_set b Ds bnf lthy =
     val (Bs, _) = apfst (map TFree)
       (Variable.invent_types (replicate live HOLogic.typeS) lthy1);
 
-    val map_unfolds = map_unfolds_of unfold_set;
-    val set_unfoldss = set_unfoldss_of unfold_set;
-    val rel_unfolds = rel_unfolds_of unfold_set;
-    val srel_unfolds = srel_unfolds_of unfold_set;
+    val map_unfolds = #map_unfolds unfold_set;
+    val set_unfoldss = #set_unfoldss unfold_set;
+    val rel_unfolds = #rel_unfolds unfold_set;
+    val srel_unfolds = #srel_unfolds unfold_set;
 
     val expand_maps =
       fold expand_term_const (map (single o Logic.dest_equals o Thm.prop_of) map_unfolds);
