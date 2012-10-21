@@ -95,8 +95,8 @@ val strip_psplits =
     fun strip [] qs vs t = (t, rev vs, qs)
       | strip (p :: ps) qs vs (Const ("Product_Type.prod.prod_case", _) $ t) =
           strip ((1 :: p) :: (2 :: p) :: ps) (p :: qs) vs t
-      | strip (p :: ps) qs vs (Abs (s, T, t)) = strip ps qs ((s, T) :: vs) t
-      | strip (p :: ps) qs vs t = strip ps qs
+      | strip (_ :: ps) qs vs (Abs (s, T, t)) = strip ps qs ((s, T) :: vs) t
+      | strip (_ :: ps) qs vs t = strip ps qs
           ((Name.uu_, hd (binder_types (fastype_of1 (map snd vs, t)))) :: vs)
           (incr_boundvars 1 t $ Bound 0)
   in strip [[]] [] [] end;
@@ -206,7 +206,7 @@ fun mk_pointfree_expr t =
     val unused_bounds = subtract (op =) (distinct (op =) (maps loose_bnos conjs'))
       (0 upto (length vs - 1))
     val (pats, fm) =
-      mk_formula vs (foldr1 HOLogic.mk_conj (conjs' @ map mk_mem_UNIV unused_bounds))
+      mk_formula ((x, T) :: vs) (foldr1 HOLogic.mk_conj (conjs' @ map mk_mem_UNIV unused_bounds))
     fun mk_set (Atom pt) = (case map (lookup pt) pats of [t'] => t' | ts => foldr1 mk_sigma ts)
       | mk_set (Un (f1, f2)) = mk_sup (mk_set f1, mk_set f2)
       | mk_set (Int (f1, f2)) = mk_inf (mk_set f1, mk_set f2)
@@ -235,9 +235,13 @@ fun eq_conv cv1 cv2 ct =
     Const (@{const_name HOL.eq}, _) $ _ $ _ => Conv.combination_conv (Conv.arg_conv cv1) cv2 ct
   | _ => raise CTERM ("eq_conv", [ct]))
 
+val vimageI2' = @{lemma "f a \<notin> A ==> a \<notin> f -` A" by simp}
+val vimageE' =
+  @{lemma "a \<notin> f -` B ==> (\<And> x. f a = x ==> x \<notin> B ==> P) ==> P" by simp}
+
 val elim_Collect_tac = dtac @{thm iffD1[OF mem_Collect_eq]}
   THEN' (REPEAT_DETERM o (eresolve_tac @{thms exE}))
-  THEN' TRY o etac @{thm conjE}
+  THEN' REPEAT_DETERM o etac @{thm conjE}
   THEN' TRY o hyp_subst_tac;
 
 fun intro_image_tac ctxt = rtac @{thm image_eqI}
@@ -264,7 +268,7 @@ fun tac1_of_formula (Int (fm1, fm2)) =
     THEN' tac1_of_formula fm2
   | tac1_of_formula (Atom _) =
     REPEAT_DETERM1 o (rtac @{thm SigmaI}
-      ORELSE' (rtac @{thm vimageI2} THEN'
+      ORELSE' ((rtac @{thm vimageI2} ORELSE' rtac vimageI2') THEN'
         TRY o Simplifier.simp_tac (HOL_basic_ss addsimps [@{thm prod.cases}])) 
       ORELSE' rtac @{thm UNIV_I}
       ORELSE' rtac @{thm iffD2[OF Compl_iff]}
@@ -284,10 +288,10 @@ fun tac2_of_formula (Int (fm1, fm2)) =
     TRY o REPEAT_DETERM1 o
       (dtac @{thm iffD1[OF mem_Sigma_iff]}
        ORELSE' etac @{thm conjE}
-       ORELSE' (etac @{thm vimageE}
+       ORELSE' etac @{thm ComplE}
+       ORELSE' ((etac @{thm vimageE} ORELSE' etac vimageE')
         THEN' TRY o Simplifier.full_simp_tac (HOL_basic_ss addsimps [@{thm prod.cases}])
         THEN' TRY o hyp_subst_tac)
-       ORELSE' etac @{thm ComplE}
        ORELSE' atac)
 
 fun tac ctxt fm =
@@ -312,8 +316,9 @@ fun tac ctxt fm =
 (* preprocessing conversion:
   rewrites {(x1, ..., xn). P x1 ... xn} to {(x1, ..., xn) | x1 ... xn. P x1 ... xn} *)
 
-fun comprehension_conv ctxt ct =
+fun comprehension_conv ss ct =
 let
+  val ctxt = Simplifier.the_context ss
   fun dest_Collect (Const (@{const_name Collect}, T) $ t) = (HOLogic.dest_setT (body_type T), t)
     | dest_Collect t = raise TERM ("dest_Collect", [t])
   fun list_ex vs t = fold_rev (fn (x, T) => fn t => HOLogic.exists_const T $ Abs (x, T, t)) vs t
@@ -329,56 +334,64 @@ let
     in
       HOLogic.Collect_const T $ absdummy T (list_ex vs (HOLogic.mk_conj (eq, t'')))
     end;
-  val tac = 
+  val unfold_thms = @{thms split_paired_all mem_Collect_eq prod.cases}
+  fun is_eq th = is_some (try (HOLogic.dest_eq o HOLogic.dest_Trueprop) (prop_of th))
+  fun tac ctxt = 
     rtac @{thm set_eqI}
     THEN' Simplifier.simp_tac
-      (HOL_basic_ss addsimps [@{thm split_paired_all}, @{thm mem_Collect_eq}, @{thm prod.cases}])
+      (Simplifier.inherit_context ss (HOL_basic_ss addsimps unfold_thms))
     THEN' rtac @{thm iffI}
     THEN' REPEAT_DETERM o rtac @{thm exI}
     THEN' rtac @{thm conjI} THEN' rtac @{thm refl} THEN' atac
     THEN' REPEAT_DETERM o etac @{thm exE}
     THEN' etac @{thm conjE}
     THEN' REPEAT_DETERM o etac @{thm Pair_inject}
-    THEN' hyp_subst_tac
-    THEN' (atac ORELSE' rtac @{thm refl})
+    THEN' Subgoal.FOCUS (fn {prems, ...} =>
+      Simplifier.simp_tac
+        (Simplifier.inherit_context ss (HOL_basic_ss addsimps (filter is_eq prems))) 1) ctxt
+    THEN' TRY o atac
 in
   case try mk_term (term_of ct) of
     NONE => Thm.reflexive ct
   | SOME t' =>
-     Goal.prove ctxt [] [] (HOLogic.mk_Trueprop (HOLogic.mk_eq (term_of ct, t'))) (K (tac 1))
-       RS @{thm eq_reflection}
+    Goal.prove ctxt [] [] (HOLogic.mk_Trueprop (HOLogic.mk_eq (term_of ct, t')))
+        (fn {context, ...} => tac context 1)
+      RS @{thm eq_reflection}
 end
 
 
 (* main simprocs *)
 
-val prep_thms = map mk_meta_eq [@{thm Bex_def}, @{thm Pow_iff[symmetric]}]
+val prep_thms =
+  map mk_meta_eq ([@{thm Bex_def}, @{thm Pow_iff[symmetric]}] @ @{thms ex_simps[symmetric]})
 
 val post_thms =
   map mk_meta_eq [@{thm Times_Un_distrib1[symmetric]},
   @{lemma "A \<times> B \<union> A \<times> C = A \<times> (B \<union> C)" by auto},
   @{lemma "(A \<times> B \<inter> C \<times> D) = (A \<inter> C) \<times> (B \<inter> D)" by auto}]
 
-fun conv ctxt t =
+fun conv ss t =
   let
+    val ctxt = Simplifier.the_context ss
     val ct = cterm_of (Proof_Context.theory_of ctxt) t
-    val prep_eq = (comprehension_conv ctxt then_conv Raw_Simplifier.rewrite true prep_thms) ct
+    fun unfold_conv thms =
+      Raw_Simplifier.rewrite_cterm (false, false, false) (K (K NONE))
+        (Raw_Simplifier.inherit_context ss empty_ss addsimps thms)
+    val prep_eq = (comprehension_conv ss then_conv unfold_conv prep_thms) ct
     val t' = term_of (Thm.rhs_of prep_eq)
     fun mk_thm (fm, t'') = Goal.prove ctxt [] []
       (HOLogic.mk_Trueprop (HOLogic.mk_eq (t', t''))) (fn {context, ...} => tac context fm 1)
     fun unfold th = th RS ((prep_eq RS meta_eq_to_obj_eq) RS @{thm trans})
-    fun post th = Conv.fconv_rule (Trueprop_conv (eq_conv Conv.all_conv
-      (Raw_Simplifier.rewrite true post_thms))) th
+    val post = Conv.fconv_rule (Trueprop_conv (eq_conv Conv.all_conv (unfold_conv post_thms)))
   in
     Option.map (post o unfold o mk_thm) (rewrite_term t')
   end;
 
 fun base_simproc ss redex =
   let
-    val ctxt = Simplifier.the_context ss
     val set_compr = term_of redex
   in
-    conv ctxt set_compr
+    conv ss set_compr
     |> Option.map (fn thm => thm RS @{thm eq_reflection})
   end;
 
@@ -397,7 +410,7 @@ fun simproc ss redex =
     val pred $ set_compr = term_of redex
     val arg_cong' = instantiate_arg_cong ctxt pred
   in
-    conv ctxt set_compr
+    conv ss set_compr
     |> Option.map (fn thm => thm RS arg_cong' RS @{thm eq_reflection})
   end;
 
