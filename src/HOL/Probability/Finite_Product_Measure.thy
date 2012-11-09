@@ -43,6 +43,15 @@ lemma extensional_Int[simp]:
   "extensional I \<inter> extensional I' = extensional (I \<inter> I')"
   unfolding extensional_def by auto
 
+lemma extensional_UNIV[simp]: "extensional UNIV = UNIV"
+  by (auto simp: extensional_def)
+
+lemma restrict_extensional_sub[intro]: "A \<subseteq> B \<Longrightarrow> restrict f A \<in> extensional B"
+  unfolding restrict_def extensional_def by auto
+
+lemma restrict_restrict[simp]: "restrict (restrict f A) B = restrict f (A \<inter> B)"
+  unfolding restrict_def by (simp add: fun_eq_iff)
+
 definition
   "merge I J = (\<lambda>(x, y) i. if i \<in> I then x i else if i \<in> J then y i else undefined)"
 
@@ -84,6 +93,33 @@ lemma restrict_merge[simp]:
   "J \<inter> I = {} \<Longrightarrow> restrict (merge I J (x, y)) I = restrict x I"
   "J \<inter> I = {} \<Longrightarrow> restrict (merge I J (x, y)) J = restrict y J"
   by (auto simp: restrict_def)
+
+lemma split_merge: "P (merge I J (x,y) i) \<longleftrightarrow> (i \<in> I \<longrightarrow> P (x i)) \<and> (i \<in> J - I \<longrightarrow> P (y i)) \<and> (i \<notin> I \<union> J \<longrightarrow> P undefined)"
+  unfolding merge_def by auto
+
+lemma extensional_merge_sub: "I \<union> J \<subseteq> K \<Longrightarrow> merge I J (x, y) \<in> extensional K"
+  unfolding merge_def extensional_def by auto
+
+lemma injective_vimage_restrict:
+  assumes J: "J \<subseteq> I"
+  and sets: "A \<subseteq> (\<Pi>\<^isub>E i\<in>J. S i)" "B \<subseteq> (\<Pi>\<^isub>E i\<in>J. S i)" and ne: "(\<Pi>\<^isub>E i\<in>I. S i) \<noteq> {}"
+  and eq: "(\<lambda>x. restrict x J) -` A \<inter> (\<Pi>\<^isub>E i\<in>I. S i) = (\<lambda>x. restrict x J) -` B \<inter> (\<Pi>\<^isub>E i\<in>I. S i)"
+  shows "A = B"
+proof  (intro set_eqI)
+  fix x
+  from ne obtain y where y: "\<And>i. i \<in> I \<Longrightarrow> y i \<in> S i" by auto
+  have "J \<inter> (I - J) = {}" by auto
+  show "x \<in> A \<longleftrightarrow> x \<in> B"
+  proof cases
+    assume x: "x \<in> (\<Pi>\<^isub>E i\<in>J. S i)"
+    have "x \<in> A \<longleftrightarrow> merge J (I - J) (x,y) \<in> (\<lambda>x. restrict x J) -` A \<inter> (\<Pi>\<^isub>E i\<in>I. S i)"
+      using y x `J \<subseteq> I` by (auto simp add: Pi_iff extensional_restrict extensional_merge_sub split: split_merge)
+    then show "x \<in> A \<longleftrightarrow> x \<in> B"
+      using y x `J \<subseteq> I` by (auto simp add: Pi_iff extensional_restrict extensional_merge_sub eq split: split_merge)
+  next
+    assume "x \<notin> (\<Pi>\<^isub>E i\<in>J. S i)" with sets show "x \<in> A \<longleftrightarrow> x \<in> B" by auto
+  qed
+qed
 
 lemma extensional_insert_undefined[intro, simp]:
   assumes "a \<in> extensional (insert i I)"
@@ -253,6 +289,24 @@ lemma prod_emb_PiE: "J \<subseteq> I \<Longrightarrow> (\<And>i. i \<in> J \<Lon
 lemma prod_emb_PiE_same_index[simp]: "(\<And>i. i \<in> I \<Longrightarrow> E i \<subseteq> space (M i)) \<Longrightarrow> prod_emb I M I (Pi\<^isub>E I E) = Pi\<^isub>E I E"
   by (auto simp: prod_emb_def Pi_iff)
 
+lemma prod_emb_trans[simp]:
+  "J \<subseteq> K \<Longrightarrow> K \<subseteq> L \<Longrightarrow> prod_emb L M K (prod_emb K M J X) = prod_emb L M J X"
+  by (auto simp add: Int_absorb1 prod_emb_def)
+
+lemma prod_emb_Pi:
+  assumes "X \<in> (\<Pi> j\<in>J. sets (M j))" "J \<subseteq> K"
+  shows "prod_emb K M J (Pi\<^isub>E J X) = (\<Pi>\<^isub>E i\<in>K. if i \<in> J then X i else space (M i))"
+  using assms space_closed
+  by (auto simp: prod_emb_def Pi_iff split: split_if_asm) blast+
+
+lemma prod_emb_id:
+  "B \<subseteq> (\<Pi>\<^isub>E i\<in>L. space (M i)) \<Longrightarrow> prod_emb L M L B = B"
+  by (auto simp: prod_emb_def Pi_iff subset_eq extensional_restrict)
+
+lemma prod_emb_mono:
+  "F \<subseteq> G \<Longrightarrow> prod_emb A M B F \<subseteq> prod_emb A M B G"
+  by (auto simp: prod_emb_def)
+
 definition PiM :: "'i set \<Rightarrow> ('i \<Rightarrow> 'a measure) \<Rightarrow> ('i \<Rightarrow> 'a) measure" where
   "PiM I M = extend_measure (\<Pi>\<^isub>E i\<in>I. space (M i))
     {(J, X). (J \<noteq> {} \<or> I = {}) \<and> finite J \<and> J \<subseteq> I \<and> X \<in> (\<Pi> j\<in>J. sets (M j))}
@@ -308,6 +362,17 @@ lemma prod_algebraI:
   "finite J \<Longrightarrow> (J \<noteq> {} \<or> I = {}) \<Longrightarrow> J \<subseteq> I \<Longrightarrow> (\<And>i. i \<in> J \<Longrightarrow> E i \<in> sets (M i))
     \<Longrightarrow> prod_emb I M J (PIE j:J. E j) \<in> prod_algebra I M"
   by (auto simp: prod_algebra_def Pi_iff)
+
+lemma prod_algebraI_finite:
+  "finite I \<Longrightarrow> (\<forall>i\<in>I. E i \<in> sets (M i)) \<Longrightarrow> (Pi\<^isub>E I E) \<in> prod_algebra I M"
+  using prod_algebraI[of I I E M] prod_emb_PiE_same_index[of I E M, OF sets_into_space] by simp
+
+lemma Int_stable_PiE: "Int_stable {Pi\<^isub>E J E | E. \<forall>i\<in>I. E i \<in> sets (M i)}"
+proof (safe intro!: Int_stableI)
+  fix E F assume "\<forall>i\<in>I. E i \<in> sets (M i)" "\<forall>i\<in>I. F i \<in> sets (M i)"
+  then show "\<exists>G. Pi\<^isub>E J E \<inter> Pi\<^isub>E J F = Pi\<^isub>E J G \<and> (\<forall>i\<in>I. G i \<in> sets (M i))"
+    by (auto intro!: exI[of _ "\<lambda>i. E i \<inter> F i"])
+qed
 
 lemma prod_algebraE:
   assumes A: "A \<in> prod_algebra I M"
@@ -545,6 +610,14 @@ proof (rule measurable_PiM_single)
   then show "{\<omega> \<in> space N. (\<lambda>i\<in>I. X i \<omega>) i \<in> A} \<in> sets N"
     using A X by (auto intro!: measurable_sets)
 qed (insert X, auto dest: measurable_space)
+
+lemma measurable_restrict_subset: "J \<subseteq> L \<Longrightarrow> (\<lambda>f. restrict f J) \<in> measurable (Pi\<^isub>M L M) (Pi\<^isub>M J M)"
+  by (intro measurable_restrict measurable_component_singleton) auto
+
+lemma measurable_prod_emb[intro, simp]:
+  "J \<subseteq> L \<Longrightarrow> X \<in> sets (Pi\<^isub>M J M) \<Longrightarrow> prod_emb L M J X \<in> sets (Pi\<^isub>M L M)"
+  unfolding prod_emb_def space_PiM[symmetric]
+  by (auto intro!: measurable_sets measurable_restrict measurable_component_singleton)
 
 lemma sets_in_Pi_aux:
   "finite I \<Longrightarrow> (\<And>j. j \<in> I \<Longrightarrow> {x\<in>space (M j). x \<in> F j} \<in> sets (M j)) \<Longrightarrow>

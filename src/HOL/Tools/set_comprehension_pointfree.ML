@@ -15,7 +15,6 @@ end
 structure Set_Comprehension_Pointfree : SET_COMPREHENSION_POINTFREE =
 struct
 
-
 (* syntactic operations *)
 
 fun mk_inf (t1, t2) =
@@ -110,10 +109,6 @@ fun dest_Pattern (Pattern bs) = bs
 fun dest_bound (Bound i) = i
   | dest_bound t = raise TERM("dest_bound", [t]);
 
-fun mk_pattern t = case try ((map dest_bound) o HOLogic.strip_tuple) t of
-    SOME p => Pattern p 
-  | NONE => raise TERM ("mk_pattern: only tuples of bound variables supported", [t]);
-
 fun type_of_pattern Ts (Pattern bs) = HOLogic.mk_tupleT (map (nth Ts) bs)
 
 fun term_of_pattern Ts (Pattern bs) =
@@ -141,40 +136,40 @@ fun mk_split _ [(x, T)] t = (T, Abs (x, T, t))
       val t'' = HOLogic.split_const (T, T', rT) $ (Abs (x, T, t'))
     in (domain_type (fastype_of t''), t'') end
 
-fun mk_atom vs (Const (@{const_name "Set.member"}, _) $ x $ s) =
+fun mk_term vs t =
+  let
+    val bs = loose_bnos t
+    val vs' = map (nth (rev vs)) bs
+    val subst = map_index (fn (i, j) => (j, Bound i)) (rev bs)
+      |> sort (fn (p1, p2) => int_ord (fst p1, fst p2))
+      |> (fn subst' => map (fn i => the_default (Bound i) (AList.lookup (op =) subst' i)) (0 upto (fst (snd (split_last subst')))))
+    val t' = subst_bounds (subst, t)
+    val tuple = Pattern bs
+  in (tuple, (vs', t')) end
+
+fun default_atom vs t =
+  let
+    val (tuple, (vs', t')) = mk_term vs t
+    val T = HOLogic.mk_tupleT (map snd vs')
+    val s = HOLogic.Collect_const T $ (snd (mk_split @{typ bool} vs' t'))
+  in
+    (tuple, Atom (tuple, s))
+  end
+
+fun mk_atom vs (t as Const (@{const_name "Set.member"}, _) $ x $ s) =
     if not (null (loose_bnos s)) then
-      raise TERM ("mk_atom: bound variables in the set expression", [s])
+      default_atom vs t
     else
-      (case try mk_pattern x of
-      SOME pat => (pat, Atom (pat, s))
+      (case try ((map dest_bound) o HOLogic.strip_tuple) x of
+      SOME pat => (Pattern pat, Atom (Pattern pat, s))
     | NONE =>
         let
-          val bs = loose_bnos x
-          val vs' = map (nth (rev vs)) bs
-          val subst = map_index (fn (i, j) => (j, Bound i)) (rev bs)
-            |> sort (fn (p1, p2) => int_ord (fst p1, fst p2))
-            |> (fn subst' => map (fn i => the_default (Bound i) (AList.lookup (op =) subst' i)) (0 upto (fst (snd (split_last subst')))))  
-          val x' = subst_bounds (subst, x)
-          val tuple = Pattern bs
+          val (tuple, (vs', x')) = mk_term vs x 
           val rT = HOLogic.dest_setT (fastype_of s)
-          val (_, f) = mk_split rT vs' x'
-        in (tuple, Atom (tuple, mk_vimage f s)) end)
-  | mk_atom vs (Const (@{const_name "HOL.Not"}, _) $ t) =
-      apsnd (map_atom (apsnd mk_Compl)) (mk_atom vs t)
-  | mk_atom vs t =
-    let
-      val bs = loose_bnos t
-      val vs' = map (nth (rev vs)) bs
-      val subst = map_index (fn (i, j) => (j, Bound i)) (rev bs)
-        |> sort (fn (p1, p2) => int_ord (fst p1, fst p2))
-        |> (fn subst' => map (fn i => the_default (Bound i) (AList.lookup (op =) subst' i)) (0 upto (fst (snd (split_last subst')))))
-      val t' = subst_bounds (subst, t)
-      val tuple = Pattern bs
-      val setT = HOLogic.mk_tupleT (map snd vs')
-      val (_, s) = mk_split @{typ bool} vs' t'
-    in
-      (tuple, Atom (tuple, HOLogic.Collect_const setT $ s))
-    end
+          val s = mk_vimage (snd (mk_split rT vs' x')) s
+        in (tuple, Atom (tuple, s)) end)
+  | mk_atom vs (Const (@{const_name "HOL.Not"}, _) $ t) = apsnd (map_atom (apsnd mk_Compl)) (mk_atom vs t)
+  | mk_atom vs t = default_atom vs t
 
 fun merge' [] (pats1, pats2) = ([], (pats1, pats2))
   | merge' pat (pats, []) = (pat, (pats, []))
@@ -294,7 +289,7 @@ fun mk_pointfree_expr t =
       (0 upto (length vs - 1))
     val (pats, fm) =
       mk_formula ((x, T) :: vs) (foldr1 HOLogic.mk_conj (conjs' @ map mk_mem_UNIV unused_bounds))
-    fun mk_set (Atom pt) = (case map (lookup pt) pats of [t'] => t' | ts => foldr1 mk_sigma ts)
+    fun mk_set (Atom pt) = foldr1 mk_sigma (map (lookup pt) pats)
       | mk_set (Un (f1, f2)) = mk_sup (mk_set f1, mk_set f2)
       | mk_set (Int (f1, f2)) = mk_inf (mk_set f1, mk_set f2)
     val pat = foldr1 (mk_prod1 Ts) (map (term_of_pattern Ts) pats)
@@ -331,10 +326,10 @@ val vimageE' =
 val collectI' = @{lemma "\<not> P a ==> a \<notin> {x. P x}" by auto}
 val collectE' = @{lemma "a \<notin> {x. P x} ==> (\<not> P a ==> Q) ==> Q" by auto}
 
-val elim_Collect_tac = dtac @{thm iffD1[OF mem_Collect_eq]}
+fun elim_Collect_tac ss = dtac @{thm iffD1[OF mem_Collect_eq]}
   THEN' (REPEAT_DETERM o (eresolve_tac @{thms exE}))
   THEN' REPEAT_DETERM o etac @{thm conjE}
-  THEN' TRY o hyp_subst_tac;
+  THEN' TRY o hyp_subst_tac' ss;
 
 fun intro_image_tac ctxt = rtac @{thm image_eqI}
     THEN' (REPEAT_DETERM1 o
@@ -348,7 +343,7 @@ fun elim_image_tac ss = etac @{thm imageE}
   THEN' REPEAT_DETERM o CHANGED o
     (TRY o Simplifier.full_simp_tac (Simplifier.inherit_context ss (HOL_basic_ss addsimps @{thms split_paired_all prod.cases}))
     THEN' REPEAT_DETERM o etac @{thm Pair_inject}
-    THEN' TRY o hyp_subst_tac)
+    THEN' TRY o hyp_subst_tac' ss)
 
 fun tac1_of_formula ss (Int (fm1, fm2)) =
     TRY o etac @{thm conjE}
@@ -392,21 +387,21 @@ fun tac2_of_formula ss (Int (fm1, fm2)) =
        ORELSE' etac @{thm conjE}
        ORELSE' ((etac @{thm CollectE} ORELSE' etac collectE') THEN'
          TRY o Simplifier.full_simp_tac (Simplifier.inherit_context ss (HOL_basic_ss addsimps [@{thm prod.cases}])) THEN'
-         REPEAT_DETERM o etac @{thm Pair_inject} THEN' TRY o hyp_subst_tac THEN' TRY o rtac @{thm refl})
+         REPEAT_DETERM o etac @{thm Pair_inject} THEN' TRY o hyp_subst_tac' ss THEN' TRY o rtac @{thm refl})
        ORELSE' (etac @{thm imageE}
          THEN' (REPEAT_DETERM o CHANGED o
          (TRY o Simplifier.full_simp_tac (Simplifier.inherit_context ss (HOL_basic_ss addsimps @{thms split_paired_all prod.cases}))
          THEN' REPEAT_DETERM o etac @{thm Pair_inject}
-         THEN' TRY o hyp_subst_tac THEN' TRY o rtac @{thm refl})))
+         THEN' TRY o hyp_subst_tac' ss THEN' TRY o rtac @{thm refl})))
        ORELSE' etac @{thm ComplE}
        ORELSE' ((etac @{thm vimageE} ORELSE' etac vimageE')
         THEN' TRY o Simplifier.full_simp_tac (Simplifier.inherit_context ss (HOL_basic_ss addsimps [@{thm prod.cases}]))
-        THEN' TRY o hyp_subst_tac THEN' TRY o rtac @{thm refl}))
+        THEN' TRY o hyp_subst_tac' ss THEN' TRY o rtac @{thm refl}))
 
 fun tac ss ctxt fm =
   let
     val subset_tac1 = rtac @{thm subsetI}
-      THEN' elim_Collect_tac
+      THEN' elim_Collect_tac ss
       THEN' intro_image_tac ctxt
       THEN' tac1_of_formula ss fm
     val subset_tac2 = rtac @{thm subsetI}
@@ -414,7 +409,7 @@ fun tac ss ctxt fm =
       THEN' rtac @{thm iffD2[OF mem_Collect_eq]}
       THEN' REPEAT_DETERM o resolve_tac @{thms exI}
       THEN' (TRY o REPEAT_ALL_NEW (rtac @{thm conjI}))
-      THEN' (K (TRY (FIRSTGOAL ((TRY o hyp_subst_tac) THEN' rtac @{thm refl}))))
+      THEN' (K (TRY (FIRSTGOAL ((TRY o hyp_subst_tac' ss) THEN' rtac @{thm refl}))))
       THEN' (fn i => EVERY (rev (map_index (fn (j, f) =>
         REPEAT_DETERM (etac @{thm IntE} (i + j)) THEN tac2_of_formula ss f (i + j)) (strip_Int fm))))
   in
@@ -528,11 +523,14 @@ fun simproc ss redex =
 
 fun code_simproc ss redex =
   let
-    val prep_thm = Raw_Simplifier.rewrite false @{thms eq_equal[symmetric]} redex
+    fun unfold_conv thms =
+      Raw_Simplifier.rewrite_cterm (false, false, false) (K (K NONE))
+        (Raw_Simplifier.inherit_context ss empty_ss addsimps thms)
+    val prep_thm = unfold_conv @{thms eq_equal[symmetric]} redex
   in
     case base_simproc ss (Thm.rhs_of prep_thm) of
       SOME rewr_thm => SOME (transitive_thm OF [transitive_thm OF [prep_thm, rewr_thm],
-        Raw_Simplifier.rewrite false @{thms eq_equal} (Thm.rhs_of rewr_thm)])
+        unfold_conv @{thms eq_equal} (Thm.rhs_of rewr_thm)])
     | NONE => NONE
   end;
 
