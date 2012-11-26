@@ -8,11 +8,13 @@ signature LIFTING_UTIL =
 sig
   val MRSL: thm list * thm -> thm
   val Trueprop_conv: conv -> conv
+  val option_fold: 'b -> ('a -> 'b) -> 'a option -> 'b
   val dest_Quotient: term -> term * term * term * term
 
   val quot_thm_rel: thm -> term
   val quot_thm_abs: thm -> term
   val quot_thm_rep: thm -> term
+  val quot_thm_crel: thm -> term
   val quot_thm_rty_qty: thm -> typ * typ
 end;
 
@@ -28,6 +30,9 @@ fun Trueprop_conv cv ct =
   (case Thm.term_of ct of
     Const (@{const_name Trueprop}, _) $ _ => Conv.arg_conv cv ct
   | _ => raise CTERM ("Trueprop_conv", [ct]))
+
+fun option_fold a _ NONE = a
+  | option_fold _ f (SOME x) = f x
 
 fun dest_Quotient (Const (@{const_name Quotient}, _) $ rel $ abs $ rep $ cr)
       = (rel, abs, rep, cr)
@@ -49,6 +54,10 @@ fun quot_thm_abs quot_thm =
 fun quot_thm_rep quot_thm =
   case (dest_Quotient o HOLogic.dest_Trueprop o prop_of) quot_thm of
     (_, _, rep, _) => rep
+
+fun quot_thm_crel quot_thm =
+  case (dest_Quotient o HOLogic.dest_Trueprop o prop_of) quot_thm of
+    (_, _, _, crel) => crel
 
 fun quot_thm_rty_qty quot_thm =
   let

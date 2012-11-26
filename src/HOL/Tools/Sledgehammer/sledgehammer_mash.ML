@@ -55,7 +55,7 @@ sig
     Proof.context -> bool -> int -> string list * string list
     -> (string * real) list
   val mash_unlearn : Proof.context -> unit
-  val mash_could_suggest_facts : unit -> bool
+  val is_mash_enabled : unit -> bool
   val mash_can_suggest_facts : Proof.context -> bool
   val mash_suggested_facts :
     Proof.context -> params -> string -> int -> term list -> term
@@ -101,7 +101,7 @@ val learn_atpN = "learn_atp"
 val relearn_isarN = "relearn_isar"
 val relearn_atpN = "relearn_atp"
 
-fun mash_home () = getenv "MASH_HOME"
+fun mash_home () = getenv "ISABELLE_SLEDGEHAMMER_MASH"
 fun mash_model_dir () =
   getenv "ISABELLE_HOME_USER" ^ "/mash"
   |> tap (Isabelle_System.mkdir o Path.explode)
@@ -446,9 +446,8 @@ fun run_mash_tool ctxt overlord save max_suggs write_cmds read_suggs =
       " --numberOfPredictions " ^ string_of_int max_suggs ^
       (if save then " --saveModel" else "")
     val command =
-      mash_home () ^ "/mash --quiet --outputDir " ^ mash_model_dir () ^
+      mash_home () ^ "/src/mash.py --quiet --outputDir " ^ mash_model_dir () ^
       " --log " ^ log_file ^ " " ^ core ^ " >& " ^ err_file
-
       |> tap (fn _ => trace_msg ctxt (fn () =>
              case try File.read (Path.explode err_file) of
                NONE => "Done"
@@ -623,7 +622,7 @@ fun mash_unlearn ctxt =
 
 end
 
-fun mash_could_suggest_facts () = mash_home () <> ""
+fun is_mash_enabled () = (getenv "MASH" = "yes")
 fun mash_can_suggest_facts ctxt = not (Graph.is_empty (#fact_G (mash_get ctxt)))
 
 fun num_keys keys = Graph.Keys.fold (K (Integer.add 1)) keys 0
@@ -974,7 +973,7 @@ fun relevant_facts ctxt (params as {learn, fact_filter, timeout, ...}) prover
         | NONE =>
           if is_smt_prover ctxt prover then
             mepoN
-          else if mash_could_suggest_facts () then
+          else if is_mash_enabled () then
             (maybe_learn ();
              if mash_can_suggest_facts ctxt then meshN else mepoN)
           else
