@@ -28,7 +28,6 @@ sig
 
   val smtN : string
   val string_for_reconstructor : reconstructor -> string
-  val thms_of_name : Proof.context -> string -> thm list
   val lam_trans_from_atp_proof : string proof -> string -> string
   val is_typed_helper_used_in_atp_proof : string proof -> bool
   val used_facts_in_atp_proof :
@@ -53,6 +52,9 @@ open ATP_Proof
 open ATP_Problem_Generate
 open ATP_Proof_Reconstruct
 open Sledgehammer_Util
+open Sledgehammer_Proof
+open Sledgehammer_Annotate
+open Sledgehammer_Shrink
 
 structure String_Redirect = ATP_Proof_Redirect(
   type key = step_name
@@ -78,19 +80,6 @@ val smtN = "smt"
 fun string_for_reconstructor (Metis (type_enc, lam_trans)) =
     metis_call type_enc lam_trans
   | string_for_reconstructor SMT = smtN
-
-fun thms_of_name ctxt name =
-  let
-    val lex = Keyword.get_lexicons
-    val get = maps (Proof_Context.get_fact ctxt o fst)
-  in
-    Source.of_string name
-    |> Symbol.source
-    |> Token.source {do_recover = SOME false} lex Position.start
-    |> Token.source_proper
-    |> Source.source Token.stopper (Parse_Spec.xthms1 >> get) NONE
-    |> Source.exhaust
-  end
 
 
 (** fact extraction from ATP proofs **)
@@ -201,8 +190,6 @@ fun used_facts_in_unsound_atp_proof _ _ [] = NONE
 
 (** one-liner reconstructor proofs **)
 
-fun string_for_label (s, num) = s ^ string_of_int num
-
 fun show_time NONE = ""
   | show_time (SOME ext_time) = " (" ^ string_from_ext_time ext_time ^ ")"
 
@@ -280,20 +267,6 @@ fun one_line_proof_text num_chained
 
 (** Isar proof construction and manipulation **)
 
-type label = string * int
-type facts = label list * string list
-
-datatype isar_qualifier = Show | Then | Moreover | Ultimately
-
-datatype isar_step =
-  Fix of (string * typ) list |
-  Let of term * term |
-  Assume of label * term |
-  Prove of isar_qualifier list * label * term * byline
-and byline =
-  By_Metis of facts |
-  Case_Split of isar_step list list * facts
-
 val assume_prefix = "a"
 val have_prefix = "f"
 val raw_prefix = "x"
@@ -304,7 +277,7 @@ fun raw_label_for_name (num, ss) =
   | _ => (raw_prefix ^ ascii_of num, 0)
 
 fun label_of_clause [name] = raw_label_for_name name
-  | label_of_clause c = (space_implode "___" (map fst c), 0)
+  | label_of_clause c = (space_implode "___" (map (fst o raw_label_for_name) c), 0)
 
 fun add_fact_from_dependencies fact_names (names as [(_, ss)]) =
     if is_fact fact_names ss then
@@ -477,149 +450,6 @@ fun add_desired_line _ _ (line as Definition_Step (name, _, _)) (j, lines) =
      else
        map (replace_dependencies_in_line (name, deps)) lines)  (* drop line *)
 
-(** Type annotations **)
-
-fun post_traverse_term_type' f _ (t as Const (_, T)) s = f t T s
-  | post_traverse_term_type' f _ (t as Free (_, T)) s = f t T s
-  | post_traverse_term_type' f _ (t as Var (_, T)) s = f t T s
-  | post_traverse_term_type' f env (t as Bound i) s = f t (nth env i) s
-  | post_traverse_term_type' f env (Abs (x, T1, b)) s =
-    let
-      val ((b', s'), T2) = post_traverse_term_type' f (T1 :: env) b s
-    in f (Abs (x, T1, b')) (T1 --> T2) s' end
-  | post_traverse_term_type' f env (u $ v) s =
-    let
-      val ((u', s'), Type (_, [_, T])) = post_traverse_term_type' f env u s
-      val ((v', s''), _) = post_traverse_term_type' f env v s'
-    in f (u' $ v') T s'' end
-
-fun post_traverse_term_type f s t =
-  post_traverse_term_type' (fn t => fn T => fn s => (f t T s, T)) [] t s |> fst
-fun post_fold_term_type f s t =
-  post_traverse_term_type (fn t => fn T => fn s => (t, f t T s)) s t |> snd
-
-(* Data structures, orders *)
-val cost_ord = prod_ord int_ord (prod_ord int_ord int_ord)
-
-structure Var_Set_Tab = Table(
-  type key = indexname list
-  val ord = list_ord Term_Ord.fast_indexname_ord)
-
-(* (1) Generalize types *)
-fun generalize_types ctxt t =
-  t |> map_types (fn _ => dummyT)
-    |> Syntax.check_term
-         (Proof_Context.set_mode Proof_Context.mode_pattern ctxt)
-
-(* (2) Typing-spot table *)
-local
-fun key_of_atype (TVar (z, _)) =
-    Ord_List.insert Term_Ord.fast_indexname_ord z
-  | key_of_atype _ = I
-fun key_of_type T = fold_atyps key_of_atype T []
-fun update_tab t T (tab, pos) =
-  (case key_of_type T of
-     [] => tab
-   | key =>
-     let val cost = (size_of_typ T, (size_of_term t, pos)) in
-       case Var_Set_Tab.lookup tab key of
-         NONE => Var_Set_Tab.update_new (key, cost) tab
-       | SOME old_cost =>
-         (case cost_ord (cost, old_cost) of
-            LESS => Var_Set_Tab.update (key, cost) tab
-          | _ => tab)
-     end,
-   pos + 1)
-in
-val typing_spot_table =
-  post_fold_term_type update_tab (Var_Set_Tab.empty, 0) #> fst
-end
-
-(* (3) Reverse-greedy *)
-fun reverse_greedy typing_spot_tab =
-  let
-    fun update_count z =
-      fold (fn tvar => fn tab =>
-        let val c = Vartab.lookup tab tvar |> the_default 0 in
-          Vartab.update (tvar, c + z) tab
-        end)
-    fun superfluous tcount =
-      forall (fn tvar => the (Vartab.lookup tcount tvar) > 1)
-    fun drop_superfluous (tvars, (_, (_, spot))) (spots, tcount) =
-      if superfluous tcount tvars then (spots, update_count ~1 tvars tcount)
-      else (spot :: spots, tcount)
-    val (typing_spots, tvar_count_tab) =
-      Var_Set_Tab.fold
-        (fn kv as (k, _) => apfst (cons kv) #> apsnd (update_count 1 k))
-        typing_spot_tab ([], Vartab.empty)
-      |>> sort_distinct (rev_order o cost_ord o pairself snd)
-  in fold drop_superfluous typing_spots ([], tvar_count_tab) |> fst end
-
-(* (4) Introduce annotations *)
-fun introduce_annotations ctxt spots t t' =
-  let
-    val thy = Proof_Context.theory_of ctxt
-    val get_types = post_fold_term_type (K cons) []
-    fun match_types tp =
-      fold (Sign.typ_match thy) (op ~~ (pairself get_types tp)) Vartab.empty
-    fun unica' b x [] = if b then [x] else []
-      | unica' b x (y :: ys) =
-        if x = y then unica' false x ys
-        else unica' true y ys |> b ? cons x
-    fun unica ord xs =
-      case sort ord xs of x :: ys => unica' true x ys | [] => []
-    val add_all_tfree_namesT = fold_atyps (fn TFree (x, _) => cons x | _ => I)
-    fun erase_unica_tfrees env =
-      let
-        val unica =
-          Vartab.fold (add_all_tfree_namesT o snd o snd) env []
-          |> filter_out (Variable.is_declared ctxt)
-          |> unica fast_string_ord
-        val erase_unica = map_atyps
-          (fn T as TFree (s, _) =>
-              if Ord_List.member fast_string_ord unica s then dummyT else T
-            | T => T)
-      in Vartab.map (K (apsnd erase_unica)) env end
-    val env = match_types (t', t) |> erase_unica_tfrees
-    fun get_annot env (TFree _) = (false, (env, dummyT))
-      | get_annot env (T as TVar (v, S)) =
-        let val T' = Envir.subst_type env T in
-          if T' = dummyT then (false, (env, dummyT))
-          else (true, (Vartab.update (v, (S, dummyT)) env, T'))
-        end
-      | get_annot env (Type (S, Ts)) =
-        (case fold_rev (fn T => fn (b, (env, Ts)) =>
-                  let
-                    val (b', (env', T)) = get_annot env T
-                  in (b orelse b', (env', T :: Ts)) end)
-                Ts (false, (env, [])) of
-           (true, (env', Ts)) => (true, (env', Type (S, Ts)))
-         | (false, (env', _)) => (false, (env', dummyT)))
-    fun post1 _ T (env, cp, ps as p :: ps', annots) =
-        if p <> cp then
-          (env, cp + 1, ps, annots)
-        else
-          let val (_, (env', T')) = get_annot env T in
-            (env', cp + 1, ps', (p, T') :: annots)
-          end
-      | post1 _ _ accum = accum
-    val (_, _, _, annots) = post_fold_term_type post1 (env, 0, spots, []) t'
-    fun post2 t _ (cp, annots as (p, T) :: annots') =
-        if p <> cp then (t, (cp + 1, annots))
-        else (Type.constraint T t, (cp + 1, annots'))
-      | post2 t _ x = (t, x)
-  in post_traverse_term_type post2 (0, rev annots) t |> fst end
-
-(* (5) Annotate *)
-fun annotate_types ctxt t =
-  let
-    val t' = generalize_types ctxt t
-    val typing_spots =
-      t' |> typing_spot_table
-         |> reverse_greedy
-         |> sort int_ord
-  in introduce_annotations ctxt typing_spots t t' end
-
 val indent_size = 2
 val no_label = ("", ~1)
 
@@ -632,7 +462,6 @@ fun string_for_proof ctxt type_enc lam_trans i n =
         (Syntax.string_of_typ ctxt) T))
     fun do_label l = if l = no_label then "" else string_for_label l ^ ": "
     fun do_have qs =
-      (if member (op =) qs Moreover then "moreover " else "") ^
       (if member (op =) qs Ultimately then "ultimately " else "") ^
       (if member (op =) qs Then then
          if member (op =) qs Show then "thus" else "hence"
@@ -739,170 +568,6 @@ val relabel_proof =
       | aux subst depth nextp (step :: proof) =
         step :: aux subst depth nextp proof
   in aux [] 0 (1, 1) end
-
-val merge_timeout_slack = 1.2
-
-val label_ord = prod_ord int_ord fast_string_ord o pairself swap
-
-structure Label_Table = Table(
-  type key = label
-  val ord = label_ord)
-
-fun shrink_proof debug ctxt type_enc lam_trans preplay preplay_timeout
-                 isar_shrink proof =
-  let
-    (* clean vector interface *)
-    fun get i v = Vector.sub (v, i)
-    fun replace x i v = Vector.update (v, i, x)
-    fun update f i v = replace (get i v |> f) i v
-    fun v_fold_index f v s =
-      Vector.foldl (fn (x, (i, s)) => (i+1, f (i, x) s)) (0, s) v |> snd
-
-    (* Queue interface to table *)
-    fun pop tab key =
-      let val v = hd (Inttab.lookup_list tab key) in
-        (v, Inttab.remove_list (op =) (key, v) tab)
-      end
-    fun pop_max tab = pop tab (the (Inttab.max_key tab))
-    val is_empty = Inttab.is_empty
-    fun add_list tab xs = fold (Inttab.insert_list (op =)) xs tab
-
-    (* proof vector *)
-    val proof_vect = proof |> map SOME |> Vector.fromList
-    val n = Vector.length proof_vect
-    val n_target = Real.fromInt n / isar_shrink |> Real.round
-
-    (* table for mapping from label to proof position *)
-    fun update_table (i, Prove (_, label, _, _)) =
-        Label_Table.update_new (label, i)
-      | update_table _ = I
-    val label_index_table = fold_index update_table proof Label_Table.empty
-
-    (* proof references *)
-    fun refs (Prove (_, _, _, By_Metis (refs, _))) =
-        map (the o Label_Table.lookup label_index_table) refs
-      | refs _ = []
-    val refed_by_vect =
-      Vector.tabulate (n, (fn _ => []))
-      |> fold_index (fn (i, step) => fold (update (cons i)) (refs step)) proof
-      |> Vector.map rev (* after rev, indices are sorted in ascending order *)
-
-    (* candidates for elimination, use table as priority queue (greedy
-       algorithm) *)
-    fun cost (Prove (_, _ , t, _)) = Term.size_of_term t
-      | cost _ = 0
-    val cand_tab =
-      v_fold_index
-        (fn (i, [_]) => cons (get i proof_vect |> the |> cost, i)
-        | _ => I) refed_by_vect []
-      |> Inttab.make_list
-
-    (* Enrich context with local facts *)
-    val thy = Proof_Context.theory_of ctxt
-    fun enrich_ctxt' (Prove (_, label, t, _)) ctxt =
-        Proof_Context.put_thms false
-            (string_for_label label, SOME [Skip_Proof.make_thm thy t]) ctxt
-      | enrich_ctxt' _ ctxt = ctxt
-    val rich_ctxt = fold enrich_ctxt' proof ctxt
-
-    (* Timing *)
-    fun take_time timeout tac arg =
-      let val timing = Timing.start () in
-        (TimeLimit.timeLimit timeout tac arg;
-         Timing.result timing |> #cpu |> SOME)
-        handle _ => NONE
-      end
-    val sum_up_time =
-      Vector.foldl
-        ((fn (SOME t, (b, s)) => (b, Time.+ (t, s))
-           | (NONE, (_, s)) => (true, Time.+ (preplay_timeout, s))) o apfst Lazy.force)
-        (false, seconds 0.0)
-
-    (* Metis preplaying *)
-    fun try_metis timeout (Prove (_, _, t, By_Metis fact_names)) =
-      if not preplay then (fn () => SOME (seconds 0.0)) else
-        let
-          val facts =
-            fact_names
-            |>> map string_for_label |> op @
-            |> map (the_single o thms_of_name rich_ctxt)
-          val goal =
-            Goal.prove (Config.put Metis_Tactic.verbose debug ctxt) [] [] t
-          fun tac {context = ctxt, prems = _} =
-            Metis_Tactic.metis_tac [type_enc] lam_trans ctxt facts 1
-        in
-          take_time timeout (fn () => goal tac)
-        end
-
-    (* Lazy metis time vector, cache *)
-    val metis_time =
-      Vector.map (Lazy.lazy o try_metis preplay_timeout o the) proof_vect
-
-    (* Merging *)
-    fun merge (Prove (qs1, label1, _, By_Metis (lfs1, gfs1)))
-              (Prove (qs2, label2 , t, By_Metis (lfs2, gfs2))) =
-      let
-        val qs = inter (op =) qs1 qs2 (* FIXME: Is this correct? *)
-          |> member (op =) (union (op =) qs1 qs2) Ultimately ? cons Ultimately
-          |> member (op =) qs2 Show ? cons Show
-        val ls = remove (op =) label1 lfs2 |> union (op =) lfs1
-        val ss = union (op =) gfs1 gfs2
-      in Prove (qs, label2, t, By_Metis (ls, ss)) end
-    fun try_merge metis_time (s1, i) (s2, j) =
-      (case get i metis_time |> Lazy.force of
-        NONE => (NONE, metis_time)
-      | SOME t1 =>
-        (case get j metis_time |> Lazy.force of
-          NONE => (NONE, metis_time)
-        | SOME t2 =>
-          let
-            val s12 = merge s1 s2
-            val timeout =
-              Time.+ (t1, t2) |> Time.toReal |> curry Real.* merge_timeout_slack
-                      |> Time.fromReal
-          in
-            case try_metis timeout s12 () of
-              NONE => (NONE, metis_time)
-            | some_t12 =>
-              (SOME s12, metis_time
-                         |> replace (seconds 0.0 |> SOME |> Lazy.value) i
-                         |> replace (Lazy.value some_t12) j)
-
-          end))
-
-    fun merge_steps metis_time proof_vect refed_by cand_tab n' =
-      if is_empty cand_tab orelse n' <= n_target orelse n'<3 then
-        (sum_up_time metis_time,
-         Vector.foldr
-           (fn (NONE, proof) => proof | (SOME s, proof) => s :: proof)
-           [] proof_vect)
-      else
-        let
-          val (i, cand_tab) = pop_max cand_tab
-          val j = get i refed_by |> the_single
-          val s1 = get i proof_vect |> the
-          val s2 = get j proof_vect |> the
-        in
-          case try_merge metis_time (s1, i) (s2, j) of
-            (NONE, metis_time) =>
-            merge_steps metis_time proof_vect refed_by cand_tab n'
-          | (s, metis_time) => let
-            val refs = refs s1
-            val refed_by = refed_by |> fold
-              (update (Ord_List.remove int_ord i #> Ord_List.insert int_ord j)) refs
-            val new_candidates =
-              fold (fn (i, [_]) => cons (cost (get i proof_vect |> the), i)
-                     | _ => I)
-                (map (fn i => (i, get i refed_by)) refs) []
-            val cand_tab = add_list cand_tab new_candidates
-            val proof_vect = proof_vect |> replace NONE i |> replace s j
-          in
-            merge_steps metis_time proof_vect refed_by cand_tab (n' - 1)
-          end
-        end
-  in
-    merge_steps metis_time proof_vect refed_by_vect cand_tab n
-  end
 
 val chain_direct_proof =
   let
@@ -1023,19 +688,20 @@ fun isar_proof_text ctxt isar_proofs
         and do_case outer (c, infs) =
           Assume (label_of_clause c, prop_of_clause c) ::
           map (do_inf outer) infs
-        val (ext_time, isar_proof) =
+        val (isar_proof, (preplay_fail, ext_time)) =
           ref_graph
           |> redirect_graph axioms tainted
           |> map (do_inf true)
           |> append assms
-          |> shrink_proof debug ctxt type_enc lam_trans preplay
-                 preplay_timeout (if isar_proofs then isar_shrink else 1000.0)
-       (* ||> reorder_proof_to_minimize_jumps (* ? *) *)
-          ||> chain_direct_proof
-          ||> kill_useless_labels_in_proof
-          ||> relabel_proof
-          ||> not (null params) ? cons (Fix params)
-        val num_steps = length isar_proof
+          |> (if not preplay andalso isar_shrink <= 1.0
+              then pair (false, (true, seconds 0.0)) #> swap
+              else shrink_proof debug ctxt type_enc lam_trans preplay
+                preplay_timeout (if isar_proofs then isar_shrink else 1000.0))
+       (* |>> reorder_proof_to_minimize_jumps (* ? *) *)
+          |>> chain_direct_proof
+          |>> kill_useless_labels_in_proof
+          |>> relabel_proof
+          |>> not (null params) ? cons (Fix params)
         val isar_text =
           string_for_proof ctxt type_enc lam_trans subgoal subgoal_count
                            isar_proof
@@ -1047,15 +713,23 @@ fun isar_proof_text ctxt isar_proofs
           else
             ""
         | _ =>
-          "\n\nStructured proof" ^
-          (if verbose then
-             " (" ^ string_of_int num_steps ^ " step" ^ plural_s num_steps ^
-             (if preplay then ", " ^ string_from_ext_time ext_time
-              else "") ^ ")"
-           else if preplay then
-             " (" ^ string_from_ext_time ext_time ^ ")"
-           else
-             "") ^ ":\n" ^ Sendback.markup isar_text
+          let 
+            val msg = 
+              (if preplay then 
+                [if preplay_fail 
+                 then "may fail" 
+                 else string_from_ext_time ext_time]
+               else [])
+              @ 
+               (if verbose then
+                  [let val num_steps = metis_steps_total isar_proof
+                   in string_of_int num_steps ^ plural_s num_steps end]
+                else [])
+          in
+            "\n\nStructured proof "
+              ^ (commas msg |> not (null msg) ? enclose "(" ")")
+              ^ ":\n" ^ Markup.markup Markup.sendback isar_text
+          end
       end
     val isar_proof =
       if debug then
