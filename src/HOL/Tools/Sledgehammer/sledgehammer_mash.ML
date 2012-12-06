@@ -44,7 +44,8 @@ sig
   val suggested_facts :
     (string * 'a) list -> ('b * thm) list -> (('b * thm) * 'a) list
   val mesh_facts :
-    int -> ((('a * thm) * real) list * ('a * thm) list) list -> ('a * thm) list
+    int -> (real * ((('a * thm) * real) list * ('a * thm) list)) list
+    -> ('a * thm) list
   val theory_ord : theory * theory -> order
   val thm_ord : thm * thm -> order
   val goal_of_thm : theory -> thm -> thm
@@ -57,9 +58,10 @@ sig
   val atp_dependencies_of :
     Proof.context -> params -> string -> int -> fact list -> unit Symtab.table
     -> thm -> bool * string list option
+  val weight_mash_facts : ('a * thm) list -> (('a * thm) * real) list
   val mash_suggested_facts :
-    Proof.context -> params -> string -> int -> term list -> term
-    -> fact list -> (fact * real) list * fact list
+    Proof.context -> params -> string -> int -> term list -> term -> fact list
+    -> fact list
   val mash_learn_proof :
     Proof.context -> params -> string -> term -> ('a * thm) list -> thm list
     -> unit
@@ -178,18 +180,9 @@ val unescape_meta = String.explode #> unmeta_chars []
 val unescape_metas =
   space_explode " " #> filter_out (curry (op =) "") #> map unescape_meta
 
-val supports_weights = false
-
 fun encode_feature (name, weight) =
-  let val s = escape_meta name in
-    if Real.== (weight, 1.0) then
-      s
-    else if supports_weights then
-      s ^ "=" ^ Real.toString weight
-    else
-      map (prefix (s ^ ".") o string_of_int) (1 upto Real.ceil weight)
-      |> space_implode " "
-  end
+  escape_meta name ^
+  (if Real.== (weight, 1.0) then "" else "=" ^ Real.toString weight)
 
 val encode_features = map encode_feature #> space_implode " "
 
@@ -297,7 +290,7 @@ val empty_state = {fact_G = Graph.empty, dirty = SOME []}
 
 local
 
-val version = "*** MaSh version 20121204a ***"
+val version = "*** MaSh version 20121205c ***"
 
 exception Too_New of unit
 
@@ -424,43 +417,57 @@ fun suggested_facts suggs facts =
       Symtab.lookup tab name |> Option.map (rpair weight)
   in map_filter find_sugg suggs end
 
-fun sum_avg [] = 0
-  | sum_avg xs =
+fun scaled_avg [] = 0
+  | scaled_avg xs =
     Real.ceil (100000000.0 * fold (curry (op +)) xs 0.0) div length xs
 
-fun normalize_scores [] = []
-  | normalize_scores ((fact, score) :: tail) =
-    (fact, 1.0) :: map (apsnd (curry Real.* (1.0 / score))) tail
+fun avg [] = 0.0
+  | avg xs = fold (curry (op +)) xs 0.0 / Real.fromInt (length xs)
 
-fun mesh_facts max_facts [(sels, unks)] =
+fun normalize_scores _ [] = []
+  | normalize_scores max_facts xs =
+    let val avg = avg (map snd (take max_facts xs)) in
+      map (apsnd (curry Real.* (1.0 / avg))) xs
+    end
+
+fun mesh_facts max_facts [(_, (sels, unks))] =
     map fst (take max_facts sels) @ take (max_facts - length sels) unks
   | mesh_facts max_facts mess =
     let
-      val mess = mess |> map (apfst (normalize_scores #> `length))
+      val mess =
+        mess |> map (apsnd (apfst (normalize_scores max_facts #> `length)))
       val fact_eq = Thm.eq_thm o pairself snd
-      fun score_at sels = try (nth sels) #> Option.map snd
-      fun score_in fact ((sel_len, sels), unks) =
-        case find_index (curry fact_eq fact o fst) sels of
-          ~1 => (case find_index (curry fact_eq fact) unks of
-                   ~1 => score_at sels sel_len
-                 | _ => NONE)
-        | rank => score_at sels rank
-      fun weight_of fact = mess |> map_filter (score_in fact) |> sum_avg
+      fun score_in fact (global_weight, ((sel_len, sels), unks)) =
+        let
+          fun score_at j =
+            case try (nth sels) j of
+              SOME (_, score) => SOME (global_weight * score)
+            | NONE => NONE
+        in
+          case find_index (curry fact_eq fact o fst) sels of
+            ~1 => (case find_index (curry fact_eq fact) unks of
+                     ~1 => score_at sel_len
+                   | _ => NONE)
+          | rank => score_at rank
+        end
+      fun weight_of fact = mess |> map_filter (score_in fact) |> scaled_avg
       val facts =
-        fold (union fact_eq o map fst o take max_facts o snd o fst) mess []
+        fold (union fact_eq o map fst o take max_facts o snd o fst o snd) mess
+             []
     in
       facts |> map (`weight_of) |> sort (int_ord o swap o pairself fst)
             |> map snd |> take max_facts
     end
 
-fun thy_feature_of s = ("y" ^ s, 1.0 (* FUDGE *))
-fun term_feature_of s = ("c" ^ s, 1.0 (* FUDGE *))
-fun type_feature_of s = ("t" ^ s, 1.0 (* FUDGE *))
-fun class_feature_of s = ("s" ^ s, 1.0 (* FUDGE *))
-fun status_feature_of status = (string_of_status status, 1.0 (* FUDGE *))
-val local_feature = ("local", 20.0 (* FUDGE *))
-val lams_feature = ("lams", 1.0 (* FUDGE *))
-val skos_feature = ("skos", 1.0 (* FUDGE *))
+fun thy_feature_of s = ("y" ^ s, 0.5 (* FUDGE *))
+fun const_feature_of s = ("c" ^ s, 1.0 (* FUDGE *))
+fun free_feature_of s = ("f" ^ s, 2.0 (* FUDGE *))
+fun type_feature_of s = ("t" ^ s, 0.5 (* FUDGE *))
+fun class_feature_of s = ("s" ^ s, 0.25 (* FUDGE *))
+fun status_feature_of status = (string_of_status status, 0.5 (* FUDGE *))
+val local_feature = ("local", 2.0 (* FUDGE *))
+val lams_feature = ("lams", 0.5 (* FUDGE *))
+val skos_feature = ("skos", 0.5 (* FUDGE *))
 
 fun theory_ord p =
   if Theory.eq_thy p then
@@ -473,11 +480,11 @@ fun theory_ord p =
     EQUAL => string_ord (pairself Context.theory_name p)
   | order => order
 
-fun thm_ord thp =
-  case theory_ord (pairself theory_of_thm thp) of
+fun thm_ord p =
+  case theory_ord (pairself theory_of_thm p) of
     EQUAL =>
     (* Hack to put "xxx_def" before "xxxI" and "xxxE" *)
-    string_ord (pairself nickname_of (swap thp))
+    string_ord (pairself nickname_of (swap p))
   | ord => ord
 
 val freezeT = Type.legacy_freeze_type
@@ -507,14 +514,22 @@ val bad_types = [@{type_name prop}, @{type_name bool}, @{type_name fun}]
 val logical_consts =
   [@{const_name prop}, @{const_name Pure.conjunction}] @ atp_logical_consts
 
-fun interesting_terms_types_and_classes ctxt prover term_max_depth
+fun interesting_terms_types_and_classes ctxt thy_name prover term_max_depth
                                         type_max_depth ts =
   let
+    val thy = Proof_Context.theory_of ctxt
+    val fixes = map snd (Variable.dest_fixes ctxt)
+    val classes = Sign.classes_of thy
     fun is_bad_const (x as (s, _)) args =
       member (op =) logical_consts s orelse
       fst (is_built_in_const_for_prover ctxt prover x args)
     fun add_classes @{sort type} = I
-      | add_classes S = union (op = o pairself fst) (map class_feature_of S)
+      | add_classes S =
+        fold (`(Sorts.super_classes classes)
+              #> swap #> op ::
+              #> subtract (op =) @{sort type}
+              #> map class_feature_of
+              #> union (op = o pairself fst)) S
     fun do_add_type (Type (s, Ts)) =
         (not (member (op =) bad_types s)
          ? insert (op = o pairself fst) (type_feature_of s))
@@ -525,24 +540,30 @@ fun interesting_terms_types_and_classes ctxt prover term_max_depth
     fun patternify_term _ ~1 _ = []
       | patternify_term args _ (Const (x as (s, _))) =
         if is_bad_const x args then [] else [s]
+      | patternify_term _ depth (Free (s, _)) =
+        if depth = term_max_depth andalso member (op =) fixes s then
+          [thy_name ^ Long_Name.separator ^ s]
+        else
+          []
       | patternify_term _ 0 _ = []
       | patternify_term args depth (t $ u) =
         let
           val ps = patternify_term (u :: args) depth t
           val qs = "" :: patternify_term [] (depth - 1) u
-        in map_product (fn p => fn "" => p | q => "(" ^ q ^ ")") ps qs end
+        in map_product (fn p => fn "" => p | q => p ^ "(" ^ q ^ ")") ps qs end
       | patternify_term _ _ _ = []
-    val add_term_pattern =
-      union (op = o pairself fst) o map term_feature_of oo patternify_term []
-    fun add_term_patterns ~1 _ = I
-      | add_term_patterns depth t =
-        add_term_pattern depth t #> add_term_patterns (depth - 1) t
-    val add_term = add_term_patterns term_max_depth
+    fun add_term_pattern feature_of =
+      union (op = o pairself fst) o map feature_of oo patternify_term []
+    fun add_term_patterns _ ~1 _ = I
+      | add_term_patterns feature_of depth t =
+        add_term_pattern feature_of depth t
+        #> add_term_patterns feature_of (depth - 1) t
+    fun add_term feature_of = add_term_patterns feature_of term_max_depth
     fun add_patterns t =
       let val (head, args) = strip_comb t in
         (case head of
-           Const (_, T) => add_term t #> add_type T
-         | Free (_, T) => add_type T
+           Const (_, T) => add_term const_feature_of t #> add_type T
+         | Free (_, T) => add_term free_feature_of t #> add_type T
          | Var (_, T) => add_type T
          | Abs (_, T, body) => add_type T #> add_patterns body
          | _ => I)
@@ -552,22 +573,24 @@ fun interesting_terms_types_and_classes ctxt prover term_max_depth
 
 fun is_exists (s, _) = (s = @{const_name Ex} orelse s = @{const_name Ex1})
 
-val term_max_depth = 2
-val type_max_depth = 2
+val term_max_depth = 1
+val type_max_depth = 1
 
 (* TODO: Generate type classes for types? *)
 fun features_of ctxt prover thy (scope, status) ts =
-  thy_feature_of (Context.theory_name thy) ::
-  interesting_terms_types_and_classes ctxt prover term_max_depth type_max_depth
-                                      ts
-  |> status <> General ? cons (status_feature_of status)
-  |> scope <> Global ? cons local_feature
-  |> exists (not o is_lambda_free) ts ? cons lams_feature
-  |> exists (exists_Const is_exists) ts ? cons skos_feature
+  let val thy_name = Context.theory_name thy in
+    thy_feature_of thy_name ::
+    interesting_terms_types_and_classes ctxt thy_name prover term_max_depth
+        type_max_depth ts
+    |> status <> General ? cons (status_feature_of status)
+    |> scope <> Global ? cons local_feature
+    |> exists (not o is_lambda_free) ts ? cons lams_feature
+    |> exists (exists_Const is_exists) ts ? cons skos_feature
+  end
 
 (* Too many dependencies is a sign that a crazy decision procedure is at work.
    There isn't much to learn from such proofs. *)
-val max_dependencies = 100
+val max_dependencies = 10
 val atp_dependency_default_max_facts = 50
 
 (* "type_definition_xxx" facts are characterized by their use of "CollectI". *)
@@ -691,22 +714,22 @@ fun maximal_in_graph fact_G facts =
                                       (Graph.imm_preds fact_G new) news))
   in find_maxes Symtab.empty ([], Graph.maximals fact_G) end
 
-(* Generate more suggestions than requested, because some might be thrown out
-   later for various reasons and "meshing" gives better results with some
-   slack. *)
-fun max_suggs_of max_facts = max_facts + Int.min (50, max_facts)
-
 fun is_fact_in_graph fact_G (_, th) =
   can (Graph.get_node fact_G) (nickname_of th)
 
-fun interleave 0 _ _ = []
-  | interleave n [] ys = take n ys
-  | interleave n xs [] = take n xs
-  | interleave 1 (x :: _) _ = [x]
-  | interleave n (x :: xs) (y :: ys) = x :: y :: interleave (n - 2) xs ys
-
 (* factor that controls whether unknown global facts should be included *)
 val include_unk_global_factor = 15
+
+(* use MePo weights for now *)
+val weight_raw_mash_facts = weight_mepo_facts
+val weight_mash_facts = weight_raw_mash_facts
+
+(* FUDGE *)
+fun weight_of_proximity_fact rank =
+  Math.pow (1.3, 15.5 - 0.2 * Real.fromInt rank) + 15.0
+
+fun weight_proximity_facts facts =
+  facts ~~ map weight_of_proximity_fact (0 upto length facts - 1)
 
 fun mash_suggested_facts ctxt ({overlord, ...} : params) prover max_facts hyp_ts
                          concl_t facts =
@@ -722,28 +745,21 @@ fun mash_suggested_facts ctxt ({overlord, ...} : params) prover max_facts hyp_ts
               val feats =
                 features_of ctxt prover thy (Local, General) (concl_t :: hyp_ts)
             in
-              (fact_G, mash_QUERY ctxt overlord (max_suggs_of max_facts)
-                                  (parents, feats))
+              (fact_G, mash_QUERY ctxt overlord max_facts (parents, feats))
             end)
-    val (chained, unchained) =
-      List.partition (fn ((_, (scope, _)), _) => scope = Chained) facts
-    val sels =
+    val chained = facts |> filter (fn ((_, (scope, _)), _) => scope = Chained)
+    val raw_mash =
       facts |> suggested_facts suggs
             (* The weights currently returned by "mash.py" are too spaced out to
                make any sense. *)
             |> map fst
-            |> filter_out (member (Thm.eq_thm_prop o pairself snd) chained)
-    val (unk_global, unk_local) =
-      unchained |> filter_out (is_fact_in_graph fact_G)
-                |> List.partition (fn ((_, (scope, _)), _) => scope = Global)
-    val (small_unk_global, big_unk_global) =
-      ([], unk_global)
-      |> include_unk_global_factor * length unk_global <= max_facts ? swap
-  in
-    (interleave max_facts (chained @ unk_local @ small_unk_global) sels
-     |> weight_mepo_facts (* use MePo weights for now *),
-     big_unk_global)
-  end
+    val proximity = facts |> sort (thm_ord o pairself snd o swap)
+    val unknown = facts |> filter_out (is_fact_in_graph fact_G)
+    val mess =
+      [(0.8000 (* FUDGE *), (map (rpair 1.0) chained, [])),
+       (0.1333 (* FUDGE *), (weight_raw_mash_facts raw_mash, unknown)),
+       (0.0667 (* FUDGE *), (weight_proximity_facts proximity, []))]
+  in mesh_facts max_facts mess end
 
 fun add_wrt_fact_graph ctxt (name, parents, feats, deps) (adds, graph) =
   let
@@ -993,6 +1009,10 @@ fun mash_learn ctxt (params as {provers, timeout, ...}) fact_override chained
 fun is_mash_enabled () = (getenv "MASH" = "yes")
 fun mash_can_suggest_facts ctxt = not (Graph.is_empty (#fact_G (mash_get ctxt)))
 
+(* Generate more suggestions than requested, because some might be thrown out
+   later for various reasons. *)
+fun generous_max_facts max_facts = max_facts + Int.min (50, max_facts)
+
 (* The threshold should be large enough so that MaSh doesn't kick in for Auto
    Sledgehammer and Try. *)
 val min_secs_for_learning = 15
@@ -1034,14 +1054,16 @@ fun relevant_facts ctxt (params as {learn, fact_filter, timeout, ...}) prover
          (accepts |> filter_out (member Thm.eq_thm_prop ths o snd)))
         |> take max_facts
       fun mepo () =
-        facts |> mepo_suggested_facts ctxt params prover max_facts NONE hyp_ts
-                                      concl_t
-              |> weight_mepo_facts
+        mepo_suggested_facts ctxt params prover max_facts NONE hyp_ts concl_t
+                             facts
+        |> weight_mepo_facts
       fun mash () =
-        mash_suggested_facts ctxt params prover max_facts hyp_ts concl_t facts
+        mash_suggested_facts ctxt params prover (generous_max_facts max_facts)
+            hyp_ts concl_t facts
+        |> weight_mash_facts
       val mess =
-        [] |> (if fact_filter <> mashN then cons (mepo (), []) else I)
-           |> (if fact_filter <> mepoN then cons (mash ()) else I)
+        [] |> (if fact_filter <> mashN then cons (0.5, (mepo (), [])) else I)
+           |> (if fact_filter <> mepoN then cons (0.5, (mash (), [])) else I)
     in
       mesh_facts max_facts mess
       |> not (null add_ths) ? prepend_facts add_ths
