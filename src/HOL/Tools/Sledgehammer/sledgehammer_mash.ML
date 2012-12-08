@@ -61,10 +61,10 @@ sig
   val weight_mash_facts : ('a * thm) list -> (('a * thm) * real) list
   val find_mash_suggestions :
     int -> (Symtab.key * 'a) list -> ('b * thm) list -> ('b * thm) list
-    -> ('b * thm) list -> ('b * thm) list
+    -> ('b * thm) list -> ('b * thm) list * ('b * thm) list
   val mash_suggested_facts :
     Proof.context -> params -> string -> int -> term list -> term -> fact list
-    -> fact list
+    -> fact list * fact list
   val mash_learn_proof :
     Proof.context -> params -> string -> term -> ('a * thm) list -> thm list
     -> unit
@@ -451,7 +451,7 @@ fun mesh_facts max_facts [(_, (sels, unks))] =
         in
           case find_index (curry fact_eq fact o fst) sels of
             ~1 => (case find_index (curry fact_eq fact) unks of
-                     ~1 => score_at sel_len
+                     ~1 => score_at (sel_len - 1)
                    | _ => NONE)
           | rank => score_at rank
         end
@@ -465,8 +465,8 @@ fun mesh_facts max_facts [(_, (sels, unks))] =
     end
 
 fun thy_feature_of s = ("y" ^ s, 0.5 (* FUDGE *))
-fun const_feature_of s = ("c" ^ s, 1.0 (* FUDGE *))
-fun free_feature_of s = ("f" ^ s, 2.0 (* FUDGE *))
+fun const_feature_of s = ("c" ^ s, 4.0 (* FUDGE *))
+fun free_feature_of s = ("f" ^ s, 5.0 (* FUDGE *))
 fun type_feature_of s = ("t" ^ s, 0.5 (* FUDGE *))
 fun class_feature_of s = ("s" ^ s, 0.25 (* FUDGE *))
 fun status_feature_of status = (string_of_status status, 0.5 (* FUDGE *))
@@ -593,9 +593,9 @@ fun features_of ctxt prover thy (scope, status) ts =
     |> exists (exists_Const is_exists) ts ? cons skos_feature
   end
 
-(* Too many dependencies is a sign that a crazy decision procedure is at work.
-   There isn't much to learn from such proofs. *)
-val max_dependencies = 10
+(* Too many dependencies is a sign that a decision procedure is at work. There
+   isn't much to learn from such proofs. *)
+val max_dependencies = 20
 val atp_dependency_default_max_facts = 50
 
 (* "type_definition_xxx" facts are characterized by their use of "CollectI". *)
@@ -722,9 +722,6 @@ fun maximal_in_graph fact_G facts =
 fun is_fact_in_graph fact_G (_, th) =
   can (Graph.get_node fact_G) (nickname_of th)
 
-(* factor that controls whether unknown global facts should be included *)
-val include_unk_global_factor = 15
-
 (* use MePo weights for now *)
 val weight_raw_mash_facts = weight_mepo_facts
 val weight_mash_facts = weight_raw_mash_facts
@@ -736,19 +733,26 @@ fun weight_of_proximity_fact rank =
 fun weight_proximity_facts facts =
   facts ~~ map weight_of_proximity_fact (0 upto length facts - 1)
 
-fun find_mash_suggestions max_facts suggs facts chained unknown =
+val max_proximity_facts = 100
+
+fun find_mash_suggestions max_facts suggs facts chained raw_unknown =
   let
     val raw_mash =
       facts |> find_suggested_facts suggs
             (* The weights currently returned by "mash.py" are too spaced out to
                make any sense. *)
             |> map fst
-    val proximity = facts |> sort (thm_ord o pairself snd o swap)
+    val proximity =
+      facts |> sort (thm_ord o pairself snd o swap)
+            |> take max_proximity_facts
     val mess =
-      [(0.8000 (* FUDGE *), (map (rpair 1.0) chained, [])),
-       (0.1333 (* FUDGE *), (weight_raw_mash_facts raw_mash, unknown)),
-       (0.0667 (* FUDGE *), (weight_proximity_facts proximity, []))]
-  in mesh_facts max_facts mess end
+      [(0.80 (* FUDGE *), (map (rpair 1.0) chained, [])),
+       (0.16 (* FUDGE *), (weight_raw_mash_facts raw_mash, raw_unknown)),
+       (0.04 (* FUDGE *), (weight_proximity_facts proximity, []))]
+    val unknown =
+      raw_unknown
+      |> fold (subtract (Thm.eq_thm_prop o pairself snd)) [chained, proximity]
+  in (mesh_facts max_facts mess, unknown) end
 
 fun mash_suggested_facts ctxt ({overlord, ...} : params) prover max_facts hyp_ts
                          concl_t facts =
@@ -1069,10 +1073,10 @@ fun relevant_facts ctxt (params as {learn, fact_filter, timeout, ...}) prover
       fun mash () =
         mash_suggested_facts ctxt params prover (generous_max_facts max_facts)
             hyp_ts concl_t facts
-        |> weight_mash_facts
+        |>> weight_mash_facts
       val mess =
         [] |> (if fact_filter <> mashN then cons (0.5, (mepo (), [])) else I)
-           |> (if fact_filter <> mepoN then cons (0.5, (mash (), [])) else I)
+           |> (if fact_filter <> mepoN then cons (0.5, (mash ())) else I)
     in
       mesh_facts max_facts mess
       |> not (null add_ths) ? prepend_facts add_ths

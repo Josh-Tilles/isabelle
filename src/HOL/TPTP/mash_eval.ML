@@ -9,7 +9,8 @@ signature MASH_EVAL =
 sig
   type params = Sledgehammer_Provers.params
 
-  val evaluate_mash_suggestions : Proof.context -> params -> string -> unit
+  val evaluate_mash_suggestions :
+    Proof.context -> params -> string -> string -> unit
 end;
 
 structure MaSh_Eval : MASH_EVAL =
@@ -25,16 +26,19 @@ val IsarN = "Isar"
 
 val all_names = map (rpair () o nickname_of) #> Symtab.make
 
-fun evaluate_mash_suggestions ctxt params file_name =
+fun evaluate_mash_suggestions ctxt params sugg_file_name out_file_name =
   let
+    val out_path = out_file_name |> Path.explode
+    val _ = File.write out_path ""
+    fun print s = (tracing s; File.append out_path (s ^ "\n"))
     val {provers, max_facts, slice, type_enc, lam_trans, timeout, ...} =
       Sledgehammer_Isar.default_params ctxt []
     val prover = hd provers
     val slack_max_facts = generous_max_facts (the max_facts)
-    val path = file_name |> Path.explode
-    val lines = path |> File.read_lines
+    val sugg_path = sugg_file_name |> Path.explode
+    val lines = sugg_path |> File.read_lines
     val css = Sledgehammer_Fact.clasimpset_rule_table_of ctxt
-    val facts = all_facts ctxt false Symtab.empty [] [] css
+    val facts = all_facts ctxt true false Symtab.empty [] [] css
     val all_names = all_names (facts |> map snd)
     val mepo_ok = Unsynchronized.ref 0
     val mash_ok = Unsynchronized.ref 0
@@ -42,7 +46,8 @@ fun evaluate_mash_suggestions ctxt params file_name =
     val isar_ok = Unsynchronized.ref 0
     fun with_index facts s = (find_index (curry (op =) s) facts + 1, s)
     fun index_string (j, s) = s ^ "@" ^ string_of_int j
-    fun str_of_res label facts ({outcome, run_time, used_facts, ...}: Sledgehammer_Provers.prover_result) =
+    fun str_of_res label facts ({outcome, run_time, used_facts, ...}
+                                : Sledgehammer_Provers.prover_result) =
       let val facts = facts |> map (fn ((name, _), _) => name ()) in
         "  " ^ label ^ ": " ^
         (if is_none outcome then
@@ -76,10 +81,10 @@ fun evaluate_mash_suggestions ctxt params file_name =
           Sledgehammer_MePo.mepo_suggested_facts ctxt params prover
               slack_max_facts NONE hyp_ts concl_t facts
           |> Sledgehammer_MePo.weight_mepo_facts
-        val mash_facts =
+        val (mash_facts, mash_unks) =
           find_mash_suggestions slack_max_facts suggs facts [] []
-          |> weight_mash_facts
-        val mess = [(0.5, (mepo_facts, [])), (0.5, (mash_facts, []))]
+          |>> weight_mash_facts
+        val mess = [(0.5, (mepo_facts, [])), (0.5, (mash_facts, mash_unks))]
         val mesh_facts = mesh_facts slack_max_facts mess
         val isar_facts = find_suggested_facts (map (rpair 1.0) isar_deps) facts
         fun prove ok heading get facts =
@@ -93,14 +98,16 @@ fun evaluate_mash_suggestions ctxt params file_name =
               run_prover_for_mash ctxt params prover facts goal
             val _ = if is_none outcome then ok := !ok + 1 else ()
           in str_of_res heading facts res end
-        val mepo_s = prove mepo_ok MePoN fst mepo_facts
-        val mash_s = prove mash_ok MaShN fst mash_facts
-        val mesh_s = prove mesh_ok MeshN I mesh_facts
-        val isar_s = prove isar_ok IsarN fst isar_facts
+        val [mepo_s, mash_s, mesh_s, isar_s] =
+          [fn () => prove mepo_ok MePoN fst mepo_facts,
+           fn () => prove mash_ok MaShN fst mash_facts,
+           fn () => prove mesh_ok MeshN I mesh_facts,
+           fn () => prove isar_ok IsarN fst isar_facts]
+          |> map (fn f => f ())
       in
         ["Goal " ^ string_of_int j ^ ": " ^ name, mepo_s, mash_s, mesh_s,
          isar_s]
-        |> cat_lines |> tracing
+        |> cat_lines |> print
       end
     fun total_of heading ok n =
       "  " ^ heading ^ ": " ^ string_of_int (!ok) ^ " (" ^
@@ -114,15 +121,15 @@ fun evaluate_mash_suggestions ctxt params file_name =
        "instantiate_inducts" |> not inst_inducts ? prefix "dont_"]
     val n = length lines
   in
-    tracing " * * *";
-    tracing ("Options: " ^ commas options);
+    print " * * *";
+    print ("Options: " ^ commas options);
     List.app solve_goal (tag_list 1 lines);
     ["Successes (of " ^ string_of_int n ^ " goals)",
      total_of MePoN mepo_ok n,
      total_of MaShN mash_ok n,
      total_of MeshN mesh_ok n,
      total_of IsarN isar_ok n]
-    |> cat_lines |> tracing
+    |> cat_lines |> print
   end
 
 end;
