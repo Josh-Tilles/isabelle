@@ -21,7 +21,7 @@ open Sledgehammer_MaSh
 
 val MePoN = "MePo"
 val MaShN = "MaSh"
-val MeshN = "Mesh"
+val MeShN = "MeSh"
 val IsarN = "Isar"
 
 val all_names = map (rpair () o nickname_of) #> Symtab.make
@@ -112,9 +112,9 @@ fun evaluate_mash_suggestions ctxt params prob_dir_name sugg_file_name
         val [mepo_s, mash_s, mesh_s, isar_s] =
           [fn () => prove mepo_ok MePoN fst mepo_facts,
            fn () => prove mash_ok MaShN fst mash_facts,
-           fn () => prove mesh_ok MeshN I mesh_facts,
+           fn () => prove mesh_ok MeShN I mesh_facts,
            fn () => prove isar_ok IsarN fst isar_facts]
-          |> map (fn f => f ())
+          |> (* Par_List. *) map (fn f => f ())
       in
         ["Goal " ^ string_of_int j ^ ": " ^ name, mepo_s, mash_s, mesh_s,
          isar_s]
@@ -134,11 +134,11 @@ fun evaluate_mash_suggestions ctxt params prob_dir_name sugg_file_name
   in
     print " * * *";
     print ("Options: " ^ commas options);
-    List.app solve_goal (tag_list 1 lines);
+    Par_List.map solve_goal (tag_list 1 lines);
     ["Successes (of " ^ string_of_int n ^ " goals)",
      total_of MePoN mepo_ok n,
      total_of MaShN mash_ok n,
-     total_of MeshN mesh_ok n,
+     total_of MeShN mesh_ok n,
      total_of IsarN isar_ok n]
     |> cat_lines |> print
   end
