@@ -11,7 +11,7 @@ begin
 ML_file "mash_eval.ML"
 
 sledgehammer_params
-  [provers = spass, max_relevant = 32, strict, dont_slice, type_enc = mono_native,
+  [provers = spass, max_facts = 32, strict, dont_slice, type_enc = mono_native,
    lam_trans = combs_and_lifting, timeout = 15, dont_preplay, minimize]
 
 declare [[sledgehammer_instantiate_inducts]]
@@ -27,7 +27,9 @@ open MaSh_Eval
 ML {*
 val do_it = false (* switch to "true" to generate the files *)
 val params = Sledgehammer_Isar.default_params @{context} []
-val prob_dir = "/tmp/mash_problems"
+val dir = "List"
+val prefix = "/tmp/" ^ dir ^ "/"
+val prob_dir = prefix ^ "mash_problems"
 *}
 
 ML {*
@@ -40,7 +42,7 @@ else
 ML {*
 if do_it then
   evaluate_mash_suggestions @{context} params (SOME prob_dir)
-      "/tmp/mash_suggestions" "/tmp/mash_eval.out"
+      (prefix ^ "mash_suggestions") (prefix ^ "mash_eval")
 else
   ()
 *}

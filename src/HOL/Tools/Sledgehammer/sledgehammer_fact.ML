@@ -24,6 +24,7 @@ sig
     Proof.context -> unit Symtab.table -> thm list -> status Termtab.table
     -> Facts.ref * Attrib.src list -> ((string * stature) * thm) list
   val backquote_thm : Proof.context -> thm -> string
+  val is_blacklisted_or_something : Proof.context -> bool -> string -> bool
   val clasimpset_rule_table_of : Proof.context -> status Termtab.table
   val build_all_names :
     (thm -> string) -> ('a * thm) list -> string Symtab.table
@@ -173,15 +174,15 @@ fun formula_has_too_many_lambdas Ts (Abs (_, T, t)) =
     else
       term_has_too_many_lambdas max_lambda_nesting t
 
-(* The max apply depth of any "metis" call in "Metis_Examples" (on 2007-10-31)
-   was 11. *)
+(* The maximum apply depth of any "metis" call in "Metis_Examples" (on
+   2007-10-31) was 11. *)
 val max_apply_depth = 18
 
 fun apply_depth (f $ t) = Int.max (apply_depth f, apply_depth t + 1)
   | apply_depth (Abs (_, _, t)) = apply_depth t
   | apply_depth _ = 0
 
-fun is_formula_too_complex ho_atp t =
+fun is_too_complex ho_atp t =
   apply_depth t > max_apply_depth orelse
   (not ho_atp andalso formula_has_too_many_lambdas [] t)
 
@@ -208,7 +209,7 @@ fun is_that_fact th =
   andalso exists_subterm (fn Free (s, _) => s = Name.skolem Auto_Bind.thesisN
                            | _ => false) (prop_of th)
 
-fun is_likely_tautology_or_too_meta th =
+fun is_likely_tautology_too_meta_or_too_technical th =
   let
     fun is_interesting_subterm (Const (s, _)) =
         not (member (op =) atp_widely_irrelevant_consts s)
@@ -227,17 +228,17 @@ fun is_likely_tautology_or_too_meta th =
       | is_boring_prop _ (Const (@{const_name "=="}, _) $ t $ u) =
         is_boring_bool t andalso is_boring_bool u
       | is_boring_prop _ _ = true
+    val t = prop_of th
   in
-    is_boring_prop [] (prop_of th) andalso
-    not (Thm.eq_thm_prop (@{thm ext}, th))
-  end
-
-fun is_theorem_bad_for_atps ho_atp th =
-  let val t = prop_of th in
-    is_formula_too_complex ho_atp t orelse
+    (is_boring_prop [] (prop_of th) andalso
+     not (Thm.eq_thm_prop (@{thm ext}, th))) orelse
     exists_type type_has_top_sort t orelse exists_technical_const t orelse
     exists_low_level_class_const t orelse is_that_fact th
   end
+
+fun is_blacklisted_or_something ctxt ho_atp name =
+  (not (Config.get ctxt ignore_no_atp) andalso is_package_def name) orelse
+  exists (fn s => String.isSuffix s name) (multi_base_blacklist ctxt ho_atp)
 
 fun hackish_string_for_term ctxt =
   with_vanilla_print_mode (Syntax.string_of_term ctxt) #> simplify_spaces
@@ -402,7 +403,7 @@ fun maybe_instantiate_inducts ctxt hyp_ts concl_t =
 fun maybe_filter_no_atps ctxt =
   not (Config.get ctxt ignore_no_atp) ? filter_out (No_ATPs.member ctxt o snd)
 
-fun all_facts ctxt really_all ho_atp reserved add_ths chained css =
+fun all_facts ctxt generous ho_atp reserved add_ths chained css =
   let
     val thy = Proof_Context.theory_of ctxt
     val global_facts = Global_Theory.facts_of thy
@@ -419,15 +420,12 @@ fun all_facts ctxt really_all ho_atp reserved add_ths chained css =
       Name_Space.merge (Facts.space_of global_facts, Facts.space_of local_facts)
     fun add_facts global foldx facts =
       foldx (fn (name0, ths) =>
-        if not really_all andalso
-           name0 <> "" andalso
+        if name0 <> "" andalso
            forall (not o member Thm.eq_thm_prop add_ths) ths andalso
            (Facts.is_concealed facts name0 orelse
             not (can (Proof_Context.get_thms ctxt) name0) orelse
-            (not (Config.get ctxt ignore_no_atp) andalso
-             is_package_def name0) orelse
-            exists (fn s => String.isSuffix s name0)
-                   (multi_base_blacklist ctxt ho_atp)) then
+            (not generous andalso
+             is_blacklisted_or_something ctxt ho_atp name0)) then
           I
         else
           let
@@ -442,9 +440,9 @@ fun all_facts ctxt really_all ho_atp reserved add_ths chained css =
             #> fold_rev (fn th => fn (j, (multis, unis)) =>
                    (j - 1,
                     if not (member Thm.eq_thm_prop add_ths th) andalso
-                       is_likely_tautology_or_too_meta th orelse
-                       (not really_all andalso
-                        is_theorem_bad_for_atps ho_atp th) then
+                       (is_likely_tautology_too_meta_or_too_technical th orelse
+                        (not generous andalso
+                         is_too_complex ho_atp (prop_of th))) then
                       (multis, unis)
                     else
                       let
