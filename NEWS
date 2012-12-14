@@ -69,10 +69,9 @@ that frequently occur in user interaction.
 * More efficient painting and improved reactivity when editing large
 files.  More scalable management of formal document content.
 
-* Smarter handling of tracing messages: output window informs about
-accumulated messages; prover transactions are limited to emit maximum
-amount of output, before being canceled (cf. system option
-"editor_tracing_limit_MB").  This avoids swamping the front-end with
+* Smarter handling of tracing messages: prover process pauses after
+certain number of messages per command transaction, with some user
+dialog to stop or continue.  This avoids swamping the front-end with
 potentially infinite message streams.
 
 * More plugin options and preferences, based on Isabelle/Scala.  The
@@ -203,6 +202,17 @@ INCOMPATIBILITY.  Related changes are:
 
     INCOMPATIBILITY.
 
+* Further generalized the definition of limits:
+
+  - Introduced the predicate filterlim (LIM x F. f x :> G) which expresses that
+    when the input values x converge to F then the output f x converges to G.
+
+  - Added filters for convergence to positive (at_top) and negative infinity (at_bot).
+    Moved infinity in the norm (at_infinity) from Multivariate_Analysis to Complex_Main.
+
+  - Removed real_tendsto_inf, it is superseded by "LIM x F. f x :> at_top".
+    INCOMPATIBILITY
+
 * HOL/Rings: renamed lemmas
 
 left_distrib ~> distrib_right
@@ -216,6 +226,36 @@ non-free datatypes.
 
 * HOL/Cardinals: Theories of ordinals and cardinals
 (supersedes the AFP entry "Ordinals_and_Cardinals").
+
+* HOL/Multivariate_Analysis:
+  Replaced "basis :: 'a::euclidean_space => nat => real" and
+  "\<Chi>\<Chi> :: (nat => real) => 'a::euclidean_space" on euclidean spaces by
+  using the inner product "_ \<bullet> _" with vectors from the Basis set.
+  "\<Chi>\<Chi> i. f i" is replaced by "SUM i : Basis. f i *r i".
+
+  With this change the following constants are also chanegd or removed:
+
+    DIM('a) :: nat   ~>   card (Basis :: 'a set)   (is an abbreviation)
+    a $$ i    ~>    inner a i  (where i : Basis)
+    cart_base i     removed
+    \<pi>, \<pi>'   removed
+
+  Theorems about these constants where removed.
+
+  Renamed lemmas:
+
+    component_le_norm   ~>   Basis_le_norm
+    euclidean_eq   ~>   euclidean_eq_iff
+    differential_zero_maxmin_component   ~>   differential_zero_maxmin_cart
+    euclidean_simps   ~>   inner_simps
+    independent_basis   ~>   independent_Basis
+    span_basis   ~>   span_Basis
+    in_span_basis   ~>   in_span_Basis
+    norm_bound_component_le   ~>   norm_boound_Basis_le
+    norm_bound_component_lt   ~>   norm_boound_Basis_lt
+    component_le_infnorm   ~>   Basis_le_infnorm
+
+  INCOMPATIBILITY.
 
 * HOL/Probability:
   - Add simproc "measurable" to automatically prove measurability

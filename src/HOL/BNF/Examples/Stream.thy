@@ -9,141 +9,184 @@ Infinite streams.
 header {* Infinite Streams *}
 
 theory Stream
-imports TreeFI
+imports "../BNF"
 begin
 
-codata 'a stream = Stream (hdd: 'a) (tll: "'a stream")
+codata 'a stream = Stream (shd: 'a) (stl: "'a stream")
 
-(* selectors for streams *)
-lemma hdd_def': "hdd as = fst (stream_dtor as)"
-unfolding hdd_def stream_case_def fst_def by (rule refl)
+(* TODO: Provide by the package*)
+theorem stream_set_induct:
+   "\<lbrakk>\<And>s. P (shd s) s; \<And>s y. \<lbrakk>y \<in> stream_set (stl s); P y (stl s)\<rbrakk> \<Longrightarrow> P y s\<rbrakk> \<Longrightarrow>
+   \<forall>y \<in> stream_set s. P y s"
+by (rule stream.dtor_set_induct)
+   (auto simp add:  shd_def stl_def stream_case_def fsts_def snds_def split_beta)
 
-lemma tll_def': "tll as = snd (stream_dtor as)"
-unfolding tll_def stream_case_def snd_def by (rule refl)
+theorem shd_stream_set: "shd s \<in> stream_set s"
+by (auto simp add: shd_def stl_def stream_case_def fsts_def snds_def split_beta)
+   (metis UnCI fsts_def insertI1 stream.dtor_set)
 
-lemma unfold_pair_fun_hdd[simp]: "hdd (stream_dtor_unfold (f \<odot> g) t) = f t"
-unfolding hdd_def' pair_fun_def stream.dtor_unfold by simp
+theorem stl_stream_set: "y \<in> stream_set (stl s) \<Longrightarrow> y \<in> stream_set s"
+by (auto simp add: shd_def stl_def stream_case_def fsts_def snds_def split_beta)
+   (metis insertI1 set_mp snds_def stream.dtor_set_set_incl)
 
-lemma unfold_pair_fun_tll[simp]: "tll (stream_dtor_unfold (f \<odot> g) t) =
- stream_dtor_unfold (f \<odot> g) (g t)"
-unfolding tll_def' pair_fun_def stream.dtor_unfold by simp
+(* only for the non-mutual case: *)
+theorem stream_set_induct1[consumes 1, case_names shd stl, induct set: "stream_set"]:
+  assumes "y \<in> stream_set s" and "\<And>s. P (shd s) s"
+  and "\<And>s y. \<lbrakk>y \<in> stream_set (stl s); P y (stl s)\<rbrakk> \<Longrightarrow> P y s"
+  shows "P y s"
+using assms stream_set_induct by blast
+(* end TODO *)
 
-(* infinite trees: *)
-coinductive infiniteTr where
-"\<lbrakk>tr' \<in> listF_set (sub tr); infiniteTr tr'\<rbrakk> \<Longrightarrow> infiniteTr tr"
 
-lemma infiniteTr_strong_coind[consumes 1, case_names sub]:
-assumes *: "phi tr" and
-**: "\<And> tr. phi tr \<Longrightarrow> \<exists> tr' \<in> listF_set (sub tr). phi tr' \<or> infiniteTr tr'"
-shows "infiniteTr tr"
-using assms by (elim infiniteTr.coinduct) blast
+subsection {* prepend list to stream *}
 
-lemma infiniteTr_coind[consumes 1, case_names sub, induct pred: infiniteTr]:
-assumes *: "phi tr" and
-**: "\<And> tr. phi tr \<Longrightarrow> \<exists> tr' \<in> listF_set (sub tr). phi tr'"
-shows "infiniteTr tr"
-using assms by (elim infiniteTr.coinduct) blast
+primrec shift :: "'a list \<Rightarrow> 'a stream \<Rightarrow> 'a stream" (infixr "@-" 65) where
+  "shift [] s = s"
+| "shift (x # xs) s = Stream x (shift xs s)"
 
-lemma infiniteTr_sub[simp]:
-"infiniteTr tr \<Longrightarrow> (\<exists> tr' \<in> listF_set (sub tr). infiniteTr tr')"
-by (erule infiniteTr.cases) blast
+lemma shift_append[simp]: "(xs @ ys) @- s = xs @- ys @- s"
+by (induct xs) auto
 
-definition "konigPath \<equiv> stream_dtor_unfold
-  (lab \<odot> (\<lambda>tr. SOME tr'. tr' \<in> listF_set (sub tr) \<and> infiniteTr tr'))"
+lemma shift_simps[simp]:
+   "shd (xs @- s) = (if xs = [] then shd s else hd xs)"
+   "stl (xs @- s) = (if xs = [] then stl s else tl xs @- s)"
+by (induct xs) auto
 
-lemma konigPath_simps[simp]:
-"hdd (konigPath t) = lab t"
-"tll (konigPath t) = konigPath (SOME tr. tr \<in> listF_set (sub t) \<and> infiniteTr tr)"
-unfolding konigPath_def by simp+
 
-(* proper paths in trees: *)
-coinductive properPath where
-"\<lbrakk>hdd as = lab tr; tr' \<in> listF_set (sub tr); properPath (tll as) tr'\<rbrakk> \<Longrightarrow>
- properPath as tr"
+subsection {* recurring stream out of a list *}
 
-lemma properPath_strong_coind[consumes 1, case_names hdd_lab sub]:
-assumes *: "phi as tr" and
-**: "\<And> as tr. phi as tr \<Longrightarrow> hdd as = lab tr" and
-***: "\<And> as tr.
-         phi as tr \<Longrightarrow>
-         \<exists> tr' \<in> listF_set (sub tr). phi (tll as) tr' \<or> properPath (tll as) tr'"
-shows "properPath as tr"
-using assms by (elim properPath.coinduct) blast
+definition cycle :: "'a list \<Rightarrow> 'a stream" where
+  "cycle = stream_unfold hd (\<lambda>xs. tl xs @ [hd xs])"
 
-lemma properPath_coind[consumes 1, case_names hdd_lab sub, induct pred: properPath]:
-assumes *: "phi as tr" and
-**: "\<And> as tr. phi as tr \<Longrightarrow> hdd as = lab tr" and
-***: "\<And> as tr.
-         phi as tr \<Longrightarrow>
-         \<exists> tr' \<in> listF_set (sub tr). phi (tll as) tr'"
-shows "properPath as tr"
-using properPath_strong_coind[of phi, OF * **] *** by blast
+lemma cycle_simps[simp]:
+  "shd (cycle u) = hd u"
+  "stl (cycle u) = cycle (tl u @ [hd u])"
+by (auto simp: cycle_def)
 
-lemma properPath_hdd_lab:
-"properPath as tr \<Longrightarrow> hdd as = lab tr"
-by (erule properPath.cases) blast
 
-lemma properPath_sub:
-"properPath as tr \<Longrightarrow>
- \<exists> tr' \<in> listF_set (sub tr). phi (tll as) tr' \<or> properPath (tll as) tr'"
-by (erule properPath.cases) blast
+lemma cycle_decomp: "u \<noteq> [] \<Longrightarrow> cycle u = u @- cycle u"
+proof (coinduct rule: stream.coinduct[of "\<lambda>s1 s2. \<exists>u. s1 = cycle u \<and> s2 = u @- cycle u \<and> u \<noteq> []"])
+  case (2 s1 s2)
+  then obtain u where "s1 = cycle u \<and> s2 = u @- cycle u \<and> u \<noteq> []" by blast
+  thus ?case using stream.unfold[of hd "\<lambda>xs. tl xs @ [hd xs]" u] by (auto simp: cycle_def)
+qed auto
 
-(* prove the following by coinduction *)
-theorem Konig:
-  assumes "infiniteTr tr"
-  shows "properPath (konigPath tr) tr"
-proof-
-  {fix as
-   assume "infiniteTr tr \<and> as = konigPath tr" hence "properPath as tr"
-   proof (induct rule: properPath_coind, safe)
-     fix t
-     let ?t = "SOME t'. t' \<in> listF_set (sub t) \<and> infiniteTr t'"
-     assume "infiniteTr t"
-     hence "\<exists>t' \<in> listF_set (sub t). infiniteTr t'" by simp
-     hence "\<exists>t'. t' \<in> listF_set (sub t) \<and> infiniteTr t'" by blast
-     hence "?t \<in> listF_set (sub t) \<and> infiniteTr ?t" by (elim someI_ex)
-     moreover have "tll (konigPath t) = konigPath ?t" by simp
-     ultimately show "\<exists>t' \<in> listF_set (sub t).
-             infiniteTr t' \<and> tll (konigPath t) = konigPath t'" by blast
-   qed simp
-  }
-  thus ?thesis using assms by blast
+lemma cycle_Cons: "cycle (x # xs) = Stream x (cycle (xs @ [x]))"
+proof (coinduct rule: stream.coinduct[of "\<lambda>s1 s2. \<exists>x xs. s1 = cycle (x # xs) \<and> s2 = Stream x (cycle (xs @ [x]))"])
+  case (2 s1 s2)
+  then obtain x xs where "s1 = cycle (x # xs) \<and> s2 = Stream x (cycle (xs @ [x]))" by blast
+  thus ?case
+    by (auto simp: cycle_def intro!: exI[of _ "hd (xs @ [x])"] exI[of _ "tl (xs @ [x])"] stream.unfold)
+qed auto
+
+coinductive_set
+  streams :: "'a set => 'a stream set"
+  for A :: "'a set"
+where
+  Stream[intro!, simp, no_atp]: "\<lbrakk>a \<in> A; s \<in> streams A\<rbrakk> \<Longrightarrow> Stream a s \<in> streams A"
+
+lemma shift_streams: "\<lbrakk>w \<in> lists A; s \<in> streams A\<rbrakk> \<Longrightarrow> w @- s \<in> streams A"
+by (induct w) auto
+
+lemma stream_set_streams:
+  assumes "stream_set s \<subseteq> A"
+  shows "s \<in> streams A"
+proof (coinduct rule: streams.coinduct[of "\<lambda>s'. \<exists>a s. s' = Stream a s \<and> a \<in> A \<and> stream_set s \<subseteq> A"])
+  case streams from assms show ?case by (cases s) auto
+next
+  fix s' assume "\<exists>a s. s' = Stream a s \<and> a \<in> A \<and> stream_set s \<subseteq> A"
+  then guess a s by (elim exE)
+  with assms show "\<exists>a l. s' = Stream a l \<and>
+    a \<in> A \<and> ((\<exists>a s. l = Stream a s \<and> a \<in> A \<and> stream_set s \<subseteq> A) \<or> l \<in> streams A)"
+    by (cases s) auto
 qed
 
-(* some more stream theorems *)
 
-lemma stream_map[simp]: "stream_map f = stream_dtor_unfold (f o hdd \<odot> tll)"
-unfolding stream_map_def pair_fun_def hdd_def'[abs_def] tll_def'[abs_def]
-  map_pair_def o_def prod_case_beta by simp
+subsection {* flatten a stream of lists *}
 
-definition plus :: "nat stream \<Rightarrow> nat stream \<Rightarrow> nat stream" (infixr "\<oplus>" 66) where
-  [simp]: "plus xs ys =
-    stream_dtor_unfold ((%(xs, ys). hdd xs + hdd ys) \<odot> (%(xs, ys). (tll xs, tll ys))) (xs, ys)"
+definition flat where
+  "flat \<equiv> stream_unfold (hd o shd) (\<lambda>s. if tl (shd s) = [] then stl s else Stream (tl (shd s)) (stl s))"
 
-definition scalar :: "nat \<Rightarrow> nat stream \<Rightarrow> nat stream" (infixr "\<cdot>" 68) where
-  [simp]: "scalar n = stream_map (\<lambda>x. n * x)"
+lemma flat_simps[simp]:
+  "shd (flat ws) = hd (shd ws)"
+  "stl (flat ws) = flat (if tl (shd ws) = [] then stl ws else Stream (tl (shd ws)) (stl ws))"
+unfolding flat_def by auto
 
-definition ones :: "nat stream" where [simp]: "ones = stream_dtor_unfold ((%x. 1) \<odot> id) ()"
-definition twos :: "nat stream" where [simp]: "twos = stream_dtor_unfold ((%x. 2) \<odot> id) ()"
-definition ns :: "nat \<Rightarrow> nat stream" where [simp]: "ns n = scalar n ones"
+lemma flat_Cons[simp]: "flat (Stream (x#xs) w) = Stream x (flat (if xs = [] then w else Stream xs w))"
+unfolding flat_def using stream.unfold[of "hd o shd" _ "Stream (x#xs) w"] by auto
 
-lemma "ones \<oplus> ones = twos"
-by (rule stream.coinduct[of "%x1 x2. \<exists>x. x1 = ones \<oplus> ones \<and> x2 = twos"]) auto
+lemma flat_Stream[simp]: "xs \<noteq> [] \<Longrightarrow> flat (Stream xs ws) = xs @- flat ws"
+by (induct xs) auto
 
-lemma "n \<cdot> twos = ns (2 * n)"
-by (rule stream.coinduct[of "%x1 x2. \<exists>n. x1 = n \<cdot> twos \<and> x2 = ns (2 * n)"]) force+
+lemma flat_unfold: "shd ws \<noteq> [] \<Longrightarrow> flat ws = shd ws @- flat (stl ws)"
+by (cases ws) auto
 
-lemma prod_scalar: "(n * m) \<cdot> xs = n \<cdot> m \<cdot> xs"
-by (rule stream.coinduct[of "%x1 x2. \<exists>n m xs. x1 = (n * m) \<cdot> xs \<and> x2 = n \<cdot> m \<cdot> xs"]) force+
 
-lemma scalar_plus: "n \<cdot> (xs \<oplus> ys) = n \<cdot> xs \<oplus> n \<cdot> ys"
-by (rule stream.coinduct[of "%x1 x2. \<exists>n xs ys. x1 = n \<cdot> (xs \<oplus> ys) \<and> x2 = n \<cdot> xs \<oplus> n \<cdot> ys"])
-   (force simp: add_mult_distrib2)+
+subsection {* take, drop, nth for streams *}
 
-lemma plus_comm: "xs \<oplus> ys = ys \<oplus> xs"
-by (rule stream.coinduct[of "%x1 x2. \<exists>xs ys. x1 = xs \<oplus> ys \<and> x2 = ys \<oplus> xs"]) force+
+primrec stake :: "nat \<Rightarrow> 'a stream \<Rightarrow> 'a list" where
+  "stake 0 s = []"
+| "stake (Suc n) s = shd s # stake n (stl s)"
 
-lemma plus_assoc: "(xs \<oplus> ys) \<oplus> zs = xs \<oplus> ys \<oplus> zs"
-by (rule stream.coinduct[of "%x1 x2. \<exists>xs ys zs. x1 = (xs \<oplus> ys) \<oplus> zs \<and> x2 = xs \<oplus> ys \<oplus> zs"]) force+
+primrec sdrop :: "nat \<Rightarrow> 'a stream \<Rightarrow> 'a stream" where
+  "sdrop 0 s = s"
+| "sdrop (Suc n) s = sdrop n (stl s)"
+
+primrec snth :: "nat \<Rightarrow> 'a stream \<Rightarrow> 'a" where
+  "snth 0 s = shd s"
+| "snth (Suc n) s = snth n (stl s)"
+
+lemma stake_sdrop: "stake n s @- sdrop n s = s"
+by (induct n arbitrary: s) auto
+
+lemma stake_empty: "stake n s = [] \<longleftrightarrow> n = 0"
+by (cases n) auto
+
+lemma sdrop_shift: "\<lbrakk>s = w @- s'; length w = n\<rbrakk> \<Longrightarrow> sdrop n s = s'"
+by (induct n arbitrary: w s) auto
+
+lemma stake_shift: "\<lbrakk>s = w @- s'; length w = n\<rbrakk> \<Longrightarrow> stake n s = w"
+by (induct n arbitrary: w s) auto
+
+lemma stake_add[simp]: "stake m s @ stake n (sdrop m s) = stake (m + n) s"
+by (induct m arbitrary: s) auto
+
+lemma sdrop_add[simp]: "sdrop n (sdrop m s) = sdrop (m + n) s"
+by (induct m arbitrary: s) auto
+
+lemma cycle_rotated: "\<lbrakk>v \<noteq> []; cycle u = v @- s\<rbrakk> \<Longrightarrow> cycle (tl u @ [hd u]) = tl v @- s"
+by (auto dest: arg_cong[of _ _ stl])
+
+lemma stake_append: "stake n (u @- s) = take (min (length u) n) u @ stake (n - length u) s"
+proof (induct n arbitrary: u)
+  case (Suc n) thus ?case by (cases u) auto
+qed auto
+
+lemma stake_cycle_le[simp]:
+  assumes "u \<noteq> []" "n < length u"
+  shows "stake n (cycle u) = take n u"
+using min_absorb2[OF less_imp_le_nat[OF assms(2)]]
+by (subst cycle_decomp[OF assms(1)], subst stake_append) auto
+
+lemma stake_cycle_eq[simp]: "u \<noteq> [] \<Longrightarrow> stake (length u) (cycle u) = u"
+by (metis cycle_decomp stake_shift)
+
+lemma sdrop_cycle_eq[simp]: "u \<noteq> [] \<Longrightarrow> sdrop (length u) (cycle u) = cycle u"
+by (metis cycle_decomp sdrop_shift)
+
+lemma stake_cycle_eq_mod_0[simp]: "\<lbrakk>u \<noteq> []; n mod length u = 0\<rbrakk> \<Longrightarrow>
+   stake n (cycle u) = concat (replicate (n div length u) u)"
+by (induct "n div length u" arbitrary: n u) (auto simp: stake_add[symmetric])
+
+lemma sdrop_cycle_eq_mod_0[simp]: "\<lbrakk>u \<noteq> []; n mod length u = 0\<rbrakk> \<Longrightarrow>
+   sdrop n (cycle u) = cycle u"
+by (induct "n div length u" arbitrary: n u) (auto simp: sdrop_add[symmetric])
+
+lemma stake_cycle: "u \<noteq> [] \<Longrightarrow>
+   stake n (cycle u) = concat (replicate (n div length u) u) @ take (n mod length u) u"
+by (subst mod_div_equality[of n "length u", symmetric], unfold stake_add[symmetric]) auto
+
+lemma sdrop_cycle: "u \<noteq> [] \<Longrightarrow> sdrop n (cycle u) = cycle (rotate (n mod length u) u)"
+by (induct n arbitrary: u) (auto simp: rotate1_rotate_swap rotate1_hd_tl rotate_conv_mod[symmetric])
 
 end
