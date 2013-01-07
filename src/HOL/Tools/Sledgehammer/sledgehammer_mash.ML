@@ -59,12 +59,13 @@ sig
   val features_of :
     Proof.context -> string -> theory -> stature -> term list
     -> (string * real) list
+  val trim_dependencies : thm -> string list -> string list option
   val isar_dependencies_of :
-    string Symtab.table * string Symtab.table -> thm -> string list option
+    string Symtab.table * string Symtab.table -> thm -> string list
   val prover_dependencies_of :
     Proof.context -> params -> string -> int -> fact list
     -> string Symtab.table * string Symtab.table -> thm
-    -> bool * string list option
+    -> bool * string list
   val weight_mash_facts : 'a list -> ('a * real) list
   val find_mash_suggestions :
     int -> (Symtab.key * 'a) list -> ('b * thm) list -> ('b * thm) list
@@ -613,7 +614,10 @@ val max_dependencies = 20
 val prover_dependency_default_max_facts = 50
 
 (* "type_definition_xxx" facts are characterized by their use of "CollectI". *)
-val typedef_deps = [@{thm CollectI} |> nickname_of_thm]
+val typedef_dep = nickname_of_thm @{thm CollectI}
+(* Mysterious parts of the class machinery create lots of proofs that refer
+   exclusively to "someI_e" (and to some internal constructions). *)
+val class_some_dep = nickname_of_thm @{thm someI_ex}
 
 (* "Rep_xxx_inject", "Abs_xxx_inverse", etc., are derived using these facts. *)
 val typedef_ths =
@@ -635,23 +639,23 @@ fun is_size_def [dep] th =
   | is_size_def _ _ = false
 
 fun trim_dependencies th deps =
-  if length deps > max_dependencies then
-    NONE
-  else
-    SOME (if deps = typedef_deps orelse
-             exists (member (op =) typedef_ths) deps orelse
-             is_size_def deps th then
-            []
-          else
-            deps)
+  if length deps > max_dependencies then NONE else SOME deps
 
 fun isar_dependencies_of name_tabs th =
-  th |> thms_in_proof (SOME name_tabs) |> trim_dependencies th
+  let
+    val deps = thms_in_proof (SOME name_tabs) th
+  in
+    if deps = [typedef_dep] orelse deps = [class_some_dep] orelse
+       exists (member (op =) typedef_ths) deps orelse is_size_def deps th then
+      []
+    else
+      deps
+  end
 
 fun prover_dependencies_of ctxt (params as {verbose, max_facts, ...}) prover
                            auto_level facts name_tabs th =
   case isar_dependencies_of name_tabs th of
-    SOME [] => (false, SOME [])
+    [] => (false, [])
   | isar_deps =>
     let
       val thy = Proof_Context.theory_of ctxt
@@ -672,7 +676,7 @@ fun prover_dependencies_of ctxt (params as {verbose, max_facts, ...}) prover
         |> mepo_suggested_facts ctxt params prover
                (max_facts |> the_default prover_dependency_default_max_facts)
                NONE hyp_ts concl_t
-        |> fold (add_isar_dep facts) (these isar_deps)
+        |> fold (add_isar_dep facts) isar_deps
         |> map nickify
     in
       if verbose andalso auto_level = 0 then
@@ -694,9 +698,7 @@ fun prover_dependencies_of ctxt (params as {verbose, max_facts, ...}) prover
            end
          else
            ();
-         case used_facts |> map fst |> trim_dependencies th of
-           NONE => (false, isar_deps)
-         | prover_deps => (true, prover_deps))
+         (true, map fst used_facts))
       | _ => (false, isar_deps)
     end
 
@@ -880,9 +882,11 @@ fun mash_learn_facts ctxt (params as {debug, verbose, overlord, ...}) prover
           else if run_prover then
             prover_dependencies_of ctxt params prover auto_level facts name_tabs
                                    th
-            |> (fn (false, _) => NONE | (true, deps) => deps)
+            |> (fn (false, _) => NONE
+                 | (true, deps) => trim_dependencies th deps)
           else
             isar_dependencies_of name_tabs th
+            |> trim_dependencies th
         fun do_commit [] [] [] state = state
           | do_commit learns relearns flops {access_G, dirty} =
             let
@@ -987,9 +991,7 @@ fun mash_learn_facts ctxt (params as {debug, verbose, overlord, ...}) prover
                      Isar_Proof => 0
                    | Automatic_Proof => 2 * max_isar
                    | Isar_Proof_wegen_Prover_Flop => max_isar)
-                - 500 * (th |> isar_dependencies_of name_tabs
-                            |> Option.map length
-                            |> the_default max_dependencies)
+                - 500 * length (isar_dependencies_of name_tabs th)
               val old_facts =
                 old_facts |> map (`priority_of)
                           |> sort (int_ord o pairself fst)
