@@ -2152,7 +2152,9 @@ lemma bounded_realI: assumes "\<forall>x\<in>s. abs (x::real) \<le> B" shows "bo
   unfolding bounded_def dist_real_def apply(rule_tac x=0 in exI)
   using assms by auto
 
-lemma bounded_empty[simp]: "bounded {}" by (simp add: bounded_def)
+lemma bounded_empty [simp]: "bounded {}"
+  by (simp add: bounded_def)
+
 lemma bounded_subset: "bounded T \<Longrightarrow> S \<subseteq> T ==> bounded S"
   by (metis bounded_def subset_eq)
 
@@ -2188,17 +2190,6 @@ lemma bounded_cball[simp,intro]: "bounded (cball x e)"
 lemma bounded_ball[simp,intro]: "bounded(ball x e)"
   by (metis ball_subset_cball bounded_cball bounded_subset)
 
-lemma finite_imp_bounded[intro]:
-  fixes S :: "'a::metric_space set" assumes "finite S" shows "bounded S"
-proof-
-  { fix a and F :: "'a set" assume as:"bounded F"
-    then obtain x e where "\<forall>y\<in>F. dist x y \<le> e" unfolding bounded_def by auto
-    hence "\<forall>y\<in>(insert a F). dist x y \<le> max e (dist x a)" by auto
-    hence "bounded (insert a F)" unfolding bounded_def by (intro exI)
-  }
-  thus ?thesis using finite_induct[of S bounded]  using bounded_empty assms by auto
-qed
-
 lemma bounded_Un[simp]: "bounded (S \<union> T) \<longleftrightarrow> bounded S \<and> bounded T"
   apply (auto simp add: bounded_def)
   apply (rename_tac x y r s)
@@ -2214,6 +2205,16 @@ lemma bounded_Un[simp]: "bounded (S \<union> T) \<longleftrightarrow> bounded S 
 lemma bounded_Union[intro]: "finite F \<Longrightarrow> (\<forall>S\<in>F. bounded S) \<Longrightarrow> bounded(\<Union>F)"
   by (induct rule: finite_induct[of F], auto)
 
+lemma bounded_insert [simp]: "bounded (insert x S) \<longleftrightarrow> bounded S"
+proof -
+  have "\<forall>y\<in>{x}. dist x y \<le> 0" by simp
+  hence "bounded {x}" unfolding bounded_def by fast
+  thus ?thesis by (metis insert_is_Un bounded_Un)
+qed
+
+lemma finite_imp_bounded [intro]: "finite S \<Longrightarrow> bounded S"
+  by (induct set: finite, simp_all)
+
 lemma bounded_pos: "bounded S \<longleftrightarrow> (\<exists>b>0. \<forall>x\<in> S. norm x <= b)"
   apply (simp add: bounded_iff)
   apply (subgoal_tac "\<And>x (y::real). 0 < 1 + abs y \<and> (x <= y \<longrightarrow> x <= 1 + abs y)")
@@ -2225,9 +2226,6 @@ lemma bounded_Int[intro]: "bounded S \<or> bounded T \<Longrightarrow> bounded (
 lemma bounded_diff[intro]: "bounded S ==> bounded (S - T)"
 apply (metis Diff_subset bounded_subset)
 done
-
-lemma bounded_insert[intro]:"bounded(insert x S) \<longleftrightarrow> bounded S"
-  by (metis Diff_cancel Un_empty_right Un_insert_right bounded_Un bounded_subset finite.emptyI finite_imp_bounded infinite_remove subset_insertI)
 
 lemma not_bounded_UNIV[simp, intro]:
   "\<not> bounded (UNIV :: 'a::{real_normed_vector, perfect_space} set)"
@@ -5063,14 +5061,14 @@ proof-
 qed
 
 lemma continuous_attains_sup:
-  fixes f :: "'a::metric_space \<Rightarrow> real"
+  fixes f :: "'a::topological_space \<Rightarrow> real"
   shows "compact s \<Longrightarrow> s \<noteq> {} \<Longrightarrow> continuous_on s f
         ==> (\<exists>x \<in> s. \<forall>y \<in> s.  f y \<le> f x)"
   using compact_attains_sup[of "f ` s"]
   using compact_continuous_image[of s f] by auto
 
 lemma continuous_attains_inf:
-  fixes f :: "'a::metric_space \<Rightarrow> real"
+  fixes f :: "'a::topological_space \<Rightarrow> real"
   shows "compact s \<Longrightarrow> s \<noteq> {} \<Longrightarrow> continuous_on s f
         \<Longrightarrow> (\<exists>x \<in> s. \<forall>y \<in> s. f x \<le> f y)"
   using compact_attains_inf[of "f ` s"]
@@ -5429,24 +5427,54 @@ next
 qed
 
 lemma separate_compact_closed:
-  fixes s t :: "'a::{heine_borel, real_normed_vector} set"
-    (* TODO: does this generalize to heine_borel? *)
+  fixes s t :: "'a::heine_borel set"
   assumes "compact s" and "closed t" and "s \<inter> t = {}"
   shows "\<exists>d>0. \<forall>x\<in>s. \<forall>y\<in>t. d \<le> dist x y"
-proof-
-  have "0 \<notin> {x - y |x y. x \<in> s \<and> y \<in> t}" using assms(3) by auto
-  then obtain d where "d>0" and d:"\<forall>x\<in>{x - y |x y. x \<in> s \<and> y \<in> t}. d \<le> dist 0 x"
-    using separate_point_closed[OF compact_closed_differences[OF assms(1,2)], of 0] by auto
-  { fix x y assume "x\<in>s" "y\<in>t"
-    hence "x - y \<in> {x - y |x y. x \<in> s \<and> y \<in> t}" by auto
-    hence "d \<le> dist (x - y) 0" using d[THEN bspec[where x="x - y"]] using dist_commute
-      by (auto  simp add: dist_commute)
-    hence "d \<le> dist x y" unfolding dist_norm by auto  }
-  thus ?thesis using `d>0` by auto
+proof - (* FIXME: long proof *)
+  let ?T = "\<Union>x\<in>s. { ball x (d / 2) | d. 0 < d \<and> (\<forall>y\<in>t. d \<le> dist x y) }"
+  note `compact s`
+  moreover have "\<forall>t\<in>?T. open t" by auto
+  moreover have "s \<subseteq> \<Union>?T"
+    apply auto
+    apply (rule rev_bexI, assumption)
+    apply (subgoal_tac "x \<notin> t")
+    apply (drule separate_point_closed [OF `closed t`])
+    apply clarify
+    apply (rule_tac x="ball x (d / 2)" in exI)
+    apply simp
+    apply fast
+    apply (cut_tac assms(3))
+    apply auto
+    done
+  ultimately obtain U where "U \<subseteq> ?T" and "finite U" and "s \<subseteq> \<Union>U"
+    by (rule compactE)
+  from `finite U` and `U \<subseteq> ?T` have "\<exists>d>0. \<forall>x\<in>\<Union>U. \<forall>y\<in>t. d \<le> dist x y"
+    apply (induct set: finite)
+    apply simp
+    apply (rule exI)
+    apply (rule zero_less_one)
+    apply clarsimp
+    apply (rename_tac y e)
+    apply (rule_tac x="min d (e / 2)" in exI)
+    apply simp
+    apply (subst ball_Un)
+    apply (rule conjI)
+    apply (intro ballI, rename_tac z)
+    apply (rule min_max.le_infI2)
+    apply (simp only: mem_ball)
+    apply (drule (1) bspec)
+    apply (cut_tac x=y and y=x and z=z in dist_triangle, arith)
+    apply simp
+    apply (intro ballI)
+    apply (rule min_max.le_infI1)
+    apply simp
+    done
+  with `s \<subseteq> \<Union>U` show ?thesis
+    by fast
 qed
 
 lemma separate_closed_compact:
-  fixes s t :: "'a::{heine_borel, real_normed_vector} set"
+  fixes s t :: "'a::heine_borel set"
   assumes "closed s" and "compact t" and "s \<inter> t = {}"
   shows "\<exists>d>0. \<forall>x\<in>s. \<forall>y\<in>t. d \<le> dist x y"
 proof-
