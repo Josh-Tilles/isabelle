@@ -170,99 +170,6 @@ lemma countable_dense_setE:
   where "countable D" "\<And>X. open X \<Longrightarrow> X \<noteq> {} \<Longrightarrow> \<exists>d \<in> D. d \<in> X"
   using countable_dense_exists by blast
 
-text {* Construction of an increasing sequence approximating open sets,
-  therefore basis which is closed under union. *}
-
-definition union_closed_basis::"'a set set" where
-  "union_closed_basis = (\<lambda>l. \<Union>set l) ` lists B"
-
-lemma basis_union_closed_basis: "topological_basis union_closed_basis"
-proof (rule topological_basisI)
-  fix O' and x::'a assume "open O'" "x \<in> O'"
-  from topological_basisE[OF is_basis this] guess B' . note B' = this
-  thus "\<exists>B'\<in>union_closed_basis. x \<in> B' \<and> B' \<subseteq> O'" unfolding union_closed_basis_def
-    by (auto intro!: bexI[where x="[B']"])
-next
-  fix B' assume "B' \<in> union_closed_basis"
-  thus "open B'"
-    using topological_basis_open[OF is_basis]
-    by (auto simp: union_closed_basis_def)
-qed
-
-lemma countable_union_closed_basis: "countable union_closed_basis"
-  unfolding union_closed_basis_def using countable_basis by simp
-
-lemmas open_union_closed_basis = topological_basis_open[OF basis_union_closed_basis]
-
-lemma union_closed_basis_ex:
- assumes X: "X \<in> union_closed_basis"
- shows "\<exists>B'. finite B' \<and> X = \<Union>B' \<and> B' \<subseteq> B"
-proof -
-  from X obtain l where "\<And>x. x\<in>set l \<Longrightarrow> x\<in>B" "X = \<Union>set l" by (auto simp: union_closed_basis_def)
-  thus ?thesis by auto
-qed
-
-lemma union_closed_basisE:
-  assumes "X \<in> union_closed_basis"
-  obtains B' where "finite B'" "X = \<Union>B'" "B' \<subseteq> B" using union_closed_basis_ex[OF assms] by blast
-
-lemma union_closed_basisI:
-  assumes "finite B'" "X = \<Union>B'" "B' \<subseteq> B"
-  shows "X \<in> union_closed_basis"
-proof -
-  from finite_list[OF `finite B'`] guess l ..
-  thus ?thesis using assms unfolding union_closed_basis_def by (auto intro!: image_eqI[where x=l])
-qed
-
-lemma empty_basisI[intro]: "{} \<in> union_closed_basis"
-  by (rule union_closed_basisI[of "{}"]) auto
-
-lemma union_basisI[intro]:
-  assumes "X \<in> union_closed_basis" "Y \<in> union_closed_basis"
-  shows "X \<union> Y \<in> union_closed_basis"
-  using assms by (auto intro: union_closed_basisI elim!:union_closed_basisE)
-
-lemma open_imp_Union_of_incseq:
-  assumes "open X"
-  shows "\<exists>S. incseq S \<and> (\<Union>j. S j) = X \<and> range S \<subseteq> union_closed_basis"
-proof -
-  from open_countable_basis_ex[OF `open X`]
-  obtain B' where B': "B'\<subseteq>B" "X = \<Union>B'" by auto
-  from this(1) countable_basis have "countable B'" by (rule countable_subset)
-  show ?thesis
-  proof cases
-    assume "B' \<noteq> {}"
-    def S \<equiv> "\<lambda>n. \<Union>i\<in>{0..n}. from_nat_into B' i"
-    have S:"\<And>n. S n = \<Union>{from_nat_into B' i|i. i\<in>{0..n}}" unfolding S_def by force
-    have "incseq S" by (force simp: S_def incseq_Suc_iff)
-    moreover
-    have "(\<Union>j. S j) = X" unfolding B'
-    proof safe
-      fix x X assume "X \<in> B'" "x \<in> X"
-      then obtain n where "X = from_nat_into B' n"
-        by (metis `countable B'` from_nat_into_surj)
-      also have "\<dots> \<subseteq> S n" by (auto simp: S_def)
-      finally show "x \<in> (\<Union>j. S j)" using `x \<in> X` by auto
-    next
-      fix x n
-      assume "x \<in> S n"
-      also have "\<dots> = (\<Union>i\<in>{0..n}. from_nat_into B' i)"
-        by (simp add: S_def)
-      also have "\<dots> \<subseteq> (\<Union>i. from_nat_into B' i)" by auto
-      also have "\<dots> \<subseteq> \<Union>B'" using `B' \<noteq> {}` by (auto intro: from_nat_into)
-      finally show "x \<in> \<Union>B'" .
-    qed
-    moreover have "range S \<subseteq> union_closed_basis" using B'
-      by (auto intro!: union_closed_basisI[OF _ S] simp: from_nat_into `B' \<noteq> {}`)
-    ultimately show ?thesis by auto
-  qed (auto simp: B')
-qed
-
-lemma open_incseqE:
-  assumes "open X"
-  obtains S where "incseq S" "(\<Union>j. S j) = X" "range S \<subseteq> union_closed_basis"
-  using open_imp_Union_of_incseq assms by atomize_elim
-
 end
 
 class first_countable_topology = topological_space +
@@ -303,6 +210,31 @@ lemma (in first_countable_topology) first_countable_basisE:
     "\<And>S. open S \<Longrightarrow> x \<in> S \<Longrightarrow> (\<exists>a\<in>A. a \<subseteq> S)"
   using first_countable_basis[of x]
   by atomize_elim auto
+
+lemma (in first_countable_topology) first_countable_basis_Int_stableE:
+  obtains A where "countable A" "\<And>a. a \<in> A \<Longrightarrow> x \<in> a" "\<And>a. a \<in> A \<Longrightarrow> open a"
+    "\<And>S. open S \<Longrightarrow> x \<in> S \<Longrightarrow> (\<exists>a\<in>A. a \<subseteq> S)"
+    "\<And>a b. a \<in> A \<Longrightarrow> b \<in> A \<Longrightarrow> a \<inter> b \<in> A"
+proof atomize_elim
+  from first_countable_basisE[of x] guess A' . note A' = this
+  def A \<equiv> "(\<lambda>N. \<Inter>((\<lambda>n. from_nat_into A' n) ` N)) ` (Collect finite::nat set set)"
+  thus "\<exists>A. countable A \<and> (\<forall>a. a \<in> A \<longrightarrow> x \<in> a) \<and> (\<forall>a. a \<in> A \<longrightarrow> open a) \<and>
+        (\<forall>S. open S \<longrightarrow> x \<in> S \<longrightarrow> (\<exists>a\<in>A. a \<subseteq> S)) \<and> (\<forall>a b. a \<in> A \<longrightarrow> b \<in> A \<longrightarrow> a \<inter> b \<in> A)"
+  proof (safe intro!: exI[where x=A])
+    show "countable A" unfolding A_def by (intro countable_image countable_Collect_finite)
+    fix a assume "a \<in> A"
+    thus "x \<in> a" "open a" using A'(4)[OF open_UNIV] by (auto simp: A_def intro: A' from_nat_into)
+  next
+    let ?int = "\<lambda>N. \<Inter>from_nat_into A' ` N"
+    fix a b assume "a \<in> A" "b \<in> A"
+    then obtain N M where "a = ?int N" "b = ?int M" "finite (N \<union> M)" by (auto simp: A_def)
+    thus "a \<inter> b \<in> A" by (auto simp: A_def intro!: image_eqI[where x="N \<union> M"])
+  next
+    fix S assume "open S" "x \<in> S" then obtain a where a: "a\<in>A'" "a \<subseteq> S" using A' by blast
+    thus "\<exists>a\<in>A. a \<subseteq> S" using a A'
+      by (intro bexI[where x=a]) (auto simp: A_def intro: image_eqI[where x="{to_nat_on A' a}"])
+  qed
+qed
 
 instance prod :: (first_countable_topology, first_countable_topology) first_countable_topology
 proof
@@ -794,7 +726,7 @@ proof -
     finally show "y \<in> ball x e" by (auto simp: ball_def)
   qed (insert a b, auto simp: box_def)
 qed
- 
+
 lemma open_UNION_box:
   fixes M :: "'a\<Colon>euclidean_space set"
   assumes "open M" 
@@ -3704,7 +3636,7 @@ qed
 
 text{* Cauchy-type criteria for uniform convergence. *}
 
-lemma uniformly_convergent_eq_cauchy: fixes s::"nat \<Rightarrow> 'b \<Rightarrow> 'a::heine_borel" shows
+lemma uniformly_convergent_eq_cauchy: fixes s::"nat \<Rightarrow> 'b \<Rightarrow> 'a::complete_space" shows
  "(\<exists>l. \<forall>e>0. \<exists>N. \<forall>n x. N \<le> n \<and> P x --> dist(s n x)(l x) < e) \<longleftrightarrow>
   (\<forall>e>0. \<exists>N. \<forall>m n x. N \<le> m \<and> N \<le> n \<and> P x  --> dist (s m x) (s n x) < e)" (is "?lhs = ?rhs")
 proof(rule)
@@ -3738,7 +3670,7 @@ next
 qed
 
 lemma uniformly_cauchy_imp_uniformly_convergent:
-  fixes s :: "nat \<Rightarrow> 'a \<Rightarrow> 'b::heine_borel"
+  fixes s :: "nat \<Rightarrow> 'a \<Rightarrow> 'b::complete_space"
   assumes "\<forall>e>0.\<exists>N. \<forall>m (n::nat) x. N \<le> m \<and> N \<le> n \<and> P x --> dist(s m x)(s n x) < e"
           "\<forall>x. P x --> (\<forall>e>0. \<exists>N. \<forall>n. N \<le> n --> dist(s n x)(l x) < e)"
   shows "\<forall>e>0. \<exists>N. \<forall>n x. N \<le> n \<and> P x --> dist(s n x)(l x) < e"
@@ -5796,7 +5728,7 @@ proof
   show "\<exists>B::'a set set. countable B \<and> topological_basis B" unfolding topological_basis_def by blast
 qed
 
-instance ordered_euclidean_space \<subseteq> polish_space ..
+instance euclidean_space \<subseteq> polish_space ..
 
 text {* Intervals in general, including infinite and mixtures of open and closed. *}
 

@@ -76,9 +76,8 @@ lemma domain_finmap_of[simp]:
 
 lemma finmap_of_eq_iff[simp]:
   assumes "finite i" "finite j"
-  shows "finmap_of i m = finmap_of j n \<longleftrightarrow> i = j \<and> restrict m i = restrict n i"
-  using assms
-  apply (auto simp: finmap_eq_iff restrict_def) by metis
+  shows "finmap_of i m = finmap_of j n \<longleftrightarrow> i = j \<and> (\<forall>k\<in>i. m k= n k)"
+  using assms by (auto simp: finmap_eq_iff)
 
 lemma finmap_of_inj_on_extensional_finite:
   assumes "finite K"
@@ -92,17 +91,6 @@ proof (rule inj_onI)
   assume "x \<in> S" "y \<in> S" hence "x \<in> extensional K" "y \<in> extensional K" using assms by auto
   ultimately
   show "x = y" using assms by (simp add: extensional_restrict)
-qed
-
-lemma finmap_choice:
-  assumes *: "\<And>i. i \<in> I \<Longrightarrow> \<exists>x. P i x" and I: "finite I"
-  shows "\<exists>fm. domain fm = I \<and> (\<forall>i\<in>I. P i (fm i))"
-proof -
-  have "\<exists>f. \<forall>i\<in>I. P i (f i)"
-    unfolding bchoice_iff[symmetric] using * by auto
-  then guess f ..
-  with I show ?thesis
-    by (intro exI[of _ "finmap_of I f"]) auto
 qed
 
 subsection {* Product set of Finite Maps *}
@@ -163,128 +151,19 @@ lemma Pi_Pi': "finite A \<Longrightarrow> (Pi\<^isub>E A B) = proj ` Pi' A B"
   apply auto
   done
 
-subsection {* Metric Space of Finite Maps *}
+subsection {* Topological Space of Finite Maps *}
 
-instantiation finmap :: (type, metric_space) metric_space
+instantiation finmap :: (type, topological_space) topological_space
 begin
 
-definition dist_finmap where
-  "dist P Q = (\<Sum>i\<in>domain P \<union> domain Q. dist ((P)\<^isub>F i) ((Q)\<^isub>F i)) +
-    card ((domain P - domain Q) \<union> (domain Q - domain P))"
-
-lemma dist_finmap_extend:
-  assumes "finite X"
-  shows "dist P Q = (\<Sum>i\<in>domain P \<union> domain Q \<union> X. dist ((P)\<^isub>F i) ((Q)\<^isub>F i)) +
-    card ((domain P - domain Q) \<union> (domain Q - domain P))"
-    unfolding dist_finmap_def add_right_cancel
-    using assms extensional_arb[of "(P)\<^isub>F"] extensional_arb[of "(Q)\<^isub>F" "domain Q"]
-    by (intro setsum_mono_zero_cong_left) auto
-
 definition open_finmap :: "('a \<Rightarrow>\<^isub>F 'b) set \<Rightarrow> bool" where
-  "open_finmap S = (\<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S)"
+  "open_finmap = generate_topology {Pi' a b|a b. \<forall>i\<in>a. open (b i)}"
 
-lemma add_eq_zero_iff[simp]:
-  fixes a b::real
-  assumes "a \<ge> 0" "b \<ge> 0"
-  shows "a + b = 0 \<longleftrightarrow> a = 0 \<and> b = 0"
-using assms by auto
+lemma open_Pi'I: "(\<And>i. i \<in> I \<Longrightarrow> open (A i)) \<Longrightarrow> open (Pi' I A)"
+  by (auto intro: generate_topology.Basis simp: open_finmap_def)
 
-lemma dist_le_1_imp_domain_eq:
-  assumes "dist P Q < 1"
-  shows "domain P = domain Q"
-proof -
-  have "0 \<le> (\<Sum>i\<in>domain P \<union> domain Q. dist (P i) (Q i))"
-    by (simp add: setsum_nonneg)
-  with assms have "card (domain P - domain Q \<union> (domain Q - domain P)) = 0"
-    unfolding dist_finmap_def by arith
-  thus "domain P = domain Q" by auto
-qed
-
-lemma dist_proj:
-  shows "dist ((x)\<^isub>F i) ((y)\<^isub>F i) \<le> dist x y"
-proof -
-  have "dist (x i) (y i) = (\<Sum>i\<in>{i}. dist (x i) (y i))" by simp
-  also have "\<dots> \<le> (\<Sum>i\<in>domain x \<union> domain y \<union> {i}. dist (x i) (y i))"
-    by (intro setsum_mono2) auto
-  also have "\<dots> \<le> dist x y" by (simp add: dist_finmap_extend[of "{i}"])
-  finally show ?thesis by simp
-qed
-
-lemma open_Pi'I:
-  assumes open_component: "\<And>i. i \<in> I \<Longrightarrow> open (A i)"
-  shows "open (Pi' I A)"
-proof (subst open_finmap_def, safe)
-  fix x assume x: "x \<in> Pi' I A"
-  hence dim_x: "domain x = I" by (simp add: Pi'_def)
-  hence [simp]: "finite I" unfolding dim_x[symmetric] by simp
-  have "\<exists>ei. \<forall>i\<in>I. 0 < ei i \<and> (\<forall>y. dist y (x i) < ei i \<longrightarrow> y \<in> A i)"
-  proof (safe intro!: bchoice)
-    fix i assume i: "i \<in> I"
-    moreover with open_component have "open (A i)" by simp
-    moreover have "x i \<in> A i" using x i
-      by (auto simp: proj_def)
-    ultimately show "\<exists>e>0. \<forall>y. dist y (x i) < e \<longrightarrow> y \<in> A i"
-      using x by (auto simp: open_dist Ball_def)
-  qed
-  then guess ei .. note ei = this
-  def es \<equiv> "ei ` I"
-  def e \<equiv> "if es = {} then 0.5 else min 0.5 (Min es)"
-  from ei have "e > 0" using x
-    by (auto simp add: e_def es_def Pi'_def Ball_def)
-  moreover have "\<forall>y. dist y x < e \<longrightarrow> y \<in> Pi' I A"
-  proof (intro allI impI)
-    fix y
-    assume "dist y x < e"
-    also have "\<dots> < 1" by (auto simp: e_def)
-    finally have "domain y = domain x" by (rule dist_le_1_imp_domain_eq)
-    with dim_x have dims: "domain y = domain x" "domain x = I" by auto
-    show "y \<in> Pi' I A"
-    proof
-      show "domain y = I" using dims by simp
-    next
-      fix i
-      assume "i \<in> I"
-      have "dist (y i) (x i) \<le> dist y x" using dims `i \<in> I`
-        by (auto intro: dist_proj)
-      also have "\<dots> < e" using `dist y x < e` dims
-        by (simp add: dist_finmap_def)
-      also have "e \<le> Min (ei ` I)" using dims `i \<in> I`
-        by (auto simp: e_def es_def)
-      also have "\<dots> \<le> ei i" using `i \<in> I` by (simp add: e_def)
-      finally have "dist (y i) (x i) < ei i" .
-      with ei `i \<in> I` show "y i \<in> A  i" by simp
-    qed
-  qed
-  ultimately
-  show "\<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> Pi' I A" by blast
-qed
-
-instance
-proof
-  fix S::"('a \<Rightarrow>\<^isub>F 'b) set"
-  show "open S = (\<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S)"
-    unfolding open_finmap_def ..
-next
-  fix P Q::"'a \<Rightarrow>\<^isub>F 'b"
-  show "dist P Q = 0 \<longleftrightarrow> P = Q"
-    by (auto simp: finmap_eq_iff dist_finmap_def setsum_nonneg setsum_nonneg_eq_0_iff)
-next
-  fix P Q R::"'a \<Rightarrow>\<^isub>F 'b"
-  let ?symdiff = "\<lambda>a b. domain a - domain b \<union> (domain b - domain a)"
-  def E \<equiv> "domain P \<union> domain Q \<union> domain R"
-  hence "finite E" by (simp add: E_def)
-  have "card (?symdiff P Q) \<le> card (?symdiff P R \<union> ?symdiff Q R)"
-    by (auto intro: card_mono)
-  also have "\<dots> \<le> card (?symdiff P R) + card (?symdiff Q R)"
-    by (subst card_Un_Int) auto
-  finally have "dist P Q \<le> (\<Sum>i\<in>E. dist (P i) (R i) + dist (Q i) (R i)) +
-    real (card (?symdiff P R) + card (?symdiff Q R))"
-    unfolding dist_finmap_extend[OF `finite E`]
-    by (intro add_mono) (auto simp: E_def intro: setsum_mono dist_triangle_le)
-  also have "\<dots> \<le> dist P R + dist Q R"
-    unfolding dist_finmap_extend[OF `finite E`] by (simp add: ac_simps E_def setsum_addf[symmetric])
-  finally show "dist P Q \<le> dist P R + dist Q R" by simp
-qed
+instance using topological_space_generate_topology
+  by intro_classes (auto simp: open_finmap_def class.topological_space_def)
 
 end
 
@@ -310,69 +189,268 @@ qed
 
 lemma closed_restricted_space:
   shows "closed {m. P (domain m)}"
-proof -
-  have "{m. P (domain m)} = - (\<Union>i \<in> - Collect P. {m. domain m = i})" by auto
-  also have "closed \<dots>"
-  proof (rule, rule, rule, cases)
-    fix i::"'a set"
-    assume "finite i"
-    hence "{m. domain m = i} = Pi' i (\<lambda>_. UNIV)" by (auto simp: Pi'_def)
-    also have "open \<dots>" by (auto intro: open_Pi'I simp: `finite i`)
-    finally show "open {m. domain m = i}" .
-  next
-    fix i::"'a set"
-    assume "\<not> finite i" hence "{m. domain m = i} = {}" by auto
-    also have "open \<dots>" by simp
-    finally show "open {m. domain m = i}" .
-  qed
-  finally show ?thesis .
+  using open_restricted_space[of "\<lambda>x. \<not> P x"]
+  unfolding closed_def by (rule back_subst) auto
+
+lemma tendsto_proj: "((\<lambda>x. x) ---> a) F \<Longrightarrow> ((\<lambda>x. (x)\<^isub>F i) ---> (a)\<^isub>F i) F"
+  unfolding tendsto_def
+proof safe
+  fix S::"'b set"
+  let ?S = "Pi' (domain a) (\<lambda>x. if x = i then S else UNIV)"
+  assume "open S" hence "open ?S" by (auto intro!: open_Pi'I)
+  moreover assume "\<forall>S. open S \<longrightarrow> a \<in> S \<longrightarrow> eventually (\<lambda>x. x \<in> S) F" "a i \<in> S"
+  ultimately have "eventually (\<lambda>x. x \<in> ?S) F" by auto
+  thus "eventually (\<lambda>x. (x)\<^isub>F i \<in> S) F"
+    by eventually_elim (insert `a i \<in> S`, force simp: Pi'_iff split: split_if_asm)
 qed
 
 lemma continuous_proj:
   shows "continuous_on s (\<lambda>x. (x)\<^isub>F i)"
-  unfolding continuous_on_topological
-proof safe
-  fix x B assume "x \<in> s" "open B" "x i \<in> B"
-  let ?A = "Pi' (domain x) (\<lambda>j. if i = j then B else UNIV)"
-  have "open ?A" using `open B` by (auto intro: open_Pi'I)
-  moreover have "x \<in> ?A" using `x i \<in> B` by auto
-  moreover have "(\<forall>y\<in>s. y \<in> ?A \<longrightarrow> y i \<in> B)"
-  proof (cases, safe)
-    fix y assume "y \<in> s"
-    assume "i \<notin> domain x" hence "undefined \<in> B" using `x i \<in> B`
-      by simp
-    moreover
-    assume "y \<in> ?A" hence "domain y = domain x" by (simp add: Pi'_def)
-    hence "y i = undefined" using `i \<notin> domain x` by simp
-    ultimately
-    show "y i \<in> B" by simp
-  qed force
-  ultimately
-  show "\<exists>A. open A \<and> x \<in> A \<and> (\<forall>y\<in>s. y \<in> A \<longrightarrow> y i \<in> B)" by blast
+  unfolding continuous_on_def
+  by (safe intro!: tendsto_proj tendsto_ident_at_within)
+
+instance finmap :: (type, first_countable_topology) first_countable_topology
+proof
+  fix x::"'a\<Rightarrow>\<^isub>F'b"
+  have "\<forall>i. \<exists>A. countable A \<and> (\<forall>a\<in>A. x i \<in> a) \<and> (\<forall>a\<in>A. open a) \<and>
+    (\<forall>S. open S \<and> x i \<in> S \<longrightarrow> (\<exists>a\<in>A. a \<subseteq> S)) \<and> (\<forall>a b. a \<in> A \<longrightarrow> b \<in> A \<longrightarrow> a \<inter> b \<in> A)" (is "\<forall>i. ?th i")
+  proof
+    fix i from first_countable_basis_Int_stableE[of "x i"] guess A .
+    thus "?th i" by (intro exI[where x=A]) simp
+  qed
+  then guess A unfolding choice_iff .. note A = this
+  hence open_sub: "\<And>i S. i\<in>domain x \<Longrightarrow> open (S i) \<Longrightarrow> x i\<in>(S i) \<Longrightarrow> (\<exists>a\<in>A i. a\<subseteq>(S i))" by auto
+  have A_notempty: "\<And>i. i \<in> domain x \<Longrightarrow> A i \<noteq> {}" using open_sub[of _ "\<lambda>_. UNIV"] by auto
+  let ?A = "(\<lambda>f. Pi' (domain x) f) ` (Pi\<^isub>E (domain x) A)"
+  show "\<exists>A. countable A \<and> (\<forall>a\<in>A. x \<in> a \<and> open a) \<and> (\<forall>S. open S \<and> x \<in> S \<longrightarrow> (\<exists>a\<in>A. a \<subseteq> S))"
+  proof (rule exI[where x="?A"], safe)
+    show "countable ?A" using A by (simp add: countable_PiE)
+  next
+    fix S::"('a \<Rightarrow>\<^isub>F 'b) set" assume "open S" "x \<in> S"
+    thus "\<exists>a\<in>?A. a \<subseteq> S" unfolding open_finmap_def
+    proof (induct rule: generate_topology.induct)
+      case UNIV thus ?case by (auto simp add: ex_in_conv PiE_eq_empty_iff A_notempty)
+    next
+      case (Int a b)
+      then obtain f g where
+        "f \<in> Pi\<^isub>E (domain x) A" "Pi' (domain x) f \<subseteq> a" "g \<in> Pi\<^isub>E (domain x) A" "Pi' (domain x) g \<subseteq> b"
+        by auto
+      thus ?case using A
+        by (auto simp: Pi'_iff PiE_iff extensional_def Int_stable_def
+            intro!: bexI[where x="\<lambda>i. f i \<inter> g i"])
+    next
+      case (UN B)
+      then obtain b where "x \<in> b" "b \<in> B" by auto
+      hence "\<exists>a\<in>?A. a \<subseteq> b" using UN by simp
+      thus ?case using `b \<in> B` by blast
+    next
+      case (Basis s)
+      then obtain a b where xs: "x\<in> Pi' a b" "s = Pi' a b" "\<And>i. i\<in>a \<Longrightarrow> open (b i)" by auto
+      have "\<forall>i. \<exists>a. (i \<in> domain x \<and> open (b i) \<and> (x)\<^isub>F i \<in> b i) \<longrightarrow> (a\<in>A i \<and> a \<subseteq> b i)"
+        using open_sub[of _ b] by auto
+      then obtain b'
+        where "\<And>i. i \<in> domain x \<Longrightarrow> open (b i) \<Longrightarrow> (x)\<^isub>F i \<in> b i \<Longrightarrow> (b' i \<in>A i \<and> b' i \<subseteq> b i)"
+          unfolding choice_iff by auto
+      with xs have "\<And>i. i \<in> a \<Longrightarrow> (b' i \<in>A i \<and> b' i \<subseteq> b i)" "Pi' a b' \<subseteq> Pi' a b"
+        by (auto simp: Pi'_iff intro!: Pi'_mono)
+      thus ?case using xs
+        by (intro bexI[where x="Pi' a b'"])
+          (auto simp: Pi'_iff intro!: image_eqI[where x="restrict b' (domain x)"])
+    qed
+  qed (insert A,auto simp: PiE_iff intro!: open_Pi'I)
 qed
 
+subsection {* Metric Space of Finite Maps *}
+
+instantiation finmap :: (type, metric_space) metric_space
+begin
+
+definition dist_finmap where
+  "dist P Q = Max (range (\<lambda>i. dist ((P)\<^isub>F i) ((Q)\<^isub>F i))) + (if domain P = domain Q then 0 else 1)"
+
+lemma add_eq_zero_iff[simp]:
+  fixes a b::real
+  assumes "a \<ge> 0" "b \<ge> 0"
+  shows "a + b = 0 \<longleftrightarrow> a = 0 \<and> b = 0"
+using assms by auto
+
+lemma finite_proj_image': "x \<notin> domain P \<Longrightarrow> finite ((P)\<^isub>F ` S)"
+  by (rule finite_subset[of _ "proj P ` (domain P \<inter> S \<union> {x})"]) auto
+
+lemma finite_proj_image: "finite ((P)\<^isub>F ` S)"
+ by (cases "\<exists>x. x \<notin> domain P") (auto intro: finite_proj_image' finite_subset[where B="domain P"])
+
+lemma finite_proj_diag: "finite ((\<lambda>i. d ((P)\<^isub>F i) ((Q)\<^isub>F i)) ` S)"
+proof -
+  have "(\<lambda>i. d ((P)\<^isub>F i) ((Q)\<^isub>F i)) ` S = (\<lambda>(i, j). d i j) ` ((\<lambda>i. ((P)\<^isub>F i, (Q)\<^isub>F i)) ` S)" by auto
+  moreover have "((\<lambda>i. ((P)\<^isub>F i, (Q)\<^isub>F i)) ` S) \<subseteq> (\<lambda>i. (P)\<^isub>F i) ` S \<times> (\<lambda>i. (Q)\<^isub>F i) ` S" by auto
+  moreover have "finite \<dots>" using finite_proj_image[of P S] finite_proj_image[of Q S]
+    by (intro finite_cartesian_product) simp_all
+  ultimately show ?thesis by (simp add: finite_subset)
+qed
+
+lemma dist_le_1_imp_domain_eq:
+  shows "dist P Q < 1 \<Longrightarrow> domain P = domain Q"
+  by (simp add: dist_finmap_def finite_proj_diag split: split_if_asm)
+
+lemma dist_proj:
+  shows "dist ((x)\<^isub>F i) ((y)\<^isub>F i) \<le> dist x y"
+proof -
+  have "dist (x i) (y i) \<le> Max (range (\<lambda>i. dist (x i) (y i)))"
+    by (simp add: Max_ge_iff finite_proj_diag)
+  also have "\<dots> \<le> dist x y" by (simp add: dist_finmap_def)
+  finally show ?thesis .
+qed
+
+lemma dist_finmap_lessI:
+  assumes "domain P = domain Q"
+  assumes "0 < e"
+  assumes "\<And>i. i \<in> domain P \<Longrightarrow> dist (P i) (Q i) < e"
+  shows "dist P Q < e"
+proof -
+  have "dist P Q = Max (range (\<lambda>i. dist (P i) (Q i)))"
+    using assms by (simp add: dist_finmap_def finite_proj_diag)
+  also have "\<dots> < e"
+  proof (subst Max_less_iff, safe)
+    fix i
+    show "dist ((P)\<^isub>F i) ((Q)\<^isub>F i) < e" using assms
+      by (cases "i \<in> domain P") simp_all
+  qed (simp add: finite_proj_diag)
+  finally show ?thesis .
+qed
+
+instance
+proof
+  fix S::"('a \<Rightarrow>\<^isub>F 'b) set"
+  show "open S = (\<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S)" (is "_ = ?od")
+  proof
+    assume "open S"
+    thus ?od
+      unfolding open_finmap_def
+    proof (induct rule: generate_topology.induct)
+      case UNIV thus ?case by (auto intro: zero_less_one)
+    next
+      case (Int a b)
+      show ?case
+      proof safe
+        fix x assume x: "x \<in> a" "x \<in> b"
+        with Int x obtain e1 e2 where
+          "e1>0" "\<forall>y. dist y x < e1 \<longrightarrow> y \<in> a" "e2>0" "\<forall>y. dist y x < e2 \<longrightarrow> y \<in> b" by force
+        thus "\<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> a \<inter> b"
+          by (auto intro!: exI[where x="min e1 e2"])
+      qed
+    next
+      case (UN K)
+      show ?case
+      proof safe
+        fix x X assume "x \<in> X" "X \<in> K"
+        moreover with UN obtain e where "e>0" "\<And>y. dist y x < e \<longrightarrow> y \<in> X" by force
+        ultimately show "\<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> \<Union>K" by auto
+      qed
+    next
+      case (Basis s) then obtain a b where s: "s = Pi' a b" and b: "\<And>i. i\<in>a \<Longrightarrow> open (b i)" by auto
+      show ?case
+      proof safe
+        fix x assume "x \<in> s"
+        hence [simp]: "finite a" and a_dom: "a = domain x" using s by (auto simp: Pi'_iff)
+        obtain es where es: "\<forall>i \<in> a. es i > 0 \<and> (\<forall>y. dist y (proj x i) < es i \<longrightarrow> y \<in> b i)"
+          using b `x \<in> s` by atomize_elim (intro bchoice, auto simp: open_dist s)
+        hence in_b: "\<And>i y. i \<in> a \<Longrightarrow> dist y (proj x i) < es i \<Longrightarrow> y \<in> b i" by auto
+        show "\<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> s"
+        proof (cases, rule, safe)
+          assume "a \<noteq> {}"
+          show "0 < min 1 (Min (es ` a))" using es by (auto simp: `a \<noteq> {}`)
+          fix y assume d: "dist y x < min 1 (Min (es ` a))"
+          show "y \<in> s" unfolding s
+          proof
+            show "domain y = a" using d s `a \<noteq> {}` by (auto simp: dist_le_1_imp_domain_eq a_dom)
+            fix i assume "i \<in> a"
+            moreover
+            hence "dist ((y)\<^isub>F i) ((x)\<^isub>F i) < es i" using d
+              by (auto simp: dist_finmap_def `a \<noteq> {}` intro!: le_less_trans[OF dist_proj])
+            ultimately
+            show "y i \<in> b i" by (rule in_b)
+          qed
+        next
+          assume "\<not>a \<noteq> {}"
+          thus "\<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> s"
+            using s `x \<in> s` by (auto simp: Pi'_def dist_le_1_imp_domain_eq intro!: exI[where x=1])
+        qed
+      qed
+    qed
+  next
+    assume "\<forall>x\<in>S. \<exists>e>0. \<forall>y. dist y x < e \<longrightarrow> y \<in> S"
+    then obtain e where e_pos: "\<And>x. x \<in> S \<Longrightarrow> e x > 0" and
+      e_in:  "\<And>x y . x \<in> S \<Longrightarrow> dist y x < e x \<Longrightarrow> y \<in> S"
+      unfolding bchoice_iff
+      by auto
+    have S_eq: "S = \<Union>{Pi' a b| a b. \<exists>x\<in>S. domain x = a \<and> b = (\<lambda>i. ball (x i) (e x))}"
+    proof safe
+      fix x assume "x \<in> S"
+      thus "x \<in> \<Union>{Pi' a b| a b. \<exists>x\<in>S. domain x = a \<and> b = (\<lambda>i. ball (x i) (e x))}"
+        using e_pos by (auto intro!: exI[where x="Pi' (domain x) (\<lambda>i. ball (x i) (e x))"])
+    next
+      fix x y
+      assume "y \<in> S"
+      moreover
+      assume "x \<in> (\<Pi>' i\<in>domain y. ball (y i) (e y))"
+      hence "dist x y < e y" using e_pos `y \<in> S`
+        by (auto simp: dist_finmap_def Pi'_iff finite_proj_diag dist_commute)
+      ultimately show "x \<in> S" by (rule e_in)
+    qed
+    also have "open \<dots>"
+      unfolding open_finmap_def
+      by (intro generate_topology.UN) (auto intro: generate_topology.Basis)
+    finally show "open S" .
+  qed
+next
+  fix P Q::"'a \<Rightarrow>\<^isub>F 'b"
+  have Max_eq_iff: "\<And>A m. finite A \<Longrightarrow> A \<noteq> {} \<Longrightarrow> (Max A = m) = (m \<in> A \<and> (\<forall>a\<in>A. a \<le> m))"
+    by (metis Max.in_idem Max_in max_def min_max.sup.commute order_refl)
+  show "dist P Q = 0 \<longleftrightarrow> P = Q"
+    by (auto simp: finmap_eq_iff dist_finmap_def Max_ge_iff finite_proj_diag Max_eq_iff
+      intro!: Max_eqI image_eqI[where x=undefined])
+next
+  fix P Q R::"'a \<Rightarrow>\<^isub>F 'b"
+  let ?dists = "\<lambda>P Q i. dist ((P)\<^isub>F i) ((Q)\<^isub>F i)"
+  let ?dpq = "?dists P Q" and ?dpr = "?dists P R" and ?dqr = "?dists Q R"
+  let ?dom = "\<lambda>P Q. (if domain P = domain Q then 0 else 1::real)"
+  have "dist P Q = Max (range ?dpq) + ?dom P Q"
+    by (simp add: dist_finmap_def)
+  also obtain t where "t \<in> range ?dpq" "t = Max (range ?dpq)" by (simp add: finite_proj_diag)
+  then obtain i where "Max (range ?dpq) = ?dpq i" by auto
+  also have "?dpq i \<le> ?dpr i + ?dqr i" by (rule dist_triangle2)
+  also have "?dpr i \<le> Max (range ?dpr)" by (simp add: finite_proj_diag)
+  also have "?dqr i \<le> Max (range ?dqr)" by (simp add: finite_proj_diag)
+  also have "?dom P Q \<le> ?dom P R + ?dom Q R" by simp
+  finally show "dist P Q \<le> dist P R + dist Q R" by (simp add: dist_finmap_def ac_simps)
+qed
+
+end
+
 subsection {* Complete Space of Finite Maps *}
-
-lemma tendsto_dist_zero:
-  assumes "(\<lambda>i. dist (f i) g) ----> 0"
-  shows "f ----> g"
-  using assms by (auto simp: tendsto_iff dist_real_def)
-
-lemma tendsto_dist_zero':
-  assumes "(\<lambda>i. dist (f i) g) ----> x"
-  assumes "0 = x"
-  shows "f ----> g"
-  using assms tendsto_dist_zero by simp
 
 lemma tendsto_finmap:
   fixes f::"nat \<Rightarrow> ('i \<Rightarrow>\<^isub>F ('a::metric_space))"
   assumes ind_f:  "\<And>n. domain (f n) = domain g"
   assumes proj_g:  "\<And>i. i \<in> domain g \<Longrightarrow> (\<lambda>n. (f n) i) ----> g i"
   shows "f ----> g"
-  apply (rule tendsto_dist_zero')
-  unfolding dist_finmap_def assms
-  apply (rule tendsto_intros proj_g | simp)+
-  done
+  unfolding tendsto_iff
+proof safe
+  fix e::real assume "0 < e"
+  let ?dists = "\<lambda>x i. dist ((f x)\<^isub>F i) ((g)\<^isub>F i)"
+  have "eventually (\<lambda>x. \<forall>i\<in>domain g. ?dists x i < e) sequentially"
+    using finite_domain[of g] proj_g
+  proof induct
+    case (insert i G)
+    with `0 < e` have "eventually (\<lambda>x. ?dists x i < e) sequentially" by (auto simp add: tendsto_iff)
+    moreover
+    from insert have "eventually (\<lambda>x. \<forall>i\<in>G. dist ((f x)\<^isub>F i) ((g)\<^isub>F i) < e) sequentially" by simp
+    ultimately show ?case by eventually_elim auto
+  qed simp
+  thus "eventually (\<lambda>x. dist (f x) g < e) sequentially"
+    by eventually_elim (auto simp add: dist_finmap_def finite_proj_diag ind_f `0 < e`)
+qed
 
 instance finmap :: (type, complete_space) complete_space
 proof
@@ -412,123 +490,114 @@ proof
   have "P ----> Q"
   proof (rule metric_LIMSEQ_I)
     fix e::real assume "0 < e"
-    def e' \<equiv> "min 1 (e / (card d + 1))"
-    hence "0 < e'" using `0 < e` by (auto simp: e'_def intro: divide_pos_pos)
-    have "\<exists>ni. \<forall>i\<in>d. \<forall>n\<ge>ni i. dist (p i n) (q i) < e'"
+    have "\<exists>ni. \<forall>i\<in>d. \<forall>n\<ge>ni i. dist (p i n) (q i) < e"
     proof (safe intro!: bchoice)
       fix i assume "i \<in> d"
-      from p[OF `i \<in> d`, THEN metric_LIMSEQ_D, OF `0 < e'`]
-      show "\<exists>no. \<forall>n\<ge>no. dist (p i n) (q i) < e'" .
+      from p[OF `i \<in> d`, THEN metric_LIMSEQ_D, OF `0 < e`]
+      show "\<exists>no. \<forall>n\<ge>no. dist (p i n) (q i) < e" .
     qed then guess ni .. note ni = this
     def N \<equiv> "max Nd (Max (ni ` d))"
     show "\<exists>N. \<forall>n\<ge>N. dist (P n) Q < e"
     proof (safe intro!: exI[where x="N"])
       fix n assume "N \<le> n"
-      hence "domain (P n) = d" "domain Q = d" "domain (P n) = domain Q"
+      hence dom: "domain (P n) = d" "domain Q = d" "domain (P n) = domain Q"
         using dim by (simp_all add: N_def Q_def dim_def Abs_finmap_inverse)
-      hence "dist (P n) Q = (\<Sum>i\<in>d. dist ((P n) i) (Q i))" by (simp add: dist_finmap_def)
-      also have "\<dots> \<le> (\<Sum>i\<in>d. e')"
-      proof (intro setsum_mono less_imp_le)
-        fix i assume "i \<in> d"
-        hence "ni i \<le> Max (ni ` d)" by simp
+      show "dist (P n) Q < e"
+      proof (rule dist_finmap_lessI[OF dom(3) `0 < e`])
+        fix i
+        assume "i \<in> domain (P n)"
+        hence "ni i \<le> Max (ni ` d)" using dom by simp
         also have "\<dots> \<le> N" by (simp add: N_def)
-        also have "\<dots> \<le> n" using `N \<le> n` .
-        finally
-        show "dist ((P n) i) (Q i) < e'"
-          using ni `i \<in> d` by (auto simp: p_def q N_def)
+        finally show "dist ((P n)\<^isub>F i) ((Q)\<^isub>F i) < e" using ni `i \<in> domain (P n)` `N \<le> n` dom
+          by (auto simp: p_def q N_def less_imp_le)
       qed
-      also have "\<dots> = card d * e'" by (simp add: real_eq_of_nat)
-      also have "\<dots> < e" using `0 < e` by (simp add: e'_def field_simps min_def)
-      finally show "dist (P n) Q < e" .
     qed
   qed
   thus "convergent P" by (auto simp: convergent_def)
 qed
 
-subsection {* Polish Space of Finite Maps *}
+subsection {* Second Countable Space of Finite Maps *}
 
-instantiation finmap :: (countable, polish_space) polish_space
+instantiation finmap :: (countable, second_countable_topology) second_countable_topology
 begin
 
+definition basis_proj::"'b set set"
+  where "basis_proj = (SOME B. countable B \<and> topological_basis B)"
+
+lemma countable_basis_proj: "countable basis_proj" and basis_proj: "topological_basis basis_proj"
+  unfolding basis_proj_def by (intro is_basis countable_basis)+
+
 definition basis_finmap::"('a \<Rightarrow>\<^isub>F 'b) set set"
-  where "basis_finmap = {Pi' I S|I S. finite I \<and> (\<forall>i \<in> I. S i \<in> union_closed_basis)}"
+  where "basis_finmap = {Pi' I S|I S. finite I \<and> (\<forall>i \<in> I. S i \<in> basis_proj)}"
 
 lemma in_basis_finmapI:
-  assumes "finite I" assumes "\<And>i. i \<in> I \<Longrightarrow> S i \<in> union_closed_basis"
+  assumes "finite I" assumes "\<And>i. i \<in> I \<Longrightarrow> S i \<in> basis_proj"
   shows "Pi' I S \<in> basis_finmap"
   using assms unfolding basis_finmap_def by auto
 
-lemma in_basis_finmapE:
-  assumes "x \<in> basis_finmap"
-  obtains I S where "x = Pi' I S" "finite I" "\<And>i. i \<in> I \<Longrightarrow> S i \<in> union_closed_basis"
-  using assms unfolding basis_finmap_def by auto
-
 lemma basis_finmap_eq:
-  "basis_finmap = (\<lambda>f. Pi' (domain f) (\<lambda>i. from_nat_into union_closed_basis ((f)\<^isub>F i))) `
+  assumes "basis_proj \<noteq> {}"
+  shows "basis_finmap = (\<lambda>f. Pi' (domain f) (\<lambda>i. from_nat_into basis_proj ((f)\<^isub>F i))) `
     (UNIV::('a \<Rightarrow>\<^isub>F nat) set)" (is "_ = ?f ` _")
   unfolding basis_finmap_def
 proof safe
   fix I::"'a set" and S::"'a \<Rightarrow> 'b set"
-  assume "finite I" "\<forall>i\<in>I. S i \<in> union_closed_basis"
-  hence "Pi' I S = ?f (finmap_of I (\<lambda>x. to_nat_on union_closed_basis (S x)))"
-    by (force simp: Pi'_def countable_union_closed_basis)
+  assume "finite I" "\<forall>i\<in>I. S i \<in> basis_proj"
+  hence "Pi' I S = ?f (finmap_of I (\<lambda>x. to_nat_on basis_proj (S x)))"
+    by (force simp: Pi'_def countable_basis_proj)
   thus "Pi' I S \<in> range ?f" by simp
-qed (metis (mono_tags) empty_basisI equals0D finite_domain from_nat_into)
+next
+  fix x and f::"'a \<Rightarrow>\<^isub>F nat"
+  show "\<exists>I S. (\<Pi>' i\<in>domain f. from_nat_into local.basis_proj ((f)\<^isub>F i)) = Pi' I S \<and>
+    finite I \<and> (\<forall>i\<in>I. S i \<in> local.basis_proj)"
+    using assms by (auto intro: from_nat_into)
+qed
+
+lemma basis_finmap_eq_empty: "basis_proj = {} \<Longrightarrow> basis_finmap = {Pi' {} undefined}"
+  by (auto simp: Pi'_iff basis_finmap_def)
 
 lemma countable_basis_finmap: "countable basis_finmap"
-  unfolding basis_finmap_eq by simp
+  by (cases "basis_proj = {}") (auto simp: basis_finmap_eq basis_finmap_eq_empty)
 
 lemma finmap_topological_basis:
   "topological_basis basis_finmap"
 proof (subst topological_basis_iff, safe)
   fix B' assume "B' \<in> basis_finmap"
   thus "open B'"
-    by (auto intro!: open_Pi'I topological_basis_open[OF basis_union_closed_basis]
+    by (auto intro!: open_Pi'I topological_basis_open[OF basis_proj]
       simp: topological_basis_def basis_finmap_def Let_def)
 next
   fix O'::"('a \<Rightarrow>\<^isub>F 'b) set" and x
-  assume "open O'" "x \<in> O'"
-  then obtain e where e: "e > 0" "\<And>y. dist y x < e \<Longrightarrow> y \<in> O'"  unfolding open_dist by blast
-  def e' \<equiv> "e / (card (domain x) + 1)"
-
+  assume O': "open O'" "x \<in> O'"
+  then obtain a where a:
+    "x \<in> Pi' (domain x) a" "Pi' (domain x) a \<subseteq> O'" "\<And>i. i\<in>domain x \<Longrightarrow> open (a i)"
+    unfolding open_finmap_def
+  proof (atomize_elim, induct rule: generate_topology.induct)
+    case (Int a b)
+    let ?p="\<lambda>a f. x \<in> Pi' (domain x) f \<and> Pi' (domain x) f \<subseteq> a \<and> (\<forall>i. i \<in> domain x \<longrightarrow> open (f i))"
+    from Int obtain f g where "?p a f" "?p b g" by auto
+    thus ?case by (force intro!: exI[where x="\<lambda>i. f i \<inter> g i"] simp: Pi'_def)
+  next
+    case (UN k)
+    then obtain kk a where "x \<in> kk" "kk \<in> k" "x \<in> Pi' (domain x) a" "Pi' (domain x) a \<subseteq> kk"
+      "\<And>i. i\<in>domain x \<Longrightarrow> open (a i)"
+      by force
+    thus ?case by blast
+  qed (auto simp: Pi'_def)
   have "\<exists>B.
-    (\<forall>i\<in>domain x. x i \<in> B i \<and> B i \<subseteq> ball (x i) e' \<and> B i \<in> union_closed_basis)"
+    (\<forall>i\<in>domain x. x i \<in> B i \<and> B i \<subseteq> a i \<and> B i \<in> basis_proj)"
   proof (rule bchoice, safe)
     fix i assume "i \<in> domain x"
-    have "open (ball (x i) e')" "x i \<in> ball (x i) e'" using e
-      by (auto simp add: e'_def intro!: divide_pos_pos)
-    from topological_basisE[OF basis_union_closed_basis this] guess b' .
-    thus "\<exists>y. x i \<in> y \<and> y \<subseteq> ball (x i) e' \<and> y \<in> union_closed_basis" by auto
+    hence "open (a i)" "x i \<in> a i" using a by auto
+    from topological_basisE[OF basis_proj this] guess b' .
+    thus "\<exists>y. x i \<in> y \<and> y \<subseteq> a i \<and> y \<in> basis_proj" by auto
   qed
   then guess B .. note B = this
   def B' \<equiv> "Pi' (domain x) (\<lambda>i. (B i)::'b set)"
-  hence "B' \<in> basis_finmap" unfolding B'_def using B
-    by (intro in_basis_finmapI) auto
-  moreover have "x \<in> B'" unfolding B'_def using B by auto
-  moreover have "B' \<subseteq> O'"
-  proof
-    fix y assume "y \<in> B'" with B have "domain y = domain x" unfolding B'_def
-      by (simp add: Pi'_def)
-    show "y \<in> O'"
-    proof (rule e)
-      have "dist y x = (\<Sum>i \<in> domain x. dist (y i) (x i))"
-        using `domain y = domain x` by (simp add: dist_finmap_def)
-      also have "\<dots> \<le> (\<Sum>i \<in> domain x. e')"
-      proof (rule setsum_mono)
-        fix i assume "i \<in> domain x"
-        with `y \<in> B'` B have "y i \<in> B i"
-          by (simp add: Pi'_def B'_def)
-        hence "y i \<in> ball (x i) e'" using B `domain y = domain x` `i \<in> domain x`
-          by force
-        thus "dist (y i) (x i) \<le> e'" by (simp add: dist_commute)
-      qed
-      also have "\<dots> = card (domain x) * e'" by (simp add: real_eq_of_nat)
-      also have "\<dots> < e" using e by (simp add: e'_def field_simps)
-      finally show "dist y x < e" .
-    qed
-  qed
-  ultimately
-  show "\<exists>B'\<in>basis_finmap. x \<in> B' \<and> B' \<subseteq> O'" by blast
+  have "B' \<subseteq> Pi' (domain x) a" using B by (auto intro!: Pi'_mono simp: B'_def)
+  also note `\<dots> \<subseteq> O'`
+  finally show "\<exists>B'\<in>basis_finmap. x \<in> B' \<and> B' \<subseteq> O'" using B
+    by (auto intro!: bexI[where x=B'] Pi'_mono in_basis_finmapI simp: B'_def)
 qed
 
 lemma range_enum_basis_finmap_imp_open:
@@ -539,6 +608,11 @@ lemma range_enum_basis_finmap_imp_open:
 instance proof qed (blast intro: finmap_topological_basis countable_basis_finmap)
 
 end
+
+subsection {* Polish Space of Finite Maps *}
+
+instance finmap :: (countable, polish_space) polish_space proof qed
+
 
 subsection {* Product Measurable Space of Finite Maps *}
 
@@ -942,9 +1016,8 @@ qed (auto simp: Pi'_def `finite I`)
 text {* adapted from @{thm sigma_prod_algebra_sigma_eq} *}
 
 lemma sigma_fprod_algebra_sigma_eq:
-  fixes E :: "'i \<Rightarrow> 'a set set"
+  fixes E :: "'i \<Rightarrow> 'a set set" and S :: "'i \<Rightarrow> nat \<Rightarrow> 'a set"
   assumes [simp]: "finite I" "I \<noteq> {}"
-  assumes S_mono: "\<And>i. i \<in> I \<Longrightarrow> incseq (S i)"
     and S_union: "\<And>i. i \<in> I \<Longrightarrow> (\<Union>j. S i j) = space (M i)"
     and S_in_E: "\<And>i. i \<in> I \<Longrightarrow> range (S i) \<subseteq> E i"
   assumes E_closed: "\<And>i. i \<in> I \<Longrightarrow> E i \<subseteq> Pow (space (M i))"
@@ -953,6 +1026,9 @@ lemma sigma_fprod_algebra_sigma_eq:
   shows "sets (PiF {I} M) = sigma_sets (space (PiF {I} M)) P"
 proof
   let ?P = "sigma (space (Pi\<^isub>F {I} M)) P"
+  from `finite I`[THEN ex_bij_betw_finite_nat] guess T ..
+  then have T: "\<And>i. i \<in> I \<Longrightarrow> T i < card I" "\<And>i. i\<in>I \<Longrightarrow> the_inv_into I T (T i) = i"
+    by (auto simp add: bij_betw_def set_eq_iff image_iff the_inv_into_f_f simp del: `finite I`)
   have P_closed: "P \<subseteq> Pow (space (Pi\<^isub>F {I} M))"
     using E_closed by (auto simp: space_PiF P_def Pi'_iff subset_eq)
   then have space_P: "space ?P = (\<Pi>' i\<in>I. space (M i))"
@@ -975,15 +1051,20 @@ proof
           using E_closed `i \<in> I` by (auto simp: space_P Pi_iff subset_eq split: split_if_asm)
         also have "\<dots> = (\<Pi>' j\<in>I. \<Union>n. if i = j then A else S j n)"
           by (intro Pi'_cong) (simp_all add: S_union)
-        also have "\<dots> = (\<Union>n. \<Pi>' j\<in>I. if i = j then A else S j n)"
-          using S_mono
-          by (subst Pi'_UN[symmetric, OF `finite I`]) (auto simp: incseq_def)
+        also have "\<dots> = (\<Union>xs\<in>{xs. length xs = card I}. \<Pi>' j\<in>I. if i = j then A else S j (xs ! T j))"
+          using T
+          apply auto
+          apply (simp_all add: Pi'_iff bchoice_iff)
+          apply (erule conjE exE)+
+          apply (rule_tac x="map (\<lambda>n. f (the_inv_into I T n)) [0..<card I]" in exI)
+          apply (auto simp: bij_betw_def)
+          done
         also have "\<dots> \<in> sets ?P"
         proof (safe intro!: sets.countable_UN)
-          fix n show "(\<Pi>' j\<in>I. if i = j then A else S j n) \<in> sets ?P"
+          fix xs show "(\<Pi>' j\<in>I. if i = j then A else S j (xs ! T j)) \<in> sets ?P"
             using A S_in_E
             by (simp add: P_closed)
-               (auto simp: P_def subset_eq intro!: exI[of _ "\<lambda>j. if i = j then A else S j n"])
+               (auto simp: P_def subset_eq intro!: exI[of _ "\<lambda>j. if i = j then A else S j (xs ! T j)"])
         qed
         finally show "(\<lambda>x. (x)\<^isub>F i) -` A \<inter> space ?P \<in> sets ?P"
           using P_closed by simp
@@ -1003,76 +1084,28 @@ proof
     by (auto intro!: sets.sigma_sets_subset product_in_sets_PiFI simp: E_generates P_def)
 qed
 
-lemma sets_PiF_eq_sigma_union_closed_basis_single:
-  assumes "I \<noteq> {}"
-  assumes [simp]: "finite I"
-  shows "sets (PiF {I} (\<lambda>_. borel)) = sigma_sets (space (PiF {I} (\<lambda>_. borel)))
-    {Pi' I F |F. (\<forall>i\<in>I. F i \<in> union_closed_basis)}"
-proof -
-  from open_incseqE[OF open_UNIV] guess S::"nat \<Rightarrow> 'b set" . note S = this
-  show ?thesis
-  proof (rule sigma_fprod_algebra_sigma_eq)
-    show "finite I" by simp
-    show "I \<noteq> {}" by fact
-    show "incseq S" "(\<Union>j. S j) = space borel" "range S \<subseteq> union_closed_basis"
-      using S by simp_all
-    show "union_closed_basis \<subseteq> Pow (space borel)" by simp
-    show "sets borel = sigma_sets (space borel) union_closed_basis"
-      by (simp add: borel_eq_union_closed_basis)
-  qed
-qed
-
-text {* adapted from @{thm sets_PiF_eq_sigma_union_closed_basis_single} *}
-
-lemma sets_PiM_eq_sigma_union_closed_basis:
-  assumes "I \<noteq> {}"
-  assumes [simp]: "finite I"
-  shows "sets (PiM I (\<lambda>_. borel)) = sigma_sets (space (PiM I (\<lambda>_. borel)))
-    {Pi\<^isub>E I F |F. \<forall>i\<in>I. F i \<in> union_closed_basis}"
-proof -
-  from open_incseqE[OF open_UNIV] guess S::"nat \<Rightarrow> 'b set" . note S = this
-  show ?thesis
-  proof (rule sigma_prod_algebra_sigma_eq)
-    show "finite I" by simp note[[show_types]]
-    fix i show "(\<Union>j. S j) = space borel" "range S \<subseteq> union_closed_basis"
-      using S by simp_all
-    show "union_closed_basis \<subseteq> Pow (space borel)" by simp
-    show "sets borel = sigma_sets (space borel) union_closed_basis"
-      by (simp add: borel_eq_union_closed_basis)
-  qed
-qed
-
 lemma product_open_generates_sets_PiF_single:
   assumes "I \<noteq> {}"
   assumes [simp]: "finite I"
   shows "sets (PiF {I} (\<lambda>_. borel::'b::second_countable_topology measure)) =
     sigma_sets (space (PiF {I} (\<lambda>_. borel))) {Pi' I F |F. (\<forall>i\<in>I. F i \<in> Collect open)}"
 proof -
-  from open_incseqE[OF open_UNIV] guess S::"nat \<Rightarrow> 'b set" . note S = this
+  from open_countable_basisE[OF open_UNIV] guess S::"'b set set" . note S = this
   show ?thesis
   proof (rule sigma_fprod_algebra_sigma_eq)
     show "finite I" by simp
     show "I \<noteq> {}" by fact
-    show "incseq S" "(\<Union>j. S j) = space borel" "range S \<subseteq> Collect open"
-      using S by (auto simp: open_union_closed_basis)
-    show "Collect open \<subseteq> Pow (space borel)" by simp
-    show "sets borel = sigma_sets (space borel) (Collect open)"
-      by (simp add: borel_def)
-  qed
-qed
-
-lemma product_open_generates_sets_PiM:
-  assumes "I \<noteq> {}"
-  assumes [simp]: "finite I"
-  shows "sets (PiM I (\<lambda>_. borel::'b::second_countable_topology measure)) =
-    sigma_sets (space (PiM I (\<lambda>_. borel))) {Pi\<^isub>E I F |F. \<forall>i\<in>I. F i \<in> Collect open}"
-proof -
-  from open_incseqE[OF open_UNIV] guess S::"nat \<Rightarrow> 'b set" . note S = this
-  show ?thesis
-  proof (rule sigma_prod_algebra_sigma_eq)
-    show "finite I" by simp note[[show_types]]
-    fix i show "(\<Union>j. S j) = space borel" "range S \<subseteq> Collect open"
-      using S by (auto simp: open_union_closed_basis)
+    def S'\<equiv>"from_nat_into S"
+    show "(\<Union>j. S' j) = space borel"
+      using S
+      apply (auto simp add: from_nat_into countable_basis_proj S'_def basis_proj_def)
+      apply (metis (lifting, mono_tags) UNIV_I UnionE basis_proj_def countable_basis_proj countable_subset from_nat_into_surj)
+      done
+    show "range S' \<subseteq> Collect open"
+      using S
+      apply (auto simp add: from_nat_into countable_basis_proj S'_def)
+      apply (metis UNIV_not_empty Union_empty from_nat_into set_mp topological_basis_open[OF basis_proj] basis_proj_def)
+      done
     show "Collect open \<subseteq> Pow (space borel)" by simp
     show "sets borel = sigma_sets (space borel) (Collect open)"
       by (simp add: borel_def)
@@ -1099,7 +1132,7 @@ proof (rule measure_eqI, clarsimp, rule sigma_sets_eqI)
     proof
       fix x assume "x \<in> B'" with B' have "x \<in> basis_finmap" by auto
       then obtain J X where "x = Pi' J X" "finite J" "X \<in> J \<rightarrow> sigma_sets UNIV (Collect open)"
-        by (auto simp: basis_finmap_def open_union_closed_basis)
+        by (auto simp: basis_finmap_def topological_basis_open[OF basis_proj])
       thus "x \<in> sets ?s" by auto
     qed
   qed
