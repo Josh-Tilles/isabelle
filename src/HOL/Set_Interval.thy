@@ -267,7 +267,7 @@ qed simp
 
 end
 
-context dense_linorder
+context inner_dense_linorder
 begin
 
 lemma greaterThanLessThan_empty_iff[simp]:
@@ -310,6 +310,22 @@ lemma greaterThanLessThan_subseteq_atLeastLessThan_iff:
 
 end
 
+context no_top
+begin
+
+lemma greaterThan_non_empty: "{x <..} \<noteq> {}"
+  using gt_ex[of x] by auto
+
+end
+
+context no_bot
+begin
+
+lemma lessThan_non_empty: "{..< x} \<noteq> {}"
+  using lt_ex[of x] by auto
+
+end
+
 lemma (in linorder) atLeastLessThan_subset_iff:
   "{a..<b} <= {c..<d} \<Longrightarrow> b <= a | c<=a & b<=d"
 apply (auto simp:subset_eq Ball_def)
@@ -329,6 +345,20 @@ lemma atLeastLessThan_eq_iff:
   assumes "a < b" "c < d"
   shows "{a ..< b} = {c ..< d} \<longleftrightarrow> a = c \<and> b = d"
   using atLeastLessThan_inj assms by auto
+
+context complete_lattice
+begin
+
+lemma atLeast_eq_UNIV_iff: "{x..} = UNIV \<longleftrightarrow> x = bot"
+  by (auto simp: set_eq_iff intro: le_bot)
+
+lemma atMost_eq_UNIV_iff: "{..x} = UNIV \<longleftrightarrow> x = top"
+  by (auto simp: set_eq_iff intro: top_le)
+
+lemma atLeastAtMost_eq_UNIV_iff: "{x..y} = UNIV \<longleftrightarrow> (x = bot \<and> y = top)"
+  by (auto simp: set_eq_iff intro: top_le le_bot)
+
+end
 
 subsubsection {* Intersection *}
 
@@ -364,6 +394,36 @@ lemma Int_atMost[simp]: "{..a} \<inter> {..b} = {.. min a b}"
 
 end
 
+context complete_lattice
+begin
+
+lemma
+  shows Sup_atLeast[simp]: "Sup {x ..} = top"
+    and Sup_greaterThanAtLeast[simp]: "x < top \<Longrightarrow> Sup {x <..} = top"
+    and Sup_atMost[simp]: "Sup {.. y} = y"
+    and Sup_atLeastAtMost[simp]: "x \<le> y \<Longrightarrow> Sup { x .. y} = y"
+    and Sup_greaterThanAtMost[simp]: "x < y \<Longrightarrow> Sup { x <.. y} = y"
+  by (auto intro!: Sup_eqI)
+
+lemma
+  shows Inf_atMost[simp]: "Inf {.. x} = bot"
+    and Inf_atMostLessThan[simp]: "top < x \<Longrightarrow> Inf {..< x} = bot"
+    and Inf_atLeast[simp]: "Inf {x ..} = x"
+    and Inf_atLeastAtMost[simp]: "x \<le> y \<Longrightarrow> Inf { x .. y} = x"
+    and Inf_atLeastLessThan[simp]: "x < y \<Longrightarrow> Inf { x ..< y} = x"
+  by (auto intro!: Inf_eqI)
+
+end
+
+lemma
+  fixes x y :: "'a :: {complete_lattice, inner_dense_linorder}"
+  shows Sup_lessThan[simp]: "Sup {..< y} = y"
+    and Sup_atLeastLessThan[simp]: "x < y \<Longrightarrow> Sup { x ..< y} = y"
+    and Sup_greaterThanLessThan[simp]: "x < y \<Longrightarrow> Sup { x <..< y} = y"
+    and Inf_greaterThan[simp]: "Inf {x <..} = x"
+    and Inf_greaterThanAtMost[simp]: "x < y \<Longrightarrow> Inf { x <.. y} = x"
+    and Inf_greaterThanLessThan[simp]: "x < y \<Longrightarrow> Inf { x <..< y} = x"
+  by (auto intro!: Inf_eqI Sup_eqI intro: dense_le dense_le_bounded dense_ge dense_ge_bounded)
 
 subsection {* Intervals of natural numbers *}
 
