@@ -1048,6 +1048,73 @@ by (simp add: diff_left diff_right)
 
 end
 
+lemma bounded_linear_ident[simp]: "bounded_linear (\<lambda>x. x)"
+  by default (auto intro!: exI[of _ 1])
+
+lemma bounded_linear_zero[simp]: "bounded_linear (\<lambda>x. 0)"
+  by default (auto intro!: exI[of _ 1])
+
+lemma bounded_linear_add:
+  assumes "bounded_linear f"
+  assumes "bounded_linear g"
+  shows "bounded_linear (\<lambda>x. f x + g x)"
+proof -
+  interpret f: bounded_linear f by fact
+  interpret g: bounded_linear g by fact
+  show ?thesis
+  proof
+    from f.bounded obtain Kf where Kf: "\<And>x. norm (f x) \<le> norm x * Kf" by blast
+    from g.bounded obtain Kg where Kg: "\<And>x. norm (g x) \<le> norm x * Kg" by blast
+    show "\<exists>K. \<forall>x. norm (f x + g x) \<le> norm x * K"
+      using add_mono[OF Kf Kg]
+      by (intro exI[of _ "Kf + Kg"]) (auto simp: field_simps intro: norm_triangle_ineq order_trans)
+  qed (simp_all add: f.add g.add f.scaleR g.scaleR scaleR_right_distrib)
+qed
+
+lemma bounded_linear_minus:
+  assumes "bounded_linear f"
+  shows "bounded_linear (\<lambda>x. - f x)"
+proof -
+  interpret f: bounded_linear f by fact
+  show ?thesis apply (unfold_locales)
+    apply (simp add: f.add)
+    apply (simp add: f.scaleR)
+    apply (simp add: f.bounded)
+    done
+qed
+
+lemma bounded_linear_compose:
+  assumes "bounded_linear f"
+  assumes "bounded_linear g"
+  shows "bounded_linear (\<lambda>x. f (g x))"
+proof -
+  interpret f: bounded_linear f by fact
+  interpret g: bounded_linear g by fact
+  show ?thesis proof (unfold_locales)
+    fix x y show "f (g (x + y)) = f (g x) + f (g y)"
+      by (simp only: f.add g.add)
+  next
+    fix r x show "f (g (scaleR r x)) = scaleR r (f (g x))"
+      by (simp only: f.scaleR g.scaleR)
+  next
+    from f.pos_bounded
+    obtain Kf where f: "\<And>x. norm (f x) \<le> norm x * Kf" and Kf: "0 < Kf" by fast
+    from g.pos_bounded
+    obtain Kg where g: "\<And>x. norm (g x) \<le> norm x * Kg" by fast
+    show "\<exists>K. \<forall>x. norm (f (g x)) \<le> norm x * K"
+    proof (intro exI allI)
+      fix x
+      have "norm (f (g x)) \<le> norm (g x) * Kf"
+        using f .
+      also have "\<dots> \<le> (norm x * Kg) * Kf"
+        using g Kf [THEN order_less_imp_le] by (rule mult_right_mono)
+      also have "(norm x * Kg) * Kf = norm x * (Kg * Kf)"
+        by (rule mult_assoc)
+      finally show "norm (f (g x)) \<le> norm x * (Kg * Kf)" .
+    qed
+  qed
+qed
+
 lemma bounded_bilinear_mult:
   "bounded_bilinear (op * :: 'a \<Rightarrow> 'a \<Rightarrow> 'a::real_normed_algebra)"
 apply (rule bounded_bilinear.intro)
@@ -1068,6 +1135,12 @@ lemma bounded_linear_mult_right:
   "bounded_linear (\<lambda>y::'a::real_normed_algebra. x * y)"
   using bounded_bilinear_mult
   by (rule bounded_bilinear.bounded_linear_right)
+
+lemmas bounded_linear_mult_const =
+  bounded_linear_mult_left [THEN bounded_linear_compose]
+
+lemmas bounded_linear_const_mult =
+  bounded_linear_mult_right [THEN bounded_linear_compose]
 
 lemma bounded_linear_divide:
   "bounded_linear (\<lambda>x::'a::real_normed_field. x / y)"
@@ -1093,6 +1166,18 @@ lemma bounded_linear_scaleR_right: "bounded_linear (\<lambda>x. scaleR r x)"
 lemma bounded_linear_of_real: "bounded_linear (\<lambda>r. of_real r)"
   unfolding of_real_def by (rule bounded_linear_scaleR_left)
 
+lemma real_bounded_linear:
+  fixes f :: "real \<Rightarrow> real"
+  shows "bounded_linear f \<longleftrightarrow> (\<exists>c::real. f = (\<lambda>x. x * c))"
+proof -
+  { fix x assume "bounded_linear f"
+    then interpret bounded_linear f .
+    from scaleR[of x 1] have "f x = x * f 1"
+      by simp }
+  then show ?thesis
+    by (auto intro: exI[of _ "f 1"] bounded_linear_mult_left)
+qed
+
 instance real_normed_algebra_1 \<subseteq> perfect_space
 proof
   fix x::'a
@@ -1117,19 +1202,18 @@ apply (erule le_less_trans [OF dist_triangle])
 done
 
 lemma eventually_at:
+  fixes a :: "'a :: metric_space"
+  shows "eventually P (at a within S) \<longleftrightarrow> (\<exists>d>0. \<forall>x\<in>S. x \<noteq> a \<and> dist x a < d \<longrightarrow> P x)"
+  unfolding eventually_at_filter eventually_nhds_metric by (auto simp: dist_nz)
+
+lemma eventually_at_le:
   fixes a :: "'a::metric_space"
-  shows "eventually P (at a) \<longleftrightarrow> (\<exists>d>0. \<forall>x. x \<noteq> a \<and> dist x a < d \<longrightarrow> P x)"
-unfolding at_def eventually_within eventually_nhds_metric by auto
-
-lemma eventually_within_less:
-  fixes a :: "'a :: metric_space"
-  shows "eventually P (at a within S) \<longleftrightarrow> (\<exists>d>0. \<forall>x\<in>S. 0 < dist x a \<and> dist x a < d \<longrightarrow> P x)"
-  unfolding eventually_within eventually_at dist_nz by auto
-
-lemma eventually_within_le:
-  fixes a :: "'a :: metric_space"
-  shows "eventually P (at a within S) \<longleftrightarrow> (\<exists>d>0. \<forall>x\<in>S. 0 < dist x a \<and> dist x a \<le> d \<longrightarrow> P x)"
-  unfolding eventually_within_less by auto (metis dense order_le_less_trans)
+  shows "eventually P (at a within S) \<longleftrightarrow> (\<exists>d>0. \<forall>x\<in>S. x \<noteq> a \<and> dist x a \<le> d \<longrightarrow> P x)"
+  unfolding eventually_at_filter eventually_nhds_metric
+  apply auto
+  apply (rule_tac x="d / 2" in exI)
+  apply auto
+  done
 
 lemma tendstoI:
   fixes l :: "'a :: metric_space"
@@ -1200,7 +1284,7 @@ subsubsection {* Limits of Functions *}
 lemma LIM_def: "f -- (a::'a::metric_space) --> (L::'b::metric_space) =
      (\<forall>r > 0. \<exists>s > 0. \<forall>x. x \<noteq> a & dist x a < s
         --> dist (f x) L < r)"
-unfolding tendsto_iff eventually_at ..
+  unfolding tendsto_iff eventually_at by simp
 
 lemma metric_LIM_I:
   "(\<And>r. 0 < r \<Longrightarrow> \<exists>s>0. \<forall>x. x \<noteq> a \<and> dist x a < s \<longrightarrow> dist (f x) L < r)
@@ -1235,8 +1319,8 @@ lemma metric_LIM_compose2:
   assumes g: "g -- b --> c"
   assumes inj: "\<exists>d>0. \<forall>x. x \<noteq> a \<and> dist x a < d \<longrightarrow> f x \<noteq> b"
   shows "(\<lambda>x. g (f x)) -- a --> c"
-  using g f inj [folded eventually_at]
-  by (rule tendsto_compose_eventually)
+  using inj
+  by (intro tendsto_compose_eventually[OF g f]) (auto simp: eventually_at)
 
 lemma metric_isCont_LIM_compose2:
   fixes f :: "'a :: metric_space \<Rightarrow> _"
