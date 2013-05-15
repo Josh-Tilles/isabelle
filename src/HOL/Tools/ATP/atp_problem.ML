@@ -50,6 +50,8 @@ sig
     Class_Decl of string * 'a * 'a list |
     Type_Decl of string * 'a * int |
     Sym_Decl of string * 'a * 'a ho_type |
+    Datatype_Decl of string * ('a * 'a list) list * 'a ho_type
+                     * ('a, 'a ho_type) ho_term list * bool |
     Class_Memb of string * ('a * 'a list) list * 'a ho_type * 'a |
     Formula of (string * string) * formula_role
                * ('a, 'a ho_type, ('a, 'a ho_type) ho_term, 'a) formula
@@ -124,8 +126,8 @@ sig
   val formula_map :
     ('c -> 'e) -> ('a, 'b, 'c, 'd) formula -> ('a, 'b, 'e, 'd) formula
   val is_format_higher_order : atp_format -> bool
-  val tptp_string_for_line : atp_format -> string problem_line -> string
-  val lines_for_atp_problem :
+  val tptp_string_of_line : atp_format -> string problem_line -> string
+  val lines_of_atp_problem :
     atp_format -> term_order -> (unit -> (string * int) list) -> string problem
     -> string list
   val ensure_cnf_problem :
@@ -190,6 +192,8 @@ datatype 'a problem_line =
   Class_Decl of string * 'a * 'a list |
   Type_Decl of string * 'a * int |
   Sym_Decl of string * 'a * 'a ho_type |
+  Datatype_Decl of string * ('a * 'a list) list * 'a ho_type
+                   * ('a, 'a ho_type) ho_term list * bool |
   Class_Memb of string * ('a * 'a list) list * 'a ho_type * 'a |
   Formula of (string * string) * formula_role
              * ('a, 'a ho_type, ('a, 'a ho_type) ho_term, 'a) formula
@@ -327,17 +331,17 @@ fun is_format_typed (TFF _) = true
   | is_format_typed (DFG _) = true
   | is_format_typed _ = false
 
-fun tptp_string_for_role Axiom = "axiom"
-  | tptp_string_for_role Definition = "definition"
-  | tptp_string_for_role Lemma = "lemma"
-  | tptp_string_for_role Hypothesis = "hypothesis"
-  | tptp_string_for_role Conjecture = "conjecture"
-  | tptp_string_for_role Negated_Conjecture = "negated_conjecture"
-  | tptp_string_for_role Plain = "plain"
-  | tptp_string_for_role Unknown = "unknown"
+fun tptp_string_of_role Axiom = "axiom"
+  | tptp_string_of_role Definition = "definition"
+  | tptp_string_of_role Lemma = "lemma"
+  | tptp_string_of_role Hypothesis = "hypothesis"
+  | tptp_string_of_role Conjecture = "conjecture"
+  | tptp_string_of_role Negated_Conjecture = "negated_conjecture"
+  | tptp_string_of_role Plain = "plain"
+  | tptp_string_of_role Unknown = "unknown"
 
-fun tptp_string_for_app _ func [] = func
-  | tptp_string_for_app format func args =
+fun tptp_string_of_app _ func [] = func
+  | tptp_string_of_app format func args =
     if is_format_higher_order format then
       "(" ^ space_implode (" " ^ tptp_app ^ " ") (func :: args) ^ ")"
     else
@@ -359,7 +363,7 @@ val dfg_individual_type = "iii" (* cannot clash *)
 val suffix_type_of_types =
   suffix (" " ^ tptp_has_type ^ " " ^ tptp_type_of_types)
 
-fun str_for_type format ty =
+fun str_of_type format ty =
   let
     val dfg = case format of DFG _ => true | _ => false
     fun str _ (AType (s, [])) =
@@ -371,7 +375,7 @@ fun str_for_type format ty =
                       (if dfg then ", " else " " ^ tptp_product_type ^ " ")
                |> (not dfg andalso length ss > 1) ? enclose "(" ")"
           else
-            tptp_string_for_app format s ss
+            tptp_string_of_app format s ss
         end
       | str rhs (AFun (ty1, ty2)) =
         (str false ty1 |> dfg ? enclose "(" ")") ^ " " ^
@@ -385,96 +389,96 @@ fun str_for_type format ty =
           str false ty
   in str true ty end
 
-fun string_for_type (format as THF _) ty = str_for_type format ty
-  | string_for_type format ty = str_for_type format (flatten_type ty)
+fun string_of_type (format as THF _) ty = str_of_type format ty
+  | string_of_type format ty = str_of_type format (flatten_type ty)
 
-fun tptp_string_for_quantifier AForall = tptp_forall
-  | tptp_string_for_quantifier AExists = tptp_exists
+fun tptp_string_of_quantifier AForall = tptp_forall
+  | tptp_string_of_quantifier AExists = tptp_exists
 
-fun tptp_string_for_connective ANot = tptp_not
-  | tptp_string_for_connective AAnd = tptp_and
-  | tptp_string_for_connective AOr = tptp_or
-  | tptp_string_for_connective AImplies = tptp_implies
-  | tptp_string_for_connective AIff = tptp_iff
+fun tptp_string_of_connective ANot = tptp_not
+  | tptp_string_of_connective AAnd = tptp_and
+  | tptp_string_of_connective AOr = tptp_or
+  | tptp_string_of_connective AImplies = tptp_implies
+  | tptp_string_of_connective AIff = tptp_iff
 
-fun string_for_bound_var format (s, ty) =
+fun string_of_bound_var format (s, ty) =
   s ^
   (if is_format_typed format then
      " " ^ tptp_has_type ^ " " ^
      (ty |> the_default (AType (tptp_individual_type, []))
-         |> string_for_type format)
+         |> string_of_type format)
    else
      "")
 
-fun tptp_string_for_term _ (ATerm ((s, []), [])) = s
-  | tptp_string_for_term format (ATerm ((s, tys), ts)) =
+fun tptp_string_of_term _ (ATerm ((s, []), [])) = s
+  | tptp_string_of_term format (ATerm ((s, tys), ts)) =
     (if s = tptp_empty_list then
        (* used for lists in the optional "source" field of a derivation *)
-       "[" ^ commas (map (tptp_string_for_term format) ts) ^ "]"
+       "[" ^ commas (map (tptp_string_of_term format) ts) ^ "]"
      else if is_tptp_equal s then
        space_implode (" " ^ tptp_equal ^ " ")
-                     (map (tptp_string_for_term format) ts)
+                     (map (tptp_string_of_term format) ts)
        |> is_format_higher_order format ? enclose "(" ")"
      else case (s = tptp_ho_forall orelse s = tptp_ho_exists, s = tptp_choice,
                 ts) of
        (true, _, [AAbs (((s', ty), tm), [])]) =>
        (* Use syntactic sugar "!" and "?" instead of "!!" and "??" whenever
           possible, to work around LEO-II 1.2.8 parser limitation. *)
-       tptp_string_for_formula format
+       tptp_string_of_formula format
            (AQuant (if s = tptp_ho_forall then AForall else AExists,
                     [(s', SOME ty)], AAtom tm))
      | (_, true, [AAbs (((s', ty), tm), args)]) =>
        (* There is code in "ATP_Problem_Generate" to ensure that "Eps" is always
           applied to an abstraction. *)
-       tptp_string_for_app format
-           (tptp_choice ^ "[" ^ s' ^ " : " ^ string_for_type format ty ^ "]: " ^
-            tptp_string_for_term format tm ^ ""
+       tptp_string_of_app format
+           (tptp_choice ^ "[" ^ s' ^ " : " ^ string_of_type format ty ^ "]: " ^
+            tptp_string_of_term format tm ^ ""
             |> enclose "(" ")")
-           (map (tptp_string_for_term format) args)
+           (map (tptp_string_of_term format) args)
      | _ =>
-       tptp_string_for_app format s
-           (map (string_for_type format) tys
-            @ map (tptp_string_for_term format) ts))
-  | tptp_string_for_term (format as THF _) (AAbs (((s, ty), tm), args)) =
-    tptp_string_for_app format
-        ("(^[" ^ s ^ " : " ^ string_for_type format ty ^ "]: " ^
-         tptp_string_for_term format tm ^ ")")
-        (map (tptp_string_for_term format) args)
-  | tptp_string_for_term _ _ =
+       tptp_string_of_app format s
+           (map (string_of_type format) tys
+            @ map (tptp_string_of_term format) ts))
+  | tptp_string_of_term (format as THF _) (AAbs (((s, ty), tm), args)) =
+    tptp_string_of_app format
+        ("(^[" ^ s ^ " : " ^ string_of_type format ty ^ "]: " ^
+         tptp_string_of_term format tm ^ ")")
+        (map (tptp_string_of_term format) args)
+  | tptp_string_of_term _ _ =
     raise Fail "unexpected term in first-order format"
-and tptp_string_for_formula format (ATyQuant (q, xs, phi)) =
-    tptp_string_for_quantifier q ^
+and tptp_string_of_formula format (ATyQuant (q, xs, phi)) =
+    tptp_string_of_quantifier q ^
     "[" ^
-    commas (map (suffix_type_of_types o string_for_type format o fst) xs) ^
-    "]: " ^ tptp_string_for_formula format phi
+    commas (map (suffix_type_of_types o string_of_type format o fst) xs) ^
+    "]: " ^ tptp_string_of_formula format phi
     |> enclose "(" ")"
-  | tptp_string_for_formula format (AQuant (q, xs, phi)) =
-    tptp_string_for_quantifier q ^
-    "[" ^ commas (map (string_for_bound_var format) xs) ^ "]: " ^
-    tptp_string_for_formula format phi
+  | tptp_string_of_formula format (AQuant (q, xs, phi)) =
+    tptp_string_of_quantifier q ^
+    "[" ^ commas (map (string_of_bound_var format) xs) ^ "]: " ^
+    tptp_string_of_formula format phi
     |> enclose "(" ")"
-  | tptp_string_for_formula format
+  | tptp_string_of_formula format
         (AConn (ANot, [AAtom (ATerm (("=" (* tptp_equal *), []), ts))])) =
     space_implode (" " ^ tptp_not_infix ^ tptp_equal ^ " ")
-                  (map (tptp_string_for_term format) ts)
+                  (map (tptp_string_of_term format) ts)
     |> is_format_higher_order format ? enclose "(" ")"
-  | tptp_string_for_formula format (AConn (c, [phi])) =
-    tptp_string_for_connective c ^ " " ^
-    (tptp_string_for_formula format phi
+  | tptp_string_of_formula format (AConn (c, [phi])) =
+    tptp_string_of_connective c ^ " " ^
+    (tptp_string_of_formula format phi
      |> is_format_higher_order format ? enclose "(" ")")
     |> enclose "(" ")"
-  | tptp_string_for_formula format (AConn (c, phis)) =
-    space_implode (" " ^ tptp_string_for_connective c ^ " ")
-                  (map (tptp_string_for_formula format) phis)
+  | tptp_string_of_formula format (AConn (c, phis)) =
+    space_implode (" " ^ tptp_string_of_connective c ^ " ")
+                  (map (tptp_string_of_formula format) phis)
     |> enclose "(" ")"
-  | tptp_string_for_formula format (AAtom tm) = tptp_string_for_term format tm
+  | tptp_string_of_formula format (AAtom tm) = tptp_string_of_term format tm
 
-fun tptp_string_for_format CNF = tptp_cnf
-  | tptp_string_for_format CNF_UEQ = tptp_cnf
-  | tptp_string_for_format FOF = tptp_fof
-  | tptp_string_for_format (TFF _) = tptp_tff
-  | tptp_string_for_format (THF _) = tptp_thf
-  | tptp_string_for_format (DFG _) = raise Fail "non-TPTP format"
+fun tptp_string_of_format CNF = tptp_cnf
+  | tptp_string_of_format CNF_UEQ = tptp_cnf
+  | tptp_string_of_format FOF = tptp_fof
+  | tptp_string_of_format (TFF _) = tptp_tff
+  | tptp_string_of_format (THF _) = tptp_thf
+  | tptp_string_of_format (DFG _) = raise Fail "non-TPTP format"
 
 val atype_of_types = AType (tptp_type_of_types, [])
 
@@ -483,24 +487,24 @@ fun nary_type_decl_type n = funpow n (curry AFun atype_of_types) atype_of_types
 fun maybe_alt "" = ""
   | maybe_alt s = " % " ^ s
 
-fun tptp_string_for_line format (Type_Decl (ident, ty, ary)) =
-    tptp_string_for_line format (Sym_Decl (ident, ty, nary_type_decl_type ary))
-  | tptp_string_for_line format (Sym_Decl (ident, sym, ty)) =
-    tptp_string_for_format format ^ "(" ^ ident ^ ", type,\n    " ^ sym ^
-    " : " ^ string_for_type format ty ^ ").\n"
-  | tptp_string_for_line format (Formula ((ident, alt), kind, phi, source, _)) =
-    tptp_string_for_format format ^ "(" ^ ident ^ ", " ^
-    tptp_string_for_role kind ^ "," ^ maybe_alt alt ^
-    "\n    (" ^ tptp_string_for_formula format phi ^ ")" ^
+fun tptp_string_of_line format (Type_Decl (ident, ty, ary)) =
+    tptp_string_of_line format (Sym_Decl (ident, ty, nary_type_decl_type ary))
+  | tptp_string_of_line format (Sym_Decl (ident, sym, ty)) =
+    tptp_string_of_format format ^ "(" ^ ident ^ ", type,\n    " ^ sym ^
+    " : " ^ string_of_type format ty ^ ").\n"
+  | tptp_string_of_line format (Formula ((ident, alt), kind, phi, source, _)) =
+    tptp_string_of_format format ^ "(" ^ ident ^ ", " ^
+    tptp_string_of_role kind ^ "," ^ maybe_alt alt ^
+    "\n    (" ^ tptp_string_of_formula format phi ^ ")" ^
     (case source of
-       SOME tm => ", " ^ tptp_string_for_term format tm
+       SOME tm => ", " ^ tptp_string_of_term format tm
      | NONE => "") ^ ").\n"
 
 fun tptp_lines format =
   maps (fn (_, []) => []
          | (heading, lines) =>
            "\n% " ^ heading ^ " (" ^ string_of_int (length lines) ^ ")\n" ::
-           map (tptp_string_for_line format) lines)
+           map (tptp_string_of_line format) lines)
 
 fun arity_of_type (APi (tys, ty)) =
     arity_of_type ty |>> Integer.add (length tys)
@@ -512,12 +516,19 @@ fun string_of_arity (0, n) = string_of_int n
 
 val dfg_class_inter = space_implode " & "
 
-fun dfg_string_for_formula poly gen_simp info =
+fun dfg_string_of_term (ATerm ((s, tys), tms)) =
+    s ^
+    (if null tys then ""
+     else "<" ^ commas (map (string_of_type (DFG Polymorphic)) tys) ^ ">") ^
+    (if null tms then ""
+     else "(" ^ commas (map dfg_string_of_term tms) ^ ")")
+  | dfg_string_of_term _ = raise Fail "unexpected atom in first-order format"
+
+fun dfg_string_of_formula poly gen_simp info =
   let
-    val str_for_typ = string_for_type (DFG poly)
-    fun str_for_bound_typ (ty, []) = str_for_typ ty
-      | str_for_bound_typ (ty, cls) =
-        str_for_typ ty ^ " : " ^ dfg_class_inter cls
+    val str_of_typ = string_of_type (DFG poly)
+    fun str_of_bound_typ (ty, []) = str_of_typ ty
+      | str_of_bound_typ (ty, cls) = str_of_typ ty ^ " : " ^ dfg_class_inter cls
     fun suffix_tag top_level s =
       if top_level then
         case extract_isabelle_status info of
@@ -531,65 +542,67 @@ fun dfg_string_for_formula poly gen_simp info =
         | NONE => s
       else
         s
-    fun str_for_term top_level (ATerm ((s, tys), tms)) =
-        (if is_tptp_equal s then "equal" |> suffix_tag top_level
-         else if s = tptp_true then "true"
-         else if s = tptp_false then "false"
-         else s) ^
-        (if null tys then ""
-         else "<" ^ commas (map (string_for_type (DFG poly)) tys) ^ ">") ^
-        (if null tms then ""
-         else "(" ^ commas (map (str_for_term false) tms) ^ ")")
-      | str_for_term _ _ = raise Fail "unexpected term in first-order format"
-    fun str_for_quant AForall = "forall"
-      | str_for_quant AExists = "exists"
-    fun str_for_conn _ ANot = "not"
-      | str_for_conn _ AAnd = "and"
-      | str_for_conn _ AOr = "or"
-      | str_for_conn _ AImplies = "implies"
-      | str_for_conn top_level AIff = "equiv" |> suffix_tag top_level
-    fun str_for_formula top_level (ATyQuant (q, xs, phi)) =
-        str_for_quant q ^ "_sorts([" ^ commas (map str_for_bound_typ xs) ^
-        "], " ^ str_for_formula top_level phi ^ ")"
-      | str_for_formula top_level (AQuant (q, xs, phi)) =
-        str_for_quant q ^ "([" ^
-        commas (map (string_for_bound_var (DFG poly)) xs) ^ "], " ^
-        str_for_formula top_level phi ^ ")"
-      | str_for_formula top_level (AConn (c, phis)) =
-        str_for_conn top_level c ^ "(" ^
-        commas (map (str_for_formula false) phis) ^ ")"
-      | str_for_formula top_level (AAtom tm) = str_for_term top_level tm
-  in str_for_formula true end
+    fun str_of_atom top_level (ATerm ((s, tys), tms)) =
+        let
+          val s' =
+            if is_tptp_equal s then "equal" |> suffix_tag top_level
+            else if s = tptp_true then "true"
+            else if s = tptp_false then "false"
+            else s
+        in dfg_string_of_term (ATerm ((s', tys), tms)) end
+      | str_of_atom _ _ = raise Fail "unexpected atom in first-order format"
+    fun str_of_quant AForall = "forall"
+      | str_of_quant AExists = "exists"
+    fun str_of_conn _ ANot = "not"
+      | str_of_conn _ AAnd = "and"
+      | str_of_conn _ AOr = "or"
+      | str_of_conn _ AImplies = "implies"
+      | str_of_conn top_level AIff = "equiv" |> suffix_tag top_level
+    fun str_of_formula top_level (ATyQuant (q, xs, phi)) =
+        str_of_quant q ^ "_sorts([" ^ commas (map str_of_bound_typ xs) ^ "], " ^
+        str_of_formula top_level phi ^ ")"
+      | str_of_formula top_level (AQuant (q, xs, phi)) =
+        str_of_quant q ^ "([" ^
+        commas (map (string_of_bound_var (DFG poly)) xs) ^ "], " ^
+        str_of_formula top_level phi ^ ")"
+      | str_of_formula top_level (AConn (c, phis)) =
+        str_of_conn top_level c ^ "(" ^
+        commas (map (str_of_formula false) phis) ^ ")"
+      | str_of_formula top_level (AAtom tm) = str_of_atom top_level tm
+  in str_of_formula true end
 
 fun maybe_enclose bef aft "" = "% " ^ bef ^ aft
   | maybe_enclose bef aft s = bef ^ s ^ aft
 
 fun dfg_lines poly {is_lpo, gen_weights, gen_prec, gen_simp} ord_info problem =
   let
-    val str_for_typ = string_for_type (DFG poly)
+    val typ = string_of_type (DFG poly)
+    val term = dfg_string_of_term
     fun spair (s, s') = "(" ^ s ^ ", " ^ s' ^ ")"
     fun tm_ary sym ty = spair (sym, string_of_arity (arity_of_type ty))
     fun ty_ary 0 ty = ty
       | ty_ary n ty = "(" ^ ty ^ ", " ^ string_of_int n ^ ")"
-    fun fun_typ sym ty = "function(" ^ sym ^ ", " ^ str_for_typ ty ^ ")."
+    fun fun_typ sym ty = "function(" ^ sym ^ ", " ^ typ ty ^ ")."
     fun pred_typ sym ty =
       let
         val (ty_vars, tys) =
           strip_atype ty |> fst
           |>> (fn [] => [] | ty_vars => ["[" ^ commas ty_vars ^ "]"])
-      in "predicate(" ^ commas (sym :: ty_vars @ map str_for_typ tys) ^ ")." end
-    fun str_for_bound_tvar (ty, []) = ty
-      | str_for_bound_tvar (ty, cls) = ty ^ " : " ^ dfg_class_inter cls
-    fun sort_decl xs ty cl =
-      "sort(" ^
-      (if null xs then ""
-       else "[" ^ commas (map str_for_bound_tvar xs) ^ "], ") ^
-      str_for_typ ty ^ ", " ^ cl ^ ")."
+      in "predicate(" ^ commas (sym :: ty_vars @ map typ tys) ^ ")." end
+    fun bound_tvar (ty, []) = ty
+      | bound_tvar (ty, cls) = ty ^ " : " ^ dfg_class_inter cls
+    fun binder_typ xs ty =
+      (if null xs then "" else "[" ^ commas (map bound_tvar xs) ^ "], ") ^
+      typ ty
+    fun sort_decl xs ty cl = "sort(" ^ binder_typ xs ty ^ ", " ^ cl ^ ")."
+    fun datatype_decl xs ty tms exhaust =
+      "datatype(" ^ commas (binder_typ xs ty :: map term tms @
+                            (if exhaust then [] else ["..."])) ^ ")."
     fun subclass_of sub super = "subclass(" ^ sub ^ ", " ^ super ^ ")."
     fun formula pred (Formula ((ident, alt), kind, phi, _, info)) =
         if pred kind then
           let val rank = extract_isabelle_rank info in
-            "formula(" ^ dfg_string_for_formula poly gen_simp info phi ^
+            "formula(" ^ dfg_string_of_formula poly gen_simp info phi ^
             ", " ^ ident ^
             (if rank = default_rank then "" else ", " ^ string_of_int rank) ^
             ")." ^ maybe_alt alt
@@ -610,11 +623,11 @@ fun dfg_lines poly {is_lpo, gen_weights, gen_prec, gen_simp} ord_info problem =
              | _ => NONE)
       |> flat |> commas |> maybe_enclose "predicates [" "]."
     val sorts =
-      filt (fn Type_Decl (_, ty, ary) => SOME (ty_ary ary ty) | _ => NONE) @
+      filt (try (fn Type_Decl (_, ty, ary) => ty_ary ary ty)) @
       [[ty_ary 0 dfg_individual_type]]
       |> flat |> commas |> maybe_enclose "sorts [" "]."
     val classes =
-      filt (fn Class_Decl (_, cl, _) => SOME cl | _ => NONE)
+      filt (try (fn Class_Decl (_, cl, _) => cl))
       |> flat |> commas |> maybe_enclose "classes [" "]."
     val ord_info = if gen_weights orelse gen_prec then ord_info () else []
     val do_term_order_weights =
@@ -631,14 +644,17 @@ fun dfg_lines poly {is_lpo, gen_weights, gen_prec, gen_simp} ord_info problem =
                if is_nontrivial_predicate_atype ty then SOME (pred_typ sym ty)
                else NONE
              | _ => NONE) |> flat
+    val datatype_decls =
+      filt (try (fn Datatype_Decl (_, xs, ty, tms, exhaust) =>
+                    datatype_decl xs ty tms exhaust)) |> flat
     val sort_decls =
-      filt (fn Class_Memb (_, xs, ty, cl) => SOME (sort_decl xs ty cl)
-             | _ => NONE) |> flat
+      filt (try (fn Class_Memb (_, xs, ty, cl) => sort_decl xs ty cl)) |> flat
     val subclass_decls =
-      filt (fn Class_Decl (_, sub, supers) =>
-               SOME (map (subclass_of sub) supers)
-             | _ => NONE) |> flat |> flat
-    val decls = func_decls @ pred_decls @ sort_decls @ subclass_decls
+      filt (try (fn Class_Decl (_, sub, supers) =>
+                    map (subclass_of sub) supers))
+      |> flat |> flat
+    val decls =
+      func_decls @ pred_decls @ datatype_decls @ sort_decls @ subclass_decls
     val axioms =
       filt (formula (curry (op <>) Conjecture)) |> separate [""] |> flat
     val conjs =
@@ -667,7 +683,7 @@ fun dfg_lines poly {is_lpo, gen_weights, gen_prec, gen_simp} ord_info problem =
     ["end_problem.\n"]
   end
 
-fun lines_for_atp_problem format ord ord_info problem =
+fun lines_of_atp_problem format ord ord_info problem =
   "% This file was generated by Isabelle (most likely Sledgehammer)\n\
   \% " ^ timestamp () ^ "\n" ::
   (case format of
@@ -767,10 +783,6 @@ fun declared_in_atp_problem problem =
   fold (fold add_declared_in_line o snd) problem (([], []), [])
 
 (** Nice names **)
-
-fun pool_fold f xs z = pair z #> fold_rev (fn x => uncurry (f x)) xs
-fun pool_map f xs =
-  pool_fold (fn x => fn ys => fn pool => f x pool |>> (fn y => y :: ys)) xs []
 
 val no_qualifiers =
   let
@@ -875,51 +887,55 @@ fun nice_atp_problem readable_names format problem =
       | DFG _ => avoid_clash_with_dfg_keywords
       | _ => I
     val nice_name = nice_name avoid_clash
+    fun nice_bound_tvars xs =
+      fold_map (nice_name o fst) xs
+      ##>> fold_map (fold_map nice_name o snd) xs
+      #>> op ~~
     fun nice_type (AType (name, tys)) =
-        nice_name name ##>> pool_map nice_type tys #>> AType
+        nice_name name ##>> fold_map nice_type tys #>> AType
       | nice_type (AFun (ty1, ty2)) = nice_type ty1 ##>> nice_type ty2 #>> AFun
       | nice_type (APi (names, ty)) =
-        pool_map nice_name names ##>> nice_type ty #>> APi
+        fold_map nice_name names ##>> nice_type ty #>> APi
     fun nice_term (ATerm ((name, tys), ts)) =
-        nice_name name ##>> pool_map nice_type tys ##>> pool_map nice_term ts
+        nice_name name ##>> fold_map nice_type tys ##>> fold_map nice_term ts
         #>> ATerm
       | nice_term (AAbs (((name, ty), tm), args)) =
         nice_name name ##>> nice_type ty ##>> nice_term tm
-        ##>> pool_map nice_term args #>> AAbs
+        ##>> fold_map nice_term args #>> AAbs
     fun nice_formula (ATyQuant (q, xs, phi)) =
-        pool_map nice_type (map fst xs)
-        ##>> pool_map (pool_map nice_name) (map snd xs)
+        fold_map (nice_type o fst) xs
+        ##>> fold_map (fold_map nice_name o snd) xs
         ##>> nice_formula phi
         #>> (fn ((tys, cls), phi) => ATyQuant (q, tys ~~ cls, phi))
       | nice_formula (AQuant (q, xs, phi)) =
-        pool_map nice_name (map fst xs)
-        ##>> pool_map (fn NONE => pair NONE
-                        | SOME ty => nice_type ty #>> SOME) (map snd xs)
+        fold_map (nice_name o fst) xs
+        ##>> fold_map (fn (_, NONE) => pair NONE
+                        | (_, SOME ty) => nice_type ty #>> SOME) xs
         ##>> nice_formula phi
         #>> (fn ((ss, ts), phi) => AQuant (q, ss ~~ ts, phi))
       | nice_formula (AConn (c, phis)) =
-        pool_map nice_formula phis #>> curry AConn c
+        fold_map nice_formula phis #>> curry AConn c
       | nice_formula (AAtom tm) = nice_term tm #>> AAtom
     fun nice_line (Class_Decl (ident, cl, cls)) =
-        nice_name cl ##>> pool_map nice_name cls
+        nice_name cl ##>> fold_map nice_name cls
         #>> (fn (cl, cls) => Class_Decl (ident, cl, cls))
       | nice_line (Type_Decl (ident, ty, ary)) =
         nice_name ty #>> (fn ty => Type_Decl (ident, ty, ary))
       | nice_line (Sym_Decl (ident, sym, ty)) =
         nice_name sym ##>> nice_type ty
         #>> (fn (sym, ty) => Sym_Decl (ident, sym, ty))
+      | nice_line (Datatype_Decl (ident, xs, ty, tms, exhaust)) =
+        nice_bound_tvars xs ##>> nice_type ty ##>> fold_map nice_term tms
+        #>> (fn ((xs, ty), tms) => Datatype_Decl (ident, xs, ty, tms, exhaust))
       | nice_line (Class_Memb (ident, xs, ty, cl)) =
-        pool_map nice_name (map fst xs)
-        ##>> pool_map (pool_map nice_name) (map snd xs)
-        ##>> nice_type ty ##>> nice_name cl
-        #>> (fn (((tys, cls), ty), cl) =>
-                Class_Memb (ident, tys ~~ cls, ty, cl))
+        nice_bound_tvars xs ##>> nice_type ty ##>> nice_name cl
+        #>> (fn ((xs, ty), cl) => Class_Memb (ident, xs, ty, cl))
       | nice_line (Formula (ident, kind, phi, source, info)) =
         nice_formula phi
         #>> (fn phi => Formula (ident, kind, phi, source, info))
     fun nice_problem problem =
-      pool_map (fn (heading, lines) =>
-                   pool_map nice_line lines #>> pair heading) problem
+      fold_map (fn (heading, lines) =>
+                   fold_map nice_line lines #>> pair heading) problem
   in nice_problem problem empty_pool end
 
 end;
