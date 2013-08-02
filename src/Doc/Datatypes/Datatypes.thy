@@ -6,15 +6,24 @@ Tutorial for (co)datatype definitions with the new package.
 
 theory Datatypes
 imports Setup
+keywords
+  "primrec_new" :: thy_decl and
+  "primcorec" :: thy_decl
 begin
 
-(*
-text {*
+(*<*)
+(* FIXME: Evil setup until "primrec_new" and "primcorec" are in place. *)
+ML_command {*
+fun add_dummy_cmd _ _ lthy = lthy;
 
-  primrec_new <fixes>
+val _ = Outer_Syntax.local_theory @{command_spec "primrec_new"} ""
+  (Parse.fixes -- Parse_Spec.where_alt_specs >> uncurry add_dummy_cmd);
 
+val _ = Outer_Syntax.local_theory @{command_spec "primcorec"} ""
+  (Parse.fixes -- Parse_Spec.where_alt_specs >> uncurry add_dummy_cmd);
 *}
-*)
+(*>*)
+
 
 section {* Introduction
   \label{sec:introduction} *}
@@ -24,52 +33,56 @@ The 2013 edition of Isabelle introduced new definitional package for datatypes
 and codatatypes. The datatype support is similar to that provided by the earlier
 package due to Berghofer and Wenzel \cite{Berghofer-Wenzel:1999:TPHOL},
 documented in the Isar reference manual \cite{isabelle-isar-ref};
-indeed, replacing @{command datatype} by @{command datatype_new} is usually
-sufficient to port existing specifications to the new package. What makes the
-new package attractive is that it supports definitions with recursion through a
-large class of non-datatypes, notably finite sets:
+indeed, replacing the keyword @{command datatype} by @{command datatype_new} is
+usually all that is needed to port existing theories to use the new package.
+
+Perhaps the main advantage of the new package is that it supports recursion
+through a large class of non-datatypes, comprising finite sets:
 *}
 
-    datatype_new 'a treeFS = TreeFS 'a "'a treeFS fset"
+    datatype_new 'a treeFS = NodeFS 'a "'a treeFS fset"
 
 text {*
 \noindent
-Another advantage of the new package is that it supports local definitions:
+Another strong point is that the package supports local definitions:
 *}
 
     context linorder
     begin
-      datatype_new flag = Less | Eq | Greater
+    datatype_new flag = Less | Eq | Greater
     end
 
 text {*
 \noindent
-Finally, the package also provides some convenience, notably automatically
-generated destructors.
+The package also provides some convenience, notably automatically generated
+destructors (discriminators and selectors).
 
-The command @{command datatype_new} is expected to displace @{command datatype} in a future
-release. Authors of new theories are encouraged to use @{command datatype_new}, and
-maintainers of older theories may want to consider upgrading in the coming months.
-
-The package also provides codatatypes (or ``coinductive datatypes''), which may
-have infinite values. The following command introduces a codatatype of infinite
-streams:
+In addition to plain inductive datatypes, the package supports coinductive
+datatypes, or \emph{codatatypes}, which may have infinite values. For example,
+the following command introduces the type of lazy lists:
 *}
 
-    codatatype 'a stream = Stream 'a "'a stream"
+    codatatype 'a llist = LNil | LCons 'a "'a llist"
 
 text {*
 \noindent
-Mixed inductive--coinductive recursion is possible via nesting.
-Compare the following four examples:
+Mixed inductive--coinductive recursion is possible via nesting. Compare the
+following four examples:
+
+%%% TODO: Avoid 0
 *}
 
-    datatype_new 'a treeFF = TreeFF 'a "'a treeFF list"
-    datatype_new 'a treeFI = TreeFI 'a "'a treeFF stream"
-    codatatype 'a treeIF = TreeIF 'a "'a treeFF list"
-    codatatype 'a treeII = TreeII 'a "'a treeFF stream"
+    datatype_new 'a treeFF0 = NodeFF 'a "'a treeFF0 list"
+    datatype_new 'a treeFI0 = NodeFI 'a "'a treeFI0 llist"
+    codatatype 'a treeIF0 = NodeIF 'a "'a treeIF0 list"
+    codatatype 'a treeII0 = NodeII 'a "'a treeII0 llist"
 
 text {*
+The first two tree types allow only finite branches, whereas the last two allow
+infinite branches. Orthogonally, the nodes in the first and third types have
+finite branching, whereas those of the second and fourth may have infinitely
+many direct subtrees.
+
 To use the package, it is necessary to import the @{theory BNF} theory, which
 can be precompiled as the \textit{HOL-BNF} image. The following commands show
 how to launch jEdit/PIDE with the image loaded and how to build the image
@@ -87,14 +100,11 @@ text {*
 The package, like its predecessor, fully adheres to the LCF philosophy
 \cite{mgordon79}: The characteristic theorems associated with the specified
 (co)datatypes are derived rather than introduced axiomatically.%
-\footnote{Nonetheless, if the \textit{quick\_and\_dirty} option is enabled, some
-of the internal constructions and most of the internal proof obligations are
-skipped.}
+\footnote{If the \textit{quick\_and\_dirty} option is enabled, some of the
+internal constructions and most of the internal proof obligations are skipped.}
 The package's metatheory is described in a pair of papers
 \cite{traytel-et-al-2012,blanchette-et-al-wit}.
-*}
 
-text {*
 This tutorial is organized as follows:
 
 \begin{itemize}
@@ -145,14 +155,17 @@ in.\allowbreak tum.\allowbreak de}}
 \newcommand\authoremailiii{\texttt{tray{\color{white}nospam}\kern-\wd\boxA{}tel@\allowbreak
 in.\allowbreak tum.\allowbreak de}}
 
-\noindent
-Comments and bug reports concerning either
-the tool or the manual should be directed to the authors at
-\authoremaili, \authoremailii, and \authoremailiii.
+The command @{command datatype_new} is expected to displace @{command datatype}
+in a future release. Authors of new theories are encouraged to use
+@{command datatype_new}, and maintainers of older theories may want to consider
+upgrading in the coming months.
+
+Comments and bug reports concerning either the tool or this tutorial should be
+directed to the authors at \authoremaili, \authoremailii, and \authoremailiii.
 
 \begin{framed}
 \noindent
-\textbf{Warning:} This document is under heavy construction. Please apologise
+\textbf{Warning:} This tutorial is under heavy construction. Please apologise
 for its appearance and come back in a few months. If you have ideas regarding
 material that should be included, please let the authors know.
 \end{framed}
@@ -167,11 +180,15 @@ This section describes how to specify datatypes using the @{command datatype_new
 command. The command is first illustrated through concrete examples featuring
 different flavors of recursion. More examples can be found in the directory
 \verb|~~/src/HOL/BNF/Examples|.
+
+  * libraries include many useful datatypes, e.g. list, option, etc., as well
+    as operations on these;
+    see e.g. ``What's in Main'' \cite{xxx}
 *}
 
 
-subsection {* Introductory Examples
-  \label{ssec:datatype-introductory-examples} *}
+subsection {* Examples
+  \label{ssec:datatype-examples} *}
 
 subsubsection {* Nonrecursive Types *}
 
@@ -203,6 +220,16 @@ simplest recursive type: natural numbers
     datatype_new nat = Zero | Suc nat
 
 text {*
+Setup to be able to write @{term 0} instead of @{const Zero}:
+*}
+
+    instantiation nat :: zero
+    begin
+    definition "0 = Zero"
+    instance ..
+    end
+
+text {*
 lists were shown in the introduction
 
 terminated lists are a variant:
@@ -224,19 +251,19 @@ Mutual recursion = Define several types simultaneously, referring to each other.
 Simple example: distinction between even and odd natural numbers:
 *}
 
-    datatype_new even_nat = Zero | Even_Suc odd_nat
-    and odd_nat = Odd_Suc even_nat
+    datatype_new enat = EZero | ESuc onat
+    and onat = OSuc enat
 
 text {*
 More complex, and more realistic, example:
 *}
 
-    datatype_new ('a, 'b) expr =
-      Term "('a, 'b) trm" | Sum "('a, 'b) trm" "('a, 'b) expr"
+    datatype_new ('a, 'b) exp =
+      Term "('a, 'b) trm" | Sum "('a, 'b) trm" "('a, 'b) exp"
     and ('a, 'b) trm =
-      Factor "('a, 'b) fact" | Prod "('a, 'b) fact" "('a, 'b) trm"
-    and ('a, 'b) fact =
-      Const 'a | Var 'b | Sub_Expr "('a, 'b) expr"
+      Factor "('a, 'b) fct" | Prod "('a, 'b) fct" "('a, 'b) trm"
+    and ('a, 'b) fct =
+      Const 'a | Var 'b | Expr "('a, 'b) exp"
 
 
 subsubsection {* Nested Recursion *}
@@ -246,19 +273,15 @@ Nested recursion = Have recursion through a type constructor.
 
 The introduction showed some examples of trees with nesting through lists.
 
-More complex example, which reuses our maybe and triple types:
+More complex example, which reuses our maybe:
 *}
 
-    datatype_new 'a triple_tree =
-      Triple_Tree "('a triple_tree maybe, bool, 'a triple_tree maybe) triple"
+    datatype_new 'a btree =
+      BNode 'a "'a btree maybe" "'a btree maybe"
 
 text {*
 Recursion may not be arbitrary; e.g. impossible to define
 *}
-
-(*
-    datatype_new 'a foo = Foo (*<*) datatype_new 'a bar = Bar  "'a foo \<Rightarrow> 'a foo"
-*)
 
     datatype_new 'a evil = Evil (*<*)'a
     typ (*>*)"'a evil \<Rightarrow> 'a evil"
@@ -307,20 +330,32 @@ The discriminators and selectors are collectively called \emph{destructors}. The
 
 The set functions, map function, relator, discriminators, and selectors can be
 given custom names, as in the example below:
+
+%%% FIXME: get rid of 0 below
 *}
 
-(*<*)hide_const Nil Cons hd tl(*>*)
-    datatype_new (set: 'a) list (map: map rel: list_all2) =
+(*<*)
+    no_translations
+      "[x, xs]" == "x # [xs]"
+      "[x]" == "x # []"
+
+    no_notation
+      Nil ("[]") and
+      Cons (infixr "#" 65)
+
+    hide_const Nil Cons hd tl map
+(*>*)
+    datatype_new (set0: 'a) list0 (map: map0 rel: list0_all2) =
       null: Nil (defaults tl: Nil)
-    | Cons (hd: 'a) (tl: "'a list")
+    | Cons (hd: 'a) (tl: "'a list0")
 
 text {*
 \noindent
 The command introduces a discriminator @{const null} and a pair of selectors
 @{const hd} and @{const tl} characterized as follows:
 %
-\[@{thm list.collapse(1)[of xs, no_vars]}
-  \qquad @{thm list.collapse(2)[of xs, no_vars]}\]
+\[@{thm list0.collapse(1)[of xs, no_vars]}
+  \qquad @{thm list0.collapse(2)[of xs, no_vars]}\]
 %
 For two-constructor datatypes, a single discriminator constant suffices. The
 discriminator associated with @{const Cons} is simply @{text "\<not> null"}.
@@ -348,13 +383,26 @@ The usual mixfix syntaxes are available for both types and constructors. For exa
     datatype_new ('a, 'b) prod (infixr "*" 20) =
       Pair 'a 'b
 
-    datatype_new (set_: 'a) list_ =
+(*<*)
+    hide_const Nil Cons hd tl
+(*>*)
+    datatype_new (set: 'a) list (map: map rel: list_all2) =
       null: Nil ("[]")
-    | Cons (hd: 'a) (tl: "'a list_") (infixr "#" 65)
+    | Cons (hd: 'a) (tl: "'a list") (infixr "#" 65)
+
+text {*
+Incidentally, this is how the traditional syntaxes are set up in @{theory List}:
+*}
+
+    syntax "_list" :: "args \<Rightarrow> 'a list" ("[(_)]")
+
+    translations
+      "[x, xs]" == "x # [xs]"
+      "[x]" == "x # []"
 
 
-subsection {* General Syntax
-  \label{ssec:datatype-general-syntax} *}
+subsection {* Syntax
+  \label{ssec:datatype-syntax} *}
 
 text {*
 Datatype definitions have the following general syntax:
@@ -410,7 +458,7 @@ Inside a mutually recursive datatype specification, all defined datatypes must
 specify exactly the same type variables in the same order.
 
 @{rail "
-  @{syntax_def ctor}: (@{syntax name} ':')? @{syntax name} (@{syntax ctor_arg} *) \\
+  @{syntax_def ctor}: (@{syntax name} ':')? @{syntax name} (@{syntax ctor_arg} * ) \\
     @{syntax sel_defaults}? @{syntax mixfix}?
 "}
 
@@ -444,8 +492,8 @@ associated with other constructors. The specified default value must have type
 (i.e., it may dependend on @{text C}'s arguments).
 *}
 
-subsection {* Characteristic Theorems
-  \label{ssec:datatype-characteristic-theorems} *}
+subsection {* Generated Theorems
+  \label{ssec:datatype-generated-theorems} *}
 
 text {*
   * free ctor theorems
@@ -520,33 +568,208 @@ text {*
 More examples in \verb|~~/src/HOL/BNF/Examples|.
 *}
 
-subsection {* Introductory Examples
-  \label{ssec:primrec-introductory-examples} *}
+subsection {* Examples
+  \label{ssec:primrec-examples} *}
 
 subsubsection {* Nonrecursive Types *}
+
+text {*
+  * simple (depth 1) pattern matching on the left-hand side
+*}
+
+    primrec_new bool_of_trool :: "trool \<Rightarrow> bool" where
+      "real_of_trool Faalse = False" |
+      "real_of_trool Truue = True"
+
+text {*
+  * OK to specify the cases in a different order
+  * OK to leave out some case (but get a warning -- maybe we need a "quiet"
+    or "silent" flag?)
+    * case is then unspecified
+
+More examples:
+*}
+
+    primrec_new list_of_maybe :: "'a maybe \<Rightarrow> 'a list" where
+      "list_of_maybe Nothing = []" |
+      "list_of_maybe (Just a) = [a]"
+
+    primrec_new maybe_def :: "'a \<Rightarrow> 'a maybe \<Rightarrow> 'a" where
+      "maybe_def d Nothing = d" |
+      "maybe_def _ (Just a) = a"
+
+    primrec_new mirrror :: "('a, 'b, 'c) triple \<Rightarrow> ('c, 'b, 'a) triple" where
+      "mirrror (Triple a b c) = Triple c b a"
 
 
 subsubsection {* Simple Recursion *}
 
+text {*
+again, simple pattern matching on left-hand side, but possibility
+to call a function recursively on an argument to a constructor:
+*}
+
+    primrec_new replicate :: "nat \<Rightarrow> 'a list \<Rightarrow> 'a list" where
+      "rep 0 _ = []" |
+      "rep (Suc n) a = a # rep n a"
+
+text {*
+we don't like the confusing name @{const nth}:
+*}
+
+    primrec_new at :: "'a list \<Rightarrow> nat \<Rightarrow> 'a" where
+      "at (a # as) j =
+         (case j of
+            0 \<Rightarrow> a
+          | Suc j' \<Rightarrow> at as j')"
+
+    primrec_new tfold :: "('a \<Rightarrow> 'b \<Rightarrow> 'b) \<Rightarrow> ('a, 'b) tlist \<Rightarrow> 'b" where
+      "tfold _ (TNil b) = b" |
+      "tfold f (TCons a as) = f a (tfold f as)"
+
 
 subsubsection {* Mutual Recursion *}
+
+text {*
+E.g., converting even/odd naturals to plain old naturals:
+*}
+
+    primrec_new
+      nat_of_enat :: "enat \<Rightarrow> nat" and
+      nat_of_onat :: "onat => nat"
+    where
+      "nat_of_enat EZero = 0" |
+      "nat_of_enat (ESuc n) = Suc (nat_of_onat n)" |
+      "nat_of_onat (OSuc n) = Suc (nat_of_enat n)"
+
+text {*
+Mutual recursion is even possible within a single type, an innovation over the
+old package:
+*}
+
+    primrec_new
+      even :: "nat \<Rightarrow> bool" and
+      odd :: "nat \<Rightarrow> bool"
+    where
+      "even 0 = True" |
+      "even (Suc n) = odd n" |
+      "odd 0 = False" |
+      "odd (Suc n) = even n"
+
+text {*
+More elaborate:
+*}
+
+    primrec_new
+      eval\<^sub>e :: "('a, 'b) exp \<Rightarrow> real" and
+      eval\<^sub>t :: "('a, 'b) trm \<Rightarrow> real" and
+      eval\<^sub>f :: "('a, 'b) fct \<Rightarrow> real"
+    where
+      "eval\<^sub>e \<gamma> \<xi> (Term t) = eval\<^sub>t \<gamma> \<xi> t" |
+      "eval\<^sub>e \<gamma> \<xi> (Sum t e) = eval\<^sub>t \<gamma> \<xi> t + eval\<^sub>e \<gamma> \<xi> e" |
+      "eval\<^sub>t \<gamma> \<xi> (Factor f) = eval\<^sub>f \<gamma> \<xi> f)" |
+      "eval\<^sub>t \<gamma> \<xi> (Prod f t) = eval\<^sub>f \<gamma> \<xi> f + eval\<^sub>t \<gamma> \<xi> t" |
+      "eval\<^sub>f \<gamma> _ (Const a) = \<gamma> a" |
+      "eval\<^sub>f _ \<xi> (Var b) = \<xi> b" |
+      "eval\<^sub>f \<gamma> \<xi> (Expr e) = eval\<^sub>e \<gamma> \<xi> e"
 
 
 subsubsection {* Nested Recursion *}
 
+(*<*)
+    datatype_new 'a treeFF = NodeFF 'a "'a treeFF list"
+    datatype_new 'a treeFI = NodeFI 'a "'a treeFI llist"
+(*>*)
+    primrec_new atFF0 :: "'a treeFF \<Rightarrow> nat list \<Rightarrow> 'a" where
+      "atFF0 (NodeFF a ts) js =
+         (case js of
+            [] \<Rightarrow> a
+          | j # js' \<Rightarrow> at (map (\<lambda>t. atFF0 t js') ts) j)"
+
+    primrec_new atFI :: "'a treeFI \<Rightarrow> nat list \<Rightarrow> 'a" where
+      "atFF (NodeFI a ts) js =
+         (case js of
+            [] \<Rightarrow> a
+          | j # js' \<Rightarrow> at (llist_map (\<lambda>t. atFF t js') ts) j)"
+
+    primrec_new sum_btree :: "('a\<Colon>plus) btree \<Rightarrow> 'a" where
+      "sum_btree (BNode a lt rt) =
+         a + maybe_def 0 (maybe_map sum_btree lt) +
+           maybe_def 0 (maybe_map sum_btree rt)"
+
 
 subsubsection {* Nested-as-Mutual Recursion *}
 
-
-subsection {* General Syntax
-  \label{ssec:primrec-general-syntax} *}
-
 text {*
-
+  * can pretend a nested type is mutually recursive
+  * avoids the higher-order map
+  * e.g.
 *}
 
-subsection {* Characteristic Theorems
-  \label{ssec:primrec-characteristic-theorems} *}
+    primrec_new
+      at_treeFF :: "'a treeFF \<Rightarrow> nat list \<Rightarrow> 'a" and
+      at_treesFF :: "'a treeFF list \<Rightarrow> nat \<Rightarrow> nat list \<Rightarrow> 'a"
+    where
+      "at_treeFF (NodeFF a ts) js =
+         (case js of
+            [] \<Rightarrow> a
+          | j # js' \<Rightarrow> at_treesFF ts j js')" |
+      "at_treesFF (t # ts) j =
+         (case j of
+            0 \<Rightarrow> at_treeFF t
+          | Suc j' \<Rightarrow> at_treesFF ts j')"
+
+    primrec_new
+      sum_btree :: "('a\<Colon>plus) btree \<Rightarrow> 'a" and
+      sum_btree_maybe :: "('a\<Colon>plus) btree maybe \<Rightarrow> 'a"
+    where
+      "sum_btree (BNode a lt rt) =
+         a + sum_btree_maybe lt + sum_btree_maybe rt" |
+      "sum_btree_maybe Nothing = 0" |
+      "sum_btree_maybe (Just t) = sum_btree t"
+
+text {*
+  * this can always be avoided;
+     * e.g. in our previous example, we first mapped the recursive
+       calls, then we used a generic at function to retrieve the result
+
+  * there's no hard-and-fast rule of when to use one or the other,
+    just like there's no rule when to use fold and when to use
+    primrec_new
+
+  * higher-order approach, considering nesting as nesting, is more
+    compositional -- e.g. we saw how we could reuse an existing polymorphic
+    at or maybe_def, whereas at_treesFF is much more specific
+
+  * but:
+     * is perhaps less intuitive, because it requires higher-order thinking
+     * may seem inefficient, and indeed with the code generator the
+       mutually recursive version might be nicer
+     * is somewhat indirect -- must apply a map first, then compute a result
+       (cannot mix)
+     * the auxiliary functions like at_treesFF are sometimes useful in own right
+
+  * impact on automation unclear
+*}
+
+
+subsection {* Syntax
+  \label{ssec:primrec-syntax} *}
+
+text {*
+Primitive recursive functions have the following general syntax:
+
+@{rail "
+  @@{command primrec_new} @{syntax target}? @{syntax \"fixes\"} \\ @'where'
+    (@{syntax primrec_equation} + '|')
+  ;
+  @{syntax_def primrec_equation}: @{syntax thmdecl}? @{syntax prop}
+"}
+*}
+
+
+subsection {* Generated Theorems
+  \label{ssec:primrec-generated-theorems} *}
 
 text {*
   * synthesized nonrecursive definition
@@ -559,8 +782,8 @@ text {*
     * mutualized
 *}
 
-subsection {* Recursive Default Values
-  \label{ssec:recursive-default-values} *}
+subsection {* Recursive Default Values for Selectors
+  \label{ssec:recursive-default-values-for-selectors} *}
 
 text {*
 A datatype selector @{text un_D} can have a default value for each constructor
@@ -603,19 +826,22 @@ The following example illustrates this procedure:
     | TCons (thd: 'a) (ttl : "('a, 'b) tlist_") (defaults termi: "\<lambda>_ xs. termi\<^sub>0 xs")
 
 (*<*)
+    (* FIXME: remove hack once "primrec_new" is in place *)
     rep_datatype TNil TCons
     by (erule tlist_.induct, assumption) auto
 (*>*)
-
     overloading
       termi\<^sub>0 \<equiv> "termi\<^sub>0 \<Colon> ('a, 'b) tlist_ \<Rightarrow> 'b"
     begin
-
-(*<*)(*FIXME: use primrec_new and avoid rep_datatype*)(*>*)
+(*<*)
+    (* FIXME: remove hack once "primrec_new" is in place *)
     fun termi\<^sub>0 :: "('a, 'b) tlist_ \<Rightarrow> 'b" where
     "termi\<^sub>0 (TNil y) = y" |
     "termi\<^sub>0 (TCons x xs) = termi\<^sub>0 xs"
-
+(*>*)
+    primrec_new termi\<^sub>0 :: "('a, 'b) tlist_ \<Rightarrow> 'b" where
+    "termi\<^sub>0 (TNil y) = y" |
+    "termi\<^sub>0 (TCons x xs) = termi\<^sub>0 xs"
     end
 
     lemma terminal_TCons[simp]: "termi (TCons x xs) = termi xs"
@@ -642,29 +868,32 @@ section {* Defining Codatatypes
 text {*
 This section describes how to specify codatatypes using the @{command codatatype}
 command.
+
+  * libraries include some useful codatatypes, notably lazy lists;
+    see the ``Coinductive'' AFP entry \cite{xxx} for an elaborate library
 *}
 
 
-subsection {* Introductory Examples
-  \label{ssec:codatatype-introductory-examples} *}
+subsection {* Examples
+  \label{ssec:codatatype-examples} *}
 
 text {*
 More examples in \verb|~~/src/HOL/BNF/Examples|.
 *}
 
 
-subsection {* General Syntax
-  \label{ssec:codatatype-general-syntax} *}
+subsection {* Syntax
+  \label{ssec:codatatype-syntax} *}
 
 text {*
 Definitions of codatatypes have almost exactly the same syntax as for datatypes
-(Section~\ref{ssec:datatype-general-syntax}), with two exceptions: The command
-is called @{command codatatype}; the \keyw{no\_dests} option is not
-available, because destructors are a central notion for codatatypes.
+(Section~\ref{ssec:datatype-syntax}), with two exceptions: The command is called
+@{command codatatype}; the \keyw{no\_dests} option is not available, because
+destructors are a central notion for codatatypes.
 *}
 
-subsection {* Characteristic Theorems
-  \label{ssec:codatatype-characteristic-theorems} *}
+subsection {* Generated Theorems
+  \label{ssec:codatatype-generated-theorems} *}
 
 
 section {* Defining Corecursive Functions
@@ -679,23 +908,35 @@ This section describes how to specify corecursive functions using the
 *}
 
 
-subsection {* Introductory Examples
-  \label{ssec:primcorec-introductory-examples} *}
+subsection {* Examples
+  \label{ssec:primcorec-examples} *}
 
 text {*
 More examples in \verb|~~/src/HOL/BNF/Examples|.
 
 Also, for default values, the same trick as for datatypes is possible for
-codatatypes (Section~\ref{ssec:recursive-default-values}).
+codatatypes (Section~\ref{ssec:recursive-default-values-for-selectors}).
 *}
 
 
-subsection {* General Syntax
-  \label{ssec:primcorec-general-syntax} *}
+subsection {* Syntax
+  \label{ssec:primcorec-syntax} *}
+
+text {*
+Primitive corecrusvie definitions have the following general syntax:
+
+@{rail "
+  @@{command primcorec} @{syntax target}? @{syntax \"fixes\"} \\ @'where'
+    (@{syntax primcorec_formula} + '|')
+  ;
+  @{syntax_def primcorec_formula}: @{syntax thmdecl}? @{syntax prop}
+    (@'of' (@{syntax term} * ))?
+"}
+*}
 
 
-subsection {* Characteristic Theorems
-  \label{ssec:primcorec-characteristic-theorems} *}
+subsection {* Generated Theorems
+  \label{ssec:primcorec-generated-theorems} *}
 
 
 section {* Registering Bounded Natural Functors
@@ -711,8 +952,8 @@ of a bounded natural functor (BNF).
 *}
 
 
-subsection {* Introductory Example
-  \label{ssec:bnf-introductory-examples} *}
+subsection {* Example
+  \label{ssec:bnf-examples} *}
 
 text {*
 More examples in \verb|~~/src/HOL/BNF/Basic_BNFs.thy| and
@@ -723,8 +964,8 @@ mention =>.
 *}
 
 
-subsection {* General Syntax
-  \label{ssec:bnf-general-syntax} *}
+subsection {* Syntax
+  \label{ssec:bnf-syntax} *}
 
 
 section {* Generating Free Constructor Theorems
@@ -745,16 +986,16 @@ as performed internally by @{command datatype_new} and @{command codatatype}.
 *}
 
 
-subsection {* Introductory Example
-  \label{ssec:ctors-introductory-examples} *}
+subsection {* Example
+  \label{ssec:ctors-examples} *}
 
 
-subsection {* General Syntax
-  \label{ssec:ctors-general-syntax} *}
+subsection {* Syntax
+  \label{ssec:ctors-syntax} *}
 
 
-subsection {* Characteristic Theorems
-  \label{ssec:ctors-characteristic-theorems} *}
+subsection {* Generated Theorems
+  \label{ssec:ctors-generated-theorems} *}
 
 
 section {* Standard ML Interface
