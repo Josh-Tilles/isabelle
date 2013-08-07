@@ -7,6 +7,9 @@ Generic theorem transfer method.
 
 signature TRANSFER =
 sig
+  val bottom_rewr_conv: thm list -> conv
+  val top_rewr_conv: thm list -> conv
+
   val prep_conv: conv
   val get_transfer_raw: Proof.context -> thm list
   val get_relator_eq: Proof.context -> thm list
@@ -132,6 +135,12 @@ fun del_transfer_thm thm = Data.map (map_transfer_raw (Item_Net.remove thm))
 
 (** Conversions **)
 
+fun bottom_rewr_conv rewrs = Conv.bottom_conv (K (Conv.try_conv (Conv.rewrs_conv rewrs))) @{context}
+fun top_rewr_conv rewrs = Conv.top_conv (K (Conv.try_conv (Conv.rewrs_conv rewrs))) @{context}
+
+fun transfer_rel_conv conv = 
+  Conv.concl_conv ~1 (HOLogic.Trueprop_conv (Conv.fun2_conv (Conv.arg_conv conv)))
+
 val Rel_rule = Thm.symmetric @{thm Rel_def}
 
 fun dest_funcT cT =
@@ -190,7 +199,7 @@ fun gen_abstract_equalities (dest : term -> term * (term -> term)) thm =
   end
     handle TERM _ => thm
 
-fun abstract_equalities_transfer thm =
+fun abstract_equalities_transfer ctxt thm =
   let
     fun dest prop =
       let
@@ -201,26 +210,33 @@ fun abstract_equalities_transfer thm =
         (rel, fn rel' =>
           Logic.list_implies (prems, HOLogic.mk_Trueprop (rel' $ x $ y)))
       end
+    val contracted_eq_thm = 
+      Conv.fconv_rule (transfer_rel_conv (bottom_rewr_conv (get_relator_eq ctxt))) thm
+      handle CTERM _ => thm
   in
-    gen_abstract_equalities dest thm
+    gen_abstract_equalities dest contracted_eq_thm
   end
 
 fun abstract_equalities_relator_eq rel_eq_thm =
   gen_abstract_equalities (fn x => (x, I))
     (rel_eq_thm RS @{thm is_equality_def [THEN iffD2]})
 
-fun abstract_equalities_domain thm =
+fun abstract_equalities_domain ctxt thm =
   let
     fun dest prop =
       let
         val prems = Logic.strip_imp_prems prop
         val concl = HOLogic.dest_Trueprop (Logic.strip_imp_concl prop)
-        val ((dom, x), y) = apfst Term.dest_comb (Term.dest_comb concl)
+        val ((eq, dom), y) = apfst Term.dest_comb (Term.dest_comb concl)
       in
-        (x, fn x' => Logic.list_implies (prems, HOLogic.mk_Trueprop (dom $ x' $ y)))
+        (dom, fn dom' => Logic.list_implies (prems, HOLogic.mk_Trueprop (eq $ dom' $ y)))
       end
+    fun transfer_rel_conv conv = 
+      Conv.concl_conv ~1 (HOLogic.Trueprop_conv (Conv.arg1_conv (Conv.arg_conv conv)))
+    val contracted_eq_thm = 
+      Conv.fconv_rule (transfer_rel_conv (bottom_rewr_conv (get_relator_eq ctxt))) thm
   in
-    gen_abstract_equalities dest thm
+    gen_abstract_equalities dest contracted_eq_thm
   end 
 
 
@@ -305,11 +321,11 @@ fun detect_transfer_rules thm =
 
 (** Adding transfer domain rules **)
 
-fun add_transfer_domain_thm thm = 
-  (add_transfer_thm o abstract_equalities_domain o detect_transfer_rules) thm
+fun add_transfer_domain_thm thm ctxt = 
+  (add_transfer_thm o abstract_equalities_domain (Context.proof_of ctxt) o detect_transfer_rules) thm ctxt
 
-fun del_transfer_domain_thm thm = 
-  (del_transfer_thm o abstract_equalities_domain o detect_transfer_rules) thm
+fun del_transfer_domain_thm thm ctxt = 
+  (del_transfer_thm o abstract_equalities_domain (Context.proof_of ctxt) o detect_transfer_rules) thm ctxt
 
 (** Transfer proof method **)
 
@@ -559,11 +575,13 @@ fun transfer_prover_tac ctxt = SUBGOAL (fn (t, i) =>
     val rule1 = transfer_rule_of_term ctxt false rhs
     val rules = get_transfer_raw ctxt
     val eq_rules = get_relator_eq_raw ctxt
+    val expand_eq_in_rel = transfer_rel_conv (top_rewr_conv [@{thm fun_rel_eq[symmetric,THEN eq_reflection]}])
   in
     EVERY
       [CONVERSION prep_conv i,
        rtac @{thm transfer_prover_start} i,
-       (rtac rule1 THEN_ALL_NEW
+       ((rtac rule1 ORELSE' (CONVERSION expand_eq_in_rel THEN' rtac rule1))
+        THEN_ALL_NEW
          (REPEAT_ALL_NEW (resolve_tac rules) THEN_ALL_NEW (DETERM o eq_tac eq_rules))) (i+1),
        rtac @{thm refl} i]
   end)
@@ -657,13 +675,16 @@ val transfer_prover_method : (Proof.context -> Method.method) context_parser =
 
 (* Attribute for transfer rules *)
 
-val prep_rule = abstract_domains_transfer o abstract_equalities_transfer o Conv.fconv_rule prep_conv
+fun prep_rule ctxt thm = 
+  (abstract_domains_transfer o abstract_equalities_transfer ctxt o Conv.fconv_rule prep_conv) thm
 
 val transfer_add =
-  Thm.declaration_attribute (add_transfer_thm o prep_rule)
+  Thm.declaration_attribute (fn thm => fn ctxt => 
+    (add_transfer_thm o prep_rule (Context.proof_of ctxt)) thm ctxt)
 
 val transfer_del =
-  Thm.declaration_attribute (del_transfer_thm o prep_rule)
+  Thm.declaration_attribute (fn thm => fn ctxt => 
+    (del_transfer_thm o prep_rule (Context.proof_of ctxt)) thm ctxt)
 
 val transfer_attribute =
   Attrib.add_del transfer_add transfer_del
