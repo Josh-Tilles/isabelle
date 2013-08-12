@@ -11,7 +11,6 @@ sig
   val sum_prod_thms_set: thm list
   val sum_prod_thms_rel: thm list
 
-  val mk_case_tac: Proof.context -> int -> int -> int -> thm -> thm -> thm -> tactic
   val mk_coinduct_tac: Proof.context -> thm list -> int -> int list -> thm -> thm list ->
     thm list -> thm list -> thm list list -> thm list list list -> thm list list list -> tactic
   val mk_coiter_tac: thm list -> thm list -> thm -> thm -> thm -> Proof.context -> tactic
@@ -69,12 +68,6 @@ fun inst_as_projs ctxt k thm =
   end;
 
 val inst_as_projs_tac = PRIMITIVE oo inst_as_projs;
-
-fun mk_case_tac ctxt n k m case_def ctr_def dtor_ctor =
-  unfold_thms_tac ctxt [case_def, ctr_def, dtor_ctor] THEN
-  HEADGOAL (rtac (mk_sum_casesN_balanced n k RS ssubst) THEN'
-    REPEAT_DETERM_N (Int.max (0, m - 1)) o rtac (@{thm split} RS ssubst) THEN'
-    rtac refl);
 
 fun mk_exhaust_tac ctxt n ctr_defs ctor_iff_dtor sumEN' =
   unfold_thms_tac ctxt (ctor_iff_dtor :: ctr_defs) THEN HEADGOAL (rtac sumEN') THEN
@@ -149,7 +142,7 @@ fun mk_induct_tac ctxt nn ns mss kkss ctr_defs ctor_induct' set_map's pre_set_de
       mss (unflat mss (1 upto n)) kkss)
   end;
 
-fun mk_coinduct_same_ctr ctxt rel_eqs pre_rel_def dtor_ctor ctr_def discs sels =
+fun mk_coinduct_same_ctr_tac ctxt rel_eqs pre_rel_def dtor_ctor ctr_def discs sels =
   hyp_subst_tac ctxt THEN'
   CONVERSION (hhf_concl_conv
     (Conv.top_conv (K (Conv.try_conv (Conv.rewr_conv ctr_def))) ctxt) ctxt) THEN'
@@ -161,7 +154,7 @@ fun mk_coinduct_same_ctr ctxt rel_eqs pre_rel_def dtor_ctor ctr_def discs sels =
      REPEAT o etac conjE THEN_MAYBE' REPEAT o hyp_subst_tac ctxt THEN' REPEAT o rtac conjI THEN'
      REPEAT o rtac refl);
 
-fun mk_coinduct_distinct_ctrs ctxt discs discs' =
+fun mk_coinduct_distinct_ctrs_tac ctxt discs discs' =
   hyp_subst_tac ctxt THEN' REPEAT o etac conjE THEN'
   full_simp_tac (ss_only (refl :: no_refl (discs @ discs') @ basic_simp_thms) ctxt);
 
@@ -175,9 +168,9 @@ fun mk_coinduct_discharge_prem_tac ctxt rel_eqs' nn kk n pre_rel_def dtor_ctor e
         EVERY' ([rtac exhaust, K (inst_as_projs_tac ctxt 2)] @
           map2 (fn k' => fn discs' =>
             if k' = k then
-              mk_coinduct_same_ctr ctxt rel_eqs' pre_rel_def dtor_ctor ctr_def discs sels
+              mk_coinduct_same_ctr_tac ctxt rel_eqs' pre_rel_def dtor_ctor ctr_def discs sels
             else
-              mk_coinduct_distinct_ctrs ctxt discs discs') ks discss)) ks ctr_defs discss selss)
+              mk_coinduct_distinct_ctrs_tac ctxt discs discs') ks discss)) ks ctr_defs discss selss)
   end;
 
 fun mk_coinduct_tac ctxt rel_eqs' nn ns dtor_coinduct' pre_rel_defs dtor_ctors exhausts ctr_defss

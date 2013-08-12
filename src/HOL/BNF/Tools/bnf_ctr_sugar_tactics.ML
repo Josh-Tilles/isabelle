@@ -8,6 +8,7 @@ Tactics for wrapping existing freely generated type's constructors.
 signature BNF_CTR_SUGAR_TACTICS =
 sig
   val mk_alternate_disc_def_tac: Proof.context -> int -> thm -> thm -> thm -> tactic
+  val mk_case_tac: Proof.context -> int -> int -> thm -> thm list -> thm list list -> tactic
   val mk_case_cong_tac: Proof.context -> thm -> thm list -> tactic
   val mk_case_conv_tac: Proof.context -> int -> thm -> thm list -> thm list list -> thm list list ->
     tactic
@@ -36,7 +37,7 @@ fun if_P_or_not_P_OF pos thm = thm RS (if pos then @{thm if_P} else @{thm if_not
 
 fun mk_nchotomy_tac n exhaust =
   HEADGOAL (rtac allI THEN' rtac exhaust THEN'
-   EVERY'  (maps (fn k => [rtac (mk_disjIN n k), REPEAT_DETERM o rtac exI, atac]) (1 upto n)));
+   EVERY' (maps (fn k => [rtac (mk_disjIN n k), REPEAT_DETERM o rtac exI, atac]) (1 upto n)));
 
 fun mk_unique_disc_def_tac m uexhaust =
   HEADGOAL (EVERY' [rtac iffI, rtac uexhaust, REPEAT_DETERM_N m o rtac exI, atac, rtac refl]);
@@ -97,6 +98,30 @@ fun mk_expand_tac ctxt n ms udisc_exhaust vdisc_exhaust uncollapses disc_exclude
               ks disc_excludess disc_excludess' uncollapses)])
           ks ms disc_excludesss disc_excludesss' uncollapses))
     end;
+
+fun mk_case_same_ctr_tac ctxt injects =
+  REPEAT_DETERM o etac exE THEN' etac conjE THEN'
+    (case injects of
+      [] => atac
+    | [inject] => dtac (inject RS iffD1) THEN' REPEAT_DETERM o etac conjE THEN'
+        hyp_subst_tac ctxt THEN' rtac refl);
+
+fun mk_case_distinct_ctrs_tac ctxt distincts =
+  REPEAT_DETERM o etac exE THEN' etac conjE THEN' full_simp_tac (ss_only distincts ctxt);
+
+fun mk_case_tac ctxt n k case_def injects distinctss =
+  let
+    val case_def' = mk_unabs_def (n + 1) (case_def RS meta_eq_to_obj_eq);
+    val ks = 1 upto n;
+  in
+    HEADGOAL (rtac (case_def' RS trans) THEN' rtac @{thm the_equality} THEN'
+      rtac (mk_disjIN n k) THEN' REPEAT_DETERM o rtac exI THEN' rtac conjI THEN' rtac refl THEN'
+      rtac refl THEN'
+      EVERY' (map2 (fn k' => fn distincts =>
+        (if k' < n then etac disjE else K all_tac) THEN'
+        (if k' = k then mk_case_same_ctr_tac ctxt injects
+         else mk_case_distinct_ctrs_tac ctxt distincts)) ks distinctss))
+  end;
 
 fun mk_case_conv_tac ctxt n uexhaust cases discss' selss =
   HEADGOAL (rtac uexhaust THEN'
