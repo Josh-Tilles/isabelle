@@ -49,8 +49,8 @@ quotient_type rat = "int \<times> int" / partial: "ratrel"
   morphisms Rep_Rat Abs_Rat
   by (rule part_equivp_ratrel)
 
-lemma Domainp_cr_rat [transfer_domain_rule]: "Domainp cr_rat = (\<lambda>x. snd x \<noteq> 0)"
-by (simp add: rat.domain)
+lemma Domainp_cr_rat [transfer_domain_rule]: "Domainp pcr_rat = (\<lambda>x. snd x \<noteq> 0)"
+by (simp add: rat.domain_eq)
 
 subsubsection {* Representation and basic operations *}
 
@@ -409,9 +409,9 @@ proof (clarsimp)
   assume "b \<noteq> 0" and "d \<noteq> 0" and "a * d = c * b"
   hence "a * d * b * d = c * b * b * d"
     by simp
-  hence "a * b * d\<twosuperior> = c * d * b\<twosuperior>"
+  hence "a * b * d\<^sup>2 = c * d * b\<^sup>2"
     unfolding power2_eq_square by (simp add: mult_ac)
-  hence "0 < a * b * d\<twosuperior> \<longleftrightarrow> 0 < c * d * b\<twosuperior>"
+  hence "0 < a * b * d\<^sup>2 \<longleftrightarrow> 0 < c * d * b\<^sup>2"
     by simp
   thus "0 < a * b \<longleftrightarrow> 0 < c * d"
     using `b \<noteq> 0` and `d \<noteq> 0`
