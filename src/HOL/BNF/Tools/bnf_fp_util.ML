@@ -352,7 +352,7 @@ val sel_corecN = selN ^ "_" ^ corecN
 fun co_prefix fp = (if fp = Greatest_FP then "co" else "");
 
 fun add_components_of_typ (Type (s, Ts)) =
-    fold add_components_of_typ Ts #> cons (Long_Name.base_name s)
+    cons (Long_Name.base_name s) #> fold_rev add_components_of_typ Ts
   | add_components_of_typ _ = I;
 
 fun base_name_of_typ T = space_implode "_" (add_components_of_typ T []);
@@ -571,18 +571,18 @@ fun mk_strong_coinduct_thm coind rel_eqs rel_monos ctxt =
     |> unfold_thms ctxt unfolds
   end;
 
-fun fp_bnf construct_fp bs resBs eqs lthy =
+fun fp_bnf construct_fp bs resBs fp_eqs lthy =
   let
     val time = time lthy;
     val timer = time (Timer.startRealTimer ());
-    val (lhss, rhss) = split_list eqs;
+    val (Xs, rhsXs) = split_list fp_eqs;
 
-    (* FIXME: because of "@ lhss", the output could contain type variables that are not in the
+    (* FIXME: because of "@ Xs", the output could contain type variables that are not in the
        input; also, "fp_sort" should put the "resBs" first and in the order in which they appear *)
     fun fp_sort Ass =
-      subtract (op =) lhss (filter (fn T => exists (fn Ts => member (op =) Ts T) Ass) resBs) @ lhss;
+      subtract (op =) Xs (filter (fn T => exists (fn Ts => member (op =) Ts T) Ass) resBs) @ Xs;
 
-    val name = mk_common_name (map Binding.name_of bs);
+    val common_name = mk_common_name (map Binding.name_of bs);
 
     fun raw_qualify b =
       let val s = Binding.name_of b in
@@ -590,20 +590,16 @@ fun fp_bnf construct_fp bs resBs eqs lthy =
       end;
 
     val ((bnfs, (deadss, livess)), (unfold_set, lthy)) = apfst (apsnd split_list o split_list)
-      (fold_map2 (fn b => bnf_of_typ Smart_Inline (raw_qualify b) fp_sort) bs rhss
+      (fold_map2 (fn b => bnf_of_typ Smart_Inline (raw_qualify b) fp_sort Xs) bs rhsXs
         (empty_unfolds, lthy));
 
     fun qualify i =
-      let val namei = name ^ nonzero_string_of_int i;
+      let val namei = common_name ^ nonzero_string_of_int i;
       in Binding.qualify true namei end;
 
     val Ass = map (map dest_TFree) livess;
     val resDs = fold (subtract (op =)) Ass resBs;
     val Ds = fold (fold Term.add_tfreesT) deadss [];
-
-    val _ = (case Library.inter (op =) Ds lhss of [] => ()
-      | A :: _ => error ("Inadmissible type recursion (cannot take fixed point of dead type \
-        \variable " ^ quote (Syntax.string_of_typ lthy (TFree A)) ^ ")"));
 
     val timer = time (timer "Construction of BNFs");
 
