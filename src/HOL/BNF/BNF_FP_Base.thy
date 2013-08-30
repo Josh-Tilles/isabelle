@@ -1,14 +1,15 @@
-(*  Title:      HOL/BNF/BNF_FP_Basic.thy
+(*  Title:      HOL/BNF/BNF_FP_Base.thy
+    Author:     Lorenz Panny, TU Muenchen
     Author:     Dmitriy Traytel, TU Muenchen
     Author:     Jasmin Blanchette, TU Muenchen
-    Copyright   2012
+    Copyright   2012, 2013
 
-Basic fixed point operations on bounded natural functors.
+Shared fixed point operations on bounded natural functors, including
 *)
 
-header {* Basic Fixed Point Operations on Bounded Natural Functors *}
+header {* Shared Fixed Point Operations on Bounded Natural Functors *}
 
-theory BNF_FP_Basic
+theory BNF_FP_Base
 imports BNF_Comp BNF_Ctr_Sugar
 keywords
   "defaults"
@@ -153,8 +154,31 @@ lemma subst_eq_imp: "(\<forall>a b. a = b \<longrightarrow> P a b) \<equiv> (\<f
 lemma eq_subset: "op = \<le> (\<lambda>a b. P a b \<or> a = b)"
   by auto
 
+lemma eq_le_Grp_id_iff: "(op = \<le> Grp (Collect R) id) = (All R)"
+  unfolding Grp_def id_apply by blast
+
+lemma Grp_id_mono_subst: "(\<And>x y. Grp P id x y \<Longrightarrow> Grp Q id (f x) (f y)) \<equiv>
+   (\<And>x. x \<in> P \<Longrightarrow> f x \<in> Q)"
+  unfolding Grp_def by rule auto
+
+lemma if_if_True:
+  "(if (if b then True else b') then (if b then x else x') else f (if b then y else y')) =
+   (if b then x else if b' then x' else f y')"
+  by simp
+
+lemma if_if_False:
+  "(if (if b then False else b') then (if b then x else x') else f (if b then y else y')) =
+   (if b then f y else if b' then x' else f y')"
+  by simp
+
 ML_file "Tools/bnf_fp_util.ML"
 ML_file "Tools/bnf_fp_def_sugar_tactics.ML"
 ML_file "Tools/bnf_fp_def_sugar.ML"
+ML_file "Tools/bnf_fp_n2m_tactics.ML"
+ML_file "Tools/bnf_fp_n2m.ML"
+ML_file "Tools/bnf_fp_n2m_sugar.ML"
+ML_file "Tools/bnf_fp_rec_sugar_util.ML"
+ML_file "Tools/bnf_fp_rec_sugar_tactics.ML"
+ML_file "Tools/bnf_fp_rec_sugar.ML"
 
 end
