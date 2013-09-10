@@ -248,11 +248,40 @@ fun mutual_induct_rules ctxt induct all_f_defs (Mutual {n, ST, parts, ...}) =
     fst (fold_map (project induct_inst) parts 0)
   end
 
-fun mk_partial_rules_mutual lthy inner_cont (m as Mutual {parts, fqgars, ...}) proof =
+fun mutual_cases_rule ctxt cases_rule n ST (MutualPart {i, cargTs, ...}) =
+  let
+    val arg_vars = 
+      cargTs
+      |> map_index (fn (i, T) => Free ("x" ^ string_of_int i, T)) (* FIXME: proper context *)
+
+    val argsT = fastype_of (HOLogic.mk_tuple arg_vars)
+    val args = Free ("x", argsT) (* FIXME: proper context *)
+
+    val cert = cterm_of (Proof_Context.theory_of ctxt)
+
+    val sumtree_inj = SumTree.mk_inj ST n i args
+
+    val sum_elims =
+      @{thms HOL.notE[OF Sum_Type.sum.distinct(1)] HOL.notE[OF Sum_Type.sum.distinct(2)]}
+
+    fun prep_subgoal i =
+      REPEAT (eresolve_tac @{thms Pair_inject Inl_inject[elim_format] Inr_inject[elim_format]} i)
+      THEN REPEAT (Tactic.eresolve_tac sum_elims i)
+  in
+    cases_rule
+    |> Thm.forall_elim @{cterm "P::bool"}
+    |> Thm.forall_elim (cert sumtree_inj)
+    |> Tactic.rule_by_tactic ctxt (ALLGOALS prep_subgoal)
+    |> Thm.forall_intr (cert args)
+    |> Thm.forall_intr @{cterm "P::bool"}
+  end
+
+
+fun mk_partial_rules_mutual lthy inner_cont (m as Mutual {parts, fqgars, n, ST, ...}) proof =
   let
     val result = inner_cont proof
-    val FunctionResult {G, R, cases, psimps, simple_pinducts=[simple_pinduct],
-      termination, domintros, dom, ...} = result
+    val FunctionResult {G, R, cases=[cases_rule], psimps, simple_pinducts=[simple_pinduct],
+      termination, domintros, dom, pelims, ...} = result
 
     val (all_f_defs, fs) =
       map (fn MutualPart {f_defthm = SOME f_def, f = SOME f, cargTs, ...} =>
@@ -269,14 +298,17 @@ fun mk_partial_rules_mutual lthy inner_cont (m as Mutual {parts, fqgars, ...}) p
     val rew_simpset = put_simpset HOL_basic_ss lthy addsimps all_f_defs
     val mpsimps = map2 mk_mpsimp fqgars psimps
     val minducts = mutual_induct_rules lthy simple_pinduct all_f_defs m
+    val mcases = map (mutual_cases_rule lthy cases_rule n ST) parts
     val mtermination = full_simplify rew_simpset termination
     val mdomintros = Option.map (map (full_simplify rew_simpset)) domintros
+
   in
     FunctionResult { fs=fs, G=G, R=R, dom=dom,
       psimps=mpsimps, simple_pinducts=minducts,
-      cases=cases, termination=mtermination,
+      cases=mcases, pelims=pelims, termination=mtermination,
       domintros=mdomintros}
   end
+
 
 fun prepare_function_mutual config defname fixes eqss lthy =
   let
@@ -288,9 +320,9 @@ fun prepare_function_mutual config defname fixes eqss lthy =
 
     val (mutual', lthy'') = define_projections fixes mutual fsum lthy'
 
-    val mutual_cont = mk_partial_rules_mutual lthy'' cont mutual'
+    val cont' = mk_partial_rules_mutual lthy'' cont mutual'
   in
-    ((goalstate, mutual_cont), lthy'')
+    ((goalstate, cont'), lthy'')
   end
 
 end
