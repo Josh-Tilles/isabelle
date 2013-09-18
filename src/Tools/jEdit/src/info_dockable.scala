@@ -11,7 +11,7 @@ import isabelle._
 
 import scala.actors.Actor._
 
-import scala.swing.{FlowPanel, Button}
+import scala.swing.Button
 import scala.swing.event.ButtonClicked
 
 import java.lang.System
@@ -94,7 +94,7 @@ class Info_Dockable(view: View, position: String) extends Dockable(view, positio
   private val zoom = new GUI.Zoom_Box(factor => { zoom_factor = factor; handle_resize() })
   zoom.tooltip = "Zoom factor for basic font size"
 
-  private val controls = new FlowPanel(FlowPanel.Alignment.Right)(zoom)
+  private val controls = new Wrap_Panel(Wrap_Panel.Alignment.Right)(zoom)
   add(controls.peer, BorderLayout.NORTH)
 
 
@@ -113,14 +113,14 @@ class Info_Dockable(view: View, position: String) extends Dockable(view, positio
 
   override def init()
   {
-    JEdit_Lib.parent_window(this).map(_.addWindowFocusListener(window_focus_listener))
+    GUI.parent_window(this).map(_.addWindowFocusListener(window_focus_listener))
     PIDE.session.global_options += main_actor
     handle_resize()
   }
 
   override def exit()
   {
-    JEdit_Lib.parent_window(this).map(_.removeWindowFocusListener(window_focus_listener))
+    GUI.parent_window(this).map(_.removeWindowFocusListener(window_focus_listener))
     PIDE.session.global_options -= main_actor
     delay_resize.revoke()
   }

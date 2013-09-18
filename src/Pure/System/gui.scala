@@ -1,13 +1,13 @@
 /*  Title:      Pure/System/gui.scala
     Author:     Makarius
 
-Elementary GUI tools.
+Basic GUI tools (for AWT/Swing).
 */
 
 package isabelle
 
 
-import java.awt.{Image, Component, Toolkit}
+import java.awt.{Image, Component, Container, Toolkit, Window}
 import javax.swing.{ImageIcon, JOptionPane, UIManager}
 
 import scala.swing.{ComboBox, TextArea, ScrollPane}
@@ -35,10 +35,12 @@ object GUI
 
   /* simple dialogs */
 
-  def scrollable_text(txt: String, width: Int = 60, editable: Boolean = false): ScrollPane =
+  def scrollable_text(txt: String, width: Int = 60, height: Int = 20, editable: Boolean = false)
+    : ScrollPane =
   {
     val text = new TextArea(txt)
     if (width > 0) text.columns = width
+    if (height > 0 && split_lines(txt).length > height) text.rows = height
     text.editable = editable
     new ScrollPane(text)
   }
@@ -117,5 +119,29 @@ object GUI
     new ImageIcon(getClass.getClassLoader.getResource("isabelle/isabelle.gif"))
 
   def isabelle_image(): Image = isabelle_icon().getImage
+
+
+  /* component hierachy */
+
+  def get_parent(component: Component): Option[Container] =
+    component.getParent match {
+      case null => None
+      case parent => Some(parent)
+    }
+
+  def ancestors(component: Component): Iterator[Container] = new Iterator[Container] {
+    private var next_elem = get_parent(component)
+    def hasNext(): Boolean = next_elem.isDefined
+    def next(): Container =
+      next_elem match {
+        case Some(parent) =>
+          next_elem = get_parent(parent)
+          parent
+        case None => Iterator.empty.next()
+      }
+  }
+
+  def parent_window(component: Component): Option[Window] =
+    ancestors(component).collectFirst({ case x: Window => x })
 }
 

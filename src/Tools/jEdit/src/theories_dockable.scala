@@ -10,9 +10,9 @@ package isabelle.jedit
 import isabelle._
 
 import scala.actors.Actor._
-import scala.swing.{FlowPanel, Button, TextArea, Label, ListView, Alignment,
+import scala.swing.{Button, TextArea, Label, ListView, Alignment,
   ScrollPane, Component, CheckBox, BorderPanel}
-import scala.swing.event.{ButtonClicked, MouseClicked, MouseMoved}
+import scala.swing.event.{MouseClicked, MouseMoved}
 
 import java.lang.System
 import java.awt.{BorderLayout, Graphics2D, Color, Point, Dimension}
@@ -73,17 +73,12 @@ class Theories_Dockable(view: View, position: String) extends Dockable(view, pos
     session_phase.text = " " + phase_text(phase) + " "
   }
 
-  private val continuous_checking = new CheckBox("Continuous checking") {
-    tooltip = "Continuous checking of proof document (visible and required parts)"
-    reactions += { case ButtonClicked(_) => Isabelle.continuous_checking = selected }
-    def load() { selected = Isabelle.continuous_checking }
-    load()
-  }
+  private val continuous_checking = new Isabelle.Continuous_Checking
 
   private val logic = Isabelle_Logic.logic_selector(true)
 
   private val controls =
-    new FlowPanel(FlowPanel.Alignment.Right)(continuous_checking, session_phase, logic)
+    new Wrap_Panel(Wrap_Panel.Alignment.Right)(continuous_checking, session_phase, logic)
   add(controls.peer, BorderLayout.NORTH)
 
 
