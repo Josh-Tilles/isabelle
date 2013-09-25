@@ -30,6 +30,7 @@ sig
      case_conv_ifs: thm list};
 
   val morph_ctr_sugar: morphism -> ctr_sugar -> ctr_sugar
+  val ctr_sugar_of: Proof.context -> string -> ctr_sugar option
 
   val rep_compat_prefix: string
 
@@ -37,10 +38,11 @@ sig
   val join_halves: int -> 'a list list -> 'a list list -> 'a list * 'a list list list
 
   val mk_ctr: typ list -> term -> term
+  val mk_case: typ list -> typ -> term -> term
   val mk_disc_or_sel: typ list -> term -> term
-
   val name_of_ctr: term -> string
   val name_of_disc: term -> string
+  val dest_case: Proof.context -> string -> typ list -> term -> (term list * term list) option
 
   val wrap_free_constructors: ({prems: thm list, context: Proof.context} -> tactic) list list ->
     (((bool * bool) * term list) * binding) *
@@ -102,6 +104,27 @@ fun morph_ctr_sugar phi {ctrs, casex, discs, selss, exhaust, nchotomy, injects, 
    expands = map (Morphism.thm phi) expands,
    case_conv_ifs = map (Morphism.thm phi) case_conv_ifs};
 
+fun eq_ctr_sugar ({ctrs = ctrs1, casex = case1, discs = discs1, selss = selss1, ...} : ctr_sugar,
+    {ctrs = ctrs2, casex = case2, discs = discs2, selss = selss2, ...} : ctr_sugar) =
+  ctrs1 = ctrs2 andalso case1 = case2 andalso discs1 = discs2 andalso selss1 = selss2;
+
+structure Data = Generic_Data
+(
+  type T = ctr_sugar Symtab.table;
+  val empty = Symtab.empty;
+  val extend = I;
+  val merge = Symtab.merge eq_ctr_sugar;
+);
+
+fun ctr_sugar_of ctxt =
+  Symtab.lookup (Data.get (Context.Proof ctxt))
+  #> Option.map (morph_ctr_sugar
+    (Morphism.thm_morphism (Thm.transfer (Proof_Context.theory_of ctxt))));
+
+fun register_ctr_sugar key ctr_sugar =
+  Local_Theory.declaration {syntax = false, pervasive = true}
+    (fn phi => Data.map (Symtab.default (key, morph_ctr_sugar phi ctr_sugar)));
+
 val rep_compat_prefix = "new";
 
 val isN = "is_";
@@ -160,13 +183,13 @@ fun mk_ctr Ts t =
     Term.subst_atomic_types (Ts0 ~~ Ts) t
   end;
 
-fun mk_disc_or_sel Ts t =
-  Term.subst_atomic_types (snd (Term.dest_Type (domain_type (fastype_of t))) ~~ Ts) t;
-
 fun mk_case Ts T t =
   let val (Type (_, Ts0), body) = strip_type (fastype_of t) |>> List.last in
     Term.subst_atomic_types ((body, T) :: (Ts0 ~~ Ts)) t
   end;
+
+fun mk_disc_or_sel Ts t =
+  Term.subst_atomic_types (snd (Term.dest_Type (domain_type (fastype_of t))) ~~ Ts) t;
 
 fun name_of_const what t =
   (case head_of t of
@@ -191,6 +214,28 @@ fun name_of_disc t =
   | t' => name_of_const "destructor" t');
 
 val base_name_of_ctr = Long_Name.base_name o name_of_ctr;
+
+fun dest_case ctxt s Ts t =
+  (case Term.strip_comb t of
+    (Const (c, _), args as _ :: _) =>
+    (case ctr_sugar_of ctxt s of
+      SOME {casex = Const (case_name, _), discs = discs0, selss = selss0, ...} =>
+      if case_name = c then
+        let
+          val n = length discs0;
+          val (branches, obj :: leftovers) = chop n args;
+          val discs = map (mk_disc_or_sel Ts) discs0;
+          val selss = map (map (mk_disc_or_sel Ts)) selss0;
+          val conds = map (rapp obj) discs;
+          val branch_argss = map (fn sels => map (rapp obj) sels @ leftovers) selss;
+          val branches' = map2 (curry Term.betapplys) branches branch_argss;
+        in
+          SOME (conds, branches')
+        end
+      else
+        NONE
+    | _ => NONE)
+  | _ => NONE);
 
 fun eta_expand_arg xs f_xs = fold_rev Term.lambda xs f_xs;
 
@@ -786,19 +831,23 @@ fun prepare_wrap_free_constructors prep_term ((((no_discs_sels, rep_compat), raw
         val notes' =
           [(map (fn th => th RS notE) distinct_thms, safe_elim_attrs)]
           |> map (fn (thms, attrs) => ((Binding.empty, attrs), [(thms, [])]));
+
+        val ctr_sugar =
+          {ctrs = ctrs, casex = casex, discs = discs, selss = selss, exhaust = exhaust_thm,
+           nchotomy = nchotomy_thm, injects = inject_thms, distincts = distinct_thms,
+           case_thms = case_thms, case_cong = case_cong_thm, weak_case_cong = weak_case_cong_thm,
+           split = split_thm, split_asm = split_asm_thm, disc_thmss = disc_thmss,
+           discIs = discI_thms, sel_thmss = sel_thmss, disc_exhausts = disc_exhaust_thms,
+           collapses = all_collapse_thms, expands = expand_thms, case_conv_ifs = case_conv_if_thms};
       in
-        ({ctrs = ctrs, casex = casex, discs = discs, selss = selss, exhaust = exhaust_thm,
-          nchotomy = nchotomy_thm, injects = inject_thms, distincts = distinct_thms,
-          case_thms = case_thms, case_cong = case_cong_thm, weak_case_cong = weak_case_cong_thm,
-          split = split_thm, split_asm = split_asm_thm, disc_thmss = disc_thmss,
-          discIs = discI_thms, sel_thmss = sel_thmss, disc_exhausts = disc_exhaust_thms,
-          collapses = all_collapse_thms, expands = expand_thms, case_conv_ifs = case_conv_if_thms},
+        (ctr_sugar,
          lthy
          |> not rep_compat ?
             (Local_Theory.declaration {syntax = false, pervasive = true}
                (fn phi => Case_Translation.register
                   (Morphism.term phi casex) (map (Morphism.term phi) ctrs)))
-         |> Local_Theory.notes (notes' @ notes) |> snd)
+         |> Local_Theory.notes (notes' @ notes) |> snd
+         |> register_ctr_sugar dataT_name ctr_sugar)
       end;
   in
     (goalss, after_qed, lthy')

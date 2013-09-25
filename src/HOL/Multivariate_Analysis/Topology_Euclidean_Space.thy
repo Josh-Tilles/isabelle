@@ -1485,19 +1485,10 @@ lemma Lim_eventually: "eventually (\<lambda>x. f x = l) net \<Longrightarrow> (f
 
 text{* The expected monotonicity property. *}
 
-lemma Lim_within_empty: "(f ---> l) (at x within {})"
-  unfolding tendsto_def eventually_at_filter by simp
-
 lemma Lim_Un:
   assumes "(f ---> l) (at x within S)" "(f ---> l) (at x within T)"
   shows "(f ---> l) (at x within (S \<union> T))"
-  using assms
-  unfolding tendsto_def eventually_at_filter
-  apply clarify
-  apply (drule spec, drule (1) mp, drule (1) mp)
-  apply (drule spec, drule (1) mp, drule (1) mp)
-  apply (auto elim: eventually_elim2)
-  done
+  using assms unfolding at_within_union by (rule filterlim_sup)
 
 lemma Lim_Un_univ:
   "(f ---> l) (at x within S) \<Longrightarrow> (f ---> l) (at x within T) \<Longrightarrow>
@@ -1537,7 +1528,7 @@ lemma at_within_interior:
   unfolding filter_eq_iff by (intro allI eventually_within_interior)
 
 lemma Lim_within_LIMSEQ:
-  fixes a :: "'a::metric_space"
+  fixes a :: "'a::first_countable_topology"
   assumes "\<forall>S. (\<forall>n. S n \<noteq> a \<and> S n \<in> T) \<and> S ----> a \<longrightarrow> (\<lambda>n. X (S n)) ----> L"
   shows "(X ---> L) (at a within T)"
   using assms unfolding tendsto_def [where l=L]
@@ -1551,7 +1542,7 @@ lemma Lim_right_bound:
   shows "(f ---> Inf (f ` ({x<..} \<inter> I))) (at x within ({x<..} \<inter> I))"
 proof (cases "{x<..} \<inter> I = {}")
   case True
-  then show ?thesis by (simp add: Lim_within_empty)
+  then show ?thesis by simp
 next
   case False
   show ?thesis
@@ -1622,14 +1613,6 @@ next
       unfolding eventually_sequentially by auto
   qed
 qed
-
-lemma Lim_inv: (* TODO: delete *)
-  fixes f :: "'a \<Rightarrow> real"
-    and A :: "'a filter"
-  assumes "(f ---> l) A"
-    and "l \<noteq> 0"
-  shows "((inverse \<circ> f) ---> inverse l) A"
-  unfolding o_def using assms by (rule tendsto_inverse)
 
 lemma Lim_null:
   fixes f :: "'a \<Rightarrow> 'b::real_normed_vector"
