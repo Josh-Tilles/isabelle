@@ -51,17 +51,6 @@ fun permute_args n t = list_comb (t, map Bound (0 :: (n downto 1)))
 val abs_tuple = HOLogic.tupled_lambda o HOLogic.mk_tuple;
 fun drop_All t = subst_bounds (strip_qnt_vars @{const_name all} t |> map Free |> rev,
   strip_qnt_body @{const_name all} t)
-fun s_not @{const True} = @{const False}
-  | s_not @{const False} = @{const True}
-  | s_not (@{const Not} $ t) = t
-  | s_not (@{const Trueprop} $ t) = @{const Trueprop} $ s_not t
-  | s_not t = HOLogic.mk_not t
-val mk_conjs = try (foldr1 HOLogic.mk_conj) #> the_default @{const True};
-val mk_disjs = try (foldr1 HOLogic.mk_disj) #> the_default @{const False};
-fun invert_prems [t] = map s_not (HOLogic.disjuncts t)
-  | invert_prems ts = [mk_disjs (map s_not ts)];
-fun invert_prems_disj [t] = map s_not (HOLogic.disjuncts t)
-  | invert_prems_disj ts = [mk_disjs (map (mk_conjs o map s_not o HOLogic.disjuncts) ts)];
 fun abstract vs =
   let fun a n (t $ u) = a n t $ a n u
         | a n (Abs (v, T, b)) = Abs (v, T, a (n + 1) b)
@@ -455,7 +444,7 @@ fun co_dissect_eqn_disc sequential fun_names corec_specs prems' concl matchedsss
     val matchedss = AList.lookup (op =) matchedsss fun_name |> the_default [];
     val prems = map (abstract (List.rev fun_args)) prems';
     val real_prems =
-      (if catch_all orelse sequential then maps invert_prems_disj matchedss else []) @
+      (if catch_all orelse sequential then maps negate_disj matchedss else []) @
       (if catch_all then [] else prems);
 
     val matchedsss' = AList.delete (op =) fun_name matchedsss
@@ -584,17 +573,21 @@ fun build_corec_arg_no_call sel_eqns sel =
 fun build_corec_args_direct_call lthy has_call sel_eqns sel =
   let
     val maybe_sel_eqn = find_first (equal sel o #sel) sel_eqns;
-    fun rewrite_q t = if has_call t then @{term False} else @{term True};
-    fun rewrite_g t = if has_call t then undef_const else t;
-    fun rewrite_h t = if has_call t then HOLogic.mk_tuple (snd (strip_comb t)) else undef_const;
-    fun massage _ NONE t = t
-      | massage f (SOME {fun_args, rhs_term, ...}) t =
-        massage_direct_corec_call lthy has_call f [] (range_type (fastype_of t)) rhs_term
-        |> abs_tuple fun_args;
   in
-    (massage rewrite_q maybe_sel_eqn,
-     massage rewrite_g maybe_sel_eqn,
-     massage rewrite_h maybe_sel_eqn)
+    if is_none maybe_sel_eqn then (I, I, I) else
+    let
+      val {fun_args, rhs_term, ... } = the maybe_sel_eqn;
+      fun rewrite_q t = if has_call t then @{term False} else @{term True};
+      fun rewrite_g t = if has_call t then undef_const else t;
+      fun rewrite_h t = if has_call t then HOLogic.mk_tuple (snd (strip_comb t)) else undef_const;
+      fun massage f t =
+          massage_direct_corec_call lthy has_call f [] (range_type (fastype_of t)) rhs_term
+          |> abs_tuple fun_args;
+    in
+      (massage rewrite_q,
+       massage rewrite_g,
+       massage rewrite_h)
+    end
   end;
 
 fun build_corec_arg_indirect_call lthy has_call sel_eqns sel =
@@ -692,7 +685,7 @@ fun mk_real_disc_eqns fun_binding arg_Ts {ctr_specs, ...} sel_eqns disc_eqns =
         ctr = #ctr (nth ctr_specs n),
         ctr_no = n,
         disc = #disc (nth ctr_specs n),
-        prems = maps (invert_prems o #prems) disc_eqns,
+        prems = maps (negate_conj o #prems) disc_eqns,
         auto_gen = true,
         user_eqn = undef_const};
     in
@@ -791,7 +784,7 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
           let
             val (SOME ctr_spec) = find_first (equal ctr o #ctr) ctr_specs;
             val ctr_no = find_index (equal ctr o #ctr) ctr_specs;
-            val prems = the_default (maps (invert_prems o #prems) disc_eqns)
+            val prems = the_default (maps (negate_conj o #prems) disc_eqns)
                 (find_first (equal ctr_no o #ctr_no) disc_eqns |> Option.map #prems);
             val sel_corec = find_index (equal sel) (#sels ctr_spec)
               |> nth (#sel_corecs ctr_spec);
@@ -814,16 +807,10 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
         fun prove_ctr disc_alist sel_alist disc_eqns sel_eqns {ctr, disc, sels, collapse, ...} =
           if not (exists (equal ctr o #ctr) disc_eqns)
               andalso not (exists (equal ctr o #ctr) sel_eqns)
-(*
-andalso (warning ("no eqns for ctr " ^ Syntax.string_of_term lthy ctr); true)
-*)
             orelse (* don't try to prove theorems when some sel_eqns are missing *)
               filter (equal ctr o #ctr) sel_eqns
               |> fst o finds ((op =) o apsnd #sel) sels
               |> exists (null o snd)
-(*
-andalso (warning ("sel_eqn(s) missing for ctr " ^ Syntax.string_of_term lthy ctr); true)
-*)
           then [] else
             let
               val (fun_name, fun_T, fun_args, prems) =
@@ -847,7 +834,7 @@ andalso (warning ("sel_eqn(s) missing for ctr " ^ Syntax.string_of_term lthy ctr
               mk_primcorec_ctr_of_dtr_tac lthy m collapse maybe_disc_thm sel_thms
               |> K |> Goal.prove lthy [] [] t
               |> single
-          end;
+            end;
 
         val disc_alists = map3 (maps oo prove_disc) corec_specs exclssss disc_eqnss;
         val sel_alists = map4 (map ooo prove_sel) corec_specs disc_eqnss exclssss sel_eqnss;
@@ -857,12 +844,13 @@ andalso (warning ("sel_eqn(s) missing for ctr " ^ Syntax.string_of_term lthy ctr
         val ctr_thmss = map5 (maps oooo prove_ctr) disc_alists sel_alists disc_eqnss sel_eqnss
           (map #ctr_specs corec_specs);
 
-        val safess = map (map (K false)) ctr_thmss; (* FIXME: "true" for non-corecursive theorems *)
+        val safess = map (map (not o exists_subterm (member (op =) (map SOME fun_names) o
+          try (fst o dest_Free)) o snd o HOLogic.dest_eq o HOLogic.dest_Trueprop o
+          Logic.strip_imp_concl o drop_All o prop_of)) ctr_thmss;
         val safe_ctr_thmss = map (map snd o filter fst o (op ~~)) (safess ~~ ctr_thmss);
 
-        fun mk_simp_thms disc_thms sel_thms ctr_thms = disc_thms @ sel_thms @ ctr_thms;
-
-        val simp_thmss = map3 mk_simp_thms disc_thmss sel_thmss safe_ctr_thmss;
+        val simp_thmss =
+          map3 (fn x => fn y => fn z => x @ y @ z) disc_thmss sel_thmss safe_ctr_thmss;
 
         val common_name = mk_common_name fun_names;
 
