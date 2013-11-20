@@ -374,8 +374,7 @@ fun get_prover_name ctxt args =
 
 fun get_prover ctxt name params goal all_facts =
   let
-    fun learn prover =
-      Sledgehammer_MaSh.mash_learn_proof ctxt params prover (prop_of goal) all_facts
+    val learn = Sledgehammer_MaSh.mash_learn_proof ctxt params (prop_of goal) all_facts
   in
     Sledgehammer_Minimize.get_minimizing_prover ctxt Sledgehammer_Provers.Normal
       learn name
@@ -609,8 +608,8 @@ fun run_minimize args reconstructor named_thms id
       |> max_new_mono_instancesLST
       |> max_mono_itersLST)
     val minimize =
-      Sledgehammer_Minimize.minimize_facts (K (K ())) prover_name params
-          true 1 (Sledgehammer_Util.subgoal_count st)
+      Sledgehammer_Minimize.minimize_facts (K ()) prover_name params true 1
+        (Sledgehammer_Util.subgoal_count st)
     val _ = log separator
     val (used_facts, (preplay, message, message_tail)) =
       minimize st goal NONE (these (!named_thms))
@@ -665,7 +664,7 @@ fun run_reconstructor trivial full m name reconstructor named_thms id
           SMT_Solver.smt_tac ctxt thms
         else if full then
           Metis_Tactic.metis_tac [ATP_Proof_Reconstruct.full_typesN]
-            ATP_Proof_Reconstruct.metis_default_lam_trans ctxt thms
+            ATP_Proof_Reconstruct.default_metis_lam_trans ctxt thms
         else if String.isPrefix "metis (" (!reconstructor) then
           let
             val (type_encs, lam_trans) =
@@ -674,10 +673,10 @@ fun run_reconstructor trivial full m name reconstructor named_thms id
               |> filter Token.is_proper |> tl
               |> Metis_Tactic.parse_metis_options |> fst
               |>> the_default [ATP_Proof_Reconstruct.partial_typesN]
-              ||> the_default ATP_Proof_Reconstruct.metis_default_lam_trans
+              ||> the_default ATP_Proof_Reconstruct.default_metis_lam_trans
           in Metis_Tactic.metis_tac type_encs lam_trans ctxt thms end
         else if !reconstructor = "metis" then
-          Metis_Tactic.metis_tac [] ATP_Proof_Reconstruct.metis_default_lam_trans ctxt
+          Metis_Tactic.metis_tac [] ATP_Proof_Reconstruct.default_metis_lam_trans ctxt
             thms
         else
           K all_tac

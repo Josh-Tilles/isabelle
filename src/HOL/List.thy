@@ -2988,6 +2988,9 @@ done
 lemma map_Suc_upt: "map Suc [m..<n] = [Suc m..<Suc n]"
 by (induct n) auto
 
+lemma map_add_upt: "map (\<lambda>i. i + n) [0..<m] = [n..<m + n]"
+  by (induct m) simp_all
+
 lemma nth_map_upt: "i < n-m ==> (map f [m..<n]) ! i = f(m+i)"
 apply (induct n m  arbitrary: i rule: diff_induct)
 prefer 3 apply (subst map_Suc_upt[symmetric])
@@ -3072,9 +3075,9 @@ declare upto.simps[simp del]
 
 lemmas upto_rec_numeral [simp] =
   upto.simps[of "numeral m" "numeral n"]
-  upto.simps[of "numeral m" "neg_numeral n"]
-  upto.simps[of "neg_numeral m" "numeral n"]
-  upto.simps[of "neg_numeral m" "neg_numeral n"] for m n
+  upto.simps[of "numeral m" "- numeral n"]
+  upto.simps[of "- numeral m" "numeral n"]
+  upto.simps[of "- numeral m" "- numeral n"] for m n
 
 lemma upto_empty[simp]: "j < i \<Longrightarrow> [i..j] = []"
 by(simp add: upto.simps)
