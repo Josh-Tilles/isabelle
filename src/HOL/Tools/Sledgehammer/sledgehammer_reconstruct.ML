@@ -67,6 +67,12 @@ fun is_only_type_information t = t aconv @{term True}
 fun is_same_inference (role, t) (_, role', t', _, _) =
   (t |> role = Conjecture ? s_not) aconv (t' |> role' = Conjecture ? s_not)
 
+fun is_False t = t aconv @{term False} orelse t aconv @{prop False}
+
+fun truncate_at_false [] = []
+  | truncate_at_false ((line as (_, role, t, _, _)) :: lines) =
+    line :: (if role <> Conjecture andalso is_False t then [] else truncate_at_false lines)
+
 (* Discard facts; consolidate adjacent lines that prove the same formula, since
    they differ only in type information.*)
 fun add_line (name as (_, ss), role, t, rule, []) lines =
@@ -103,19 +109,19 @@ val vampire_skolemisation_rule = "skolemisation"
 
 val is_skolemize_rule = member (op =) [e_skolemize_rule, vampire_skolemisation_rule]
 
-fun add_desired_line (name as (_, ss), role, t, rule, deps) (j, lines) =
-  (j + 1,
-   if role <> Plain orelse is_skolemize_rule rule orelse
-      (* the last line must be kept *)
-      j = 0 orelse
-      (not (is_only_type_information t) andalso
-       null (Term.add_tvars t []) andalso
-       length deps >= 2 andalso
-       (* kill next to last line, which usually results in a trivial step *)
-       j <> 1) then
-     (name, role, t, rule, deps) :: lines  (* keep line *)
-   else
-     map (replace_dependencies_in_line (name, deps)) lines)  (* drop line *)
+fun add_desired_lines res [] = rev res
+  | add_desired_lines res ((name as (_, ss), role, t, rule, deps) :: lines) =
+    if role <> Plain orelse is_skolemize_rule rule orelse
+       (* the last line must be kept *)
+       null lines orelse
+       (not (is_only_type_information t) andalso
+        null (Term.add_tvars t []) andalso
+        length deps >= 2 andalso
+        (* don't keep next to last line, which usually results in a trivial step *)
+        not (can the_single lines)) then
+      add_desired_lines ((name, role, t, rule, deps) :: res) lines
+    else
+      add_desired_lines res (map (replace_dependencies_in_line (name, deps)) lines)
 
 val add_labels_of_proof =
   steps_of_proof
@@ -226,11 +232,10 @@ fun isar_proof_text ctxt isar_proofs
       let
         val atp_proof =
           atp_proof
+          |> truncate_at_false
           |> rpair [] |-> fold_rev add_line
           |> rpair [] |-> fold_rev add_nontrivial_line
-          |> rpair (0, [])
-          |-> fold_rev add_desired_line
-          |> snd
+          |> add_desired_lines []
 
         val conjs =
           map_filter (fn (name, role, _, _, _) =>
