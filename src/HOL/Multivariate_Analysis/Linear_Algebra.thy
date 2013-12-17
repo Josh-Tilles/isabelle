@@ -2881,9 +2881,9 @@ text {* Prove that it differs only up to a bound from Euclidean norm. *}
 lemma infnorm_le_norm: "infnorm x \<le> norm x"
   by (simp add: Basis_le_norm infnorm_Max)
 
-lemma euclidean_inner: "inner x y = (\<Sum>b\<in>Basis. (x \<bullet> b) * (y \<bullet> b))"
-  by (subst (1 2) euclidean_representation[symmetric, where 'a='a])
-     (simp add: inner_setsum_left inner_setsum_right setsum_cases inner_Basis ac_simps if_distrib)
+lemma (in euclidean_space) euclidean_inner: "inner x y = (\<Sum>b\<in>Basis. (x \<bullet> b) * (y \<bullet> b))"
+  by (subst (1 2) euclidean_representation[symmetric])
+    (simp add: inner_setsum_left inner_setsum_right setsum_cases inner_Basis ac_simps if_distrib)
 
 lemma norm_le_infnorm:
   fixes x :: "'a::euclidean_space"
@@ -3108,42 +3108,5 @@ lemma norm_cauchy_schwarz_equal: "abs (x \<bullet> y) = norm x * norm y \<longle
   apply simp
   done
 
-
-subsection {* An ordering on euclidean spaces that will allow us to talk about intervals *}
-
-class ordered_euclidean_space = ord + euclidean_space +
-  assumes eucl_le: "x \<le> y \<longleftrightarrow> (\<forall>i\<in>Basis. x \<bullet> i \<le> y \<bullet> i)"
-    and eucl_less: "x < y \<longleftrightarrow> (\<forall>i\<in>Basis. x \<bullet> i < y \<bullet> i)"
-
-lemma eucl_less_not_refl[simp, intro!]: "\<not> x < (x::'a::ordered_euclidean_space)"
-  unfolding eucl_less[where 'a='a] by auto
-
-lemma euclidean_trans[trans]:
-  fixes x y z :: "'a::ordered_euclidean_space"
-  shows "x < y \<Longrightarrow> y < z \<Longrightarrow> x < z"
-    and "x \<le> y \<Longrightarrow> y < z \<Longrightarrow> x < z"
-    and "x \<le> y \<Longrightarrow> y \<le> z \<Longrightarrow> x \<le> z"
-  unfolding eucl_less[where 'a='a] eucl_le[where 'a='a]
-  by (fast intro: less_trans, fast intro: le_less_trans,
-    fast intro: order_trans)
-
-lemma atLeastAtMost_singleton_euclidean[simp]:
-  fixes a :: "'a::ordered_euclidean_space"
-  shows "{a .. a} = {a}"
-  by (force simp: eucl_le[where 'a='a] euclidean_eq_iff[where 'a='a])
-
-instance real :: ordered_euclidean_space
-  by default auto
-
-instantiation prod :: (ordered_euclidean_space, ordered_euclidean_space) ordered_euclidean_space
-begin
-
-definition "x \<le> (y::('a\<times>'b)) \<longleftrightarrow> (\<forall>i\<in>Basis. x \<bullet> i \<le> y \<bullet> i)"
-definition "x < (y::('a\<times>'b)) \<longleftrightarrow> (\<forall>i\<in>Basis. x \<bullet> i < y \<bullet> i)"
-
-instance
-  by default (auto simp: less_prod_def less_eq_prod_def)
-
 end
 
-end

@@ -7,7 +7,7 @@ header {* Convex sets, functions and related things. *}
 
 theory Convex_Euclidean_Space
 imports
-  Topology_Euclidean_Space
+  Ordered_Euclidean_Space
   "~~/src/HOL/Library/Convex"
   "~~/src/HOL/Library/Set_Algebras"
 begin
@@ -342,11 +342,6 @@ qed
 
 lemma if_smult: "(if P then x else (y::real)) *\<^sub>R v = (if P then x *\<^sub>R v else y *\<^sub>R v)"
   by auto
-
-lemma image_smult_interval:
-  "(\<lambda>x. m *\<^sub>R (x::'a::ordered_euclidean_space)) ` {a..b} =
-    (if {a..b} = {} then {} else if 0 \<le> m then {m *\<^sub>R a..m *\<^sub>R b} else {m *\<^sub>R b..m *\<^sub>R a})"
-  using image_affinity_interval[of m 0 a b] by auto
 
 lemma dist_triangle_eq:
   fixes x y z :: "'a::real_inner"
@@ -3366,18 +3361,21 @@ proof -
   ultimately show ?thesis by auto
 qed
 
+lemma box_real: "box a b = {a<..<b::real}"
+  by (force simp add: box_def)
+
 lemma rel_interior_real_interval:
   fixes a b :: real
   assumes "a < b"
   shows "rel_interior {a..b} = {a<..<b}"
 proof -
-  have "{a<..<b} \<noteq> {}"
+  have "box a b \<noteq> {}"
     using assms
     unfolding set_eq_iff
-    by (auto intro!: exI[of _ "(a + b) / 2"])
+    by (auto intro!: exI[of _ "(a + b) / 2"] simp: box_def)
   then show ?thesis
     using interior_rel_interior_gen[of "{a..b}", symmetric]
-    by (simp split: split_if_asm add: interior_closed_interval)
+    by (simp split: split_if_asm add: interior_closed_interval box_real)
 qed
 
 lemma rel_interior_real_semiline:
@@ -5666,7 +5664,7 @@ lemma is_interval_connected:
   shows "is_interval s \<Longrightarrow> connected s"
   using is_interval_convex convex_connected by auto
 
-lemma convex_interval: "convex {a .. b}" "convex {a<..<b::'a::ordered_euclidean_space}"
+lemma convex_interval: "convex {a .. b}" "convex (box a (b::'a::ordered_euclidean_space))"
   apply (rule_tac[!] is_interval_convex)
   using is_interval_interval
   apply auto

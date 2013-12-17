@@ -58,7 +58,7 @@ instantiation vec :: (ord, finite) ord
 begin
 
 definition "x \<le> y \<longleftrightarrow> (\<forall>i. x$i \<le> y$i)"
-definition "x < y \<longleftrightarrow> (\<forall>i. x$i < y$i)"
+definition "x < (y::'a^'b) \<longleftrightarrow> x \<le> y \<and> \<not> y \<le> x"
 instance ..
 
 end
@@ -77,10 +77,11 @@ qed
 
 end
 
-instantiation vec :: (linorder, cart_one) linorder
-begin
+instance vec:: (order, finite) order
+  by default (auto simp: less_eq_vec_def less_vec_def vec_eq_iff
+      intro: order.trans order.antisym order.strict_implies_order)
 
-instance
+instance vec :: (linorder, cart_one) linorder
 proof
   obtain a :: 'b where all: "\<And>P. (\<forall>i. P i) \<longleftrightarrow> P a"
   proof -
@@ -89,17 +90,12 @@ proof
     then have "\<And>P. (\<forall>i\<in>UNIV. P i) \<longleftrightarrow> P b" by auto
     then show thesis by (auto intro: that)
   qed
-
+  fix x y :: "'a^'b::cart_one"
   note [simp] = less_eq_vec_def less_vec_def all vec_eq_iff field_simps
-  fix x y z :: "'a^'b::cart_one"
-  show "x \<le> x" "(x < y) = (x \<le> y \<and> \<not> y \<le> x)" "x \<le> y \<or> y \<le> x" by auto
-  { assume "x\<le>y" "y\<le>z" then show "x\<le>z" by auto }
-  { assume "x\<le>y" "y\<le>x" then show "x=y" by auto }
+  show "x \<le> y \<or> y \<le> x" by auto
 qed
 
-end
-
-text{* Constant Vectors *} 
+text{* Constant Vectors *}
 
 definition "vec x = (\<chi> i. x)"
 
@@ -332,14 +328,24 @@ lemma setsum_norm_allsubsets_bound_cart:
   using setsum_norm_allsubsets_bound[OF assms]
   by (simp add: DIM_cart Basis_real_def)
 
-instance vec :: (ordered_euclidean_space, finite) ordered_euclidean_space
-proof
-  fix x y::"'a^'b"
-  show "(x \<le> y) = (\<forall>i\<in>Basis. x \<bullet> i \<le> y \<bullet> i)"
-    unfolding less_eq_vec_def apply(subst eucl_le) by (simp add: Basis_vec_def inner_axis)
-  show"(x < y) = (\<forall>i\<in>Basis. x \<bullet> i < y \<bullet> i)"
-    unfolding less_vec_def apply(subst eucl_less) by (simp add: Basis_vec_def inner_axis)
-qed
+instantiation vec :: (ordered_euclidean_space, finite) ordered_euclidean_space
+begin
+
+definition "inf x y = (\<chi> i. inf (x $ i) (y $ i))"
+definition "sup x y = (\<chi> i. sup (x $ i) (y $ i))"
+definition "Inf X = (\<chi> i. (INF x:X. x $ i))"
+definition "Sup X = (\<chi> i. (SUP x:X. x $ i))"
+definition "abs x = (\<chi> i. abs (x $ i))"
+
+instance
+  apply default
+  unfolding euclidean_representation_setsum'
+  apply (auto simp: less_eq_vec_def inf_vec_def sup_vec_def Inf_vec_def Sup_vec_def inner_axis
+    Basis_vec_def inner_Basis_inf_left inner_Basis_sup_left inner_Basis_INF_left
+    inner_Basis_SUP_left eucl_le[where 'a='a] less_le_not_le abs_vec_def abs_inner)
+  done
+
+end
 
 subsection {* Matrix operations *}
 
@@ -903,23 +909,23 @@ proof
 qed
 
 lemma interval_cart:
-  fixes a :: "'a::ord^'n"
-  shows "{a <..< b} = {x::'a^'n. \<forall>i. a$i < x$i \<and> x$i < b$i}"
-    and "{a .. b} = {x::'a^'n. \<forall>i. a$i \<le> x$i \<and> x$i \<le> b$i}"
-  by (auto simp add: set_eq_iff less_vec_def less_eq_vec_def)
+  fixes a :: "real^'n"
+  shows "box a b = {x::real^'n. \<forall>i. a$i < x$i \<and> x$i < b$i}"
+    and "{a .. b} = {x::real^'n. \<forall>i. a$i \<le> x$i \<and> x$i \<le> b$i}"
+  by (auto simp add: set_eq_iff less_vec_def less_eq_vec_def mem_interval Basis_vec_def inner_axis)
 
 lemma mem_interval_cart:
-  fixes a :: "'a::ord^'n"
-  shows "x \<in> {a<..<b} \<longleftrightarrow> (\<forall>i. a$i < x$i \<and> x$i < b$i)"
+  fixes a :: "real^'n"
+  shows "x \<in> box a b \<longleftrightarrow> (\<forall>i. a$i < x$i \<and> x$i < b$i)"
     and "x \<in> {a .. b} \<longleftrightarrow> (\<forall>i. a$i \<le> x$i \<and> x$i \<le> b$i)"
   using interval_cart[of a b] by (auto simp add: set_eq_iff less_vec_def less_eq_vec_def)
 
 lemma interval_eq_empty_cart:
   fixes a :: "real^'n"
-  shows "({a <..< b} = {} \<longleftrightarrow> (\<exists>i. b$i \<le> a$i))" (is ?th1)
+  shows "(box a b = {} \<longleftrightarrow> (\<exists>i. b$i \<le> a$i))" (is ?th1)
     and "({a  ..  b} = {} \<longleftrightarrow> (\<exists>i. b$i < a$i))" (is ?th2)
 proof -
-  { fix i x assume as:"b$i \<le> a$i" and x:"x\<in>{a <..< b}"
+  { fix i x assume as:"b$i \<le> a$i" and x:"x\<in>box a b"
     hence "a $ i < x $ i \<and> x $ i < b $ i" unfolding mem_interval_cart by auto
     hence "a$i < b$i" by auto
     hence False using as by auto }
@@ -931,7 +937,7 @@ proof -
       hence "a$i < ((1/2) *\<^sub>R (a+b)) $ i" "((1/2) *\<^sub>R (a+b)) $ i < b$i"
         unfolding vector_smult_component and vector_add_component
         by auto }
-    hence "{a <..< b} \<noteq> {}" using mem_interval_cart(1)[of "?x" a b] by auto }
+    hence "box a b \<noteq> {}" using mem_interval_cart(1)[of "?x" a b] by auto }
   ultimately show ?th1 by blast
 
   { fix i x assume as:"b$i < a$i" and x:"x\<in>{a .. b}"
@@ -953,16 +959,16 @@ qed
 lemma interval_ne_empty_cart:
   fixes a :: "real^'n"
   shows "{a  ..  b} \<noteq> {} \<longleftrightarrow> (\<forall>i. a$i \<le> b$i)"
-    and "{a <..< b} \<noteq> {} \<longleftrightarrow> (\<forall>i. a$i < b$i)"
+    and "box a b \<noteq> {} \<longleftrightarrow> (\<forall>i. a$i < b$i)"
   unfolding interval_eq_empty_cart[of a b] by (auto simp add: not_less not_le)
     (* BH: Why doesn't just "auto" work here? *)
 
 lemma subset_interval_imp_cart:
   fixes a :: "real^'n"
   shows "(\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i) \<Longrightarrow> {c .. d} \<subseteq> {a .. b}"
-    and "(\<forall>i. a$i < c$i \<and> d$i < b$i) \<Longrightarrow> {c .. d} \<subseteq> {a<..<b}"
-    and "(\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i) \<Longrightarrow> {c<..<d} \<subseteq> {a .. b}"
-    and "(\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i) \<Longrightarrow> {c<..<d} \<subseteq> {a<..<b}"
+    and "(\<forall>i. a$i < c$i \<and> d$i < b$i) \<Longrightarrow> {c .. d} \<subseteq> box a b"
+    and "(\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i) \<Longrightarrow> box c d \<subseteq> {a .. b}"
+    and "(\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i) \<Longrightarrow> box c d \<subseteq> box a b"
   unfolding subset_eq[unfolded Ball_def] unfolding mem_interval_cart
   by (auto intro: order_trans less_le_trans le_less_trans less_imp_le) (* BH: Why doesn't just "auto" work here? *)
 
@@ -970,26 +976,24 @@ lemma interval_sing:
   fixes a :: "'a::linorder^'n"
   shows "{a .. a} = {a} \<and> {a<..<a} = {}"
   apply (auto simp add: set_eq_iff less_vec_def less_eq_vec_def vec_eq_iff)
-  apply (simp add: order_eq_iff)
-  apply (auto simp add: not_less less_imp_le)
   done
 
 lemma interval_open_subset_closed_cart:
-  fixes a :: "'a::preorder^'n"
-  shows "{a<..<b} \<subseteq> {a .. b}"
+  fixes a :: "real^'n"
+  shows "box a b \<subseteq> {a .. b}"
 proof (simp add: subset_eq, rule)
   fix x
-  assume x: "x \<in>{a<..<b}"
+  assume x: "x \<in>box a b"
   { fix i
     have "a $ i \<le> x $ i"
       using x order_less_imp_le[of "a$i" "x$i"]
-      by(simp add: set_eq_iff less_vec_def less_eq_vec_def vec_eq_iff)
+      by(simp add: set_eq_iff less_vec_def less_eq_vec_def vec_eq_iff mem_interval Basis_vec_def inner_axis)
   }
   moreover
   { fix i
     have "x $ i \<le> b $ i"
       using x order_less_imp_le[of "x$i" "b$i"]
-      by(simp add: set_eq_iff less_vec_def less_eq_vec_def vec_eq_iff)
+      by(simp add: set_eq_iff less_vec_def less_eq_vec_def vec_eq_iff mem_interval Basis_vec_def inner_axis)
   }
   ultimately
   show "a \<le> x \<and> x \<le> b"
@@ -999,21 +1003,21 @@ qed
 lemma subset_interval_cart:
   fixes a :: "real^'n"
   shows "{c .. d} \<subseteq> {a .. b} \<longleftrightarrow> (\<forall>i. c$i \<le> d$i) --> (\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i)" (is ?th1)
-    and "{c .. d} \<subseteq> {a<..<b} \<longleftrightarrow> (\<forall>i. c$i \<le> d$i) --> (\<forall>i. a$i < c$i \<and> d$i < b$i)" (is ?th2)
-    and "{c<..<d} \<subseteq> {a .. b} \<longleftrightarrow> (\<forall>i. c$i < d$i) --> (\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i)" (is ?th3)
-    and "{c<..<d} \<subseteq> {a<..<b} \<longleftrightarrow> (\<forall>i. c$i < d$i) --> (\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i)" (is ?th4)
+    and "{c .. d} \<subseteq> box a b \<longleftrightarrow> (\<forall>i. c$i \<le> d$i) --> (\<forall>i. a$i < c$i \<and> d$i < b$i)" (is ?th2)
+    and "box c d \<subseteq> {a .. b} \<longleftrightarrow> (\<forall>i. c$i < d$i) --> (\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i)" (is ?th3)
+    and "box c d \<subseteq> box a b \<longleftrightarrow> (\<forall>i. c$i < d$i) --> (\<forall>i. a$i \<le> c$i \<and> d$i \<le> b$i)" (is ?th4)
   using subset_interval[of c d a b] by (simp_all add: Basis_vec_def inner_axis)
 
 lemma disjoint_interval_cart:
   fixes a::"real^'n"
   shows "{a .. b} \<inter> {c .. d} = {} \<longleftrightarrow> (\<exists>i. (b$i < a$i \<or> d$i < c$i \<or> b$i < c$i \<or> d$i < a$i))" (is ?th1)
-    and "{a .. b} \<inter> {c<..<d} = {} \<longleftrightarrow> (\<exists>i. (b$i < a$i \<or> d$i \<le> c$i \<or> b$i \<le> c$i \<or> d$i \<le> a$i))" (is ?th2)
-    and "{a<..<b} \<inter> {c .. d} = {} \<longleftrightarrow> (\<exists>i. (b$i \<le> a$i \<or> d$i < c$i \<or> b$i \<le> c$i \<or> d$i \<le> a$i))" (is ?th3)
-    and "{a<..<b} \<inter> {c<..<d} = {} \<longleftrightarrow> (\<exists>i. (b$i \<le> a$i \<or> d$i \<le> c$i \<or> b$i \<le> c$i \<or> d$i \<le> a$i))" (is ?th4)
+    and "{a .. b} \<inter> box c d = {} \<longleftrightarrow> (\<exists>i. (b$i < a$i \<or> d$i \<le> c$i \<or> b$i \<le> c$i \<or> d$i \<le> a$i))" (is ?th2)
+    and "box a b \<inter> {c .. d} = {} \<longleftrightarrow> (\<exists>i. (b$i \<le> a$i \<or> d$i < c$i \<or> b$i \<le> c$i \<or> d$i \<le> a$i))" (is ?th3)
+    and "box a b \<inter> box c d = {} \<longleftrightarrow> (\<exists>i. (b$i \<le> a$i \<or> d$i \<le> c$i \<or> b$i \<le> c$i \<or> d$i \<le> a$i))" (is ?th4)
   using disjoint_interval[of a b c d] by (simp_all add: Basis_vec_def inner_axis)
 
 lemma inter_interval_cart:
-  fixes a :: "'a::linorder^'n"
+  fixes a :: "real^'n"
   shows "{a .. b} \<inter> {c .. d} =  {(\<chi> i. max (a$i) (c$i)) .. (\<chi> i. min (b$i) (d$i))}"
   unfolding set_eq_iff and Int_iff and mem_interval_cart
   by auto

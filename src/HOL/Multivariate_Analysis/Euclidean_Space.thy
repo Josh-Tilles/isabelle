@@ -75,6 +75,10 @@ lemma (in euclidean_space) euclidean_representation_setsum:
   "(\<Sum>i\<in>Basis. f i *\<^sub>R i) = b \<longleftrightarrow> (\<forall>i\<in>Basis. f i = inner b i)"
   by (subst euclidean_eq_iff) simp
 
+lemma (in euclidean_space) euclidean_representation_setsum':
+  "b = (\<Sum>i\<in>Basis. f i *\<^sub>R i) \<longleftrightarrow> (\<forall>i\<in>Basis. f i = inner b i)"
+  by (auto simp add: euclidean_representation_setsum[symmetric])
+
 lemma (in euclidean_space) euclidean_representation: "(\<Sum>b\<in>Basis. inner x b *\<^sub>R b) = x"
   unfolding euclidean_representation_setsum by simp
 
@@ -153,6 +157,17 @@ begin
 
 definition
   "Basis = (\<lambda>u. (u, 0)) ` Basis \<union> (\<lambda>v. (0, v)) ` Basis"
+
+lemma setsum_Basis_prod_eq:
+  fixes f::"('a*'b)\<Rightarrow>('a*'b)"
+  shows "setsum f Basis = setsum (\<lambda>i. f (i, 0)) Basis + setsum (\<lambda>i. f (0, i)) Basis"
+proof -
+  have "inj_on (\<lambda>u. (u::'a, 0::'b)) Basis" "inj_on (\<lambda>u. (0::'a, u::'b)) Basis"
+    by (auto intro!: inj_onI Pair_inject)
+  thus ?thesis
+    unfolding Basis_prod_def
+    by (subst setsum_Un_disjoint) (auto simp: Basis_prod_def setsum_reindex)
+qed
 
 instance proof
   show "(Basis :: ('a \<times> 'b) set) \<noteq> {}"
