@@ -8,16 +8,16 @@ Tactics for corecursor sugar.
 signature BNF_GFP_REC_SUGAR_TACTICS =
 sig
   val mk_primcorec_assumption_tac: Proof.context -> thm list -> int -> tactic
-  val mk_primcorec_code_of_raw_code_tac: Proof.context -> thm list -> thm list -> thm -> tactic
+  val mk_primcorec_code_tac: Proof.context -> thm list -> thm list -> thm -> tactic
   val mk_primcorec_ctr_tac: Proof.context -> int -> thm -> thm option -> thm list -> tactic
   val mk_primcorec_disc_tac: Proof.context -> thm list -> thm -> int -> int -> thm list list list ->
     tactic
-  val mk_primcorec_disc_iff_tac: Proof.context -> string list -> thm -> thm -> thm list list ->
+  val mk_primcorec_disc_iff_tac: Proof.context -> string list -> thm -> thm list -> thm list list ->
     thm list -> tactic
   val mk_primcorec_exhaust_tac: Proof.context -> string list -> int -> thm -> tactic
   val mk_primcorec_nchotomy_tac: Proof.context -> thm list -> tactic
-  val mk_primcorec_raw_code_of_ctr_tac: Proof.context -> thm list -> thm list -> thm list ->
-    thm list -> int list -> thm list -> thm option -> tactic
+  val mk_primcorec_raw_code_tac: Proof.context -> thm list -> thm list -> thm list -> thm list ->
+    int list -> thm list -> thm option -> tactic
   val mk_primcorec_sel_tac: Proof.context -> thm list -> thm list -> thm list -> thm list ->
     thm list -> thm list -> thm list -> thm -> int -> int -> thm list list list -> tactic
 end;
@@ -88,44 +88,48 @@ fun same_case_tac ctxt m =
   HEADGOAL (if m = 0 then rtac TrueI
     else REPEAT_DETERM_N (m - 1) o (rtac conjI THEN' case_atac ctxt) THEN' case_atac ctxt);
 
-fun different_case_tac ctxt m excl =
+fun different_case_tac ctxt m exclude =
   HEADGOAL (if m = 0 then
       mk_primcorec_assumption_tac ctxt []
     else
-      dtac excl THEN' (REPEAT_DETERM_N (m - 1) o case_atac ctxt) THEN'
+      dtac exclude THEN' (REPEAT_DETERM_N (m - 1) o case_atac ctxt) THEN'
       mk_primcorec_assumption_tac ctxt []);
 
-fun cases_tac ctxt k m exclsss =
-  let val n = length exclsss in
+fun cases_tac ctxt k m excludesss =
+  let val n = length excludesss in
     EVERY (map (fn [] => if k = n then all_tac else same_case_tac ctxt m
-        | [excl] => different_case_tac ctxt m excl)
-      (take k (nth exclsss (k - 1))))
+        | [exclude] => different_case_tac ctxt m exclude)
+      (take k (nth excludesss (k - 1))))
   end;
 
 fun prelude_tac ctxt defs thm =
   unfold_thms_tac ctxt defs THEN HEADGOAL (rtac thm) THEN unfold_thms_tac ctxt unfold_lets;
 
-fun mk_primcorec_disc_tac ctxt defs disc_corec k m exclsss =
-  prelude_tac ctxt defs disc_corec THEN cases_tac ctxt k m exclsss;
+fun mk_primcorec_disc_tac ctxt defs disc_corec k m excludesss =
+  prelude_tac ctxt defs disc_corec THEN cases_tac ctxt k m excludesss;
 
-fun mk_primcorec_disc_iff_tac ctxt fun_exhaust_frees fun_exhaust fun_disc fun_discss disc_excludes =
+fun mk_primcorec_disc_iff_tac ctxt fun_exhaust_frees fun_exhaust fun_discs fun_discss
+    disc_excludes =
   HEADGOAL (rtac iffI THEN'
     rtac fun_exhaust THEN'
     K (exhaust_inst_as_projs_tac ctxt fun_exhaust_frees) THEN'
     EVERY' (map (fn [] => etac FalseE
-        | [fun_disc'] =>
-          if Thm.eq_thm (fun_disc', fun_disc) then
+        | fun_discs' as [fun_disc'] =>
+          if eq_list Thm.eq_thm (fun_discs', fun_discs) then
             REPEAT_DETERM o etac conjI THEN' (atac ORELSE' rtac TrueI)
           else
-            rtac FalseE THEN' rotate_tac 1 THEN' dtac fun_disc' THEN' REPEAT_DETERM o atac THEN'
+            rtac FalseE THEN'
+            (rotate_tac 1 THEN' dtac fun_disc' THEN' REPEAT_DETERM o atac ORELSE'
+             cut_tac fun_disc') THEN'
             dresolve_tac disc_excludes THEN' etac notE THEN' atac)
       fun_discss) THEN'
-    rtac (unfold_thms ctxt [atomize_conjL] fun_disc) THEN_MAYBE' atac);
+    (etac FalseE ORELSE'
+     resolve_tac (map (unfold_thms ctxt [atomize_conjL]) fun_discs) THEN_MAYBE' atac));
 
 fun mk_primcorec_sel_tac ctxt defs distincts splits split_asms mapsx map_idents map_comps fun_sel k
-    m exclsss =
+    m excludesss =
   prelude_tac ctxt defs (fun_sel RS trans) THEN
-  cases_tac ctxt k m exclsss THEN
+  cases_tac ctxt k m excludesss THEN
   HEADGOAL (REPEAT_DETERM o (rtac refl ORELSE' rtac ext ORELSE'
     eresolve_tac falseEs ORELSE'
     resolve_tac split_connectI ORELSE'
@@ -153,7 +157,7 @@ fun inst_split_eq ctxt split =
     end
   | _ => split);
 
-fun raw_code_of_ctr_single_tac ctxt distincts discIs splits split_asms m fun_ctr =
+fun raw_code_single_tac ctxt distincts discIs splits split_asms m fun_ctr =
   let
     val splits' =
       map (fn th => th RS iffD2) (@{thm split_if_eq2} :: map (inst_split_eq ctxt) splits)
@@ -173,8 +177,7 @@ fun raw_code_of_ctr_single_tac ctxt distincts discIs splits split_asms m fun_ctr
 
 fun rulify_nchotomy n = funpow (n - 1) (fn thm => thm RS @{thm Meson.make_pos_rule'});
 
-fun mk_primcorec_raw_code_of_ctr_tac ctxt distincts discIs splits split_asms ms fun_ctrs
-    nchotomy_opt =
+fun mk_primcorec_raw_code_tac ctxt distincts discIs splits split_asms ms fun_ctrs nchotomy_opt =
   let
     val n = length ms;
     val (ms', fun_ctrs') =
@@ -188,13 +191,12 @@ fun mk_primcorec_raw_code_of_ctr_tac ctxt distincts discIs splits split_asms ms 
          ||> (fn thm => [rulify_nchotomy n nchotomy RS thm] handle THM _ => [thm])
          |> op @));
   in
-    EVERY (map2 (raw_code_of_ctr_single_tac ctxt distincts discIs splits split_asms)
-      ms' fun_ctrs') THEN
+    EVERY (map2 (raw_code_single_tac ctxt distincts discIs splits split_asms) ms' fun_ctrs') THEN
     IF_UNSOLVED (unfold_thms_tac ctxt @{thms Code.abort_def} THEN
       HEADGOAL (REPEAT_DETERM o resolve_tac (refl :: split_connectI)))
   end;
 
-fun mk_primcorec_code_of_raw_code_tac ctxt distincts splits raw =
+fun mk_primcorec_code_tac ctxt distincts splits raw =
   HEADGOAL (rtac raw ORELSE' rtac (raw RS trans) THEN'
     SELECT_GOAL (unfold_thms_tac ctxt unfold_lets) THEN' REPEAT_DETERM o
     (rtac refl ORELSE' atac ORELSE'
