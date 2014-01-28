@@ -12,55 +12,345 @@ begin
 typedecl ZF
 
 axiomatization
-  Empty :: ZF and
+  Empty :: ZF and (* @TODO add empty-set symbol *)
   Elem :: "ZF \<Rightarrow> ZF \<Rightarrow> bool" and
   Sum :: "ZF \<Rightarrow> ZF" and
-  Power :: "ZF \<Rightarrow> ZF" and
-  Repl :: "ZF \<Rightarrow> (ZF \<Rightarrow> ZF) \<Rightarrow> ZF" and
+  Power :: "ZF \<Rightarrow> ZF" and (* @TODO add scripty "P" *)
+  Replace :: "ZF \<Rightarrow> (ZF \<Rightarrow> ZF) \<Rightarrow> ZF" and
   Inf :: ZF
 
 definition Upair :: "ZF \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "Upair a b == Repl (Power (Power Empty)) (% x. if x = Empty then a else b)"
+  "Upair a b \<equiv> Replace (Power (Power Empty)) (\<lambda> x. if x = Empty then a else b)"
 
-definition Singleton:: "ZF \<Rightarrow> ZF" where
-  "Singleton x == Upair x x"
+definition Singleton :: "ZF \<Rightarrow> ZF" where
+  "Singleton x \<equiv> Upair x x"
 
 definition union :: "ZF \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "union A B == Sum (Upair A B)"
+  "union A B \<equiv> Sum (Upair A B)"
 
 definition SucNat:: "ZF \<Rightarrow> ZF" where
-  "SucNat x == union x (Singleton x)"
+  "SucNat x \<equiv> union x (Singleton x)"
 
 definition subset :: "ZF \<Rightarrow> ZF \<Rightarrow> bool" where
-  "subset A B == ! x. Elem x A \<longrightarrow> Elem x B"
+  "subset A B \<longleftrightarrow> (\<forall> x. Elem x A \<longrightarrow> Elem x B)"
 
 axiomatization where
-  Empty: "Not (Elem x Empty)" and
-  Ext: "(x = y) = (! z. Elem z x = Elem z y)" and
-  Sum: "Elem z (Sum x) = (? y. Elem z y & Elem y x)" and
-  Power: "Elem y (Power x) = (subset y x)" and
-  Repl: "Elem b (Repl A f) = (? a. Elem a A & b = f a)" and
-  Regularity: "A \<noteq> Empty \<longrightarrow> (? x. Elem x A & (! y. Elem y x \<longrightarrow> Not (Elem y A)))" and
-  Infinity: "Elem Empty Inf & (! x. Elem x Inf \<longrightarrow> Elem (SucNat x) Inf)"
+  Empty: "\<not>(Elem x Empty)" and
+  Ext: "(x = y) \<longleftrightarrow> (\<forall> z. Elem z x = Elem z y)" and
+  Sum: "Elem z (Sum x) \<longleftrightarrow> (\<exists> y. Elem z y \<and> Elem y x)" and
+  Power: "Elem y (Power x) \<longleftrightarrow> (subset y x)" and
+  Replace: "Elem b (Replace A f) \<longleftrightarrow> (\<exists> a. Elem a A \<and> b = f a)" and
+  Regularity: "A \<noteq> Empty \<longrightarrow> (\<exists> x. Elem x A \<and> (\<forall> y. Elem y x \<longrightarrow> Not (Elem y A)))" and
+  Infinity: "Elem Empty Inf \<and> (\<forall> x. Elem x Inf \<longrightarrow> Elem (SucNat x) Inf)"
 
 definition Sep :: "ZF \<Rightarrow> (ZF \<Rightarrow> bool) \<Rightarrow> ZF" where
-  "Sep A p == (if (!x. Elem x A \<longrightarrow> Not (p x)) then Empty else 
-  (let z = (\<some> x. Elem x A & p x) in
-   let f = % x. (if p x then x else z) in Repl A f))" 
+  "Sep A p \<equiv> (if (\<forall>x. Elem x A \<longrightarrow> Not (p x)) then Empty else 
+    (let z = (\<some> x. Elem x A \<and> p x) in
+     let f = (\<lambda> y. (if p y then y else z)) in 
+     Replace A f))" 
 
 thm Power[unfolded subset_def]
 
-theorem Sep: "Elem b (Sep A p) = (Elem b A & p b)"
+theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
   apply (auto simp add: Sep_def Empty)
-  apply (auto simp add: Let_def Repl)
-  apply (rule someI2, auto)+
-  done
+  apply (auto simp add: Replace)
+  apply (rule someI2)
+  apply auto
+  apply (rule someI2)
+  apply auto
+  oops
+lemma "Elem b (Sep A p)"
+  apply (unfold Sep_def)
+  apply (split split_if)
+  apply (rule conjI)
+  apply auto oops
+lemma "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
+proof -
+  fix x and a
+  assume 3: "Elem x A" and 4: "p x"
+     and 5: "Elem a A" and 6: "\<not> (p a)"
+  have 1: "Elem (SOME x. Elem x A \<and> p x) A"
+    apply (rule someI2)
+      apply (rule conjI)
+        using `Elem x A` apply assumption
+      using `p x` apply assumption
+    apply (erule conjE)
+    apply assumption
+    done
+  have 2: "p (SOME x. Elem x A \<and> p x)"
+    apply (rule someI2)
+      apply (rule conjI)
+        using `Elem x A` apply assumption
+      using `p x` apply assumption
+    apply (erule conjE)
+    apply assumption
+    done
+ oops
+
+lemma
+  fixes p q :: "'a \<Rightarrow> bool"
+  assumes "\<exists>x. q x" and "q x \<Longrightarrow> p x"
+  shows "p (\<some> y. q y)"
+  oops
+
+(*
+CRUCIAL
+*)
+thm Replace
+
+theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
+  unfolding Sep_def
+proof (split split_if) (* @TODO figure out which `[of \<dots>]` or `[OF \<dots>]` would work? *)
+  have "Elem b (Sep A p) \<longleftrightarrow> Elem b (
+    (if (\<forall>x. Elem x A \<longrightarrow> Not (p x))
+      then Empty
+      else (let z = (\<some> x. Elem x A \<and> p x) in
+             let f = (\<lambda> y. (if p y then y else z)) in 
+              Replace A f))
+)" by (simp only: Sep_def)
+  also have "\<dots> \<longleftrightarrow> (
+((\<forall>x. Elem x A \<longrightarrow> \<not> p x) \<longrightarrow> Elem b Empty) 
+ \<and>
+ (\<not> (\<forall>x. Elem x A \<longrightarrow> \<not> p x) \<longrightarrow> Elem b (let z = (\<some> x. Elem x A \<and> p x) in let f = (\<lambda> y. (if p y then y else z)) in Replace A f))
+)" by (rule split_if)
+  also have "\<dots> = (Elem b A \<and> p b)"
+thm split_if[where ?P="Elem b" and ?Q="\<forall> x. Elem x A \<longrightarrow> \<not>(p x)" and ?x=Empty]
+  show "((\<forall>x. Elem x A \<longrightarrow> \<not> p x) \<longrightarrow> Elem b Empty = (Elem b A \<and> p b)) \<and>
+    (\<not> (\<forall>x. Elem x A \<longrightarrow> \<not> p x) \<longrightarrow>
+     Elem b (let z = SOME x. Elem x A \<and> p x in Let (\<lambda>y. if p y then y else z) (Replace A)) =
+     (Elem b A \<and> p b))"
+  proof (rule conjI)
+    
+  
+  have "Elem b (Sep A p) \<longleftrightarrow> Elem b ((if (\<forall>x. Elem x A \<longrightarrow> Not (p x)) then Empty else 
+(let z = (\<some> x. Elem x A \<and> p x) in
+ let f = (\<lambda> y. (if p y then y else z)) in 
+ Replace A f)))" by (unfold Sep_def) (rule refl)
+  
+  also have "\<dots> \<longleftrightarrow> ((\<forall>x. Elem x A \<longrightarrow> \<not> p x) \<longrightarrow> Elem b Empty) \<and>
+    (\<not> (\<forall>x. Elem x A \<longrightarrow> \<not> p x) \<longrightarrow>
+     Elem b (let z = SOME x. Elem x A \<and> p x in Let (\<lambda>y. if p y then y else z) (Replace A)))"
+apply (split split_if)
+oops
+
+theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
+proof (rule iffI)
+  assume left_premise: "Elem b (Sep A p)"
+  show "Elem b A \<and> p b"
+  proof -(* (rule conjI) *)
+    from `Elem b (Sep A p)` 
+     have unfolded_premise: "Elem b (if \<forall>x. Elem x A \<longrightarrow> \<not> p x then Empty else 
+                                          let z = \<some> x. Elem x A \<and> p x in let f = (\<lambda> y. (if p y then y else z)) in Replace A f)"
+     by (simp only: Sep_def)
+    have "\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))"
+    proof (rule notI)
+      assume "\<forall>x. Elem x A \<longrightarrow> \<not>(p x)"
+      with unfolded_premise (*have "Elem b
+     (if True then Empty
+      else let z = SOME x. Elem x A \<and> p x in Let (\<lambda>y. if p y then y else z) (Replace A))" by simp (* @TODO Cf. "congruence rule": Q \<equiv> ?c \<Longrightarrow> if Q then x else y \<equiv> if ?c then x else y *)
+
+      hence*) have "Elem b Empty" by simp
+      with Empty show False by (simp only: HOL.simp_thms(27))
+    qed
+    with unfolded_premise
+     have "Elem b (let z = \<some> x. Elem x A \<and> p x in let f = (\<lambda> y. (if p y then y else z)) in Replace A f)"
+     by (simp only: if_False)
+    hence "Elem b (let z = \<some> x. Elem x A \<and> p x in Replace A (\<lambda> y. if p y then y else z))" by (unfold Let_def)
+    hence simplified_premise: "Elem b (Replace A (\<lambda> y. if p y then y else \<some> x. Elem x A \<and> p x))" by (unfold Let_def)
+    hence "\<exists> i. Elem i A \<and> b = ((\<lambda> y. if p y then y else \<some> x. Elem x A \<and> p x) i)" by (simp only: Replace)
+    hence "\<exists> i. Elem i A \<and> b = (if p i then i else \<some> x. Elem x A \<and> p x)" .
+
+obtain w where
+    
+    from `\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))`
+     obtain z where "Elem z A" and "p z"
+     by blast
+    
+    from `\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))` have tmpex: "\<exists>x. Elem x A \<and> p x" by blast
+    thm someI2
+    find_theorems "(\<some>_. _) = _"
+thm HOL.simp_thms(27)
+ have "Elem b Empty"
+    hence "Elem b (let z = \<some> x. Elem x A \<and> p x in
+                    let f = \<lambda> y. if p y then y else z in
+                     Replace A f)"
+    { assume "\<forall>x. Elem x A \<longrightarrow> \<not> p x"
+      hence "Elem b Empty" using tmp by simp
+      with Empty have False by (simp only: HOL.simp_thms(27)) }
+    hence "\<not>(\<forall>x. Elem x A \<longrightarrow> \<not> p x)" by (rule notI)
+    hence tmp2: "Elem b (let z = \<some> x. Elem x A \<and> p x in
+                    let f = \<lambda> y. if p y then y else z in
+                     Replace A f)" using tmp by (simp only: if_False)
+    let ?f = "(let z = \<some> x. Elem x A \<and> p x in (\<lambda> y. if p y then y else z))"
+    from tmp2 have "Elem b (Replace A ?f)" by (simp only: Let_def)
+    hence tmp3: "\<exists>x. Elem x A \<and> b = ?f x" by (simp only: Replace)
+    thus "Elem b A \<and> p b"
+    proof -
+      fix t
+      assume "Elem t A" and "b = ?f t"
+      from `b = ?f t` have "b = (let z = SOME x. Elem x A \<and> p x in if p t then t else z)" by (unfold Let_def)
+      hence b_eq: "b = (if p t then t else (\<some> x. Elem x A \<and> p x))" by (unfold Let_def)
+      hence "p b"
+      proof (cases "p t")
+        assume "p t"
+        hence "b = t" using b_eq by simp (* @TODO which? *)
+        thus "p b" by (simp only: `p t`)
+      next
+        assume "\<not>(p t)"
+        hence b_eq_some: "b = (\<some> x. Elem x A \<and> p x)" using b_eq by simp (* @TODO which? *)
+        have "p (\<some> x. Elem x A \<and> p x)"
+          apply (rule someI2)
+          defer
+          apply (erule conjE)
+          apply assumption
+        proof -
+          show "Elem t A \<and> p t" apply (rule conjI)
+ sorry
+        thus "p b" using b_eq_some by simp (* @TODO which? *)
+      qed
+        thm some_equality
+        show "b = (if p t then t else SOME x. Elem x A \<and> p x) \<Longrightarrow> p t \<Longrightarrow> p b" by simp
+
+      proof -
+        assume "b = (SOME x. Elem x A \<and> p x)"
+           and "\<not>(p t)"
+        from 
+        show "p (SOME x. Elem x A \<and> p x)"
+          using `b = (SOME x. Elem x A \<and> p x)` apply simp
+          apply (simp only: `b = (SOME x. Elem x A \<and> p x)`)
+        apply (subst `b = (SOME x. Elem x A \<and> p x)`)
+        apply (rule someI)
+thm someI
+        apply (simp only: split_if)
+        apply (erule conjE)
+      
+
+    proof -
+      obtain t where t: "Elem t A \<and> b = ?f t" using tmp3 by auto (* @TODO cheap *)
+      from t have "Elem t A" by (rule conjE)
+      from t have "b = ?f t" by (rule conjE)
+       
+      hence "p b"
+        apply (simp only: Let_def)
+        apply cases
+        apply (simp only: some_eq_ex)
+        apply (rule someI2, auto)
+        thm some_equality
+        apply (simp only: someI2)
+      have "p (?f t)"
+        apply (simp only: Let_def)
+        apply (split split_if)
+        apply auto
+        apply (rule someI)
+        thm someI2
+      
+      hence "Elem x A" and "b = ?f x" apply (rule conjE) apply assumption using x apply (rule conjE) apply assumption
+    thm exE
+    thm Replace
+    have "Elem b (let z = \<some> x. Elem x A \<and> p x in
+                    let f = \<lambda> y. if p y then y else z in
+                     Replace A f)
+          =
+          Elem b (Replace A
+                          (let z = \<some> x. Elem x A \<and> p x in (\<lambda> y. if p y then y else z)))"
+      by (simp only: Let_def)
+    have "Elem b (let z = \<some> x. Elem x A \<and> p x in
+                   let f = \<lambda> y. if p y then y else z in
+                    Replace A f)
+          =
+          Elem b (Replace A ?f)"
+      by (simp only: Let_def)
+    also have "\<dots> = (\<exists>a. Elem a A \<and> b = (?f a))" by (rule Replace)
+(*
+    also have "\<dots> = (\<exists>a. Elem a A \<and> b = ((let z = \<some> x. Elem x A \<and> p x in (\<lambda> y. if p y then y else z))) a)"
+      by (rule Replace)
+*)
+    also have "\<dots> = (\<exists>a. Elem a A \<and> b = (?f a))" by (rule Replace)
+thm someI2
+    thm Replace[of b A "let z = \<some> x. Elem x A \<and> p x in (\<lambda> y. if p y then y else z)"]
+thm Replace
+    
+    
+    hence "\<exists>x. Elem x A \<and> p x" by auto (* @TODO cheap? *)
+thm split_if
+      then obtain c where "Elem c A \<and> p c" by (rule exE)
+thm spec
+thm FalseE
+find_theorems "?P \<and> \<not>?P"
+    have "\<forall>x. Elem x A \<longrightarrow> Not (p x)"
+    proof (rule ccontr)
+oops
+theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)" sorry
 
 lemma subset_empty: "subset Empty A"
   by (simp add: subset_def Empty)
 
-theorem Upair: "Elem x (Upair a b) = (x = a | x = b)"
-  apply (auto simp add: Upair_def Repl)
+thm split_if[of "\<lambda>y. x = y" B a b] (* key! *)
+
+lemma "Elem x (Upair a b) \<longleftrightarrow> (x=a \<or> x=b)"
+  apply (auto simp add: Upair_def Replace)
+    apply (rule exI[where x=Empty])
+    apply (simp add: Power subset_empty)
+  apply (rule exI[where x="Power Empty"])
+  apply (auto)
+  apply (auto simp add: Ext Power subset_def Empty)
+  apply (drule spec[where x=Empty], simp add: Empty)+
+  oops
+
+
+theorem Upair: "Elem x (Upair a b) \<longleftrightarrow> (x = a \<or> x = b)"
+  apply (simp only: Upair_def Replace)
+  apply (subst exI)
+  (* apply (subst split_if) *)
+  apply (simp only: split_if)
+  apply auto
+  
+  apply (unfold Upair_def)
+  apply (simp only: Replace)
+  apply (rule iffI)
+  apply (rule disjCI)
+  apply (erule exE)
+  apply (erule conjE)
+  
+thm disjCI
+thm exI[where x=Empty]
+thm exI[where x="Power Empty"]
+thm spec[where x=Empty]
+  apply auto
+  apply (rule exI[where x=Empty])
+  apply (simp only: Power)
+  apply (simp only: subset_empty)
+  apply simp
+proof -
+  have "\<exists> Y. subset Y (Power Empty)"
+  apply (rule exI)
+  apply (rule subset_empty) done
+  have "Upair a b = (Replace (Power (Power Empty)) (\<lambda> x. if x = Empty then a else b))" by (unfold Upair_def) (rule refl)
+  hence "Elem x (Upair a b) \<longleftrightarrow> Elem x \<dots>" by simp
+  also have "\<dots> \<longleftrightarrow> (\<exists> A. Elem A (Power (Power Empty)) \<and> x = (if A = Empty then a else b))" by (simp only: Replace)
+(*  also have "\<dots> \<longleftrightarrow> (\<exists> Y. subset Y (Power Empty) \<and> x = (if Y = Empty then a else b))" by (simp only: Power)
+  also have "\<dots> \<longleftrightarrow> (\<exists> Y. (\<forall> w. Elem w Y \<longrightarrow> Elem w (Power Empty)) \<and> x = (if Y = Empty then a else b))" by (simp only: subset_def)
+  also have "\<dots> \<longleftrightarrow> (\<exists> Y. (\<forall> w. Elem w Y \<longrightarrow> subset w Empty) \<and> x = (if Y = Empty then a else b))" by (simp only: Power)
+*)  also have "\<dots> \<longleftrightarrow> (x=a \<or> x=b)"
+  proof -
+    fix A :: ZF
+    have "Elem A (Power (Power Empty)) \<longleftrightarrow> subset A (Power Empty)" by (subst Power) (rule refl)
+    also have "\<dots> \<longleftrightarrow> (\<forall> y. Elem y A \<longrightarrow> Elem y (Power Empty))" by (unfold subset_def) (rule refl)
+    also have "\<dots> \<longleftrightarrow> (\<forall> y. Elem y A \<longrightarrow> subset y Empty)" by (simp only: Power)
+    also have "\<dots> \<longleftrightarrow> (\<forall> y. Elem y A \<longrightarrow> (\<forall> z. Elem z y \<longrightarrow> Elem z Empty))" by (simp only: subset_def)
+    also have "\<dots> \<longleftrightarrow> (\<forall> y. Elem y A \<longrightarrow> (\<forall> z. Elem z y \<longrightarrow> False))" by (subst Empty) (rule refl)
+    also have "\<dots> \<longleftrightarrow> (\<forall> y. Elem y A \<longrightarrow> \<not>(\<exists> z. Elem z y))" by auto (* @TODO *)
+    
+    
+
+ apply auto apply (rule exI) apply (auto simp add: Power subset_empty Empty) apply (rule exI) apply auto
+
+  thm exI[where x="Power Empty"]
+  (* have "subset Y (Power Empty) \<longleftrightarrow> (\<forall> y. Elem y Y \<longrightarrow> Elem y (Power Empty))" by (simp only: subset_def *)
+  also have "\<dots> = (\<exists> Y. (\<forall> y. Elem y Y \<longrightarrow> Elem y (Power Empty)) \<and> x = (if Y = Empty then a else b))" by (simp only: subset_def)
+  also have "\<dots> = (\<exists> Y. (\<forall> y. Elem y Y \<longrightarrow> Elem y (Power Empty)) \<and> (x = a \<or> x = b))" apply simp
+  have "Elem x (Upair a b) = Elem x (Replace (Power (Power Empty)) (\<lambda>x. if x = Empty then a else b))"
+  apply (auto simp add: Upair_def Replace)
   apply (rule exI[where x=Empty])
   apply (simp add: Power subset_empty)
   apply (rule exI[where x="Power Empty"])
@@ -68,23 +358,25 @@ theorem Upair: "Elem x (Upair a b) = (x = a | x = b)"
   apply (auto simp add: Ext Power subset_def Empty)
   apply (drule spec[where x=Empty], simp add: Empty)+
   done
+  oops
+lemma Upair: "Elem x (Upair a b) \<longleftrightarrow> (x = a \<or> x = b)" sorry
 
-lemma Singleton: "Elem x (Singleton y) = (x = y)"
+lemma Singleton: "Elem x (Singleton y) \<longleftrightarrow> x = y"
   by (simp add: Singleton_def Upair)
 
 definition Opair :: "ZF \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "Opair a b == Upair (Upair a a) (Upair a b)"
+  "Opair a b \<equiv> Upair (Upair a a) (Upair a b)"
 
-lemma Upair_singleton: "(Upair a a = Upair c d) = (a = c & a = d)"
+lemma Upair_singleton: "(Upair a a = Upair c d) \<longleftrightarrow> (a = c \<and> a = d)"
   by (auto simp add: Ext[where x="Upair a a"] Upair)
 
-lemma Upair_fsteq: "(Upair a b = Upair a c) = ((a = b & a = c) | (b = c))"
+lemma Upair_fsteq: "(Upair a b = Upair a c) \<longleftrightarrow> ((a = b \<and> a = c) \<or> (b = c))"
   by (auto simp add: Ext[where x="Upair a b"] Upair)
 
 lemma Upair_comm: "Upair a b = Upair b a"
   by (auto simp add: Ext Upair)
 
-theorem Opair: "(Opair a b = Opair c d) = (a = c & b = d)"
+theorem Opair: "(Opair a b = Opair c d) \<longleftrightarrow> (a = c \<and> b = d)"
   proof -
     have fst: "(Opair a b = Opair c d) \<Longrightarrow> a = c"
       apply (simp add: Opair_def)
@@ -101,17 +393,17 @@ theorem Opair: "(Opair a b = Opair c d) = (a = c & b = d)"
   qed
 
 definition Replacement :: "ZF \<Rightarrow> (ZF \<Rightarrow> ZF option) \<Rightarrow> ZF" where
-  "Replacement A f == Repl (Sep A (% a. f a \<noteq> None)) (the o f)"
+  "Replacement A f \<equiv> Replace (Sep A (\<lambda> a. f a \<noteq> None)) (the \<circ> f)"
 
-theorem Replacement: "Elem y (Replacement A f) = (? x. Elem x A & f x = Some y)"
-  by (auto simp add: Replacement_def Repl Sep) 
+theorem Replacement: "Elem y (Replacement A f) \<longleftrightarrow> (\<exists> x. Elem x A \<and> f x = Some y)"
+  by (auto simp add: Replacement_def Replace Sep) 
 
 definition Fst :: "ZF \<Rightarrow> ZF" where
-  "Fst q == SOME x. ? y. q = Opair x y"
+  "Fst q \<equiv> \<some> x. \<exists> y. q = Opair x y"
 
 definition Snd :: "ZF \<Rightarrow> ZF" where
-  "Snd q == SOME y. ? x. q = Opair x y"
-
+  "Snd q \<equiv> \<some> y. \<exists> x. q = Opair x y"
+thm someI2
 theorem Fst: "Fst (Opair x y) = x"
   apply (simp add: Fst_def)
   apply (rule someI2)
@@ -125,7 +417,7 @@ theorem Snd: "Snd (Opair x y) = y"
   done
 
 definition isOpair :: "ZF \<Rightarrow> bool" where
-  "isOpair q == ? x y. q = Opair x y"
+  "isOpair q \<longleftrightarrow> (\<exists> x y. q = Opair x y)"
 
 lemma isOpair: "isOpair (Opair x y) = True"
   by (auto simp add: isOpair_def)
@@ -134,16 +426,16 @@ lemma FstSnd: "isOpair x \<Longrightarrow> Opair (Fst x) (Snd x) = x"
   by (auto simp add: isOpair_def Fst Snd)
   
 definition CartProd :: "ZF \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "CartProd A B == Sum(Repl A (% a. Repl B (% b. Opair a b)))"
+  "CartProd A B \<equiv> Sum(Replace A (\<lambda> a. Replace B (\<lambda> b. Opair a b)))"
 
-lemma CartProd: "Elem x (CartProd A B) = (? a b. Elem a A & Elem b B & x = (Opair a b))"
-  apply (auto simp add: CartProd_def Sum Repl)
-  apply (rule_tac x="Repl B (Opair a)" in exI)
-  apply (auto simp add: Repl)
+lemma CartProd: "Elem x (CartProd A B) = (\<exists> a b. Elem a A \<and> Elem b B \<and> x = (Opair a b))"
+  apply (auto simp add: CartProd_def Sum Replace)
+  apply (rule_tac x="Replace B (Opair a)" in exI)
+  apply (auto simp add: Replace)
   done
 
 definition explode :: "ZF \<Rightarrow> ZF set" where
-  "explode z == { x. Elem x z }"
+  "explode z \<equiv> { x. Elem x z }"
 
 lemma explode_Empty: "(explode x = {}) = (x = Empty)"
   by (auto simp add: explode_def Ext Empty)
@@ -154,19 +446,19 @@ lemma explode_Elem: "(x \<in> explode X) = (Elem x X)"
 lemma Elem_explode_in: "\<lbrakk> Elem a A; explode A \<subseteq> B\<rbrakk> \<Longrightarrow> a \<in> B"
   by (auto simp add: explode_def)
 
-lemma explode_CartProd_eq: "explode (CartProd a b) = (% (x,y). Opair x y) ` ((explode a) \<times> (explode b))"
+lemma explode_CartProd_eq: "explode (CartProd a b) = (\<lambda> (x,y). Opair x y) ` ((explode a) \<times> (explode b))"
   by (simp add: explode_def set_eq_iff CartProd image_def)
 
-lemma explode_Repl_eq: "explode (Repl A f) = image f (explode A)"
-  by (simp add: explode_def Repl image_def)
+lemma explode_Repl_eq: "explode (Replace A f) = image f (explode A)"
+  by (simp add: explode_def Replace image_def)
 
 definition Domain :: "ZF \<Rightarrow> ZF" where
-  "Domain f == Replacement f (% p. if isOpair p then Some (Fst p) else None)"
+  "Domain f \<equiv> Replacement f (\<lambda> p. if isOpair p then Some (Fst p) else None)"
 
 definition Range :: "ZF \<Rightarrow> ZF" where
-  "Range f == Replacement f (% p. if isOpair p then Some (Snd p) else None)"
+  "Range f \<equiv> Replacement f (\<lambda> p. if isOpair p then Some (Snd p) else None)"
 
-theorem Domain: "Elem x (Domain f) = (? y. Elem (Opair x y) f)"
+theorem Domain: "Elem x (Domain f) = (\<exists> y. Elem (Opair x y) f)"
   apply (auto simp add: Domain_def Replacement)
   apply (rule_tac x="Snd x" in exI)
   apply (simp add: FstSnd)
@@ -174,7 +466,7 @@ theorem Domain: "Elem x (Domain f) = (? y. Elem (Opair x y) f)"
   apply (simp add: isOpair Fst)
   done
 
-theorem Range: "Elem y (Range f) = (? x. Elem (Opair x y) f)"
+theorem Range: "Elem y (Range f) = (\<exists> x. Elem (Opair x y) f)"
   apply (auto simp add: Range_def Replacement)
   apply (rule_tac x="Fst x" in exI)
   apply (simp add: FstSnd)
@@ -186,35 +478,35 @@ theorem union: "Elem x (union A B) = (Elem x A | Elem x B)"
   by (auto simp add: union_def Sum Upair)
 
 definition Field :: "ZF \<Rightarrow> ZF" where
-  "Field A == union (Domain A) (Range A)"
+  "Field A \<equiv> union (Domain A) (Range A)"
 
 definition app :: "ZF \<Rightarrow> ZF => ZF" (infixl "\<acute>" 90) --{*function application*} where
-  "f \<acute> x == (THE y. Elem (Opair x y) f)"
+  "f \<acute> x \<equiv> (THE y. Elem (Opair x y) f)"
 
 definition isFun :: "ZF \<Rightarrow> bool" where
-  "isFun f == (! x y1 y2. Elem (Opair x y1) f & Elem (Opair x y2) f \<longrightarrow> y1 = y2)"
+  "isFun f \<longleftrightarrow> (\<forall> x y1 y2. Elem (Opair x y1) f \<and> Elem (Opair x y2) f \<longrightarrow> y1 = y2)"
 
 definition Lambda :: "ZF \<Rightarrow> (ZF \<Rightarrow> ZF) \<Rightarrow> ZF" where
-  "Lambda A f == Repl A (% x. Opair x (f x))"
+  "Lambda A f \<equiv> Replace A (\<lambda> x. Opair x (f x))"
 
 lemma Lambda_app: "Elem x A \<Longrightarrow> (Lambda A f)\<acute>x = f x"
-  by (simp add: app_def Lambda_def Repl Opair)
+  by (simp add: app_def Lambda_def Replace Opair)
 
 lemma isFun_Lambda: "isFun (Lambda A f)"
-  by (auto simp add: isFun_def Lambda_def Repl Opair)
+  by (auto simp add: isFun_def Lambda_def Replace Opair)
 
 lemma domain_Lambda: "Domain (Lambda A f) = A"
   apply (auto simp add: Domain_def)
   apply (subst Ext)
   apply (auto simp add: Replacement)
-  apply (simp add: Lambda_def Repl)
+  apply (simp add: Lambda_def Replace)
   apply (auto simp add: Fst)
-  apply (simp add: Lambda_def Repl)
+  apply (simp add: Lambda_def Replace)
   apply (rule_tac x="Opair z (f z)" in exI)
   apply (auto simp add: Fst isOpair_def)
   done
 
-lemma Lambda_ext: "(Lambda s f = Lambda t g) = (s = t & (! x. Elem x s \<longrightarrow> f x = g x))"
+lemma Lambda_ext: "(Lambda s f = Lambda t g) \<longleftrightarrow> (s = t \<and> (\<forall> x. Elem x s \<longrightarrow> f x = g x))"
 proof -
   have "Lambda s f = Lambda t g \<Longrightarrow> s = t"
     apply (subst domain_Lambda[where A = s and f = f, symmetric])
@@ -226,16 +518,16 @@ proof -
     apply (subst Lambda_app[where f=f, symmetric], simp)
     apply (subst Lambda_app[where f=g, symmetric], simp)
     apply auto
-    apply (auto simp add: Lambda_def Repl Ext)
+    apply (auto simp add: Lambda_def Replace Ext)
     apply (auto simp add: Ext[symmetric])
     done
 qed
 
 definition PFun :: "ZF \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "PFun A B == Sep (Power (CartProd A B)) isFun"
+  "PFun A B \<equiv> Sep (Power (CartProd A B)) isFun"
 
 definition Fun :: "ZF \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "Fun A B == Sep (PFun A B) (\<lambda> f. Domain f = A)"
+  "Fun A B \<equiv> Sep (PFun A B) (\<lambda> f. Domain f = A)"
 
 lemma Fun_Range: "Elem f (Fun U V) \<Longrightarrow> subset (Range f) V"
   apply (simp add: Fun_def Sep PFun_def Power subset_def CartProd)
@@ -244,7 +536,7 @@ lemma Fun_Range: "Elem f (Fun U V) \<Longrightarrow> subset (Range f) V"
   apply (auto simp add: Opair)
   done
 
-lemma Elem_Elem_PFun: "Elem F (PFun U V) \<Longrightarrow> Elem p F \<Longrightarrow> isOpair p & Elem (Fst p) U & Elem (Snd p) V"
+lemma Elem_Elem_PFun: "Elem F (PFun U V) \<Longrightarrow> Elem p F \<Longrightarrow> isOpair p \<and> Elem (Fst p) U \<and> Elem (Snd p) V"
   apply (simp add: PFun_def Sep Power subset_def, clarify)
   apply (erule_tac x=p in allE)
   apply (auto simp add: CartProd isOpair Fst Snd)
@@ -253,7 +545,7 @@ lemma Elem_Elem_PFun: "Elem F (PFun U V) \<Longrightarrow> Elem p F \<Longrighta
 lemma Fun_implies_PFun[simp]: "Elem f (Fun U V) \<Longrightarrow> Elem f (PFun U V)"
   by (simp add: Fun_def Sep)
 
-lemma Elem_Elem_Fun: "Elem F (Fun U V) \<Longrightarrow> Elem p F \<Longrightarrow> isOpair p & Elem (Fst p) U & Elem (Snd p) V" 
+lemma Elem_Elem_Fun: "Elem F (Fun U V) \<Longrightarrow> Elem p F \<Longrightarrow> isOpair p \<and> Elem (Fst p) U \<and> Elem (Snd p) V" 
   by (auto simp add: Elem_Elem_PFun dest: Fun_implies_PFun)
 
 lemma PFun_inj: "Elem F (PFun U V) \<Longrightarrow> Elem x F \<Longrightarrow> Elem y F \<Longrightarrow> Fst x = Fst y \<Longrightarrow> Snd x = Snd y"
@@ -282,7 +574,7 @@ lemma fun_value_in_range: "\<lbrakk>isFun f; Elem x (Domain f)\<rbrakk> \<Longri
   apply (auto simp add: the_equality)
   done
 
-lemma fun_range_witness: "\<lbrakk>isFun f; Elem y (Range f)\<rbrakk> \<Longrightarrow> ? x. Elem x (Domain f) & f\<acute>x = y"
+lemma fun_range_witness: "\<lbrakk>isFun f; Elem y (Range f)\<rbrakk> \<Longrightarrow> ? x. Elem x (Domain f) \<and> f\<acute>x = y"
   apply (auto simp add: Range)
   apply (rule_tac x="x" in exI)
   apply (auto simp add: app_def the_equality isFun_def Domain)
@@ -290,7 +582,7 @@ lemma fun_range_witness: "\<lbrakk>isFun f; Elem y (Range f)\<rbrakk> \<Longrigh
 
 lemma Elem_Fun_Lambda: "Elem F (Fun U V) \<Longrightarrow> ? f. F = Lambda U f"
   apply (rule exI[where x= "% x. (THE y. Elem (Opair x y) F)"])
-  apply (simp add: Ext Lambda_def Repl Domain)
+  apply (simp add: Ext Lambda_def Replace Domain)
   apply (simp add: Ext[symmetric])
   apply auto
   apply (frule Elem_Elem_Fun)
@@ -313,7 +605,7 @@ lemma Elem_Fun_Lambda: "Elem F (Fun U V) \<Longrightarrow> ? f. F = Lambda U f"
   apply (auto simp add: Fst Snd)
   done
  
-lemma Elem_Lambda_Fun: "Elem (Lambda A f) (Fun U V) = (A = U & (! x. Elem x A \<longrightarrow> Elem (f x) V))"
+lemma Elem_Lambda_Fun: "Elem (Lambda A f) (Fun U V) = (A = U \<and> (\<forall> x. Elem x A \<longrightarrow> Elem (f x) V))"
 proof -
   have "Elem (Lambda A f) (Fun U V) \<Longrightarrow> A = U"
     by (simp add: Fun_def Sep domain_Lambda)
@@ -331,13 +623,13 @@ proof -
     apply (simp add: Fun_def Sep PFun_def Power domain_Lambda isFun_Lambda)
     apply (auto simp add: subset_def CartProd)
     apply (rule_tac x="Fst x" in exI)
-    apply (auto simp add: Lambda_def Repl Fst)
+    apply (auto simp add: Lambda_def Replace Fst)
     done
 qed    
 
 
 definition is_Elem_of :: "(ZF * ZF) set" where
-  "is_Elem_of == { (a,b) | a b. Elem a b }"
+  "is_Elem_of \<equiv> { (a,b) | a b. Elem a b }"
 
 lemma cond_wf_Elem:
   assumes hyps:"\<forall>x. (\<forall>y. Elem y x \<longrightarrow> Elem y U \<longrightarrow> P y) \<longrightarrow> Elem x U \<longrightarrow> P x" "Elem a U"
@@ -359,11 +651,11 @@ proof -
           proof 
             assume not_empty: "?Z \<noteq> Empty" 
             note thereis_x = Regularity[where A="?Z", simplified not_empty, simplified]
-            then obtain x where x_def: "Elem x ?Z & (! y. Elem y x \<longrightarrow> Not (Elem y ?Z))" ..
-            then have x_induct:"! y. Elem y x \<longrightarrow> Elem y U \<longrightarrow> P y" by (simp add: Sep)
+            then obtain x where x_def: "Elem x ?Z \<and> (\<forall> y. Elem y x \<longrightarrow> Not (Elem y ?Z))" ..
+            then have x_induct:"\<forall> y. Elem y x \<longrightarrow> Elem y U \<longrightarrow> P y" by (simp add: Sep)
             have "Elem x U \<longrightarrow> P x" 
               by (rule impE[OF spec[OF P_induct, where x=x], OF x_induct], assumption)
-            moreover have "Elem x U & Not(P x)"
+            moreover have "Elem x U \<and> Not(P x)"
               apply (insert x_def)
               apply (simp add: Sep)
               done
@@ -384,7 +676,7 @@ lemma cond2_wf_Elem:
 proof -
   have "? U Q. P = (\<lambda> x. (Elem x U \<longrightarrow> Q x))"
   proof -
-    from special_P obtain U where U:"! x. Not(Elem x U) \<longrightarrow> (P x)" ..
+    from special_P obtain U where U:"\<forall> x. Not(Elem x U) \<longrightarrow> (P x)" ..
     show ?thesis
       apply (rule_tac exI[where x=U])
       apply (rule exI[where x="P"])
@@ -407,7 +699,7 @@ primrec nat2Nat :: "nat \<Rightarrow> ZF" where
 | nat2Nat_Suc[intro]:  "nat2Nat (Suc n) = SucNat (nat2Nat n)"
 
 definition Nat2nat :: "ZF \<Rightarrow> nat" where
-  "Nat2nat == inv nat2Nat"
+  "Nat2nat \<equiv> inv nat2Nat"
 
 lemma Elem_nat2Nat_inf[intro]: "Elem (nat2Nat n) Inf"
   apply (induct n)
@@ -415,7 +707,7 @@ lemma Elem_nat2Nat_inf[intro]: "Elem (nat2Nat n) Inf"
   done
 
 definition Nat :: ZF
- where  "Nat == Sep Inf (\<lambda> N. ? n. nat2Nat n = N)"
+ where  "Nat \<equiv> Sep Inf (\<lambda> N. ? n. nat2Nat n = N)"
 
 lemma Elem_nat2Nat_Nat[intro]: "Elem (nat2Nat n) Nat"
   by (auto simp add: Nat_def Sep)
@@ -427,11 +719,11 @@ lemma Elem_SucNat_Nat: "Elem N Nat \<Longrightarrow> Elem (SucNat N) Nat"
   by (auto simp add: Nat_def Sep Infinity)
   
 lemma no_infinite_Elem_down_chain:
-  "Not (? f. isFun f & Domain f = Nat & (! N. Elem N Nat \<longrightarrow> Elem (f\<acute>(SucNat N)) (f\<acute>N)))"
+  "Not (\<exists> f. isFun f \<and> Domain f = Nat \<and> (\<forall> N. Elem N Nat \<longrightarrow> Elem (f\<acute>(SucNat N)) (f\<acute>N)))"
 proof -
   {
     fix f
-    assume f:"isFun f & Domain f = Nat & (! N. Elem N Nat \<longrightarrow> Elem (f\<acute>(SucNat N)) (f\<acute>N))"
+    assume f:"isFun f \<and> Domain f = Nat \<and> (\<forall> N. Elem N Nat \<longrightarrow> Elem (f\<acute>(SucNat N)) (f\<acute>N))"
     let ?r = "Range f"
     have "?r \<noteq> Empty"
       apply (auto simp add: Ext Empty)
@@ -439,16 +731,16 @@ proof -
       apply (rule fun_value_in_range)
       apply (auto simp add: f Elem_Empty_Nat)
       done
-    then have "? x. Elem x ?r & (! y. Elem y x \<longrightarrow> Not(Elem y ?r))"
+    then have "? x. Elem x ?r \<and> (\<forall> y. Elem y x \<longrightarrow> Not(Elem y ?r))"
       by (simp add: Regularity)
-    then obtain x where x: "Elem x ?r & (! y. Elem y x \<longrightarrow> Not(Elem y ?r))" ..
-    then have "? N. Elem N (Domain f) & f\<acute>N = x" 
+    then obtain x where x: "Elem x ?r \<and> (\<forall> y. Elem y x \<longrightarrow> Not(Elem y ?r))" ..
+    then have "? N. Elem N (Domain f) \<and> f\<acute>N = x" 
       apply (rule_tac fun_range_witness)
       apply (simp_all add: f)
       done
-    then have "? N. Elem N Nat & f\<acute>N = x" 
+    then have "? N. Elem N Nat \<and> f\<acute>N = x" 
       by (simp add: f)
-    then obtain N where N: "Elem N Nat & f\<acute>N = x" ..
+    then obtain N where N: "Elem N Nat \<and> f\<acute>N = x" ..
     from N have N': "Elem N Nat" by auto
     let ?y = "f\<acute>(SucNat N)"
     have Elem_y_r: "Elem ?y ?r"
@@ -467,7 +759,7 @@ lemma Upair_nonEmpty: "Upair a b \<noteq> Empty"
 lemma Singleton_nonEmpty: "Singleton x \<noteq> Empty"
   by (auto simp add: Singleton_def Upair_nonEmpty)
 
-lemma notsym_Elem: "Not(Elem a b & Elem b a)"
+lemma notsym_Elem: "Not(Elem a b \<and> Elem b a)"
 proof -
   {
     fix a b
@@ -475,9 +767,9 @@ proof -
     assume ba: "Elem b a"
     let ?Z = "Upair a b"
     have "?Z \<noteq> Empty" by (simp add: Upair_nonEmpty)
-    then have "? x. Elem x ?Z & (! y. Elem y x \<longrightarrow> Not(Elem y ?Z))"
+    then have "\<exists> x. Elem x ?Z \<and> (\<forall> y. Elem y x \<longrightarrow> Not(Elem y ?Z))"
       by (simp add: Regularity)
-    then obtain x where x:"Elem x ?Z & (! y. Elem y x \<longrightarrow> Not(Elem y ?Z))" ..
+    then obtain x where x:"Elem x ?Z \<and> (\<forall> y. Elem y x \<longrightarrow> Not(Elem y ?Z))" ..
     then have "x = a \<or> x = b" by (simp add: Upair)
     moreover have "x = a \<longrightarrow> Not (Elem b ?Z)"
       by (auto simp add: x ba)
@@ -501,7 +793,7 @@ primrec NatInterval :: "nat \<Rightarrow> nat \<Rightarrow> ZF" where
   "NatInterval n 0 = Singleton (nat2Nat n)"
 | "NatInterval n (Suc m) = union (NatInterval n m) (Singleton (nat2Nat (n+m+1)))"
 
-lemma n_Elem_NatInterval[rule_format]: "! q. q <= m \<longrightarrow> Elem (nat2Nat (n+q)) (NatInterval n m)"
+lemma n_Elem_NatInterval[rule_format]: "\<forall> q. q <= m \<longrightarrow> Elem (nat2Nat (n+q)) (NatInterval n m)"
   apply (induct m)
   apply (auto simp add: Singleton union)
   apply (case_tac "q <= m")
@@ -514,13 +806,13 @@ lemma NatInterval_not_Empty: "NatInterval n m \<noteq> Empty"
   by (auto intro:   n_Elem_NatInterval[where q = 0, simplified] simp add: Empty Ext)
 
 lemma increasing_nat2Nat[rule_format]: "0 < n \<longrightarrow> Elem (nat2Nat (n - 1)) (nat2Nat n)"
-  apply (case_tac "? m. n = Suc m")
+  apply (case_tac "\<exists> m. n = Suc m")
   apply (auto simp add: SucNat_def union Singleton)
   apply (drule spec[where x="n - 1"])
   apply arith
   done
 
-lemma represent_NatInterval[rule_format]: "Elem x (NatInterval n m) \<longrightarrow> (? u. n \<le> u & u \<le> n+m & nat2Nat u = x)"
+lemma represent_NatInterval[rule_format]: "Elem x (NatInterval n m) \<longrightarrow> (\<exists> u. n \<le> u \<and> u \<le> n+m \<and> nat2Nat u = x)"
   apply (induct m)
   apply (auto simp add: Singleton union)
   apply (rule_tac x="Suc (n+m)" in exI)
@@ -535,12 +827,12 @@ proof -
     assume mg0: "0 < m"
     let ?Z = "NatInterval n m"
     have "?Z \<noteq> Empty" by (simp add: NatInterval_not_Empty)
-    then have "? x. (Elem x ?Z) & (! y. Elem y x \<longrightarrow> Not (Elem y ?Z))" 
+    then have "\<exists> x. (Elem x ?Z) \<and> (\<forall> y. Elem y x \<longrightarrow> Not (Elem y ?Z))" 
       by (auto simp add: Regularity)
-    then obtain x where x:"Elem x ?Z & (! y. Elem y x \<longrightarrow> Not (Elem y ?Z))" ..
-    then have "? u. n \<le> u & u \<le> n+m & nat2Nat u = x" 
+    then obtain x where x:"Elem x ?Z \<and> (\<forall> y. Elem y x \<longrightarrow> Not (Elem y ?Z))" ..
+    then have "\<exists> u. n \<le> u \<and> u \<le> n+m \<and> nat2Nat u = x" 
       by (simp add: represent_NatInterval)
-    then obtain u where u: "n \<le> u & u \<le> n+m & nat2Nat u = x" ..
+    then obtain u where u: "n \<le> u \<and> u \<le> n+m \<and> nat2Nat u = x" ..
     have "n < u \<longrightarrow> False"
     proof 
       assume n_less_u: "n < u"
@@ -590,14 +882,14 @@ proof -
     apply (case_tac "x = y")
     apply auto
     apply (case_tac "x < y")
-    apply (case_tac "? m. y = x + m & 0 < m")
+    apply (case_tac "\<exists> m. y = x + m \<and> 0 < m")
     apply (auto intro: lemma_nat2Nat)
     apply (case_tac "y < x")
-    apply (case_tac "? m. x = y + m & 0 < m")
+    apply (case_tac "\<exists> m. x = y + m \<and> 0 < m")
     apply simp
     apply simp
     using th apply blast
-    apply (case_tac "? m. x = y + m")
+    apply (case_tac "\<exists> m. x = y + m")
     apply (auto intro: lemma_nat2Nat)
     apply (drule sym)
     using lemma_nat2Nat apply blast
@@ -625,7 +917,7 @@ lemma Nat2nat_SucNat: "Elem N Nat \<Longrightarrow> Nat2nat (SucNat N) = Suc (Na
 (*lemma Elem_induct: "(\<And>x. \<forall>y. Elem y x \<longrightarrow> P y \<Longrightarrow> P x) \<Longrightarrow> P a"
   by (erule wf_induct[OF wf_is_Elem_of, simplified is_Elem_of_def, simplified])*)
 
-lemma Elem_Opair_exists: "? z. Elem x z & Elem y z & Elem z (Opair x y)"
+lemma Elem_Opair_exists: "\<exists> z. Elem x z \<and> Elem y z \<and> Elem z (Opair x y)"
   apply (rule exI[where x="Upair x y"])
   by (simp add: Upair Opair_def)
 
@@ -673,7 +965,7 @@ proof
 qed
 
 definition implode :: "ZF set \<Rightarrow> ZF" where
-  "implode == inv explode"
+  "implode \<equiv> inv explode"
 
 lemma inj_explode: "inj explode"
   by (auto simp add: inj_on_def explode_def Ext)
@@ -682,13 +974,13 @@ lemma implode_explode[simp]: "implode (explode x) = x"
   by (simp add: implode_def inj_explode)
 
 definition regular :: "(ZF * ZF) set \<Rightarrow> bool" where
-  "regular R == ! A. A \<noteq> Empty \<longrightarrow> (? x. Elem x A & (! y. (y, x) \<in> R \<longrightarrow> Not (Elem y A)))"
+  "regular R \<longleftrightarrow> (\<forall> A. A \<noteq> Empty \<longrightarrow> (\<exists> x. Elem x A \<and> (\<forall> y. (y, x) \<in> R \<longrightarrow> Not (Elem y A))))"
 
 definition set_like :: "(ZF * ZF) set \<Rightarrow> bool" where
-  "set_like R == ! y. Ext R y \<in> range explode"
+  "set_like R \<longleftrightarrow> (\<forall> y. Ext R y \<in> range explode)"
 
 definition wfzf :: "(ZF * ZF) set \<Rightarrow> bool" where
-  "wfzf R == regular R & set_like R"
+  "wfzf R \<longleftrightarrow> regular R \<and> set_like R"
 
 lemma regular_Elem: "regular is_Elem_of"
   by (simp add: regular_def is_Elem_of_def Regularity)
@@ -700,16 +992,16 @@ lemma wfzf_is_Elem_of: "wfzf is_Elem_of"
   by (auto simp add: wfzf_def regular_Elem set_like_Elem)
 
 definition SeqSum :: "(nat \<Rightarrow> ZF) \<Rightarrow> ZF" where
-  "SeqSum f == Sum (Repl Nat (f o Nat2nat))"
+  "SeqSum f \<equiv> Sum (Replace Nat (f o Nat2nat))"
 
-lemma SeqSum: "Elem x (SeqSum f) = (? n. Elem x (f n))"
-  apply (auto simp add: SeqSum_def Sum Repl)
+lemma SeqSum: "Elem x (SeqSum f) = (\<exists> n. Elem x (f n))"
+  apply (auto simp add: SeqSum_def Sum Replace)
   apply (rule_tac x = "f n" in exI)
   apply auto
   done
 
 definition Ext_ZF :: "(ZF * ZF) set \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "Ext_ZF R s == implode (Ext R s)"
+  "Ext_ZF R s \<equiv> implode (Ext R s)"
 
 lemma Elem_implode: "A \<in> range explode \<Longrightarrow> Elem x (implode A) = (x \<in> A)"
   apply (auto)
@@ -725,14 +1017,14 @@ lemma Elem_Ext_ZF: "set_like R \<Longrightarrow> Elem x (Ext_ZF R s) = ((x,s) \<
 
 primrec Ext_ZF_n :: "(ZF * ZF) set \<Rightarrow> ZF \<Rightarrow> nat \<Rightarrow> ZF" where
   "Ext_ZF_n R s 0 = Ext_ZF R s"
-| "Ext_ZF_n R s (Suc n) = Sum (Repl (Ext_ZF_n R s n) (Ext_ZF R))"
+| "Ext_ZF_n R s (Suc n) = Sum (Replace (Ext_ZF_n R s n) (Ext_ZF R))"
 
 definition Ext_ZF_hull :: "(ZF * ZF) set \<Rightarrow> ZF \<Rightarrow> ZF" where
-  "Ext_ZF_hull R s == SeqSum (Ext_ZF_n R s)"
+  "Ext_ZF_hull R s \<equiv> SeqSum (Ext_ZF_n R s)"
 
 lemma Elem_Ext_ZF_hull:
   assumes set_like_R: "set_like R" 
-  shows "Elem x (Ext_ZF_hull R S) = (? n. Elem x (Ext_ZF_n R S n))"
+  shows "Elem x (Ext_ZF_hull R S) = (\<exists> n. Elem x (Ext_ZF_n R S n))"
   by (simp add: Ext_ZF_hull_def SeqSum)
   
 lemma Elem_Elem_Ext_ZF_hull:
@@ -742,10 +1034,10 @@ lemma Elem_Elem_Ext_ZF_hull:
   shows "Elem y (Ext_ZF_hull R S)"
 proof -
   from Elem_Ext_ZF_hull[OF set_like_R] x_hull 
-  have "? n. Elem x (Ext_ZF_n R S n)" by auto
+  have "\<exists> n. Elem x (Ext_ZF_n R S n)" by auto
   then obtain n where n:"Elem x (Ext_ZF_n R S n)" ..
   with y_R_x have "Elem y (Ext_ZF_n R S (Suc n))"
-    apply (auto simp add: Repl Sum)
+    apply (auto simp add: Replace Sum)
     apply (rule_tac x="Ext_ZF R x" in exI) 
     apply (auto simp add: Elem_Ext_ZF[OF set_like_R])
     done
@@ -805,9 +1097,9 @@ proof (subst wf_def, rule allI)
         done
       with x show "False" by auto
     qed
-    then have "! x. P x" by auto
+    then have "\<forall> x. P x" by auto
   }
-  then show "(\<forall>x. (\<forall>y. (y, x) \<in> R \<longrightarrow> P y) \<longrightarrow> P x) \<longrightarrow> (! x. P x)" by blast
+  then show "(\<forall>x. (\<forall>y. (y, x) \<in> R \<longrightarrow> P y) \<longrightarrow> P x) \<longrightarrow> (\<forall> x. P x)" by blast
 qed
 
 lemma wf_is_Elem_of: "wf is_Elem_of"
@@ -821,7 +1113,7 @@ lemma in_Ext_RTrans_implies_Elem_Ext_ZF_hull:
   apply (simp add: Elem_Ext_ZF)
   apply auto
   apply (rule_tac x="Suc n" in exI)
-  apply (simp add: Sum Repl)
+  apply (simp add: Sum Replace)
   apply (rule_tac x="Ext_ZF R z" in exI)
   apply (auto simp add: Elem_Ext_ZF)
   done
@@ -837,7 +1129,7 @@ lemma implodeable_Ext_trancl: "set_like R \<Longrightarrow> set_like (R^+)"
 lemma Elem_Ext_ZF_hull_implies_in_Ext_RTrans[rule_format]:
   "set_like R \<Longrightarrow> ! x. Elem x (Ext_ZF_n R s n) \<longrightarrow> x \<in> (Ext (R^+) s)"
   apply (induct_tac n)
-  apply (auto simp add: Elem_Ext_ZF Ext_def Sum Repl)
+  apply (auto simp add: Elem_Ext_ZF Ext_def Sum Replace)
   done
 
 lemma "set_like R \<Longrightarrow> Ext_ZF (R^+) s = Ext_ZF_hull R s"
@@ -856,7 +1148,7 @@ proof (simp add: regular_def, rule allI)
   show "A \<noteq> Empty \<longrightarrow> (\<exists>x. Elem x A \<and> (\<forall>y. (y, x) \<in> R \<longrightarrow> \<not> Elem y A))"
   proof
     assume A: "A \<noteq> Empty"
-    then have "? x. x \<in> explode A" 
+    then have "\<exists> x. x \<in> explode A" 
       by (auto simp add: explode_def Ext Empty)
     then obtain x where x:"x \<in> explode A" ..   
     from iffD1[OF wf_eq_minimal wf, rule_format, where Q="explode A", OF x]
@@ -884,7 +1176,7 @@ lemma set_like_subset: "set_like R \<Longrightarrow> S \<subseteq> R \<Longright
   apply (erule_tac x=y in allE)
   apply (drule_tac y=y in Ext_subset_mono)
   apply (auto simp add: image_def)
-  apply (rule_tac x="Sep x (% z. z \<in> (Ext S y))" in exI) 
+  apply (rule_tac x="Sep x (\<lambda> z. z \<in> (Ext S y))" in exI) 
   apply (auto simp add: explode_def Sep)
   done
 
