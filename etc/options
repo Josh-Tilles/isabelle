@@ -1,0 +1,138 @@
+(* :mode=isabelle-options: *)
+
+section "Document Preparation"
+
+option browser_info : bool = false
+  -- "generate theory browser information"
+
+option document : string = ""
+  -- "build document in given format: pdf, dvi, false"
+option document_output : string = ""
+  -- "document output directory (default within $ISABELLE_BROWSER_INFO tree)"
+option document_variants : string = "document"
+  -- "option alternative document variants (separated by colons)"
+option document_graph : bool = false
+  -- "generate session graph image for document"
+
+option thy_output_display : bool = false
+  -- "indicate output as multi-line display-style material"
+option thy_output_break : bool = false
+  -- "control line breaks in non-display material"
+option thy_output_quotes : bool = false
+  -- "indicate if the output should be enclosed in double quotes"
+option thy_output_indent : int = 0
+  -- "indentation for pretty printing of display material"
+option thy_output_source : bool = false
+  -- "print original source text rather than internal representation"
+option thy_output_modes : string = ""
+  -- "additional print modes for document output (separated by commas)"
+
+
+section "Prover Output"
+
+option show_types : bool = false
+  -- "show type constraints when printing terms"
+option show_sorts : bool = false
+  -- "show sort constraints when printing types"
+option show_brackets : bool = false
+  -- "show extra brackets when printing terms/types"
+option show_question_marks : bool = true
+  -- "show leading question mark of schematic variables"
+
+option show_consts : bool = false
+  -- "show constants with types when printing proof state"
+option show_main_goal : bool = false
+  -- "show main goal when printing proof state"
+option goals_limit : int = 10
+  -- "maximum number of subgoals to be printed"
+
+option names_long : bool = false
+  -- "show fully qualified names"
+option names_short : bool = false
+  -- "show base names only"
+option names_unique : bool = true
+  -- "show partially qualified names, as required for unique name resolution"
+
+option eta_contract : bool = true
+  -- "print terms in eta-contracted form"
+
+option pretty_margin : int = 76
+  -- "right margin / page width of pretty printer in Isabelle/ML"
+
+option print_mode : string = ""
+  -- "additional print modes for prover output (separated by commas)"
+
+
+section "Parallel Checking"
+
+public option threads : int = 0
+  -- "maximum number of worker threads for prover process (0 = hardware max.)"
+public option threads_trace : int = 0
+  -- "level of tracing information for multithreading"
+public option parallel_proofs : int = 2
+  -- "level of parallel proof checking: 0, 1, 2"
+option parallel_subproofs_threshold : real = 0.01
+  -- "lower bound of timing estimate for forked nested proofs (seconds)"
+
+
+section "Detail of Proof Checking"
+
+option quick_and_dirty : bool = false
+  -- "if true then some tools will OMIT some proofs"
+option skip_proofs : bool = false
+  -- "skip over proofs (implicit 'sorry')"
+
+
+section "Global Session Parameters"
+
+option condition : string = ""
+  -- "required environment variables for subsequent theories (separated by commas)"
+
+option timing : bool = false
+  -- "global timing of toplevel command execution and theory processing"
+
+option timeout : real = 0
+  -- "timeout for session build job (seconds > 0)"
+
+option process_output_limit : int = 100
+  -- "build process output limit in million characters (0 = unlimited)"
+
+
+section "Editor Reactivity"
+
+public option editor_load_delay : real = 0.5
+  -- "delay for file load operations (new buffers etc.)"
+
+public option editor_input_delay : real = 0.3
+  -- "delay for user input (text edits, cursor movement etc.)"
+
+public option editor_output_delay : real = 0.1
+  -- "delay for prover output (markup, common messages etc.)"
+
+public option editor_update_delay : real = 0.5
+  -- "delay for physical GUI updates"
+
+public option editor_reparse_limit : int = 10000
+  -- "maximum amount of reparsed text outside perspective"
+
+public option editor_tracing_messages : int = 1000
+  -- "initial number of tracing messages for each command transaction"
+
+public option editor_chart_delay : real = 3.0
+  -- "delay for chart repainting"
+
+public option editor_continuous_checking : bool = true
+  -- "continuous checking of proof document (visible and required parts)"
+
+option editor_execution_delay : real = 0.02
+  -- "delay for start of execution process after document update (seconds)"
+
+
+section "Miscellaneous Tools"
+
+public option find_theorems_limit : int = 40
+  -- "limit of displayed results"
+
+public option find_theorems_tac_limit : int = 5
+  -- "limit of tactic search for 'solves' criterion"
+

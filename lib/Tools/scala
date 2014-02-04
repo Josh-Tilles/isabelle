@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+#
+# Author: Makarius
+#
+# DESCRIPTION: invoke Scala within the Isabelle environment
+
+isabelle_admin_build jars || exit $?
+
+isabelle_scala scala -Dfile.encoding=UTF-8 \
+  -classpath "$(jvmpath "$ISABELLE_CLASSPATH")" "$@"
+

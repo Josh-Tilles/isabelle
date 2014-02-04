@@ -1,0 +1,256 @@
+# -*- shell-script -*- :mode=shellscript:
+#
+# Author: Markus Wenzel, TU Muenchen
+#
+# getsettings - bash source script to augment current env.
+
+if [ -z "$ISABELLE_SETTINGS_PRESENT" ]
+then
+
+set -o allexport
+
+ISABELLE_SETTINGS_PRESENT=true
+
+#GNU tar (notably on Mac OS X)
+if [ -x /usr/bin/gnutar ]; then
+  function tar() { /usr/bin/gnutar "$@"; }
+fi
+
+#Cygwin vs. POSIX
+if [ "$OSTYPE" = cygwin ]
+then
+  unset INI_DIR
+
+  if [ -z "$USER_HOME" ]; then
+    USER_HOME="$(cygpath -u "$HOMEDRIVE\\$HOMEPATH")"
+  fi
+
+  function jvmpath() { cygpath -i -C UTF8 -w -p "$@"; }
+  CYGWIN_ROOT="$(jvmpath "/")"
+
+  ISABELLE_CLASSPATH="$(cygpath -i -u -p "$CLASSPATH")"
+  unset CLASSPATH
+else
+  if [ -z "$USER_HOME" ]; then
+    USER_HOME="$HOME"
+  fi
+
+  function jvmpath() { echo "$@"; }
+
+  ISABELLE_CLASSPATH="$CLASSPATH"
+  unset CLASSPATH
+fi
+
+export ISABELLE_HOME
+
+#key executables
+ISABELLE_PROCESS="$ISABELLE_HOME/bin/isabelle-process"
+ISABELLE_TOOL="$ISABELLE_HOME/bin/isabelle"
+
+function isabelle ()
+{
+  "$ISABELLE_TOOL" "$@"
+}
+
+#platform
+source "$ISABELLE_HOME/lib/scripts/isabelle-platform"
+if [ -z "$ISABELLE_PLATFORM" ]; then
+  echo 1>&2 "Failed to determine hardware and operating system type!"
+  exit 2
+fi
+
+#Isabelle distribution identifier -- filled in automatically!
+ISABELLE_ID="4dd08fe126ba"
+[ -z "$ISABELLE_IDENTIFIER" ] && ISABELLE_IDENTIFIER="Isabelle2013-2"
+
+#sometimes users put strange things in here ...
+unset ENV
+unset BASH_ENV
+
+#shared library convenience
+function librarypath ()
+{
+  for X in "$@"
+  do
+    case "$ISABELLE_PLATFORM" in
+      *-darwin)
+        if [ -z "$DYLD_LIBRARY_PATH" ]; then
+          DYLD_LIBRARY_PATH="$X"
+        else
+          DYLD_LIBRARY_PATH="$X:$DYLD_LIBRARY_PATH"
+        fi
+        export DYLD_LIBRARY_PATH
+        ;;
+      *)
+        if [ -z "$LD_LIBRARY_PATH" ]; then
+          LD_LIBRARY_PATH="$X"
+        else
+          LD_LIBRARY_PATH="$X:$LD_LIBRARY_PATH"
+        fi
+        export LD_LIBRARY_PATH
+        ;;
+    esac
+  done
+}
+
+#robust invocation via ISABELLE_JDK_HOME
+function isabelle_jdk ()
+{
+  if [ -z "$ISABELLE_JDK_HOME" ]; then
+    echo "Unknown ISABELLE_JDK_HOME -- Java tools unavailable" >&2
+    return 127
+  else
+    local PRG="$1"; shift
+    "$ISABELLE_JDK_HOME/bin/$PRG" "$@"
+  fi
+}
+
+#robust invocation via SCALA_HOME
+function isabelle_scala ()
+{
+  if [ -z "$ISABELLE_JDK_HOME" ]; then
+    echo "Unknown ISABELLE_JDK_HOME -- Java tools unavailable" >&2
+    return 127
+  elif [ -z "$SCALA_HOME" ]; then
+    echo "Unknown SCALA_HOME -- Scala unavailable" >&2
+    return 127
+  else
+    local PRG="$1"; shift
+    "$SCALA_HOME/bin/$PRG" "$@"
+  fi
+}
+
+#administrative build
+if [ -e "$ISABELLE_HOME/Admin/build" ]; then
+  function isabelle_admin_build ()
+  {
+    "$ISABELLE_HOME/Admin/build" "$@"
+  }
+else
+  function isabelle_admin_build () { return 0; }
+fi
+
+#classpath
+function classpath ()
+{
+  for X in "$@"
+  do
+    if [ -z "$ISABELLE_CLASSPATH" ]; then
+      ISABELLE_CLASSPATH="$X"
+    else
+      ISABELLE_CLASSPATH="$ISABELLE_CLASSPATH:$X"
+    fi
+  done
+  export ISABELLE_CLASSPATH
+}
+
+#arrays
+function splitarray ()
+{
+  SPLITARRAY=()
+  local IFS="$1"; shift
+  for X in $*
+  do
+    SPLITARRAY["${#SPLITARRAY[@]}"]="$X"
+  done
+}
+
+
+# components
+
+ISABELLE_COMPONENTS=""
+ISABELLE_COMPONENTS_MISSING=""
+
+#init component tree
+function init_component ()
+{
+  local COMPONENT="$1"
+  case "$COMPONENT" in
+    /*) ;;
+    *)
+      echo >&2 "Absolute component path required: \"$COMPONENT\""
+      exit 2
+      ;;
+  esac
+
+  if [ -d "$COMPONENT" ]; then
+    if [ -z "$ISABELLE_COMPONENTS" ]; then
+      ISABELLE_COMPONENTS="$COMPONENT"
+    else
+      ISABELLE_COMPONENTS="$ISABELLE_COMPONENTS:$COMPONENT"
+    fi
+  else
+    echo >&2 "### Missing Isabelle component: \"$COMPONENT\""
+    if [ -z "$ISABELLE_COMPONENTS_MISSING" ]; then
+      ISABELLE_COMPONENTS_MISSING="$COMPONENT"
+    else
+      ISABELLE_COMPONENTS_MISSING="$ISABELLE_COMPONENTS_MISSING:$COMPONENT"
+    fi
+  fi
+
+  if [ -f "$COMPONENT/etc/settings" ]; then
+    source "$COMPONENT/etc/settings"
+    local RC="$?"
+    if [ "$RC" -ne 0 ]; then
+      echo >&2 "Return code $RC from bash script: \"$COMPONENT/etc/settings\""
+      exit 2
+    fi
+  fi
+  if [ -f "$COMPONENT/etc/components" ]; then
+    init_components "$COMPONENT" "$COMPONENT/etc/components"
+  fi
+}
+
+#init component forest
+function init_components ()
+{
+  local BASE="$1"
+  local CATALOG="$2"
+
+  if [ ! -f "$CATALOG" ]; then
+    echo >&2 "Bad component catalog file: \"$CATALOG\""
+    exit 2
+  fi
+  {
+    while { unset REPLY; read -r; test "$?" = 0 -o -n "$REPLY"; }
+    do
+      case "$REPLY" in
+        \#* | "") ;;
+        /*) init_component "$REPLY" ;;
+        *) init_component "$BASE/$REPLY" ;;
+      esac
+    done
+  } < "$CATALOG"
+}
+
+#main components
+init_component "$ISABELLE_HOME"
+[ -d "$ISABELLE_HOME/Admin" ] && init_component "$ISABELLE_HOME/Admin"
+[ -d "$ISABELLE_HOME_USER" ] && init_component "$ISABELLE_HOME_USER"
+
+
+#ML system identifier
+if [ -z "$ML_PLATFORM" ]; then
+  ML_IDENTIFIER="$ML_SYSTEM"
+else
+  ML_IDENTIFIER="${ML_SYSTEM}_${ML_PLATFORM}"
+fi
+
+ISABELLE_OUTPUT="$ISABELLE_OUTPUT/$ML_IDENTIFIER"
+
+#enforce JAVA_HOME
+export JAVA_HOME="$ISABELLE_JDK_HOME"
+
+#build condition etc.
+case "$ML_SYSTEM" in
+  polyml*)
+    ISABELLE_POLYML="true"
+    ;;
+  *)
+    ISABELLE_POLYML=""
+    ;;
+esac
+
+set +o allexport
+
+fi

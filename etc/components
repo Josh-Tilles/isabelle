@@ -1,0 +1,26 @@
+src/Tools/Code
+src/Tools/jEdit
+src/Tools/Graphview
+src/Tools/WWW_Find
+src/HOL/Mirabelle
+src/HOL/Mutabelle
+src/HOL/Library/Sum_of_Squares
+src/HOL/Tools
+src/HOL/Tools/ATP
+src/HOL/Tools/Sledgehammer/MaSh
+src/HOL/Tools/SMT
+src/HOL/TPTP
+#bundled components
+contrib/cvc3-2.4.1
+contrib/e-1.8
+contrib/exec_process-1.0.3
+contrib/Haskabelle-2013
+contrib/jdk
+contrib/jfreechart-1.0.14-1
+contrib/kodkodi-1.5.2
+contrib/polyml-5.5.1-1
+contrib/scala-2.10.3
+contrib/spass-3.8ds
+contrib/z3-3.2
+contrib/xz-java-1.2-1
+contrib/ProofGeneral-4.2

@@ -1,0 +1,142 @@
+# -*- shell-script -*- :mode=shellscript:
+#
+# Isabelle settings -- distribution defaults.
+#
+# Important notes:
+#   * See the "system" manual for explanations on Isabelle settings
+#   * DO NOT EDIT the repository copy of this file!
+#   * DO NOT COPY this file into your ~/.isabelle directory!
+
+###
+### Isabelle/Scala
+###
+
+ISABELLE_SCALA_BUILD_OPTIONS="-nowarn -target:jvm-1.5 -Xmax-classfile-name 130"
+
+ISABELLE_JAVA_SYSTEM_OPTIONS="-Dfile.encoding=UTF-8 -server"
+
+classpath "$ISABELLE_HOME/lib/classes/Pure.jar"
+classpath "$ISABELLE_HOME/lib/classes/scala-library.jar"
+classpath "$ISABELLE_HOME/lib/classes/scala-swing.jar"
+classpath "$ISABELLE_HOME/lib/classes/scala-actors.jar"
+classpath "$ISABELLE_HOME/lib/classes/scala-compiler.jar"
+classpath "$ISABELLE_HOME/lib/classes/scala-reflect.jar"
+
+#paranoia setting -- avoid problems of Java/Swing versus XIM/IBus etc.
+unset XMODIFIERS
+
+
+###
+### Interactive sessions (cf. isabelle tty)
+###
+
+ISABELLE_LINE_EDITOR=""
+[ -z "$ISABELLE_LINE_EDITOR" ] && ISABELLE_LINE_EDITOR="$(type -p rlwrap)"
+[ -z "$ISABELLE_LINE_EDITOR" ] && ISABELLE_LINE_EDITOR="$(type -p ledit)"
+
+
+###
+### Batch sessions (cf. isabelle build)
+###
+
+ISABELLE_BUILD_OPTIONS=""
+ISABELLE_BUILD_JAVA_OPTIONS="-Xmx1024m -Xss1m"
+
+
+###
+### Document preparation (cf. isabelle latex/document)
+###
+
+ISABELLE_LATEX="latex"
+ISABELLE_PDFLATEX="pdflatex"
+ISABELLE_BIBTEX="bibtex"
+ISABELLE_MAKEINDEX="makeindex"
+ISABELLE_EPSTOPDF="epstopdf"
+
+
+###
+### Misc path settings
+###
+
+ISABELLE_COMPONENT_REPOSITORY="http://isabelle.in.tum.de/components"
+
+# The place for user configuration, heap files, etc.
+if [ -z "$ISABELLE_IDENTIFIER" ]; then
+  ISABELLE_HOME_USER="$USER_HOME/.isabelle"
+else
+  ISABELLE_HOME_USER="$USER_HOME/.isabelle/$ISABELLE_IDENTIFIER"
+fi
+
+# Where to look for isabelle tools (multiple dirs separated by ':').
+ISABELLE_TOOLS="$ISABELLE_HOME/lib/Tools"
+
+# Location for temporary files (should be on a local file system).
+ISABELLE_TMP_PREFIX="/tmp/isabelle-$USER"
+
+# Heap input locations. ML system identifier is included in lookup.
+ISABELLE_PATH="$ISABELLE_HOME_USER/heaps:$ISABELLE_HOME/heaps"
+
+# Heap output location. ML system identifier is appended automatically later on.
+ISABELLE_OUTPUT="$ISABELLE_HOME_USER/heaps"
+ISABELLE_BROWSER_INFO="$ISABELLE_HOME_USER/browser_info"
+
+# Site settings check -- just to make it a little bit harder to copy this file verbatim!
+[ -n "$ISABELLE_SITE_SETTINGS_PRESENT" ] && \
+  { echo >&2 "### Isabelle site settings already present!  Maybe copied etc/settings in full?"; }
+ISABELLE_SITE_SETTINGS_PRESENT=true
+
+
+###
+### Default logic
+###
+
+ISABELLE_LOGIC=HOL
+
+
+###
+### Docs
+###
+
+# Where to look for docs (multiple dirs separated by ':').
+ISABELLE_DOCS="$ISABELLE_HOME/doc"
+
+# PDF file viewer (command-line to eval)
+case "$ISABELLE_PLATFORM_FAMILY" in
+  linux)
+    PDF_VIEWER="xdg-open"
+    ;;
+  macos)
+    PDF_VIEWER="open -W -n -F"
+    ;;
+  windows)
+    PDF_VIEWER="cygstart"
+    ;;
+esac
+
+# DVI file viewer (command-line to eval)
+DVI_VIEWER=xdvi
+
+
+###
+### Rendering information
+###
+
+ISABELLE_FONTS="$ISABELLE_HOME/lib/fonts/IsabelleText.ttf:$ISABELLE_HOME/lib/fonts/IsabelleTextBold.ttf"
+ISABELLE_SYMBOLS="$ISABELLE_HOME/etc/symbols:$ISABELLE_HOME_USER/etc/symbols"
+
+
+###
+### Misc old-style settings
+###
+
+# Standard ML of New Jersey (slow!)
+#ML_SYSTEM=smlnj-110
+#ML_HOME="/usr/local/smlnj/bin"
+#ML_OPTIONS="@SMLdebug=/dev/null @SMLalloc=1024"
+#ML_PLATFORM=$(eval $("$ML_HOME/.arch-n-opsys" 2>/dev/null); echo "$HEAP_SUFFIX")
+#SMLNJ_CYGWIN_RUNTIME=1
+
+# Misc programming languages
+#ISABELLE_GHC="/usr/bin/ghc"
+#ISABELLE_OCAML="/usr/bin/ocaml"
+#ISABELLE_SWIPL="/usr/bin/swipl"

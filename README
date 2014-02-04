@@ -1,0 +1,80 @@
+                       The Isabelle System Distribution
+
+Version information
+
+   This is Isabelle2013-2: December 2013.
+
+   See the NEWS file in the distribution for details on user-relevant
+   changes.
+
+Installation
+
+   Isabelle works on the three main platform families: Linux, Windows,
+   and Mac OS X.  The application bundles from the Isabelle web page
+   include sources, documentation, and add-on tools for all supported
+   platforms.
+
+   Some technical background information may be found in the Isabelle
+   System Manual (directory doc).
+
+User interfaces
+
+   Isabelle/jEdit is an advanced Prover IDE based on jEdit and
+   Isabelle/Scala.  It provides a metaphor of continuous proof
+   checking of a versioned collection of theory sources, with
+   instantaneous feedback in real-time and rich semantic markup
+   associated with the formal text.
+
+   The classic Isabelle user interface is Proof General by David
+   Aspinall and others.  It is a generic Emacs interface for proof
+   assistants, including Isabelle.  Its main feature is script
+   management, with stepwise proof scripting and partial locking of
+   the editor buffer.
+
+Other sources of information
+
+  The Isabelle Page
+
+   The Isabelle home page may be accessed from Cambridge, Munich, and
+   Sydney:
+
+     * http://www.cl.cam.ac.uk/research/hvg/Isabelle/
+     * http://isabelle.in.tum.de
+     * http://mirror.cse.unsw.edu.au/pub/isabelle/index.html
+
+  Mailing list
+
+   The electronic mailing list isabelle-users@cl.cam.ac.uk provides a
+   forum for Isabelle users to discuss problems and exchange
+   information.  To join, send a message to
+   isabelle-users-request@cl.cam.ac.uk.
+
+  Personal mail
+
+   Lawrence C Paulson
+   Computer Laboratory
+   University of Cambridge
+   JJ Thomson Avenue
+   Cambridge CB3 0FD
+   England
+   E-mail: lcp@cl.cam.ac.uk
+   Phone: +44-223-763500
+   Fax: +44-223-334748
+
+   or
+
+   Tobias Nipkow
+   Institut fuer Informatik
+   Technische Universitaet Muenchen
+   Boltzmannstr. 3
+   D-85748 Garching
+   Germany
+   E-mail: nipkow@in.tum.de
+   Phone: +49-89-289-17302
+   Fax: +49-89-289-17307
+     _________________________________________________________________
+
+   Please report any problems you encounter. While we shall try to be
+   helpful, we can accept no responsibility for the deficiencies of
+   Isabelle and their consequences.
+     _________________________________________________________________

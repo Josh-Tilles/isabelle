@@ -1,0 +1,323 @@
+From c3066acfca0260c0488e6caee47e83cfe0c3e101 Mon Sep 17 00:00:00 2001
+From: Josh Tilles <MerelyAPseudonym@gmail.com>
+Date: Tue, 10 Dec 2013 09:10:01 -0500
+Subject: [PATCH] Symbolize FuncSet.thy
+
+---
+ HOL/Library/FuncSet.thy | 110 ++++++++++++++++++++++++------------------------
+ 1 file changed, 55 insertions(+), 55 deletions(-)
+
+diff --git a/HOL/Library/FuncSet.thy b/HOL/Library/FuncSet.thy
+index c27ee78..ad47f5e 100644
+--- a/HOL/Library/FuncSet.thy
++++ b/HOL/Library/FuncSet.thy
+@@ -5,23 +5,23 @@
+ header {* Pi and Function Sets *}
+ 
+ theory FuncSet
+-imports Hilbert_Choice Main
++imports Main
+ begin
+ 
+ definition
+-  Pi :: "['a set, 'a => 'b set] => ('a => 'b) set" where
+-  "Pi A B = {f. \<forall>x. x \<in> A --> f x \<in> B x}"
++  Pi :: "['a set, 'a \<Rightarrow> 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set" where
++  "Pi A B = {f. \<forall>x. x \<in> A \<longrightarrow> f x \<in> B x}"
+ 
+ definition
+-  extensional :: "'a set => ('a => 'b) set" where
+-  "extensional A = {f. \<forall>x. x~:A --> f x = undefined}"
++  extensional :: "'a set \<Rightarrow> ('a \<Rightarrow> 'b) set" where
++  "extensional A = {f. \<forall>x. x\<notin>A \<longrightarrow> f x = undefined}"
+ 
+ definition
+-  "restrict" :: "['a => 'b, 'a set] => ('a => 'b)" where
+-  "restrict f A = (%x. if x \<in> A then f x else undefined)"
++  "restrict" :: "['a \<Rightarrow> 'b, 'a set] \<Rightarrow> ('a \<Rightarrow> 'b)" where
++  "restrict f A = (\<lambda>x. if x \<in> A then f x else undefined)"
+ 
+ abbreviation
+-  funcset :: "['a set, 'b set] => ('a => 'b) set"
++  funcset :: "['a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"
+     (infixr "->" 60) where
+   "A -> B == Pi A (%_. B)"
+ 
+@@ -29,45 +29,45 @@ notation (xsymbols)
+   funcset  (infixr "\<rightarrow>" 60)
+ 
+ syntax
+-  "_Pi"  :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3PI _:_./ _)" 10)
+-  "_lam" :: "[pttrn, 'a set, 'a => 'b] => ('a=>'b)"  ("(3%_:_./ _)" [0,0,3] 3)
++  "_Pi"  :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3PI _:_./ _)" 10)
++  "_lam" :: "[pttrn, 'a set, 'a \<Rightarrow> 'b] \<Rightarrow> ('a=>'b)"  ("(3%_:_./ _)" [0,0,3] 3)
+ 
+ syntax (xsymbols)
+-  "_Pi" :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3\<Pi> _\<in>_./ _)"   10)
+-  "_lam" :: "[pttrn, 'a set, 'a => 'b] => ('a=>'b)"  ("(3\<lambda>_\<in>_./ _)" [0,0,3] 3)
++  "_Pi" :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3\<Pi> _\<in>_./ _)"   10)
++  "_lam" :: "[pttrn, 'a set, 'a \<Rightarrow> 'b] \<Rightarrow> ('a=>'b)"  ("(3\<lambda>_\<in>_./ _)" [0,0,3] 3)
+ 
+ syntax (HTML output)
+-  "_Pi" :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3\<Pi> _\<in>_./ _)"   10)
+-  "_lam" :: "[pttrn, 'a set, 'a => 'b] => ('a=>'b)"  ("(3\<lambda>_\<in>_./ _)" [0,0,3] 3)
++  "_Pi" :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3\<Pi> _\<in>_./ _)"   10)
++  "_lam" :: "[pttrn, 'a set, 'a \<Rightarrow> 'b] \<Rightarrow> ('a=>'b)"  ("(3\<lambda>_\<in>_./ _)" [0,0,3] 3)
+ 
+ translations
+   "PI x:A. B" == "CONST Pi A (%x. B)"
+   "%x:A. f" == "CONST restrict (%x. f) A"
+ 
+ definition
+-  "compose" :: "['a set, 'b => 'c, 'a => 'b] => ('a => 'c)" where
++  "compose" :: "['a set, 'b \<Rightarrow> 'c, 'a \<Rightarrow> 'b] \<Rightarrow> ('a \<Rightarrow> 'c)" where
+   "compose A g f = (\<lambda>x\<in>A. g (f x))"
+ 
+ 
+ subsection{*Basic Properties of @{term Pi}*}
+ 
+-lemma Pi_I[intro!]: "(!!x. x \<in> A ==> f x \<in> B x) ==> f \<in> Pi A B"
++lemma Pi_I[intro!]: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B x) \<Longrightarrow> f \<in> Pi A B"
+   by (simp add: Pi_def)
+ 
+-lemma Pi_I'[simp]: "(!!x. x : A --> f x : B x) ==> f : Pi A B"
++lemma Pi_I'[simp]: "(\<And>x. x \<in> A \<longrightarrow> f x \<in> B x) \<Longrightarrow> f \<in> Pi A B"
+ by(simp add:Pi_def)
+ 
+-lemma funcsetI: "(!!x. x \<in> A ==> f x \<in> B) ==> f \<in> A -> B"
++lemma funcsetI: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B) \<Longrightarrow> f \<in> A \<rightarrow> B"
+   by (simp add: Pi_def)
+ 
+-lemma Pi_mem: "[|f: Pi A B; x \<in> A|] ==> f x \<in> B x"
++lemma Pi_mem: "\<lbrakk>f: Pi A B; x \<in> A\<rbrakk> \<Longrightarrow> f x \<in> B x"
+   by (simp add: Pi_def)
+ 
+ lemma Pi_iff: "f \<in> Pi I X \<longleftrightarrow> (\<forall>i\<in>I. f i \<in> X i)"
+   unfolding Pi_def by auto
+ 
+ lemma PiE [elim]:
+-  "f : Pi A B ==> (f x : B x ==> Q) ==> (x ~: A ==> Q) ==> Q"
++  "f : Pi A B \<Longrightarrow> (f x : B x \<Longrightarrow> Q) \<Longrightarrow> (x \<notin> A \<Longrightarrow> Q) \<Longrightarrow> Q"
+ by(auto simp: Pi_def)
+ 
+ lemma Pi_cong:
+@@ -77,10 +77,10 @@ lemma Pi_cong:
+ lemma funcset_id [simp]: "(\<lambda>x. x) \<in> A \<rightarrow> A"
+   by auto
+ 
+-lemma funcset_mem: "[|f \<in> A -> B; x \<in> A|] ==> f x \<in> B"
++lemma funcset_mem: "\<lbrakk>f \<in> A \<rightarrow> B; x \<in> A\<rbrakk> \<Longrightarrow> f x \<in> B"
+   by (simp add: Pi_def)
+ 
+-lemma funcset_image: "f \<in> A\<rightarrow>B ==> f ` A \<subseteq> B"
++lemma funcset_image: "f \<in> A\<rightarrow>B \<Longrightarrow> f ` A \<subseteq> B"
+   by auto
+ 
+ lemma image_subset_iff_funcset: "F ` A \<subseteq> B \<longleftrightarrow> F \<in> A \<rightarrow> B"
+@@ -90,8 +90,8 @@ lemma Pi_eq_empty[simp]: "((PI x: A. B x) = {}) = (\<exists>x\<in>A. B x = {})"
+ apply (simp add: Pi_def, auto)
+ txt{*Converse direction requires Axiom of Choice to exhibit a function
+ picking an element from each non-empty @{term "B x"}*}
+-apply (drule_tac x = "%u. SOME y. y \<in> B u" in spec, auto)
+-apply (cut_tac P= "%y. y \<in> B x" in some_eq_ex, auto)
++apply (drule_tac x = "\<lambda>u. SOME y. y \<in> B u" in spec, auto)
++apply (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
+ done
+ 
+ lemma Pi_empty [simp]: "Pi {} B = UNIV"
+@@ -119,15 +119,15 @@ proof (intro set_eqI iffI)
+   then show "f \<in> (\<Union>n. Pi I (A n))" by auto
+ qed auto
+ 
+-lemma Pi_UNIV [simp]: "A -> UNIV = UNIV"
++lemma Pi_UNIV [simp]: "A \<rightarrow> UNIV = UNIV"
+ by (simp add: Pi_def)
+ 
+ text{*Covariance of Pi-sets in their second argument*}
+-lemma Pi_mono: "(!!x. x \<in> A ==> B x <= C x) ==> Pi A B <= Pi A C"
++lemma Pi_mono: "(\<And>x. x \<in> A \<Longrightarrow> B x <= C x) \<Longrightarrow> Pi A B <= Pi A C"
+ by auto
+ 
+ text{*Contravariance of Pi-sets in their first argument*}
+-lemma Pi_anti_mono: "A' <= A ==> Pi A B <= Pi A' B"
++lemma Pi_anti_mono: "A' <= A \<Longrightarrow> Pi A B <= Pi A' B"
+ by auto
+ 
+ lemma prod_final:
+@@ -166,27 +166,27 @@ lemma Pi_fupd_iff: "i \<in> I \<Longrightarrow> f \<in> Pi I (B(i := A)) \<longl
+ subsection{*Composition With a Restricted Domain: @{term compose}*}
+ 
+ lemma funcset_compose:
+-  "[| f \<in> A -> B; g \<in> B -> C |]==> compose A g f \<in> A -> C"
++  "\<lbrakk> f \<in> A \<rightarrow> B; g \<in> B \<rightarrow> C \<rbrakk> \<Longrightarrow> compose A g f \<in> A \<rightarrow> C"
+ by (simp add: Pi_def compose_def restrict_def)
+ 
+ lemma compose_assoc:
+-    "[| f \<in> A -> B; g \<in> B -> C; h \<in> C -> D |]
+-      ==> compose A h (compose A g f) = compose A (compose B h g) f"
++    "\<lbrakk> f \<in> A \<rightarrow> B; g \<in> B \<rightarrow> C; h \<in> C \<rightarrow> D \<rbrakk>
++      \<Longrightarrow> compose A h (compose A g f) = compose A (compose B h g) f"
+ by (simp add: fun_eq_iff Pi_def compose_def restrict_def)
+ 
+-lemma compose_eq: "x \<in> A ==> compose A g f x = g(f(x))"
++lemma compose_eq: "x \<in> A \<Longrightarrow> compose A g f x = g(f(x))"
+ by (simp add: compose_def restrict_def)
+ 
+-lemma surj_compose: "[| f ` A = B; g ` B = C |] ==> compose A g f ` A = C"
++lemma surj_compose: "\<lbrakk> f ` A = B; g ` B = C \<rbrakk> \<Longrightarrow> compose A g f ` A = C"
+   by (auto simp add: image_def compose_eq)
+ 
+ 
+ subsection{*Bounded Abstraction: @{term restrict}*}
+ 
+-lemma restrict_in_funcset: "(!!x. x \<in> A ==> f x \<in> B) ==> (\<lambda>x\<in>A. f x) \<in> A -> B"
++lemma restrict_in_funcset: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B) \<Longrightarrow> (\<lambda>x\<in>A. f x) \<in> A \<rightarrow> B"
+   by (simp add: Pi_def restrict_def)
+ 
+-lemma restrictI[intro!]: "(!!x. x \<in> A ==> f x \<in> B x) ==> (\<lambda>x\<in>A. f x) \<in> Pi A B"
++lemma restrictI[intro!]: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B x) \<Longrightarrow> (\<lambda>x\<in>A. f x) \<in> Pi A B"
+   by (simp add: Pi_def restrict_def)
+ 
+ lemma restrict_apply [simp]:
+@@ -194,18 +194,18 @@ lemma restrict_apply [simp]:
+   by (simp add: restrict_def)
+ 
+ lemma restrict_ext:
+-    "(!!x. x \<in> A ==> f x = g x) ==> (\<lambda>x\<in>A. f x) = (\<lambda>x\<in>A. g x)"
++    "(\<And>x. x \<in> A \<Longrightarrow> f x = g x) \<Longrightarrow> (\<lambda>x\<in>A. f x) = (\<lambda>x\<in>A. g x)"
+   by (simp add: fun_eq_iff Pi_def restrict_def)
+ 
+ lemma inj_on_restrict_eq [simp]: "inj_on (restrict f A) A = inj_on f A"
+   by (simp add: inj_on_def restrict_def)
+ 
+ lemma Id_compose:
+-    "[|f \<in> A -> B;  f \<in> extensional A|] ==> compose A (\<lambda>y\<in>B. y) f = f"
++    "\<lbrakk>f \<in> A \<rightarrow> B;  f \<in> extensional A\<rbrakk> \<Longrightarrow> compose A (\<lambda>y\<in>B. y) f = f"
+   by (auto simp add: fun_eq_iff compose_def extensional_def Pi_def)
+ 
+ lemma compose_Id:
+-    "[|g \<in> A -> B;  g \<in> extensional A|] ==> compose A g (\<lambda>x\<in>A. x) = g"
++    "\<lbrakk>g \<in> A \<rightarrow> B;  g \<in> extensional A\<rbrakk> \<Longrightarrow> compose A g (\<lambda>x\<in>A. x) = g"
+   by (auto simp add: fun_eq_iff compose_def extensional_def Pi_def)
+ 
+ lemma image_restrict_eq [simp]: "(restrict f A) ` A = f ` A"
+@@ -248,11 +248,11 @@ lemma bij_betw_imp_funcset: "bij_betw f A B \<Longrightarrow> f \<in> A \<righta
+ by (auto simp add: bij_betw_def)
+ 
+ lemma inj_on_compose:
+-  "[| bij_betw f A B; inj_on g B |] ==> inj_on (compose A g f) A"
++  "\<lbrakk> bij_betw f A B; inj_on g B \<rbrakk> \<Longrightarrow> inj_on (compose A g f) A"
+ by (auto simp add: bij_betw_def inj_on_def compose_eq)
+ 
+ lemma bij_betw_compose:
+-  "[| bij_betw f A B; bij_betw g B C |] ==> bij_betw (compose A g f) A C"
++  "\<lbrakk> bij_betw f A B; bij_betw g B C \<rbrakk> \<Longrightarrow> bij_betw (compose A g f) A C"
+ apply (simp add: bij_betw_def compose_eq inj_on_compose)
+ apply (auto simp add: compose_def image_def)
+ done
+@@ -267,7 +267,7 @@ subsection{*Extensionality*}
+ lemma extensional_empty[simp]: "extensional {} = {\<lambda>x. undefined}"
+   unfolding extensional_def by auto
+ 
+-lemma extensional_arb: "[|f \<in> extensional A; x\<notin> A|] ==> f x = undefined"
++lemma extensional_arb: "\<lbrakk>f \<in> extensional A; x \<notin> A\<rbrakk> \<Longrightarrow> f x = undefined"
+ by (simp add: extensional_def)
+ 
+ lemma restrict_extensional [simp]: "restrict f A \<in> extensional A"
+@@ -277,8 +277,8 @@ lemma compose_extensional [simp]: "compose A f g \<in> extensional A"
+ by (simp add: compose_def)
+ 
+ lemma extensionalityI:
+-  "[| f \<in> extensional A; g \<in> extensional A;
+-      !!x. x\<in>A ==> f x = g x |] ==> f = g"
++  "\<lbrakk> f \<in> extensional A; g \<in> extensional A;
++      \<And>x. x\<in>A \<Longrightarrow> f x = g x \<rbrakk> \<Longrightarrow> f = g"
+ by (force simp add: fun_eq_iff extensional_def)
+ 
+ lemma extensional_restrict:  "f \<in> extensional A \<Longrightarrow> restrict f A = f"
+@@ -287,17 +287,17 @@ by(rule extensionalityI[OF restrict_extensional]) auto
+ lemma extensional_subset: "f \<in> extensional A \<Longrightarrow> A \<subseteq> B \<Longrightarrow> f \<in> extensional B"
+   unfolding extensional_def by auto
+ 
+-lemma inv_into_funcset: "f ` A = B ==> (\<lambda>x\<in>B. inv_into A f x) : B -> A"
++lemma inv_into_funcset: "f ` A = B \<Longrightarrow> (\<lambda>x\<in>B. inv_into A f x) \<in> B \<rightarrow> A"
+ by (unfold inv_into_def) (fast intro: someI2)
+ 
+ lemma compose_inv_into_id:
+-  "bij_betw f A B ==> compose A (\<lambda>y\<in>B. inv_into A f y) f = (\<lambda>x\<in>A. x)"
++  "bij_betw f A B \<Longrightarrow> compose A (\<lambda>y\<in>B. inv_into A f y) f = (\<lambda>x\<in>A. x)"
+ apply (simp add: bij_betw_def compose_def)
+ apply (rule restrict_ext, auto)
+ done
+ 
+ lemma compose_id_inv_into:
+-  "f ` A = B ==> compose B f (\<lambda>y\<in>B. inv_into A f y) = (\<lambda>x\<in>B. x)"
++  "f ` A = B \<Longrightarrow> compose B f (\<lambda>y\<in>B. inv_into A f y) = (\<lambda>x\<in>B. x)"
+ apply (simp add: compose_def)
+ apply (rule restrict_ext)
+ apply (simp add: f_inv_into_f)
+@@ -329,12 +329,12 @@ lemma extensional_insert_cancel[intro, simp]:
+ 
+ subsection{*Cardinality*}
+ 
+-lemma card_inj: "[|f \<in> A\<rightarrow>B; inj_on f A; finite B|] ==> card(A) \<le> card(B)"
++lemma card_inj: "\<lbrakk>f \<in> A\<rightarrow>B; inj_on f A; finite B\<rbrakk> \<Longrightarrow> card(A) \<le> card(B)"
+ by (rule card_inj_on_le) auto
+ 
+ lemma card_bij:
+-  "[|f \<in> A\<rightarrow>B; inj_on f A;
+-     g \<in> B\<rightarrow>A; inj_on g B; finite A; finite B|] ==> card(A) = card(B)"
++  "\<lbrakk>f \<in> A\<rightarrow>B; inj_on f A;
++     g \<in> B\<rightarrow>A; inj_on g B; finite A; finite B\<rbrakk> \<Longrightarrow> card(A) = card(B)"
+ by (blast intro: card_inj order_antisym)
+ 
+ subsection {* Extensional Function Spaces *} 
+@@ -344,11 +344,11 @@ definition PiE :: "'a set \<Rightarrow> ('a \<Rightarrow> 'b set) \<Rightarrow>
+ 
+ abbreviation "Pi\<^sub>E A B \<equiv> PiE A B"
+ 
+-syntax "_PiE"  :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3PIE _:_./ _)" 10)
++syntax "_PiE"  :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3PIE _:_./ _)" 10)
+ 
+-syntax (xsymbols) "_PiE" :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3\<Pi>\<^sub>E _\<in>_./ _)" 10)
++syntax (xsymbols) "_PiE" :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3\<Pi>\<^sub>E _\<in>_./ _)" 10)
+ 
+-syntax (HTML output) "_PiE" :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3\<Pi>\<^sub>E _\<in>_./ _)" 10)
++syntax (HTML output) "_PiE" :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3\<Pi>\<^sub>E _\<in>_./ _)" 10)
+ 
+ translations "PIE x:A. B" == "CONST Pi\<^sub>E A (%x. B)"
+ 
+@@ -358,10 +358,10 @@ abbreviation extensional_funcset :: "'a set \<Rightarrow> 'b set \<Rightarrow> (
+ notation (xsymbols)
+   extensional_funcset  (infixr "\<rightarrow>\<^sub>E" 60)
+ 
+-lemma extensional_funcset_def: "extensional_funcset S T = (S -> T) \<inter> extensional S"
++lemma extensional_funcset_def: "extensional_funcset S T = (S \<rightarrow> T) \<inter> extensional S"
+   by (simp add: PiE_def)
+ 
+-lemma PiE_empty_domain[simp]: "PiE {} T = {%x. undefined}"
++lemma PiE_empty_domain[simp]: "PiE {} T = {\<lambda>x. undefined}"
+   unfolding PiE_def by simp
+ 
+ lemma PiE_empty_range[simp]: "i \<in> I \<Longrightarrow> F i = {} \<Longrightarrow> (PIE i:I. F i) = {}"
+@@ -417,7 +417,7 @@ lemma PiE_E [elim]:
+   "f \<in> PiE A B \<Longrightarrow> (x \<in> A \<Longrightarrow> f x \<in> B x \<Longrightarrow> Q) \<Longrightarrow> (x \<notin> A \<Longrightarrow> f x = undefined \<Longrightarrow> Q) \<Longrightarrow> Q"
+ by(auto simp: Pi_def PiE_def extensional_def)
+ 
+-lemma PiE_I[intro!]: "(\<And>x. x \<in> A ==> f x \<in> B x) \<Longrightarrow> (\<And>x. x \<notin> A \<Longrightarrow> f x = undefined) \<Longrightarrow> f \<in> PiE A B"
++lemma PiE_I[intro!]: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B x) \<Longrightarrow> (\<And>x. x \<notin> A \<Longrightarrow> f x = undefined) \<Longrightarrow> f \<in> PiE A B"
+   by (simp add: PiE_def extensional_def)
+ 
+ lemma PiE_mono: "(\<And>x. x \<in> A \<Longrightarrow> B x \<subseteq> C x) \<Longrightarrow> PiE A B \<subseteq> PiE A C"
+@@ -473,7 +473,7 @@ next
+ qed
+ 
+ lemma extensional_funcset_fun_upd_restricts_rangeI: 
+-  "\<forall>y \<in> S. f x \<noteq> f y \<Longrightarrow> f : (insert x S) \<rightarrow>\<^sub>E T ==> f(x := undefined) : S \<rightarrow>\<^sub>E (T - {f x})"
++  "\<forall>y \<in> S. f x \<noteq> f y \<Longrightarrow> f \<in> (insert x S) \<rightarrow>\<^sub>E T \<Longrightarrow> f(x := undefined) \<in> S \<rightarrow>\<^sub>E (T - {f x})"
+   unfolding extensional_funcset_def extensional_def
+   apply auto
+   apply (case_tac "x = xa")
+-- 
+1.7.11.1
+

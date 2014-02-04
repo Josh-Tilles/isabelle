@@ -1,0 +1,20 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>What's new in jEdit 5.1</title><meta name="generator" content="DocBook XSL Stylesheets V1.76.1"><link rel="home" href="index.html" title="What's new in jEdit 5.1"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center"> What's new in jEdit 5.1 </th></tr></table><hr></div><div class="article" title="What's new in jEdit 5.1"><div class="titlepage"><div><div><h2 class="title"><a name="whatsnewarticle"></a> What's new in jEdit 5.1 </h2></div><div><div class="author"><h3 class="author"><span class="othername">The jEdit all-volunteer development team</span></h3></div></div></div><hr></div><p> Detailed changes can always be found in the <a class="ulink" href="../CHANGES.txt" target="_top">Detailed Change Log</a>,
+    but here are some of the major features of this version. </p><div class="itemizedlist"><ul class="itemizedlist" type="disc"><li class="listitem"><p>VFS WorkThreads have been rewritten into Tasks, making it 
+      possible to completely remove the old "I/O Progress Monitor" and the 
+      wasteful space it took up in the Task Monitor. Old deprecated
+      classes related to WorkThread and WorkThreadPool have been removed.
+      </p></li><li class="listitem"><p> New Plugin Manager option to check for and disable
+      obsolete plugins. 
+      Enabled by default, this will ensure that old unsupported plugins do not
+      interfere with the running operation of jEdit. </p></li><li class="listitem"><p> Added another language to our list of translated languages:
+    English, French, German, Japanese, Czech, Russian, and now Chinese!
+    We are always looking for volunteers to help translate jEdit into Hindi,
+    Korean, or Spanish, or any other language, really! It is fairly easy
+    to add a new translation to jEdit or the plugins. 
+    </p></li><li class="listitem"><p> There is now a new encoding Native2ASCII which collapses
+    unicode escapes in ISO-8859-1 files on read and expands characters that
+    cannot be encoded with ASCII as unicode escapes on write. This encoding is
+    the one Java properties files should be in. 
+    </p></li></ul></div></div><div class="navfooter"><hr></div></body></html>

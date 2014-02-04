@@ -1,0 +1,237 @@
+#!/usr/bin/env bash
+#
+# Author: Makarius
+#
+# build-jars - build Isabelle/Scala
+#
+# Requires proper Isabelle settings environment.
+
+## sources
+
+declare -a SOURCES=(
+  Concurrent/counter.scala
+  Concurrent/future.scala
+  Concurrent/simple_thread.scala
+  Concurrent/volatile.scala
+  General/exn.scala
+  General/file.scala
+  General/graph.scala
+  General/graphics_file.scala
+  General/linear_set.scala
+  General/multi_map.scala
+  General/path.scala
+  General/position.scala
+  General/pretty.scala
+  General/properties.scala
+  General/scan.scala
+  General/sha1.scala
+  General/symbol.scala
+  General/time.scala
+  General/timing.scala
+  General/xz_file.scala
+  GUI/color_value.scala
+  GUI/gui.scala
+  GUI/html5_panel.scala
+  GUI/jfx_thread.scala
+  GUI/popup.scala
+  GUI/swing_thread.scala
+  GUI/system_dialog.scala
+  GUI/wrap_panel.scala
+  Isar/completion.scala
+  Isar/keyword.scala
+  Isar/outer_syntax.scala
+  Isar/parse.scala
+  Isar/token.scala
+  PIDE/command.scala
+  PIDE/document.scala
+  PIDE/document_id.scala
+  PIDE/editor.scala
+  PIDE/markup.scala
+  PIDE/markup_tree.scala
+  PIDE/protocol.scala
+  PIDE/query_operation.scala
+  PIDE/text.scala
+  PIDE/xml.scala
+  PIDE/yxml.scala
+  System/command_line.scala
+  System/event_bus.scala
+  System/interrupt.scala
+  System/invoke_scala.scala
+  System/isabelle_charset.scala
+  System/isabelle_font.scala
+  System/isabelle_process.scala
+  System/isabelle_system.scala
+  System/options.scala
+  System/platform.scala
+  System/session.scala
+  System/system_channel.scala
+  System/utf8.scala
+  Thy/html.scala
+  Thy/present.scala
+  Thy/thy_header.scala
+  Thy/thy_info.scala
+  Thy/thy_load.scala
+  Thy/thy_syntax.scala
+  Tools/build.scala
+  Tools/doc.scala
+  Tools/keywords.scala
+  Tools/main.scala
+  Tools/ml_statistics.scala
+  Tools/sledgehammer_params.scala
+  Tools/task_statistics.scala
+  library.scala
+  package.scala
+  term.scala
+  term_xml.scala
+)
+
+
+## diagnostics
+
+PRG="$(basename "$0")"
+
+function usage()
+{
+  echo
+  echo "Usage: isabelle $PRG [OPTIONS]"
+  echo
+  echo "  Options are:"
+  echo "    -f           fresh build"
+  echo "    -t           test separate compilation of PIDE"
+  echo
+  exit 1
+}
+
+function fail()
+{
+  echo "$1" >&2
+  exit 2
+}
+
+[ -z "$ISABELLE_HOME" ] && fail "Missing Isabelle settings environment"
+
+
+## process command line
+
+# options
+
+FRESH=""
+TEST_PIDE=""
+
+while getopts "ft" OPT
+do
+  case "$OPT" in
+    f)
+      FRESH=true
+      ;;
+    t)
+      TEST_PIDE=true
+      ;;
+    \?)
+      usage
+      ;;
+  esac
+done
+
+shift $(($OPTIND - 1))
+
+
+# args
+
+[ "$#" -ne 0 ] && usage
+
+
+## build
+
+TARGET_DIR="$ISABELLE_HOME/lib/classes"
+TARGET="$TARGET_DIR/Pure.jar"
+
+declare -a PIDE_SOURCES=()
+declare -a PURE_SOURCES=()
+
+for DEP in "${SOURCES[@]}"
+do
+  if grep "Module:.*PIDE" "$DEP" >/dev/null
+  then
+    PIDE_SOURCES["${#PIDE_SOURCES[@]}"]="$DEP"
+  else
+    PURE_SOURCES["${#PURE_SOURCES[@]}"]="$DEP"
+  fi
+done
+
+declare -a UPDATED=()
+
+if [ -n "$FRESH" ]; then
+  OUTDATED=true
+else
+  OUTDATED=false
+  if [ ! -e "$TARGET" ]; then
+    OUTDATED=true
+  else
+    for DEP in "${SOURCES[@]}"
+    do
+      [ ! -e "$DEP" ] && fail "Missing file: $DEP"
+      [ "$DEP" -nt "$TARGET" ] && {
+        OUTDATED=true
+        UPDATED["${#UPDATED[@]}"]="$DEP"
+      }
+    done
+  fi
+fi
+
+if [ "$OUTDATED" = true ]
+then
+  echo "### Building Isabelle/Scala ..."
+
+  [ "${#UPDATED[@]}" -gt 0 ] && {
+    echo "Changed files:"
+    for FILE in "${UPDATED[@]}"
+    do
+      echo "  $FILE"
+    done
+  }
+
+  rm -rf classes && mkdir classes
+
+  SCALAC_OPTIONS="$ISABELLE_SCALA_BUILD_OPTIONS -d classes"
+
+  (
+    classpath "$ISABELLE_JDK_HOME/jre/lib/jfxrt.jar"
+    classpath classes
+    export CLASSPATH="$(jvmpath "$ISABELLE_CLASSPATH")"
+
+    if [ "$TEST_PIDE" = true ]; then
+      isabelle_scala scalac $SCALAC_OPTIONS "${PIDE_SOURCES[@]}" || \
+        fail "Failed to compile PIDE sources"
+      isabelle_scala scalac $SCALAC_OPTIONS "${PURE_SOURCES[@]}" || \
+        fail "Failed to compile Pure sources"
+    else
+      isabelle_scala scalac $SCALAC_OPTIONS "${PIDE_SOURCES[@]}" "${PURE_SOURCES[@]}" || \
+        fail "Failed to compile sources"
+    fi
+  ) || exit "$?"
+
+  mkdir -p "$TARGET_DIR" || fail "Failed to create directory $TARGET_DIR"
+
+  pushd classes >/dev/null
+
+  CHARSET_SERVICE="META-INF/services/java.nio.charset.spi.CharsetProvider"
+  mkdir -p "$(dirname "$CHARSET_SERVICE")"
+  echo isabelle.Isabelle_Charset_Provider > "$CHARSET_SERVICE"
+
+  cp "$ISABELLE_HOME/lib/logo/isabelle-32.gif" isabelle/.
+
+  isabelle_jdk jar cfe "$(jvmpath "$TARGET")" isabelle.Main META-INF isabelle || \
+    fail "Failed to produce $TARGET"
+
+  cp "$SCALA_HOME/lib/scala-compiler.jar" \
+    "$SCALA_HOME/lib/scala-library.jar" \
+    "$SCALA_HOME/lib/scala-swing.jar" \
+    "$SCALA_HOME/lib/scala-actors.jar" \
+    "$SCALA_HOME/lib/scala-reflect.jar" \
+    "$TARGET_DIR"
+
+  popd >/dev/null
+
+  rm -rf classes
+fi

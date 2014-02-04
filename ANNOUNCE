@@ -1,0 +1,31 @@
+Subject: Announcing Isabelle2013-2
+To: isabelle-users@cl.cam.ac.uk
+
+Isabelle2013-2 is now available.
+
+This version supersedes Isabelle2013-1, which in turn consolidated
+Isabelle2013 and introduced numerous improvements.  See the NEWS file
+in the distribution for more details.  Some highlights are:
+
+* Significantly improved Isabelle/jEdit Prover IDE.
+
+* Consolidated multi-platform support: Linux, Windows, Mac OS X.
+
+* Added and updated manuals: datatypes, implementation, isar-ref, jedit.
+
+* New Spec_Check tool: Quickcheck for Isabelle/ML.
+
+* HOL library enhancements: Complex_Main, HOL-Library,
+  HOL-Multivariate_Analysis.
+
+* HOL tool enhancements: Codegenerator, Function, Lifting, Transfer,
+  Nitpick, Sledgehammer.
+
+* HOL-BNF: significantly improved BNF-based (co)datatype package.
+
+
+You may get Isabelle2013-2 from the following mirror sites:
+
+  Cambridge (UK)       http://www.cl.cam.ac.uk/research/hvg/Isabelle/
+  Munich (Germany)     http://isabelle.in.tum.de/
+  Sydney (Australia)   http://mirror.cse.unsw.edu.au/pub/isabelle/
