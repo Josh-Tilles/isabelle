@@ -43,9 +43,7 @@ fun import (_, intros) args ctxt =
 (* patterns only constructed of variables and pairs/tuples are trivial constructor terms*)
 fun is_nontrivial_constrt thy t =
   let
-    val cnstrs = flat (maps
-      (map (fn (_, (Tname, _, cs)) => map (apsnd (rpair Tname o length)) cs) o #descr o snd)
-      (Symtab.dest (Datatype.get_all thy)));
+    val cnstrs = get_constrs thy
     fun check t =
       (case strip_comb t of
         (Var _, []) => (true, true)
@@ -112,6 +110,7 @@ fun specialise_intros black_list (pred, intros) pats thy =
 
 and find_specialisations black_list specs thy =
   let
+    val ctxt = Proof_Context.init_global thy
     val add_vars = fold_aterms (fn Var v => cons v | _ => I);
     fun fresh_free T free_names =
       let
@@ -137,23 +136,23 @@ and find_specialisations black_list specs thy =
       | restrict_pattern' thy ((T as TFree _, t) :: Tts) free_names =
           replace_term_and_restrict thy T t Tts free_names
       | restrict_pattern' thy ((T as Type (Tcon, _), t) :: Tts) free_names =
-          (case Datatype.get_constrs thy Tcon of
-            NONE => replace_term_and_restrict thy T t Tts free_names
-          | SOME constrs =>
-              (case strip_comb t of
-                (Const (s, _), ats) =>
-                  (case AList.lookup (op =) constrs s of
-                    SOME constr_T =>
-                      let
-                        val (Ts', T') = strip_type constr_T
-                        val Tsubst = Type.raw_match (T', T) Vartab.empty
-                        val Ts = map (Envir.subst_type Tsubst) Ts'
-                        val (bts', free_names') = restrict_pattern' thy ((Ts ~~ ats) @ Tts) free_names
-                        val (ats', ts') = chop (length ats) bts'
-                      in
-                        (list_comb (Const (s, map fastype_of ats' ---> T), ats') :: ts', free_names')
-                      end
-                    | NONE => replace_term_and_restrict thy T t Tts free_names)))
+        case Ctr_Sugar.ctr_sugar_of ctxt Tcon of
+          NONE => replace_term_and_restrict thy T t Tts free_names
+        | SOME {ctrs, ...} =>
+          (case strip_comb t of
+            (Const (s, _), ats) =>
+              (case AList.lookup (op =) (map_filter (try dest_Const) ctrs) s of
+                SOME constr_T =>
+                  let
+                    val (Ts', T') = strip_type constr_T
+                    val Tsubst = Type.raw_match (T', T) Vartab.empty
+                    val Ts = map (Envir.subst_type Tsubst) Ts'
+                    val (bts', free_names') = restrict_pattern' thy ((Ts ~~ ats) @ Tts) free_names
+                    val (ats', ts') = chop (length ats) bts'
+                  in
+                    (list_comb (Const (s, map fastype_of ats' ---> T), ats') :: ts', free_names')
+                  end
+              | NONE => replace_term_and_restrict thy T t Tts free_names))
     fun restrict_pattern thy Ts args =
       let
         val args = map Logic.unvarify_global args
@@ -210,4 +209,4 @@ and find_specialisations black_list specs thy =
     fold_map specialise' specs thy
   end
 
-end;
+end
