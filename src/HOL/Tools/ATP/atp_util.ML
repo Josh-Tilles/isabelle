@@ -273,11 +273,11 @@ fun s_not (Const (@{const_name All}, T) $ Abs (s, T', t')) =
     Const (@{const_name Ex}, T) $ Abs (s, T', s_not t')
   | s_not (Const (@{const_name Ex}, T) $ Abs (s, T', t')) =
     Const (@{const_name All}, T) $ Abs (s, T', s_not t')
-  | s_not (@{const HOL.implies} $ t1 $ t2) = @{const HOL.conj} $ t1 $ s_not t2
-  | s_not (@{const HOL.conj} $ t1 $ t2) =
-    @{const HOL.disj} $ s_not t1 $ s_not t2
-  | s_not (@{const HOL.disj} $ t1 $ t2) =
-    @{const HOL.conj} $ s_not t1 $ s_not t2
+  | s_not (@{const IHOL.implies} $ t1 $ t2) = @{const IHOL.conj} $ t1 $ s_not t2
+  | s_not (@{const IHOL.conj} $ t1 $ t2) =
+    @{const IHOL.disj} $ s_not t1 $ s_not t2
+  | s_not (@{const IHOL.disj} $ t1 $ t2) =
+    @{const IHOL.conj} $ s_not t1 $ s_not t2
   | s_not (@{const False}) = @{const True}
   | s_not (@{const True}) = @{const False}
   | s_not (@{const Not} $ t) = t
@@ -354,7 +354,7 @@ fun cong_extensionalize_term thy t =
   else
     t
 
-fun is_fun_equality (@{const_name HOL.eq},
+fun is_fun_equality (@{const_name IHOL.eq},
                      Type (_, [Type (@{type_name fun}, _), _])) = true
   | is_fun_equality _ = false
 
@@ -369,12 +369,12 @@ fun abs_extensionalize_term ctxt t =
 
 fun unextensionalize_def t =
   case t of
-    @{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ lhs $ rhs) =>
+    @{const Trueprop} $ (Const (@{const_name IHOL.eq}, _) $ lhs $ rhs) =>
     (case strip_comb lhs of
        (c as Const (_, T), args) =>
        if forall is_Var args andalso not (has_duplicates (op =) args) then
          @{const Trueprop}
-         $ (Const (@{const_name HOL.eq}, T --> T --> @{typ bool})
+         $ (Const (@{const_name IHOL.eq}, T --> T --> @{typ bool})
             $ c $ fold_rev lambda args rhs)
        else
          t
@@ -382,7 +382,7 @@ fun unextensionalize_def t =
   | _ => t
 
 fun is_legitimate_tptp_def (@{const Trueprop} $ t) = is_legitimate_tptp_def t
-  | is_legitimate_tptp_def (Const (@{const_name HOL.eq}, _) $ t $ u) =
+  | is_legitimate_tptp_def (Const (@{const_name IHOL.eq}, _) $ t $ u) =
     (is_Const t orelse is_Free t) andalso
     not (exists_subterm (curry (op =) t) u)
   | is_legitimate_tptp_def _ = false

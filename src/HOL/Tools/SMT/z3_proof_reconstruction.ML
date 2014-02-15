@@ -341,13 +341,13 @@ local
     let val (ct1, ct2) = Thm.dest_binop (Thm.dest_arg ct)
     in
       (case Thm.term_of ct1 of
-        @{const Not} $ (@{const HOL.conj} $ _ $ _) =>
+        @{const Not} $ (@{const IHOL.conj} $ _ $ _) =>
           prove disjI1 (Thm.dest_arg ct1, true) (ct2, true)
-      | @{const HOL.conj} $ _ $ _ =>
+      | @{const IHOL.conj} $ _ $ _ =>
           prove disjI3 (Z3_Proof_Literals.negate ct2, false) (ct1, true)
-      | @{const Not} $ (@{const HOL.disj} $ _ $ _) =>
+      | @{const Not} $ (@{const IHOL.disj} $ _ $ _) =>
           prove disjI3 (Z3_Proof_Literals.negate ct2, false) (ct1, false)
-      | @{const HOL.disj} $ _ $ _ =>
+      | @{const IHOL.disj} $ _ $ _ =>
           prove disjI2 (Z3_Proof_Literals.negate ct1, false) (ct2, true)
       | Const (@{const_name distinct}, _) $ _ =>
           let
@@ -520,8 +520,8 @@ local
 
   fun mono f (cp as (cl, _)) =
     (case Term.head_of (Thm.term_of cl) of
-      @{const HOL.conj} => prove_nary Z3_Proof_Literals.is_conj (prove_exn f)
-    | @{const HOL.disj} => prove_nary Z3_Proof_Literals.is_disj (prove_exn f)
+      @{const IHOL.conj} => prove_nary Z3_Proof_Literals.is_conj (prove_exn f)
+    | @{const IHOL.disj} => prove_nary Z3_Proof_Literals.is_disj (prove_exn f)
     | Const (@{const_name distinct}, _) => prove_distinct (prove_safe f)
     | _ => prove (prove_safe f)) cp
 in

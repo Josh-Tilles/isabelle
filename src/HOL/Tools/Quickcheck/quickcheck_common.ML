@@ -50,7 +50,7 @@ val define_foundationally = false
 
 (* HOLogic's term functions *)
 
-fun strip_imp (Const(@{const_name HOL.implies},_) $ A $ B) = apfst (cons A) (strip_imp B)
+fun strip_imp (Const(@{const_name IHOL.implies},_) $ A $ B) = apfst (cons A) (strip_imp B)
   | strip_imp A = ([], A)
 
 fun reflect_bool b = if b then @{term "True"} else @{term "False"}
@@ -220,7 +220,7 @@ datatype wellsorted_error = Wellsorted_Error of string | Term of term * term lis
 
 (* minimalistic preprocessing *)
 
-fun strip_all (Const (@{const_name HOL.All}, _) $ Abs (a, T, t)) = 
+fun strip_all (Const (@{const_name IHOL.All}, _) $ Abs (a, T, t)) = 
   let
     val (a', t') = strip_all t
   in ((a, T) :: a', t') end

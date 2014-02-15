@@ -27,7 +27,7 @@ open Function_Common
 (* Extract a function and its arguments from a proposition that is
    either of the form "f x y z = ..." or, in case of function that
    returns a boolean, "f x y z" *)
-fun dest_funprop (Const (@{const_name HOL.eq}, _) $ lhs $ rhs) = (strip_comb lhs, rhs)
+fun dest_funprop (Const (@{const_name IHOL.eq}, _) $ lhs $ rhs) = (strip_comb lhs, rhs)
   | dest_funprop (Const (@{const_name Not}, _) $ trm) = (strip_comb trm, @{term "False"})
   | dest_funprop trm = (strip_comb trm, @{term "True"});
 
@@ -37,9 +37,9 @@ fun propagate_tac ctxt i =
   let
     fun inspect eq =
       (case eq of
-        Const (@{const_name Trueprop}, _) $ (Const (@{const_name HOL.eq}, _) $ Free x $ t) =>
+        Const (@{const_name Trueprop}, _) $ (Const (@{const_name IHOL.eq}, _) $ Free x $ t) =>
           if Logic.occs (Free x, t) then raise Match else true
-      | Const (@{const_name Trueprop}, _) $ (Const (@{const_name HOL.eq}, _) $ t $ Free x) =>
+      | Const (@{const_name Trueprop}, _) $ (Const (@{const_name IHOL.eq}, _) $ t $ Free x) =>
           if Logic.occs (Free x, t) then raise Match else false
       | _ => raise Match);
     fun mk_eq thm =
@@ -54,9 +54,9 @@ fun propagate_tac ctxt i =
   end;
 
 val eq_boolI = @{lemma "!!P. P ==> P = True" "!!P. ~P ==> P = False" by iprover+};
-val boolE = @{thms HOL.TrueE HOL.FalseE};
+val boolE = @{thms IHOL.TrueE IHOL.FalseE};
 val boolD = @{lemma "!!P. True = P ==> P" "!!P. False = P ==> ~P" by iprover+};
-val eq_bool = @{thms HOL.eq_True HOL.eq_False HOL.not_False_eq_True HOL.not_True_eq_False};
+val eq_bool = @{thms IHOL.eq_True IHOL.eq_False IHOL.not_False_eq_True IHOL.not_True_eq_False};
 
 fun bool_subst_tac ctxt i =
   REPEAT (EqSubst.eqsubst_asm_tac ctxt [1] eq_bool i)

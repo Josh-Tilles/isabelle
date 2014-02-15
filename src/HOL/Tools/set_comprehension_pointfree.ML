@@ -168,7 +168,7 @@ fun mk_atom vs (t as Const (@{const_name "Set.member"}, _) $ x $ s) =
           val rT = HOLogic.dest_setT (fastype_of s)
           val s = mk_vimage (snd (mk_split rT vs' x')) s
         in (tuple, Atom (tuple, s)) end)
-  | mk_atom vs (Const (@{const_name "HOL.Not"}, _) $ t) = apsnd (map_atom (apsnd mk_Compl)) (mk_atom vs t)
+  | mk_atom vs (Const (@{const_name "IHOL.Not"}, _) $ t) = apsnd (map_atom (apsnd mk_Compl)) (mk_atom vs t)
   | mk_atom vs t = default_atom vs t
 
 fun merge' [] (pats1, pats2) = ([], (pats1, pats2))
@@ -250,8 +250,8 @@ fun merge_union vs (pats1, fm1) (pats2, fm2) =
     (map Pattern pats, Un (fm1', fm2'))
   end;
 
-fun mk_formula vs (@{const HOL.conj} $ t1 $ t2) = merge_inter vs (mk_formula vs t1) (mk_formula vs t2)
-  | mk_formula vs (@{const HOL.disj} $ t1 $ t2) = merge_union vs (mk_formula vs t1) (mk_formula vs t2)
+fun mk_formula vs (@{const IHOL.conj} $ t1 $ t2) = merge_inter vs (mk_formula vs t1) (mk_formula vs t2)
+  | mk_formula vs (@{const IHOL.disj} $ t1 $ t2) = merge_union vs (mk_formula vs t1) (mk_formula vs t2)
   | mk_formula vs t = apfst single (mk_atom vs t)
 
 fun strip_Int (Int (fm1, fm2)) = fm1 :: (strip_Int fm2) 

@@ -1,10 +1,10 @@
-(*  Title:      HOL/HOL.thy
+(*  Title:      HOL/IHOL.thy
     Author:     Tobias Nipkow, Markus Wenzel, and Larry Paulson
 *)
 
 header {* The basis of Higher-Order Logic *}
 
-theory HOL
+theory IHOL
 imports Pure "~~/src/Tools/Code_Generator"
 keywords
   "try" "solve_direct" "quickcheck" "print_coercions" "print_claset"
@@ -847,7 +847,7 @@ setup Classical.setup
 
 setup {*
 let
-  fun non_bool_eq (@{const_name HOL.eq}, Type (_, [T, _])) = T <> @{typ bool}
+  fun non_bool_eq (@{const_name IHOL.eq}, Type (_, [T, _])) = T <> @{typ bool}
     | non_bool_eq _ = false;
   fun hyp_subst_tac' ctxt =
     SUBGOAL (fn (goal, i) =>
@@ -915,7 +915,7 @@ ML {*
   (
     structure Classical = Classical
     val Trueprop_const = dest_Const @{const Trueprop}
-    val equality_name = @{const_name HOL.eq}
+    val equality_name = @{const_name IHOL.eq}
     val not_name = @{const_name Not}
     val notE = @{thm notE}
     val ccontr = @{thm ccontr}
@@ -1569,7 +1569,7 @@ structure Coherent = Coherent
   val atomize_conjL = @{thm atomize_conjL}
   val atomize_disjL = @{thm atomize_disjL}
   val operator_names =
-    [@{const_name HOL.disj}, @{const_name HOL.conj}, @{const_name Ex}]
+    [@{const_name IHOL.disj}, @{const_name IHOL.conj}, @{const_name Ex}]
 );
 *}
 
@@ -1738,7 +1738,7 @@ declare eq_equal [code]
 
 setup {*
   Code_Preproc.map_pre (fn ctxt =>
-    ctxt addsimprocs [Simplifier.simproc_global_i @{theory} "equal" [@{term HOL.eq}]
+    ctxt addsimprocs [Simplifier.simproc_global_i @{theory} "equal" [@{term IHOL.eq}]
       (fn _ => fn Const (_, Type ("fun", [Type _, _])) => SOME @{thm eq_equal} | _ => NONE)])
 *}
 
@@ -1862,11 +1862,11 @@ code_reserved Scala
 code_printing
   constant Not \<rightharpoonup>
     (SML) "not" and (OCaml) "not" and (Haskell) "not" and (Scala) "'! _"
-| constant HOL.conj \<rightharpoonup>
+| constant IHOL.conj \<rightharpoonup>
     (SML) infixl 1 "andalso" and (OCaml) infixl 3 "&&" and (Haskell) infixr 3 "&&" and (Scala) infixl 3 "&&"
-| constant HOL.disj \<rightharpoonup>
+| constant IHOL.disj \<rightharpoonup>
     (SML) infixl 0 "orelse" and (OCaml) infixl 2 "||" and (Haskell) infixl 2 "||" and (Scala) infixl 1 "||"
-| constant HOL.implies \<rightharpoonup>
+| constant IHOL.implies \<rightharpoonup>
     (SML) "!(if (_)/ then (_)/ else true)"
     and (OCaml) "!(if (_)/ then (_)/ else true)"
     and (Haskell) "!(if (_)/ then (_)/ else True)"
@@ -1891,8 +1891,8 @@ text {* using built-in Haskell equality *}
 
 code_printing
   type_class equal \<rightharpoonup> (Haskell) "Eq"
-| constant HOL.equal \<rightharpoonup> (Haskell) infix 4 "=="
-| constant HOL.eq \<rightharpoonup> (Haskell) infix 4 "=="
+| constant IHOL.equal \<rightharpoonup> (Haskell) infix 4 "=="
+| constant IHOL.eq \<rightharpoonup> (Haskell) infix 4 "=="
 
 text {* undefined *}
 

@@ -203,8 +203,8 @@ fun dynamic_conv thy = certify_eval thy (dynamic_value thy)
 
 fun static_conv thy consts Ts =
   let
-    val eqs = "==" :: @{const_name HOL.eq} ::
-      map (fn T => Axclass.unoverload_const thy (@{const_name HOL.equal}, T)) Ts;
+    val eqs = "==" :: @{const_name IHOL.eq} ::
+      map (fn T => Axclass.unoverload_const thy (@{const_name IHOL.equal}, T)) Ts;
         (*assumes particular code equations for "==" etc.*)
   in
     certify_eval thy (static_value thy consts Ts)

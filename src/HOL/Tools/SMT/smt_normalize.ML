@@ -50,7 +50,7 @@ end
 
 fun norm_def thm =
   (case Thm.prop_of thm of
-    @{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ _ $ Abs _) =>
+    @{const Trueprop} $ (Const (@{const_name IHOL.eq}, _) $ _ $ Abs _) =>
       norm_def (thm RS @{thm fun_cong})
   | Const (@{const_name "=="}, _) $ _ $ Abs _ =>
       norm_def (thm RS @{thm meta_eq_to_obj_eq})
@@ -154,8 +154,8 @@ local
 
   fun dest_cond_eq ct =
     (case Thm.term_of ct of
-      Const (@{const_name HOL.eq}, _) $ _ $ _ => Thm.dest_binop ct
-    | @{const HOL.implies} $ _ $ _ => dest_cond_eq (Thm.dest_arg ct)
+      Const (@{const_name IHOL.eq}, _) $ _ $ _ => Thm.dest_binop ct
+    | @{const IHOL.implies} $ _ $ _ => dest_cond_eq (Thm.dest_arg ct)
     | _ => raise CTERM ("no equation", [ct]))
 
   fun get_constrs thy (Type (n, _)) = these (Datatype.get_constrs thy n)
@@ -601,7 +601,7 @@ fun apply_extra_norms ctxt ithms =
 
 local
   val ignored = member (op =) [@{const_name All}, @{const_name Ex},
-    @{const_name Let}, @{const_name If}, @{const_name HOL.eq}]
+    @{const_name Let}, @{const_name If}, @{const_name IHOL.eq}]
 
   val schematic_consts_of =
     let

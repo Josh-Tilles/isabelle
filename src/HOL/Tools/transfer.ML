@@ -199,7 +199,7 @@ fun gen_abstract_equalities ctxt (dest : term -> term * (term -> term)) thm =
     val prop = Thm.prop_of thm
     val (t, mk_prop') = dest prop
     (* Only consider "op =" at non-base types *)
-    fun is_eq (Const (@{const_name HOL.eq}, Type ("fun", [T, _]))) =
+    fun is_eq (Const (@{const_name IHOL.eq}, Type ("fun", [T, _]))) =
         (case T of Type (_, []) => false | _ => true)
       | is_eq _ = false
     val add_eqs = Term.fold_aterms (fn t => if is_eq t then insert (op =) t else I)
@@ -330,7 +330,7 @@ fun abstract_domains_transfer ctxt thm =
 fun detect_transfer_rules thm =
   let
     fun is_transfer_rule tm = case (HOLogic.dest_Trueprop tm) of
-      (Const (@{const_name HOL.eq}, _)) $ ((Const (@{const_name Domainp}, _)) $ _) $ _ => false
+      (Const (@{const_name IHOL.eq}, _)) $ ((Const (@{const_name Domainp}, _)) $ _) $ _ => false
       | _ $ _ $ _ => true
       | _ => false
     fun safe_transfer_rule_conv ctm =

@@ -189,7 +189,7 @@ fun dest_builtin_fun ctxt (c as (_, T)) ts =
 fun dest_builtin_eq ctxt t u =
   let
     val aT = TFree (Name.aT, @{sort type})
-    val c = (@{const_name HOL.eq}, aT --> aT --> @{typ bool})
+    val c = (@{const_name IHOL.eq}, aT --> aT --> @{typ bool})
     fun mk ts = Term.list_comb (HOLogic.eq_const (Term.fastype_of (hd ts)), ts)
   in
     dest_builtin_fun ctxt c []

@@ -10,11 +10,11 @@ Instantiation of the generic simplifier for HOL.
 structure Quantifier1 = Quantifier1
 (
   (*abstract syntax*)
-  fun dest_eq (Const(@{const_name HOL.eq},_) $ s $ t) = SOME (s, t)
+  fun dest_eq (Const(@{const_name IHOL.eq},_) $ s $ t) = SOME (s, t)
     | dest_eq _ = NONE;
-  fun dest_conj (Const(@{const_name HOL.conj},_) $ s $ t) = SOME (s, t)
+  fun dest_conj (Const(@{const_name IHOL.conj},_) $ s $ t) = SOME (s, t)
     | dest_conj _ = NONE;
-  fun dest_imp (Const(@{const_name HOL.implies},_) $ s $ t) = SOME (s, t)
+  fun dest_imp (Const(@{const_name IHOL.implies},_) $ s $ t) = SOME (s, t)
     | dest_imp _ = NONE;
   val conj = HOLogic.conj
   val imp  = HOLogic.imp
@@ -44,7 +44,7 @@ fun safe_mk_meta_eq r = mk_meta_eq r handle Thm.THM _ => r;
 fun mk_eq th = case concl_of th
   (*expects Trueprop if not == *)
   of Const (@{const_name "=="},_) $ _ $ _ => th
-   | _ $ (Const (@{const_name HOL.eq}, _) $ _ $ _) => mk_meta_eq th
+   | _ $ (Const (@{const_name IHOL.eq}, _) $ _ $ _) => mk_meta_eq th
    | _ $ (Const (@{const_name Not}, _) $ _) => th RS @{thm Eq_FalseI}
    | _ => th RS @{thm Eq_TrueI}
 
@@ -57,7 +57,7 @@ fun mk_eq_True (_: Proof.context) r =
 
 fun lift_meta_eq_to_obj_eq i st =
   let
-    fun count_imp (Const (@{const_name HOL.simp_implies}, _) $ P $ Q) = 1 + count_imp Q
+    fun count_imp (Const (@{const_name IHOL.simp_implies}, _) $ P $ Q) = 1 + count_imp Q
       | count_imp _ = 0;
     val j = count_imp (Logic.strip_assums_concl (Thm.term_of (Thm.cprem_of st i)))
   in
@@ -66,7 +66,7 @@ fun lift_meta_eq_to_obj_eq i st =
       let
         val Ps = map (fn k => Free ("P" ^ string_of_int k, propT)) (1 upto j);
         val mk_simp_implies = fold_rev (fn R => fn S =>
-          Const (@{const_name HOL.simp_implies}, propT --> propT --> propT) $ R $ S) Ps;
+          Const (@{const_name IHOL.simp_implies}, propT --> propT --> propT) $ R $ S) Ps;
       in
         Goal.prove_global (Thm.theory_of_thm st) []
           [mk_simp_implies @{prop "(x::'a) == y"}]
@@ -158,8 +158,8 @@ structure Clasimp = Clasimp
 open Clasimp;
 
 val mksimps_pairs =
- [(@{const_name HOL.implies}, [@{thm mp}]),
-  (@{const_name HOL.conj}, [@{thm conjunct1}, @{thm conjunct2}]),
+ [(@{const_name IHOL.implies}, [@{thm mp}]),
+  (@{const_name IHOL.conj}, [@{thm conjunct1}, @{thm conjunct2}]),
   (@{const_name All}, [@{thm spec}]),
   (@{const_name True}, []),
   (@{const_name False}, []),

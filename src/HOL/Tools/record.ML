@@ -1066,7 +1066,7 @@ in
     subrecord.
 *)
 val simproc =
-  Simplifier.simproc_global @{theory HOL} "record_simp" ["x"]
+  Simplifier.simproc_global @{theory IHOL} "record_simp" ["x"]
     (fn ctxt => fn t =>
       let val thy = Proof_Context.theory_of ctxt in
         (case t of
@@ -1142,7 +1142,7 @@ fun get_upd_acc_cong_thm upd acc thy ss =
   we omit considering further updates if doing so would introduce
   both a more update and an update to a field within it.*)
 val upd_simproc =
-  Simplifier.simproc_global @{theory HOL} "record_upd_simp" ["x"]
+  Simplifier.simproc_global @{theory IHOL} "record_upd_simp" ["x"]
     (fn ctxt => fn t =>
       let
         val thy = Proof_Context.theory_of ctxt;
@@ -1263,9 +1263,9 @@ end;
  Complexity: #components * #updates     #updates
 *)
 val eq_simproc =
-  Simplifier.simproc_global @{theory HOL} "record_eq_simp" ["r = s"]
+  Simplifier.simproc_global @{theory IHOL} "record_eq_simp" ["r = s"]
     (fn ctxt => fn t =>
-      (case t of Const (@{const_name HOL.eq}, Type (_, [T, _])) $ _ $ _ =>
+      (case t of Const (@{const_name IHOL.eq}, Type (_, [T, _])) $ _ $ _ =>
         (case rec_id ~1 T of
           "" => NONE
         | name =>
@@ -1283,7 +1283,7 @@ val eq_simproc =
     P t = ~1: completely split
     P t > 0: split up to given bound of record extensions.*)
 fun split_simproc P =
-  Simplifier.simproc_global @{theory HOL} "record_split_simp" ["x"]
+  Simplifier.simproc_global @{theory IHOL} "record_split_simp" ["x"]
     (fn ctxt => fn t =>
       (case t of
         Const (quantifier, Type (_, [Type (_, [T, _]), _])) $ _ =>
@@ -1311,7 +1311,7 @@ fun split_simproc P =
       | _ => NONE));
 
 val ex_sel_eq_simproc =
-  Simplifier.simproc_global @{theory HOL} "ex_sel_eq_simproc" ["Ex t"]
+  Simplifier.simproc_global @{theory IHOL} "ex_sel_eq_simproc" ["Ex t"]
     (fn ctxt => fn t =>
       let
         val thy = Proof_Context.theory_of ctxt;
@@ -1324,12 +1324,12 @@ val ex_sel_eq_simproc =
                 else raise TERM ("", [x]);
               val sel' = Const (sel, Tsel) $ Bound 0;
               val (l, r) = if lr then (sel', x') else (x', sel');
-            in Const (@{const_name HOL.eq}, Teq) $ l $ r end
+            in Const (@{const_name IHOL.eq}, Teq) $ l $ r end
           else raise TERM ("", [Const (sel, Tsel)]);
 
-        fun dest_sel_eq (Const (@{const_name HOL.eq}, Teq) $ (Const (sel, Tsel) $ Bound 0) $ X) =
+        fun dest_sel_eq (Const (@{const_name IHOL.eq}, Teq) $ (Const (sel, Tsel) $ Bound 0) $ X) =
               (true, Teq, (sel, Tsel), X)
-          | dest_sel_eq (Const (@{const_name HOL.eq}, Teq) $ X $ (Const (sel, Tsel) $ Bound 0)) =
+          | dest_sel_eq (Const (@{const_name IHOL.eq}, Teq) $ X $ (Const (sel, Tsel) $ Bound 0)) =
               (false, Teq, (sel, Tsel), X)
           | dest_sel_eq _ = raise TERM ("", []);
       in
@@ -1741,8 +1741,8 @@ fun add_code ext_tyco vs extT ext simps inject thy =
     let
       val eq =
         HOLogic.mk_Trueprop (HOLogic.mk_eq
-          (Const (@{const_name HOL.equal}, extT --> extT --> HOLogic.boolT),
-           Const (@{const_name HOL.eq}, extT --> extT --> HOLogic.boolT)));
+          (Const (@{const_name IHOL.equal}, extT --> extT --> HOLogic.boolT),
+           Const (@{const_name IHOL.eq}, extT --> extT --> HOLogic.boolT)));
       fun tac ctxt eq_def =
         Class.intro_classes_tac []
         THEN rewrite_goals_tac ctxt [Simpdata.mk_eq eq_def]

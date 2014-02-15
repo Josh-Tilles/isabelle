@@ -217,8 +217,8 @@ lemma is_none_code [code]:
   unfolding is_none_def by simp_all
 
 lemma [code_unfold]:
-  "HOL.equal x None \<longleftrightarrow> is_none x"
-  "HOL.equal None = is_none"
+  "IHOL.equal x None \<longleftrightarrow> is_none x"
+  "IHOL.equal None = is_none"
   by (auto simp add: equal is_none_def)
 
 hide_const (open) is_none
@@ -241,7 +241,7 @@ code_printing
     and (Scala) "Some"
 | class_instance option :: equal \<rightharpoonup>
     (Haskell) -
-| constant "HOL.equal :: 'a option \<Rightarrow> 'a option \<Rightarrow> bool" \<rightharpoonup>
+| constant "IHOL.equal :: 'a option \<Rightarrow> 'a option \<Rightarrow> bool" \<rightharpoonup>
     (Haskell) infix 4 "=="
 
 code_reserved SML

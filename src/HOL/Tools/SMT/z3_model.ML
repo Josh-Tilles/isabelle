@@ -231,7 +231,7 @@ fun unfold_funapp (eqs, defs) =
   let
     fun unfold_app (Const (@{const_name SMT.fun_app}, _) $ f $ t) = f $ t
       | unfold_app t = t
-    fun unfold_eq ((eq as Const (@{const_name HOL.eq}, _)) $ t $ u) =
+    fun unfold_eq ((eq as Const (@{const_name IHOL.eq}, _)) $ t $ u) =
           eq $ unfold_app t $ u
       | unfold_eq t = t
 
@@ -256,7 +256,7 @@ val unfold_eqs =
       | rewr_free (e as (_, Free _)) = rewr_free' (swap e)
       | rewr_free _ = NONE
 
-    fun is_trivial (Const (@{const_name HOL.eq}, _) $ t $ u) = t aconv u
+    fun is_trivial (Const (@{const_name IHOL.eq}, _) $ t $ u) = t aconv u
       | is_trivial _ = false
 
     fun replace r = replace_vars [r] #> filter_out is_trivial
@@ -275,7 +275,7 @@ val unfold_eqs =
 
   in unfold_vars #> unfold_frees [] end
 
-fun swap_free ((eq as Const (@{const_name HOL.eq}, _)) $ t $ (u as Free _)) =
+fun swap_free ((eq as Const (@{const_name IHOL.eq}, _)) $ t $ (u as Free _)) =
       eq $ u $ t
   | swap_free t = t
 
@@ -306,7 +306,7 @@ fun frees_for_vars ctxt (eqs, defs) =
 
 val is_free_constraint = Term.exists_subterm (fn Free _ => true | _ => false)
 
-fun is_free_def (Const (@{const_name HOL.eq}, _) $ Free _ $ _) = true
+fun is_free_def (Const (@{const_name IHOL.eq}, _) $ Free _ $ _) = true
   | is_free_def _ = false
 
 fun defined tp =
@@ -317,7 +317,7 @@ fun add_free_defs free_cs defs =
   let val (free_defs, defs') = List.partition is_free_def defs
   in (free_cs @ filter_out (member defined free_cs) free_defs, defs') end
 
-fun is_const_def (Const (@{const_name HOL.eq}, _) $ Const _ $ _) = true
+fun is_const_def (Const (@{const_name IHOL.eq}, _) $ Const _ $ _) = true
   | is_const_def _ = false
 
 fun parse_counterex ctxt ({terms, ...} : SMT_Translate.recon) ls =

@@ -721,7 +721,7 @@ primrec relpow :: "nat \<Rightarrow> ('a \<times> 'a) set \<Rightarrow> ('a \<ti
   | "relpow (Suc n) R = (R ^^ n) O R"
 
 primrec relpowp :: "nat \<Rightarrow> ('a \<Rightarrow> 'a \<Rightarrow> bool) \<Rightarrow> ('a \<Rightarrow> 'a \<Rightarrow> bool)" where
-    "relpowp 0 R = HOL.eq"
+    "relpowp 0 R = IHOL.eq"
   | "relpowp (Suc n) R = (R ^^ n) OO R"
 
 end
@@ -746,7 +746,7 @@ lemma [code]:
 
 lemma [code]:
   "relpowp (Suc n) R = (R ^^ n) OO R"
-  "relpowp 0 R = HOL.eq"
+  "relpowp 0 R = IHOL.eq"
   by (simp_all add: relpowp_code_def)
 
 hide_const (open) relpow

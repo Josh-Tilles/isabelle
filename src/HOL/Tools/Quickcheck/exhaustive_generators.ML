@@ -64,7 +64,7 @@ fun mk_none_continuation (x, y) =
 fun mk_if (b, t, e) =
   let
     val T = fastype_of t
-  in Const (@{const_name "HOL.If"}, @{typ bool} --> T --> T --> T) $ b $ t $ e end
+  in Const (@{const_name "IHOL.If"}, @{typ bool} --> T --> T --> T) $ b $ t $ e end
 
 (* handling inductive datatypes *)
 
