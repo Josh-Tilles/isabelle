@@ -196,4 +196,278 @@ axiomatization undefined :: 'a
 
 class default = fixes default :: 'a
 
+
+subsection {* Fundamental rules *}
+
+subsubsection {* Equality *}
+
+lemma sym: "s = t ==> t = s"
+  by (erule subst) (rule refl)
+
+lemma ssubst: "t = s ==> P s ==> P t"
+  by (drule sym) (erule subst)
+
+lemma trans: "[| r=s; s=t |] ==> r=t"
+  by (erule subst)
+
+lemma trans_sym [Pure.elim?]: "r = s ==> t = s ==> r = t"
+  by (rule trans [OF _ sym])
+
+lemma meta_eq_to_obj_eq: 
+  assumes meq: "A == B"
+  shows "A = B"
+  by (unfold meq) (rule refl)
+
+text {* Useful with @{text erule} for proving equalities from known equalities. *}
+     (* a = b
+        |   |
+        c = d   *)
+lemma box_equals: "[| a=b;  a=c;  b=d |] ==> c=d"
+apply (rule trans)
+apply (rule trans)
+apply (rule sym)
+apply assumption+
+done
+
+text {* For calculational reasoning: *}
+
+lemma forw_subst: "a = b ==> P b ==> P a"
+  by (rule ssubst)
+
+lemma back_subst: "P a ==> a = b ==> P b"
+  by (rule subst)
+
+
+subsubsection {* Congruence rules for application *}
+
+text {* Similar to @{text AP_THM} in Gordon's HOL. *}
+lemma fun_cong: "(f::'a=>'b) = g ==> f(x)=g(x)"
+apply (erule subst)
+apply (rule refl)
+done
+
+text {* Similar to @{text AP_TERM} in Gordon's HOL and FOL's @{text subst_context}. *}
+lemma arg_cong: "x=y ==> f(x)=f(y)"
+apply (erule subst)
+apply (rule refl)
+done
+
+lemma arg_cong2: "\<lbrakk> a = b; c = d \<rbrakk> \<Longrightarrow> f a c = f b d"
+apply (erule ssubst)+
+apply (rule refl)
+done
+
+lemma cong: "[| f = g; (x::'a) = y |] ==> f x = g y"
+apply (erule subst)+
+apply (rule refl)
+done
+
+ML {* val cong_tac = Cong_Tac.cong_tac @{thm cong} *}
+
+
+subsubsection {* Equality of booleans -- iff *}
+
+lemma iffI: assumes "P ==> Q" and "Q ==> P" shows "P=Q"
+  by (iprover intro: iff [THEN mp, THEN mp] impI assms)
+
+lemma iffD2: "[| P=Q; Q |] ==> P"
+  by (erule ssubst)
+
+lemma rev_iffD2: "[| Q; P=Q |] ==> P"
+  by (erule iffD2)
+
+lemma iffD1: "Q = P \<Longrightarrow> Q \<Longrightarrow> P"
+  by (drule sym) (rule iffD2)
+
+lemma rev_iffD1: "Q \<Longrightarrow> Q = P \<Longrightarrow> P"
+  by (drule sym) (rule rev_iffD2)
+
+lemma iffE:
+  assumes major: "P=Q"
+    and minor: "[| P --> Q; Q --> P |] ==> R"
+  shows R
+  by (iprover intro: minor impI major [THEN iffD2] major [THEN iffD1])
+
+
+subsubsection {*True*}
+
+lemma TrueI: "True"
+  unfolding True_def by (rule refl)
+
+lemma eqTrueI: "P ==> P = True"
+  by (iprover intro: iffI TrueI)
+
+lemma eqTrueE: "P = True ==> P"
+  by (erule iffD2) (rule TrueI)
+
+
+subsubsection {*Universal quantifier*}
+
+lemma allI: assumes "!!x::'a. P(x)" shows "ALL x. P(x)"
+  unfolding All_def by (iprover intro: ext eqTrueI assms)
+
+lemma spec: "ALL x::'a. P(x) ==> P(x)"
+apply (unfold All_def)
+apply (rule eqTrueE)
+apply (erule fun_cong)
+done
+
+lemma allE:
+  assumes major: "ALL x. P(x)"
+    and minor: "P(x) ==> R"
+  shows R
+  by (iprover intro: minor major [THEN spec])
+
+lemma all_dupE:
+  assumes major: "ALL x. P(x)"
+    and minor: "[| P(x); ALL x. P(x) |] ==> R"
+  shows R
+  by (iprover intro: minor major major [THEN spec])
+
+
+subsubsection {* False *}
+
+text {*
+  Depends upon @{text spec}; it is impossible to do propositional
+  logic before quantifiers!
+*}
+
+lemma FalseE: "False ==> P"
+  apply (unfold False_def)
+  apply (erule spec)
+  done
+
+lemma False_neq_True: "False = True ==> P"
+  by (erule eqTrueE [THEN FalseE])
+
+
+subsubsection {* Negation *}
+
+lemma notI:
+  assumes "P ==> False"
+  shows "~P"
+  apply (unfold not_def)
+  apply (iprover intro: impI assms)
+  done
+
+lemma False_not_True: "False ~= True"
+  apply (rule notI)
+  apply (erule False_neq_True)
+  done
+
+lemma True_not_False: "True ~= False"
+  apply (rule notI)
+  apply (drule sym)
+  apply (erule False_neq_True)
+  done
+
+lemma notE: "[| ~P;  P |] ==> R"
+  apply (unfold not_def)
+  apply (erule mp [THEN FalseE])
+  apply assumption
+  done
+
+lemma notI2: "(P \<Longrightarrow> \<not> Pa) \<Longrightarrow> (P \<Longrightarrow> Pa) \<Longrightarrow> \<not> P"
+  by (erule notE [THEN notI]) (erule meta_mp)
+
+
+subsubsection {*Implication*}
+
+lemma impE:
+  assumes "P-->Q" "P" "Q ==> R"
+  shows "R"
+by (iprover intro: assms mp)
+
+(* Reduces Q to P-->Q, allowing substitution in P. *)
+lemma rev_mp: "[| P;  P --> Q |] ==> Q"
+by (iprover intro: mp)
+
+lemma contrapos_nn:
+  assumes major: "~Q"
+      and minor: "P==>Q"
+  shows "~P"
+by (iprover intro: notI minor major [THEN notE])
+
+(*not used at all, but we already have the other 3 combinations *)
+lemma contrapos_pn:
+  assumes major: "Q"
+      and minor: "P ==> ~Q"
+  shows "~P"
+by (iprover intro: notI minor major notE)
+
+lemma not_sym: "t ~= s ==> s ~= t"
+  by (erule contrapos_nn) (erule sym)
+
+lemma eq_neq_eq_imp_neq: "[| x = a ; a ~= b; b = y |] ==> x ~= y"
+  by (erule subst, erule ssubst, assumption)
+
+
+subsubsection {*Existential quantifier*}
+
+lemma exI: "P x ==> EX x::'a. P x"
+apply (unfold Ex_def)
+apply (iprover intro: allI allE impI mp)
+done
+
+lemma exE:
+  assumes major: "EX x::'a. P(x)"
+      and minor: "!!x. P(x) ==> Q"
+  shows "Q"
+apply (rule major [unfolded Ex_def, THEN spec, THEN mp])
+apply (iprover intro: impI [THEN allI] minor)
+done
+
+
+subsubsection {*Conjunction*}
+
+lemma conjI: "[| P; Q |] ==> P&Q"
+apply (unfold and_def)
+apply (iprover intro: impI [THEN allI] mp)
+done
+
+lemma conjunct1: "[| P & Q |] ==> P"
+apply (unfold and_def)
+apply (iprover intro: impI dest: spec mp)
+done
+
+lemma conjunct2: "[| P & Q |] ==> Q"
+apply (unfold and_def)
+apply (iprover intro: impI dest: spec mp)
+done
+
+lemma conjE:
+  assumes major: "P&Q"
+      and minor: "[| P; Q |] ==> R"
+  shows "R"
+apply (rule minor)
+apply (rule major [THEN conjunct1])
+apply (rule major [THEN conjunct2])
+done
+
+lemma context_conjI:
+  assumes "P" "P ==> Q" shows "P & Q"
+by (iprover intro: conjI assms)
+
+
+subsubsection {*Disjunction*}
+
+lemma disjI1: "P ==> P|Q"
+apply (unfold or_def)
+apply (iprover intro: allI impI mp)
+done
+
+lemma disjI2: "Q ==> P|Q"
+apply (unfold or_def)
+apply (iprover intro: allI impI mp)
+done
+
+lemma disjE:
+  assumes major: "P|Q"
+      and minorP: "P ==> R"
+      and minorQ: "Q ==> R"
+  shows "R"
+by (iprover intro: minorP minorQ impI
+                 major [unfolded or_def, THEN spec, THEN mp, THEN mp])
+
+
 end
