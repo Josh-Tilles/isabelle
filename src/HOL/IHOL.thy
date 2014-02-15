@@ -555,6 +555,48 @@ apply (rule refl)
 apply (erule sym)
 done
 
+subsubsection {* Intuitionistic Reasoning *}
+
+lemma impE':
+  assumes 1: "P --> Q"
+    and 2: "Q ==> R"
+    and 3: "P --> Q ==> P"
+  shows R
+proof -
+  from 3 and 1 have P .
+  with 1 have Q by (rule impE)
+  with 2 show R .
+qed
+
+lemma allE':
+  assumes 1: "ALL x. P x"
+    and 2: "P x ==> ALL x. P x ==> Q"
+  shows Q
+proof -
+  from 1 have "P x" by (rule spec)
+  from this and 1 show Q by (rule 2)
+qed
+
+lemma notE':
+  assumes 1: "~ P"
+    and 2: "~ P ==> P"
+  shows R
+proof -
+  from 2 and 1 have P .
+  with 1 show R by (rule notE)
+qed
+
+lemma TrueE: "True ==> P ==> P" .
+lemma notFalseE: "~ False ==> P ==> P" .
+
+lemmas [Pure.elim!] = disjE iffE FalseE conjE exE TrueE notFalseE
+  and [Pure.intro!] = iffI conjI impI TrueI notI allI refl
+  and [Pure.elim 2] = allE notE' impE'
+  and [Pure.intro] = exI disjI2 disjI1
+
+lemmas [trans] = trans
+  and [sym] = sym not_sym
+  and [Pure.elim?] = iffD1 iffD2 impE
 
 
 end
