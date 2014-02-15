@@ -469,5 +469,92 @@ lemma disjE:
 by (iprover intro: minorP minorQ impI
                  major [unfolded or_def, THEN spec, THEN mp, THEN mp])
 
+subsubsection {*Unique existence*}
+
+lemma ex1I:
+  assumes "P a" "!!x. P(x) ==> x=a"
+  shows "EX! x. P(x)"
+by (unfold Ex1_def, iprover intro: assms exI conjI allI impI)
+
+text{*Sometimes easier to use: the premises have no shared variables.  Safe!*}
+lemma ex_ex1I:
+  assumes ex_prem: "EX x. P(x)"
+      and eq: "!!x y. [| P(x); P(y) |] ==> x=y"
+  shows "EX! x. P(x)"
+by (iprover intro: ex_prem [THEN exE] ex1I eq)
+
+lemma ex1E:
+  assumes major: "EX! x. P(x)"
+      and minor: "!!x. [| P(x);  ALL y. P(y) --> y=x |] ==> R"
+  shows "R"
+apply (rule major [unfolded Ex1_def, THEN exE])
+apply (erule conjE)
+apply (iprover intro: minor)
+done
+
+lemma ex1_implies_ex: "EX! x. P x ==> EX x. P x"
+apply (erule ex1E)
+apply (rule exI)
+apply assumption
+done
+
+
+subsubsection {*THE: definite description operator*}
+
+lemma the_equality:
+  assumes prema: "P a"
+      and premx: "!!x. P x ==> x=a"
+  shows "(THE x. P x) = a"
+apply (rule trans [OF _ the_eq_trivial])
+apply (rule_tac f = "The" in arg_cong)
+apply (rule ext)
+apply (rule iffI)
+ apply (erule premx)
+apply (erule ssubst, rule prema)
+done
+
+lemma theI:
+  assumes "P a" and "!!x. P x ==> x=a"
+  shows "P (THE x. P x)"
+by (iprover intro: assms the_equality [THEN ssubst])
+
+lemma theI': "EX! x. P x ==> P (THE x. P x)"
+apply (erule ex1E)
+apply (erule theI)
+apply (erule allE)
+apply (erule mp)
+apply assumption
+done
+
+(*Easier to apply than theI: only one occurrence of P*)
+lemma theI2:
+  assumes "P a" "!!x. P x ==> x=a" "!!x. P x ==> Q x"
+  shows "Q (THE x. P x)"
+by (iprover intro: assms theI)
+
+lemma the1I2: assumes "EX! x. P x" "\<And>x. P x \<Longrightarrow> Q x" shows "Q (THE x. P x)"
+by(iprover intro:assms(2) theI2[where P=P and Q=Q] ex1E[OF assms(1)]
+           elim:allE impE)
+
+lemma the1_equality [elim?]: "[| EX!x. P x; P a |] ==> (THE x. P x) = a"
+apply (rule the_equality)
+apply  assumption
+apply (erule ex1E)
+apply (erule all_dupE)
+apply (drule mp)
+apply  assumption
+apply (erule ssubst)
+apply (erule allE)
+apply (erule mp)
+apply assumption
+done
+
+lemma the_sym_eq_trivial: "(THE y. x=y) = x"
+apply (rule the_equality)
+apply (rule refl)
+apply (erule sym)
+done
+
+
 
 end
