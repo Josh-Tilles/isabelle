@@ -57,7 +57,7 @@ fun mk_eq_True (_: Proof.context) r =
 
 fun lift_meta_eq_to_obj_eq i st =
   let
-    fun count_imp (Const (@{const_name IHOL.simp_implies}, _) $ P $ Q) = 1 + count_imp Q
+    fun count_imp (Const (@{const_name CHOL.simp_implies}, _) $ P $ Q) = 1 + count_imp Q
       | count_imp _ = 0;
     val j = count_imp (Logic.strip_assums_concl (Thm.term_of (Thm.cprem_of st i)))
   in
@@ -66,7 +66,7 @@ fun lift_meta_eq_to_obj_eq i st =
       let
         val Ps = map (fn k => Free ("P" ^ string_of_int k, propT)) (1 upto j);
         val mk_simp_implies = fold_rev (fn R => fn S =>
-          Const (@{const_name IHOL.simp_implies}, propT --> propT --> propT) $ R $ S) Ps;
+          Const (@{const_name CHOL.simp_implies}, propT --> propT --> propT) $ R $ S) Ps;
       in
         Goal.prove_global (Thm.theory_of_thm st) []
           [mk_simp_implies @{prop "(x::'a) == y"}]
