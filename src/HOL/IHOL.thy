@@ -679,4 +679,8 @@ lemma atomize_elimL[atomize_elim]: "(!!B. (A ==> B) ==> B) == Trueprop A" ..
 
 
 
+subsection {* Package setup *}
+
+ML_file "Tools/hologic.ML"
+
 end

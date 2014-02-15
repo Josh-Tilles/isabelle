@@ -112,9 +112,6 @@ done
 
 subsection {* Package setup *}
 
-ML_file "Tools/hologic.ML"
-
-
 subsubsection {* Sledgehammer setup *}
 
 text {*
