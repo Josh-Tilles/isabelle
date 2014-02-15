@@ -2082,17 +2082,17 @@ by simp
 instantiation real :: equal
 begin
 
-definition "HOL.equal (x\<Colon>real) y \<longleftrightarrow> x - y = 0"
+definition "IHOL.equal (x\<Colon>real) y \<longleftrightarrow> x - y = 0"
 
 instance proof
 qed (simp add: equal_real_def)
 
 lemma real_equal_code [code]:
-  "HOL.equal (Ratreal x) (Ratreal y) \<longleftrightarrow> HOL.equal x y"
+  "IHOL.equal (Ratreal x) (Ratreal y) \<longleftrightarrow> IHOL.equal x y"
   by (simp add: equal_real_def equal)
 
 lemma [code nbe]:
-  "HOL.equal (x::real) x \<longleftrightarrow> True"
+  "IHOL.equal (x::real) x \<longleftrightarrow> True"
   by (rule equal_refl)
 
 end

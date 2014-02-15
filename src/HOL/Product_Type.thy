@@ -38,11 +38,11 @@ declare case_split [cases type: bool]
   -- "prefer plain propositional version"
 
 lemma
-  shows [code]: "HOL.equal False P \<longleftrightarrow> \<not> P"
-    and [code]: "HOL.equal True P \<longleftrightarrow> P" 
-    and [code]: "HOL.equal P False \<longleftrightarrow> \<not> P"
-    and [code]: "HOL.equal P True \<longleftrightarrow> P"
-    and [code nbe]: "HOL.equal P P \<longleftrightarrow> True"
+  shows [code]: "IHOL.equal False P \<longleftrightarrow> \<not> P"
+    and [code]: "IHOL.equal True P \<longleftrightarrow> P" 
+    and [code]: "IHOL.equal P False \<longleftrightarrow> \<not> P"
+    and [code]: "IHOL.equal P True \<longleftrightarrow> P"
+    and [code nbe]: "IHOL.equal P P \<longleftrightarrow> True"
   by (simp_all add: equal)
 
 lemma If_case_cert:
@@ -55,7 +55,7 @@ setup {*
 *}
 
 code_printing
-  constant "HOL.equal :: bool \<Rightarrow> bool \<Rightarrow> bool" \<rightharpoonup> (Haskell) infix 4 "=="
+  constant "IHOL.equal :: bool \<Rightarrow> bool \<Rightarrow> bool" \<rightharpoonup> (Haskell) infix 4 "=="
 | class_instance "bool" :: "equal" \<rightharpoonup> (Haskell) -
 
 
@@ -131,7 +131,7 @@ instance ..
 end
 
 lemma [code]:
-  "HOL.equal (u\<Colon>unit) v \<longleftrightarrow> True" unfolding equal unit_eq [of u] unit_eq [of v] by rule+
+  "IHOL.equal (u\<Colon>unit) v \<longleftrightarrow> True" unfolding equal unit_eq [of u] unit_eq [of v] by rule+
 
 code_printing
   type_constructor unit \<rightharpoonup>
@@ -146,7 +146,7 @@ code_printing
     and (Scala) "()"
 | class_instance unit :: equal \<rightharpoonup>
     (Haskell) -
-| constant "HOL.equal :: unit \<Rightarrow> unit \<Rightarrow> bool" \<rightharpoonup>
+| constant "IHOL.equal :: unit \<Rightarrow> unit \<Rightarrow> bool" \<rightharpoonup>
     (Haskell) infix 4 "=="
 
 code_reserved SML
@@ -363,7 +363,7 @@ code_printing
     and (Scala) "!((_),/ (_))"
 | class_instance  prod :: equal \<rightharpoonup>
     (Haskell) -
-| constant "HOL.equal :: 'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" \<rightharpoonup>
+| constant "IHOL.equal :: 'a \<times> 'b \<Rightarrow> 'a \<times> 'b \<Rightarrow> bool" \<rightharpoonup>
     (Haskell) infix 4 "=="
 
 

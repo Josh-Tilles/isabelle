@@ -203,10 +203,10 @@ fun abstract depth (ext_logic, with_theories) =
       | @{const True} => pair ct
       | @{const False} => pair ct
       | @{const Not} $ _ => abstr1 dcvs ct
-      | @{const HOL.conj} $ _ $ _ => abstr2 dcvs ct
-      | @{const HOL.disj} $ _ $ _ => abstr2 dcvs ct
-      | @{const HOL.implies} $ _ $ _ => abstr2 dcvs ct
-      | Const (@{const_name HOL.eq}, _) $ _ $ _ => abstr2 dcvs ct
+      | @{const IHOL.conj} $ _ $ _ => abstr2 dcvs ct
+      | @{const IHOL.disj} $ _ $ _ => abstr2 dcvs ct
+      | @{const IHOL.implies} $ _ $ _ => abstr2 dcvs ct
+      | Const (@{const_name IHOL.eq}, _) $ _ $ _ => abstr2 dcvs ct
       | Const (@{const_name distinct}, _) $ _ =>
           if ext_logic then abs_arg (abs_list abstr fresh_abstraction) dcvs ct
           else fresh_abstraction dcvs ct

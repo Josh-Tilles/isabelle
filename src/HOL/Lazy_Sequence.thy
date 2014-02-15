@@ -82,14 +82,14 @@ lemma lazy_sequence_size_code [code]:
   by (cases "list_of_lazy_sequence xq") (simp_all add: lazy_sequence_size_eq)
 
 lemma equal_lazy_sequence_code [code]:
-  "HOL.equal xq yq = (case (yield xq, yield yq) of
+  "IHOL.equal xq yq = (case (yield xq, yield yq) of
     (None, None) \<Rightarrow> True
-  | (Some (x, xq'), Some (y, yq')) \<Rightarrow> HOL.equal x y \<and> HOL.equal xq yq
+  | (Some (x, xq'), Some (y, yq')) \<Rightarrow> IHOL.equal x y \<and> IHOL.equal xq yq
   | _ \<Rightarrow> False)"
   by (simp_all add: lazy_sequence_eq_iff equal_eq split: list.splits)
 
 lemma [code nbe]:
-  "HOL.equal (x :: 'a lazy_sequence) x \<longleftrightarrow> True"
+  "IHOL.equal (x :: 'a lazy_sequence) x \<longleftrightarrow> True"
   by (fact equal_refl)
 
 definition empty :: "'a lazy_sequence"

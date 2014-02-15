@@ -494,8 +494,8 @@ in
   
     in
       case get_args 2 rel of
-          [Const (@{const_name "HOL.eq"}, _), _] => rewrs_imp @{thms neg_eq_OO pos_eq_OO} ctm
-          | [_, Const (@{const_name "HOL.eq"}, _)] => rewrs_imp @{thms neg_OO_eq pos_OO_eq} ctm
+          [Const (@{const_name "IHOL.eq"}, _), _] => rewrs_imp @{thms neg_eq_OO pos_eq_OO} ctm
+          | [_, Const (@{const_name "IHOL.eq"}, _)] => rewrs_imp @{thms neg_OO_eq pos_OO_eq} ctm
           | [_, trans_rel] =>
             let
               val (rty', qty) = (relation_types o fastype_of) trans_rel

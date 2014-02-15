@@ -39,12 +39,12 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
 
    "(meta_eq_to_obj_eq % TYPE('T) % x1 % x2 %% prfT %%  \
  \    (axm.transitive % TYPE('T) % x % y % z %% prf1 %% prf2)) ==  \
- \  (HOL.trans % TYPE('T) % x % y % z %% prfT %%  \
+ \  (IHOL.trans % TYPE('T) % x % y % z %% prfT %%  \
  \    (meta_eq_to_obj_eq % TYPE('T) % x % y %% prfT %% prf1) %%  \
  \    (meta_eq_to_obj_eq % TYPE('T) % y % z %% prfT %% prf2))",
 
    "(meta_eq_to_obj_eq % TYPE('T) % x % x %% prfT %% (axm.reflexive % TYPE('T) % x)) ==  \
- \  (HOL.refl % TYPE('T) % x %% prfT)",
+ \  (IHOL.refl % TYPE('T) % x %% prfT)",
 
    "(meta_eq_to_obj_eq % TYPE('T) % x % y %% prfT %%  \
  \    (axm.symmetric % TYPE('T) % x % y %% prf)) ==  \
@@ -70,7 +70,7 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
  \      (cong % TYPE('T) % TYPE('T=>bool) %  \
  \        (op = :: 'T=>'T=>bool) % (op = :: 'T=>'T=>bool) % A % B %%  \
  \        prfT %% (OfClass type_class % TYPE('T=>bool)) %%  \
- \        (HOL.refl % TYPE('T=>'T=>bool) % (op = :: 'T=>'T=>bool) %%  \
+ \        (IHOL.refl % TYPE('T=>'T=>bool) % (op = :: 'T=>'T=>bool) %%  \
  \           (OfClass type_class % TYPE('T=>'T=>bool))) %%  \
  \        (meta_eq_to_obj_eq % TYPE('T) % A % B %% prfT %% prf1)) %%  \
  \      (meta_eq_to_obj_eq % TYPE('T) % C % D %% prfT %% prf2)) %%  \
@@ -87,7 +87,7 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
  \      (cong % TYPE('T) % TYPE('T=>bool) %  \
  \        (op = :: 'T=>'T=>bool) % (op = :: 'T=>'T=>bool) % A % B %%  \
  \        prfT %% (OfClass type_class % TYPE('T=>bool)) %%  \
- \        (HOL.refl % TYPE('T=>'T=>bool) % (op = :: 'T=>'T=>bool) %%  \
+ \        (IHOL.refl % TYPE('T=>'T=>bool) % (op = :: 'T=>'T=>bool) %%  \
  \           (OfClass type_class % TYPE('T=>'T=>bool))) %%  \
  \        (meta_eq_to_obj_eq % TYPE('T) % A % B %% prfT %% prf1)) %%  \
  \      (meta_eq_to_obj_eq % TYPE('T) % C % D %% prfT %% prf2)) %%  \
@@ -98,7 +98,7 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
    (* All *)
 
    "(iffD1 % All P % All Q %% (cong % TYPE('T1) % TYPE('T2) % All % All % P % Q %% prfT1 %% prfT2 %%  \
- \    (HOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
+ \    (IHOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
  \    (ext % TYPE('a) % TYPE(bool) % x2 % x3 %% prfa %% prfb %% prf)) %% prf') ==  \
  \  (allI % TYPE('a) % Q %% prfa %%  \
  \    (Lam x.  \
@@ -106,7 +106,7 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
  \         (spec % TYPE('a) % P % x %% prfa %% prf')))",
 
    "(iffD2 % All P % All Q %% (cong % TYPE('T1) % TYPE('T2) % All % All % P % Q %% prfT1 %% prfT2 %%  \
- \    (HOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
+ \    (IHOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
  \    (ext % TYPE('a) % TYPE(bool) % x2 % x3 %% prfa %% prfb %% prf)) %% prf') ==  \
  \  (allI % TYPE('a) % P %% prfa %%  \
  \    (Lam x.  \
@@ -116,7 +116,7 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
    (* Ex *)
 
    "(iffD1 % Ex P % Ex Q %% (cong % TYPE('T1) % TYPE('T2) % Ex % Ex % P % Q %% prfT1 %% prfT2 %%  \
- \    (HOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
+ \    (IHOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
  \    (ext % TYPE('a) % TYPE(bool) % x2 % x3 %% prfa %% prfb %% prf)) %% prf') ==  \
  \  (exE % TYPE('a) % P % EX x. Q x %% prfa %% prf' %%  \
  \    (Lam x H : P x.  \
@@ -124,7 +124,7 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
  \         (iffD1 % P x % Q x %% (prf % x) %% H)))",
 
    "(iffD2 % Ex P % Ex Q %% (cong % TYPE('T1) % TYPE('T2) % Ex % Ex % P % Q %% prfT1 %% prfT2 %%  \
- \    (HOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
+ \    (IHOL.refl % TYPE('T3) % x1 %% prfT3) %%  \
  \    (ext % TYPE('a) % TYPE(bool) % x2 % x3 %% prfa %% prfb %% prf)) %% prf') ==  \
  \  (exE % TYPE('a) % Q % EX x. P x %% prfa %% prf' %%  \
  \    (Lam x H : Q x.  \
@@ -135,87 +135,87 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
 
    "(iffD1 % A & C % B & D %% (cong % TYPE('T1) % TYPE('T2) % x1 % x2 % C % D %% prfT1 %% prfT2 %%  \
  \    (cong % TYPE('T3) % TYPE('T4) % op & % op & % A % B %% prfT3 %% prfT4 %%  \
- \      (HOL.refl % TYPE('T5) % op & %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
+ \      (IHOL.refl % TYPE('T5) % op & %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
  \  (conjI % B % D %%  \
  \    (iffD1 % A % B %% prf1 %% (conjunct1 % A % C %% prf3)) %%  \
  \    (iffD1 % C % D %% prf2 %% (conjunct2 % A % C %% prf3)))",
 
    "(iffD2 % A & C % B & D %% (cong % TYPE('T1) % TYPE('T2) % x1 % x2 % C % D %% prfT1 %% prfT2 %%  \
  \    (cong % TYPE('T3) % TYPE('T4) % op & % op & % A % B %% prfT3 %% prfT4 %%  \
- \      (HOL.refl % TYPE('T5) % op & %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
+ \      (IHOL.refl % TYPE('T5) % op & %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
  \  (conjI % A % C %%  \
  \    (iffD2 % A % B %% prf1 %% (conjunct1 % B % D %% prf3)) %%  \
  \    (iffD2 % C % D %% prf2 %% (conjunct2 % B % D %% prf3)))",
 
    "(cong % TYPE(bool) % TYPE(bool) % op & A % op & A % B % C %% prfb %% prfb %%  \
- \    (HOL.refl % TYPE(bool=>bool) % op & A %% prfbb)) ==  \
+ \    (IHOL.refl % TYPE(bool=>bool) % op & A %% prfbb)) ==  \
  \  (cong % TYPE(bool) % TYPE(bool) % op & A % op & A % B % C %% prfb %% prfb %%  \
  \    (cong % TYPE(bool) % TYPE(bool=>bool) %  \
  \      (op & :: bool=>bool=>bool) % (op & :: bool=>bool=>bool) % A % A %%  \
  \        prfb %% prfbb %%  \
- \        (HOL.refl % TYPE(bool=>bool=>bool) % (op & :: bool=>bool=>bool) %%  \
+ \        (IHOL.refl % TYPE(bool=>bool=>bool) % (op & :: bool=>bool=>bool) %%  \
  \           (OfClass type_class % TYPE(bool=>bool=>bool))) %%  \
- \        (HOL.refl % TYPE(bool) % A %% prfb)))",
+ \        (IHOL.refl % TYPE(bool) % A %% prfb)))",
 
    (* | *)
 
    "(iffD1 % A | C % B | D %% (cong % TYPE('T1) % TYPE('T2) % x1 % x2 % C % D %% prfT1 %% prfT2 %%  \
  \    (cong % TYPE('T3) % TYPE('T4) % op | % op | % A % B %% prfT3 %% prfT4 %%  \
- \      (HOL.refl % TYPE('T5) % op | %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
+ \      (IHOL.refl % TYPE('T5) % op | %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
  \  (disjE % A % C % B | D %% prf3 %%  \
  \    (Lam H : A. disjI1 % B % D %% (iffD1 % A % B %% prf1 %% H)) %%  \
  \    (Lam H : C. disjI2 % D % B %% (iffD1 % C % D %% prf2 %% H)))",
 
    "(iffD2 % A | C % B | D %% (cong % TYPE('T1) % TYPE('T2) % x1 % x2 % C % D %% prfT1 %% prfT2 %%  \
  \    (cong % TYPE('T3) % TYPE('T4) % op | % op | % A % B %% prfT3 %% prfT4 %%  \
- \      (HOL.refl % TYPE('T5) % op | %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
+ \      (IHOL.refl % TYPE('T5) % op | %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
  \  (disjE % B % D % A | C %% prf3 %%  \
  \    (Lam H : B. disjI1 % A % C %% (iffD2 % A % B %% prf1 %% H)) %%  \
  \    (Lam H : D. disjI2 % C % A %% (iffD2 % C % D %% prf2 %% H)))",
 
    "(cong % TYPE(bool) % TYPE(bool) % op | A % op | A % B % C %% prfb %% prfb %%  \
- \    (HOL.refl % TYPE(bool=>bool) % op | A %% prfbb)) ==  \
+ \    (IHOL.refl % TYPE(bool=>bool) % op | A %% prfbb)) ==  \
  \  (cong % TYPE(bool) % TYPE(bool) % op | A % op | A % B % C %% prfb %% prfb %%  \
  \    (cong % TYPE(bool) % TYPE(bool=>bool) %  \
  \      (op | :: bool=>bool=>bool) % (op | :: bool=>bool=>bool) % A % A %%  \
  \        prfb %% prfbb %%  \
- \        (HOL.refl % TYPE(bool=>bool=>bool) % (op | :: bool=>bool=>bool) %%  \
+ \        (IHOL.refl % TYPE(bool=>bool=>bool) % (op | :: bool=>bool=>bool) %%  \
  \           (OfClass type_class % TYPE(bool=>bool=>bool))) %%  \
- \        (HOL.refl % TYPE(bool) % A %% prfb)))",
+ \        (IHOL.refl % TYPE(bool) % A %% prfb)))",
 
    (* --> *)
 
    "(iffD1 % A --> C % B --> D %% (cong % TYPE('T1) % TYPE('T2) % x1 % x2 % C % D %% prfT1 %% prfT2 %%  \
  \    (cong % TYPE('T3) % TYPE('T4) % op --> % op --> % A % B %% prfT3 %% prfT4 %%  \
- \      (HOL.refl % TYPE('T5) % op --> %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
+ \      (IHOL.refl % TYPE('T5) % op --> %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
  \  (impI % B % D %% (Lam H: B. iffD1 % C % D %% prf2 %%  \
  \    (mp % A % C %% prf3 %% (iffD2 % A % B %% prf1 %% H))))",
 
    "(iffD2 % A --> C % B --> D %% (cong % TYPE('T1) % TYPE('T2) % x1 % x2 % C % D %% prfT1 %% prfT2 %%  \
  \    (cong % TYPE('T3) % TYPE('T4) % op --> % op --> % A % B %% prfT3 %% prfT4 %%  \
- \      (HOL.refl % TYPE('T5) % op --> %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
+ \      (IHOL.refl % TYPE('T5) % op --> %% prfT5) %% prf1) %% prf2) %% prf3) ==  \
  \  (impI % A % C %% (Lam H: A. iffD2 % C % D %% prf2 %%  \
  \    (mp % B % D %% prf3 %% (iffD1 % A % B %% prf1 %% H))))",
 
    "(cong % TYPE(bool) % TYPE(bool) % op --> A % op --> A % B % C %% prfb %% prfb %%  \
- \    (HOL.refl % TYPE(bool=>bool) % op --> A %% prfbb)) ==  \
+ \    (IHOL.refl % TYPE(bool=>bool) % op --> A %% prfbb)) ==  \
  \  (cong % TYPE(bool) % TYPE(bool) % op --> A % op --> A % B % C %% prfb %% prfb %%  \
  \    (cong % TYPE(bool) % TYPE(bool=>bool) %  \
  \      (op --> :: bool=>bool=>bool) % (op --> :: bool=>bool=>bool) % A % A %%  \
  \        prfb %% prfbb %%  \
- \        (HOL.refl % TYPE(bool=>bool=>bool) % (op --> :: bool=>bool=>bool) %%  \
+ \        (IHOL.refl % TYPE(bool=>bool=>bool) % (op --> :: bool=>bool=>bool) %%  \
  \           (OfClass type_class % TYPE(bool=>bool=>bool))) %%  \
- \        (HOL.refl % TYPE(bool) % A %% prfb)))",
+ \        (IHOL.refl % TYPE(bool) % A %% prfb)))",
 
    (* ~ *)
 
    "(iffD1 % ~ P % ~ Q %% (cong % TYPE('T1) % TYPE('T2) % Not % Not % P % Q %% prfT1 %% prfT2 %%  \
- \    (HOL.refl % TYPE('T3) % Not %% prfT3) %% prf1) %% prf2) ==  \
+ \    (IHOL.refl % TYPE('T3) % Not %% prfT3) %% prf1) %% prf2) ==  \
  \  (notI % Q %% (Lam H: Q.  \
  \    notE % P % False %% prf2 %% (iffD2 % P % Q %% prf1 %% H)))",
 
    "(iffD2 % ~ P % ~ Q %% (cong % TYPE('T1) % TYPE('T2) % Not % Not % P % Q %% prfT1 %% prfT2 %%  \
- \    (HOL.refl % TYPE('T3) % Not %% prfT3) %% prf1) %% prf2) ==  \
+ \    (IHOL.refl % TYPE('T3) % Not %% prfT3) %% prf1) %% prf2) ==  \
  \  (notI % P %% (Lam H: P.  \
  \    notE % Q % False %% prf2 %% (iffD1 % P % Q %% prf1 %% H)))",
 
@@ -224,52 +224,52 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
    "(iffD1 % B % D %%  \
  \    (iffD1 % A = C % B = D %% (cong % TYPE(bool) % TYPE('T1) % x1 % x2 % C % D %% prfb %% prfT1 %%  \
  \      (cong % TYPE(bool) % TYPE('T2) % op = % op = % A % B %% prfb %% prfT2 %%  \
- \        (HOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4) ==  \
+ \        (IHOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4) ==  \
  \  (iffD1 % C % D %% prf2 %%  \
  \    (iffD1 % A % C %% prf3 %% (iffD2 % A % B %% prf1 %% prf4)))",
 
    "(iffD2 % B % D %%  \
  \    (iffD1 % A = C % B = D %% (cong % TYPE(bool) % TYPE('T1) % x1 % x2 % C % D %% prfb %% prfT1 %%  \
  \      (cong % TYPE(bool) % TYPE('T2) % op = % op = % A % B %% prfb %% prfT2 %%  \
- \        (HOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4) ==  \
+ \        (IHOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4) ==  \
  \  (iffD1 % A % B %% prf1 %%  \
  \    (iffD2 % A % C %% prf3 %% (iffD2 % C % D %% prf2 %% prf4)))",
 
    "(iffD1 % A % C %%  \
  \    (iffD2 % A = C % B = D %% (cong % TYPE(bool) % TYPE('T1) % x1 % x2 % C % D %% prfb %% prfT1 %%  \
  \      (cong % TYPE(bool) % TYPE('T2) % op = % op = % A % B %% prfb %% prfT2 %%  \
- \        (HOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4)==  \
+ \        (IHOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4)==  \
  \  (iffD2 % C % D %% prf2 %%  \
  \    (iffD1 % B % D %% prf3 %% (iffD1 % A % B %% prf1 %% prf4)))",
 
    "(iffD2 % A % C %%  \
  \    (iffD2 % A = C % B = D %% (cong % TYPE(bool) % TYPE('T1) % x1 % x2 % C % D %% prfb %% prfT1 %%  \
  \      (cong % TYPE(bool) % TYPE('T2) % op = % op = % A % B %% prfb %% prfT2 %%  \
- \        (HOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4) ==  \
+ \        (IHOL.refl % TYPE('T3) % op = %% prfT3) %% prf1) %% prf2) %% prf3) %% prf4) ==  \
  \  (iffD2 % A % B %% prf1 %%  \
  \    (iffD2 % B % D %% prf3 %% (iffD1 % C % D %% prf2 %% prf4)))",
 
    "(cong % TYPE(bool) % TYPE(bool) % op = A % op = A % B % C %% prfb %% prfb %%  \
- \    (HOL.refl % TYPE(bool=>bool) % op = A %% prfbb)) ==  \
+ \    (IHOL.refl % TYPE(bool=>bool) % op = A %% prfbb)) ==  \
  \  (cong % TYPE(bool) % TYPE(bool) % op = A % op = A % B % C %% prfb %% prfb %%  \
  \    (cong % TYPE(bool) % TYPE(bool=>bool) %  \
  \      (op = :: bool=>bool=>bool) % (op = :: bool=>bool=>bool) % A % A %%  \
  \        prfb %% prfbb %%  \
- \        (HOL.refl % TYPE(bool=>bool=>bool) % (op = :: bool=>bool=>bool) %%  \
+ \        (IHOL.refl % TYPE(bool=>bool=>bool) % (op = :: bool=>bool=>bool) %%  \
  \           (OfClass type_class % TYPE(bool=>bool=>bool))) %%  \
- \        (HOL.refl % TYPE(bool) % A %% prfb)))",
+ \        (IHOL.refl % TYPE(bool) % A %% prfb)))",
 
    (** transitivity, reflexivity, and symmetry **)
 
-   "(iffD1 % A % C %% (HOL.trans % TYPE(bool) % A % B % C %% prfb %% prf1 %% prf2) %% prf3) ==  \
+   "(iffD1 % A % C %% (IHOL.trans % TYPE(bool) % A % B % C %% prfb %% prf1 %% prf2) %% prf3) ==  \
  \  (iffD1 % B % C %% prf2 %% (iffD1 % A % B %% prf1 %% prf3))",
 
-   "(iffD2 % A % C %% (HOL.trans % TYPE(bool) % A % B % C %% prfb %% prf1 %% prf2) %% prf3) ==  \
+   "(iffD2 % A % C %% (IHOL.trans % TYPE(bool) % A % B % C %% prfb %% prf1 %% prf2) %% prf3) ==  \
  \  (iffD2 % A % B %% prf1 %% (iffD2 % B % C %% prf2 %% prf3))",
 
-   "(iffD1 % A % A %% (HOL.refl % TYPE(bool) % A %% prfb) %% prf) == prf",
+   "(iffD1 % A % A %% (IHOL.refl % TYPE(bool) % A %% prfb) %% prf) == prf",
 
-   "(iffD2 % A % A %% (HOL.refl % TYPE(bool) % A %% prfb) %% prf) == prf",
+   "(iffD2 % A % A %% (IHOL.refl % TYPE(bool) % A %% prfb) %% prf) == prf",
 
    "(iffD1 % A % B %% (sym % TYPE(bool) % B % A %% prfb %% prf)) == (iffD2 % B % A %% prf)",
 
@@ -304,9 +304,9 @@ val rews = map (pairself (Proof_Syntax.proof_of_term @{theory} true) o
 
 (** Replace congruence rules by substitution rules **)
 
-fun strip_cong ps (PThm (_, (("HOL.cong", _, _), _)) % _ % _ % SOME x % SOME y %%
+fun strip_cong ps (PThm (_, (("IHOL.cong", _, _), _)) % _ % _ % SOME x % SOME y %%
       prfa %% prfT %% prf1 %% prf2) = strip_cong (((x, y), (prf2, prfa)) :: ps) prf1
-  | strip_cong ps (PThm (_, (("HOL.refl", _, _), _)) % SOME f %% _) = SOME (f, ps)
+  | strip_cong ps (PThm (_, (("IHOL.refl", _, _), _)) % SOME f %% _) = SOME (f, ps)
   | strip_cong _ _ = NONE;
 
 val subst_prf = fst (Proofterm.strip_combt (fst (Proofterm.strip_combP (Thm.proof_of subst))));
@@ -329,15 +329,15 @@ fun make_sym Ts ((x, y), (prf, clprf)) =
 
 fun mk_AbsP P t = AbsP ("H", Option.map HOLogic.mk_Trueprop P, t);
 
-fun elim_cong_aux Ts (PThm (_, (("HOL.iffD1", _, _), _)) % _ % _ %% prf1 %% prf2) =
+fun elim_cong_aux Ts (PThm (_, (("IHOL.iffD1", _, _), _)) % _ % _ %% prf1 %% prf2) =
       Option.map (make_subst Ts prf2 []) (strip_cong [] prf1)
-  | elim_cong_aux Ts (PThm (_, (("HOL.iffD1", _, _), _)) % P % _ %% prf) =
+  | elim_cong_aux Ts (PThm (_, (("IHOL.iffD1", _, _), _)) % P % _ %% prf) =
       Option.map (mk_AbsP P o make_subst Ts (PBound 0) [])
         (strip_cong [] (Proofterm.incr_pboundvars 1 0 prf))
-  | elim_cong_aux Ts (PThm (_, (("HOL.iffD2", _, _), _)) % _ % _ %% prf1 %% prf2) =
+  | elim_cong_aux Ts (PThm (_, (("IHOL.iffD2", _, _), _)) % _ % _ %% prf1 %% prf2) =
       Option.map (make_subst Ts prf2 [] o
         apsnd (map (make_sym Ts))) (strip_cong [] prf1)
-  | elim_cong_aux Ts (PThm (_, (("HOL.iffD2", _, _), _)) % _ % P %% prf) =
+  | elim_cong_aux Ts (PThm (_, (("IHOL.iffD2", _, _), _)) % _ % P %% prf) =
       Option.map (mk_AbsP P o make_subst Ts (PBound 0) [] o
         apsnd (map (make_sym Ts))) (strip_cong [] (Proofterm.incr_pboundvars 1 0 prf))
   | elim_cong_aux _ _ = NONE;

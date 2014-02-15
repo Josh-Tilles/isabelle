@@ -305,7 +305,7 @@ fun depending_preds_of ctxt (key, value) =
   in
     fold Term.add_const_names intros []
       |> (fn cs =>
-        if member (op =) cs @{const_name "HOL.eq"} then
+        if member (op =) cs @{const_name "IHOL.eq"} then
           insert (op =) @{const_name Predicate.eq} cs
         else cs)
       |> filter (fn c => (not (c = key)) andalso

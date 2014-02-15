@@ -255,12 +255,24 @@ fun simplify_code_eq ctxt def_thm =
 
 fun can_generate_code_cert quot_thm  =
   case quot_thm_rel quot_thm of
-    Const (@{const_name HOL.eq}, _) => true
+    Const (@{const_name IHOL.eq}, _) => true
     | Const (@{const_name invariant}, _) $ _  => true
     | _ => false
 
 fun generate_rep_eq ctxt def_thm rsp_thm (rty, qty) =
   let
+<<<<<<< HEAD
+=======
+    val thy = Proof_Context.theory_of ctxt
+    val quot_thm = Lifting_Term.prove_quot_thm ctxt (get_body_types (rty, qty))
+    val fun_rel = prove_rel ctxt rsp_thm (rty, qty)
+    val abs_rep_thm = [quot_thm, fun_rel] MRSL @{thm Quotient_rep_abs}
+    val abs_rep_eq = 
+      case (HOLogic.dest_Trueprop o prop_of) fun_rel of
+        Const (@{const_name IHOL.eq}, _) $ _ $ _ => abs_rep_thm
+        | Const (@{const_name invariant}, _) $ _ $ _ $ _ => abs_rep_thm RS @{thm invariant_to_eq}
+        | _ => raise CODE_CERT_GEN "relation is neither equality nor invariant"
+>>>>>>> 3b7847c... Rename HOL.thy to IHOL.thy
     val unfolded_def = Conv.fconv_rule (Conv.arg_conv unfold_fun_maps_beta) def_thm
     val unabs_def = unabs_all_def ctxt unfolded_def
   in  
@@ -527,11 +539,11 @@ fun mk_readable_rsp_thm_eq tm lthy =
           | _ => (invariant_commute_conv then_conv relator_eq_conv) ctm
       end
     
-    val unfold_ret_val_invs = Conv.bottom_conv 
+    val unfold_ret_val_invs = Conv.bottom_conv
       (K (Conv.try_conv (Conv.rewr_conv @{thm invariant_same_args}))) lthy
     val cr_to_pcr_conv = Raw_Simplifier.rewrite lthy false (get_cr_pcr_eqs lthy)
     val simp_conv = HOLogic.Trueprop_conv (Conv.fun2_conv (cr_to_pcr_conv then_conv simp_arrows_conv))
-    val univq_conv = Conv.rewr_conv @{thm HOL.all_simps(6)[symmetric, THEN eq_reflection]}
+    val univq_conv = Conv.rewr_conv @{thm IHOL.all_simps(6)[symmetric, THEN eq_reflection]}
     val univq_prenex_conv = Conv.top_conv (K (Conv.try_conv univq_conv)) lthy
     val beta_conv = Thm.beta_conversion true
     val eq_thm = 

@@ -435,7 +435,7 @@ fun nut_from_term (hol_ctxt as {thy, ctxt, stds, ...}) eq =
                 val t1 = incr_boundvars n t1
                 val t2 = incr_boundvars n t2
                 val xs = map Bound (n - 1 downto 0)
-                val equation = Const (@{const_name HOL.eq},
+                val equation = Const (@{const_name IHOL.eq},
                                       body_T --> body_T --> bool_T)
                                    $ betapplys (t1, xs) $ betapplys (t2, xs)
                 val t =
@@ -493,14 +493,14 @@ fun nut_from_term (hol_ctxt as {thy, ctxt, stds, ...}) eq =
           do_quantifier Exist s T t1
         | (t0 as Const (@{const_name Ex}, _), [t1]) =>
           sub' (t0 $ eta_expand Ts t1 1)
-        | (Const (@{const_name HOL.eq}, T), [t1]) =>
+        | (Const (@{const_name IHOL.eq}, T), [t1]) =>
           Op1 (SingletonSet, range_type T, Any, sub t1)
-        | (Const (@{const_name HOL.eq}, T), [t1, t2]) => sub_equals T t1 t2
-        | (Const (@{const_name HOL.conj}, _), [t1, t2]) =>
+        | (Const (@{const_name IHOL.eq}, T), [t1, t2]) => sub_equals T t1 t2
+        | (Const (@{const_name IHOL.conj}, _), [t1, t2]) =>
           Op2 (And, bool_T, Any, sub' t1, sub' t2)
-        | (Const (@{const_name HOL.disj}, _), [t1, t2]) =>
+        | (Const (@{const_name IHOL.disj}, _), [t1, t2]) =>
           Op2 (Or, bool_T, Any, sub t1, sub t2)
-        | (Const (@{const_name HOL.implies}, _), [t1, t2]) =>
+        | (Const (@{const_name IHOL.implies}, _), [t1, t2]) =>
           Op2 (Or, bool_T, Any, Op1 (Not, bool_T, Any, sub t1), sub' t2)
         | (Const (@{const_name If}, T), [t1, t2, t3]) =>
           Op3 (If, nth_range_type 3 T, Any, sub t1, sub t2, sub t3)

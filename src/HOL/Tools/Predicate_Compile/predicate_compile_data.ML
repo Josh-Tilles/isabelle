@@ -116,7 +116,7 @@ fun defining_const_of_equation th =
 
 fun mk_meta_equation th =
   (case prop_of th of
-    Const (@{const_name Trueprop}, _) $ (Const (@{const_name HOL.eq}, _) $ _ $ _) =>
+    Const (@{const_name Trueprop}, _) $ (Const (@{const_name IHOL.eq}, _) $ _ $ _) =>
       th RS @{thm eq_reflection}
   | _ => th)
 
@@ -228,12 +228,12 @@ val logic_operator_names =
    @{const_name "==>"},
    @{const_name Trueprop},
    @{const_name Not},
-   @{const_name HOL.eq},
-   @{const_name HOL.implies},
+   @{const_name IHOL.eq},
+   @{const_name IHOL.implies},
    @{const_name All},
    @{const_name Ex},
-   @{const_name HOL.conj},
-   @{const_name HOL.disj}]
+   @{const_name IHOL.conj},
+   @{const_name IHOL.disj}]
 
 fun special_cases (c, _) =
   member (op =)
@@ -254,7 +254,7 @@ fun special_cases (c, _) =
     @{const_name Num.One},
     @{const_name Int.zero_int_inst.zero_int},
     @{const_name List.filter},
-    @{const_name HOL.If},
+    @{const_name IHOL.If},
     @{const_name Groups.minus}] c
 
 

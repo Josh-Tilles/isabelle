@@ -189,7 +189,7 @@ fun fin_fun_body _ _ (t as @{term False}) = SOME t
   | fin_fun_body _ _ (t as Const (@{const_name None}, _)) = SOME t
   | fin_fun_body dom_T ran_T
                  ((t0 as Const (@{const_name If}, _))
-                  $ (t1 as Const (@{const_name HOL.eq}, _) $ Bound 0 $ t1')
+                  $ (t1 as Const (@{const_name IHOL.eq}, _) $ Bound 0 $ t1')
                   $ t2 $ t3) =
     (if loose_bvar1 (t1', 0) then
        NONE
@@ -812,7 +812,7 @@ fun consider_term (mdata as {hol_ctxt = {thy, ctxt, stds, ...}, alpha_T,
        | Const (@{const_name None}, T) =>
          (mtype_for T, accum ||> add_comp_frame (A Fls) Leq frame)
        | @{const True} => (bool_M, accum ||> add_comp_frame (A Tru) Leq frame)
-       | (t0 as Const (@{const_name HOL.eq}, _)) $ Bound 0 $ t2 =>
+       | (t0 as Const (@{const_name IHOL.eq}, _)) $ Bound 0 $ t2 =>
          (* hack to exploit symmetry of equality when typing "insert" *)
          (if t2 = Bound 0 then do_term @{term True}
           else do_term (t0 $ t2 $ Bound 0)) accum
@@ -834,7 +834,7 @@ fun consider_term (mdata as {hol_ctxt = {thy, ctxt, stds, ...}, alpha_T,
                                         @{const False}),
                                    Bound 0)))) accum
               end
-            | @{const_name HOL.eq} => do_equals T accum
+            | @{const_name IHOL.eq} => do_equals T accum
             | @{const_name The} =>
               (trace_msg (K "*** The"); raise UNSOLVABLE ())
             | @{const_name Eps} =>
@@ -937,7 +937,7 @@ fun consider_term (mdata as {hol_ctxt = {thy, ctxt, stds, ...}, alpha_T,
                     do_term (incr_boundvars ~1 t1') accum
                   else
                     raise SAME ()
-                | (t11 as Const (@{const_name HOL.eq}, _)) $ Bound 0 $ t13 =>
+                | (t11 as Const (@{const_name IHOL.eq}, _)) $ Bound 0 $ t13 =>
                   if not (loose_bvar1 (t13, 0)) then
                     do_term (incr_boundvars ~1 (t11 $ t13)) accum
                   else
@@ -1049,7 +1049,7 @@ fun consider_general_formula (mdata as {hol_ctxt = {ctxt, ...}, max_fresh,
              do_term (@{const Not}
                       $ (HOLogic.eq_const (domain_type T0) $ t1
                          $ Abs (Name.uu, T1, @{const False}))) accum)
-        | Const (@{const_name HOL.eq}, _) $ t1 $ t2 => do_equals t1 t2
+        | Const (@{const_name IHOL.eq}, _) $ t1 $ t2 => do_equals t1 t2
         | Const (@{const_name Let}, _) $ t1 $ t2 =>
           do_formula sn (betapply (t2, t1)) accum
         | @{const Pure.conjunction} $ t1 $ t2 =>
@@ -1108,7 +1108,7 @@ fun consider_definitional_axiom (mdata as {hol_ctxt = {ctxt, ...}, ...} : mdata)
         | @{const Pure.conjunction} $ t1 $ t2 =>
           fold (do_formula) [t1, t2] accum
         | Const (@{const_name All}, _) $ Abs (_, T1, t1) => do_all T1 t1 accum
-        | Const (@{const_name HOL.eq}, _) $ t1 $ t2 =>
+        | Const (@{const_name IHOL.eq}, _) $ t1 $ t2 =>
           consider_general_equals mdata true t1 t2 accum
         | @{const conj} $ t1 $ t2 => fold (do_formula) [t1, t2] accum
         | @{const implies} $ t1 $ t2 => do_implies t1 t2 accum

@@ -451,7 +451,7 @@ local
           (lhs, rhs)
         | Const ("Orderings.ord_class.less_eq", _) $ rhs $ (lhs as Const ("Relation.relcompp",_) $ _ $ _) => 
           (lhs, rhs)
-        | Const ("HOL.eq", _) $ (lhs as Const ("Relation.relcompp",_) $ _ $ _) $ rhs => (lhs, rhs)
+        | Const ("IHOL.eq", _) $ (lhs as Const ("Relation.relcompp",_) $ _ $ _) $ rhs => (lhs, rhs)
         | _ => error "The rule has a wrong format."
       
       val lhs_vars = Term.add_vars lhs []
@@ -482,7 +482,7 @@ in
           add_pos_distr_rule distr_rule ctxt
         | Const ("Orderings.ord_class.less_eq", _) $ _ $ (Const ("Relation.relcompp",_) $ _ $ _) => 
           add_neg_distr_rule distr_rule ctxt
-        | Const ("HOL.eq", _) $ (Const ("Relation.relcompp",_) $ _ $ _) $ _ =>
+        | Const ("IHOL.eq", _) $ (Const ("Relation.relcompp",_) $ _ $ _) $ _ =>
           add_eq_distr_rule distr_rule ctxt
     end
 end

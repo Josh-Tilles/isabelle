@@ -86,7 +86,7 @@ local
 
   fun print_generate_pcr_cr_eq_error ctxt term = 
   let
-    val goal = (Const ("HOL.eq", dummyT)) $ term $ Const ("HOL.eq", dummyT)
+    val goal = (Const ("IHOL.eq", dummyT)) $ term $ Const ("IHOL.eq", dummyT)
     val error_msg = cat_lines 
       ["Generation of a pcr_cr_eq failed.",
       (Pretty.string_of (Pretty.block
@@ -121,7 +121,7 @@ in
           (Transfer.bottom_rewr_conv (Transfer.get_relator_eq lthy))))
   in
     case (term_of o Thm.rhs_of) pcr_cr_eq of
-      Const (@{const_name "relcompp"}, _) $ Const ("HOL.eq", _) $ _ => 
+      Const (@{const_name "relcompp"}, _) $ Const ("IHOL.eq", _) $ _ => 
         let
           val thm = 
             pcr_cr_eq
@@ -819,7 +819,7 @@ fun lifting_restore_sanity_check ctxt (qinfo:Lifting_Info.quotient) =
                     Pretty.brk 1,
                     Display.pretty_thm ctxt pcr_cr_eq]]
             val (pcr_const_eq, eqs) = strip_comb eq_lhs
-            fun is_eq (Const ("HOL.eq", _)) = true
+            fun is_eq (Const ("IHOL.eq", _)) = true
               | is_eq _ = false
             fun eq_Const (Const (name1, _)) (Const (name2, _)) = (name1 = name2)
               | eq_Const _ _ = false
@@ -921,7 +921,7 @@ val monotonicity_names = [@{const_name right_unique}, @{const_name left_unique},
   @{const_name left_total}, @{const_name bi_unique}, @{const_name bi_total}]
 
 fun fold_transfer_rel f (Const (@{const_name "Transfer.Rel"}, _) $ rel $ _ $ _) = f rel
-  | fold_transfer_rel f (Const (@{const_name "HOL.eq"}, _) $ 
+  | fold_transfer_rel f (Const (@{const_name "IHOL.eq"}, _) $ 
     (Const (@{const_name Domainp}, _) $ rel) $ _) = f rel
   | fold_transfer_rel f (Const (name, _) $ rel) = 
     if member op= monotonicity_names name then f rel else f @{term undefined}

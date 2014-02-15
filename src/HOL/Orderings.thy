@@ -5,7 +5,7 @@
 header {* Abstract orderings *}
 
 theory Orderings
-imports HOL
+imports IHOL
 keywords "print_orders" :: diag
 begin
 
@@ -660,8 +660,8 @@ print_translation {*
 let
   val All_binder = Mixfix.binder_name @{const_syntax All};
   val Ex_binder = Mixfix.binder_name @{const_syntax Ex};
-  val impl = @{const_syntax HOL.implies};
-  val conj = @{const_syntax HOL.conj};
+  val impl = @{const_syntax IHOL.implies};
+  val conj = @{const_syntax IHOL.conj};
   val less = @{const_syntax less};
   val less_eq = @{const_syntax less_eq};
 

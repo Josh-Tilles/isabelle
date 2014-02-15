@@ -348,7 +348,7 @@ local
     @{lemma "P = True == P" by (rule eq_reflection) simp},
     @{lemma "if P then True else False == P" by (rule eq_reflection) simp}]
 
-  fun as_term t = @{const HOL.eq (bool)} $ t $ @{const SMT.term_true}
+  fun as_term t = @{const IHOL.eq (bool)} $ t $ @{const SMT.term_true}
 
   exception BAD_PATTERN of unit
 
@@ -364,7 +364,7 @@ local
 
   fun builtin b ctxt c ts =
     (case (Const c, ts) of
-      (@{const HOL.eq (bool)}, [t, u]) =>
+      (@{const IHOL.eq (bool)}, [t, u]) =>
         if t = @{const SMT.term_true} orelse u = @{const SMT.term_true} then
           SMT_Builtin.dest_builtin_eq ctxt t u
         else b ctxt c ts
@@ -557,7 +557,7 @@ fun translate ctxt comments ithms =
 
     fun mk_trigger ((q as Const (@{const_name All}, _)) $ Abs (n, T, t)) =
           q $ Abs (n, T, mk_trigger t)
-      | mk_trigger (eq as (Const (@{const_name HOL.eq}, T) $ lhs $ _)) =
+      | mk_trigger (eq as (Const (@{const_name IHOL.eq}, T) $ lhs $ _)) =
           Term.domain_type T --> @{typ SMT.pattern}
           |> (fn T => Const (@{const_name SMT.pat}, T) $ lhs)
           |> HOLogic.mk_list @{typ SMT.pattern} o single

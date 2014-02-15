@@ -263,7 +263,7 @@ fun mutual_cases_rule ctxt cases_rule n ST (MutualPart {i, cargTs, ...}) =
     val sumtree_inj = SumTree.mk_inj ST n i args
 
     val sum_elims =
-      @{thms HOL.notE[OF Sum_Type.sum.distinct(1)] HOL.notE[OF Sum_Type.sum.distinct(2)]}
+      @{thms IHOL.notE[OF Sum_Type.sum.distinct(1)] IHOL.notE[OF Sum_Type.sum.distinct(2)]}
 
     fun prep_subgoal i =
       REPEAT (eresolve_tac @{thms Pair_inject Inl_inject[elim_format] Inr_inject[elim_format]} i)

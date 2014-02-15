@@ -99,7 +99,7 @@ fun mk_readable_rsp_thm_eq tm lthy =
         fun abs_conv2 cv = Conv.abs_conv (K (Conv.abs_conv (K cv) lthy)) lthy
         fun erase_quants ctm' =
           case (Thm.term_of ctm') of
-            Const (@{const_name HOL.eq}, _) $ _ $ _ => Conv.all_conv ctm'
+            Const (@{const_name IHOL.eq}, _) $ _ $ _ => Conv.all_conv ctm'
             | _ => (Conv.binder_conv (K erase_quants) lthy then_conv 
               Conv.rewr_conv @{thm fun_eq_iff[symmetric, THEN eq_reflection]}) ctm'
       in
@@ -123,7 +123,7 @@ fun mk_readable_rsp_thm_eq tm lthy =
     val unfold_ret_val_invs = Conv.bottom_conv 
       (K (Conv.try_conv (Conv.rewr_conv @{thm invariant_same_args}))) lthy 
     val simp_conv = Conv.arg_conv (Conv.fun2_conv simp_arrows_conv)
-    val univq_conv = Conv.rewr_conv @{thm HOL.all_simps(6)[symmetric, THEN eq_reflection]}
+    val univq_conv = Conv.rewr_conv @{thm IHOL.all_simps(6)[symmetric, THEN eq_reflection]}
     val univq_prenex_conv = Conv.top_conv (K (Conv.try_conv univq_conv)) lthy
     val beta_conv = Thm.beta_conversion true
     val eq_thm = 
@@ -164,7 +164,7 @@ fun gen_quotient_def prep_vars prep_term (raw_var, (attr, (lhs_raw, rhs_raw))) l
           |> try HOLogic.dest_Trueprop
       in
         case lhs_eq of
-          SOME (Const (@{const_name HOL.eq}, _) $ _ $ _) => SOME (@{thm refl} RS thm)
+          SOME (Const (@{const_name IHOL.eq}, _) $ _ $ _) => SOME (@{thm refl} RS thm)
           | SOME _ => (case body_type (fastype_of lhs) of
             Type (typ_name, _) =>
               try (fn () =>

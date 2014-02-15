@@ -204,8 +204,8 @@ fun has_conns bs =
   let fun has (Const _) = false
         | has (Const(@{const_name Trueprop},_) $ p) = has p
         | has (Const(@{const_name Not},_) $ p) = has p
-        | has (Const(@{const_name HOL.disj},_) $ p $ q) = member (op =) bs @{const_name HOL.disj} orelse has p orelse has q
-        | has (Const(@{const_name HOL.conj},_) $ p $ q) = member (op =) bs @{const_name HOL.conj} orelse has p orelse has q
+        | has (Const(@{const_name IHOL.disj},_) $ p $ q) = member (op =) bs @{const_name IHOL.disj} orelse has p orelse has q
+        | has (Const(@{const_name IHOL.conj},_) $ p $ q) = member (op =) bs @{const_name IHOL.conj} orelse has p orelse has q
         | has (Const(@{const_name All},_) $ Abs(_,_,p)) = member (op =) bs @{const_name All} orelse has p
         | has (Const(@{const_name Ex},_) $ Abs(_,_,p)) = member (op =) bs @{const_name Ex} orelse has p
         | has _ = false
@@ -215,7 +215,7 @@ fun has_conns bs =
 (**** Clause handling ****)
 
 fun literals (Const(@{const_name Trueprop},_) $ P) = literals P
-  | literals (Const(@{const_name HOL.disj},_) $ P $ Q) = literals P @ literals Q
+  | literals (Const(@{const_name IHOL.disj},_) $ P $ Q) = literals P @ literals Q
   | literals (Const(@{const_name Not},_) $ P) = [(false,P)]
   | literals P = [(true,P)];
 
@@ -225,7 +225,7 @@ val nliterals = length o literals;
 
 (*** Tautology Checking ***)
 
-fun signed_lits_aux (Const (@{const_name HOL.disj}, _) $ P $ Q) (poslits, neglits) =
+fun signed_lits_aux (Const (@{const_name IHOL.disj}, _) $ P $ Q) (poslits, neglits) =
       signed_lits_aux Q (signed_lits_aux P (poslits, neglits))
   | signed_lits_aux (Const(@{const_name Not},_) $ P) (poslits, neglits) = (poslits, P::neglits)
   | signed_lits_aux P (poslits, neglits) = (P::poslits, neglits);
@@ -233,7 +233,7 @@ fun signed_lits_aux (Const (@{const_name HOL.disj}, _) $ P $ Q) (poslits, neglit
 fun signed_lits th = signed_lits_aux (HOLogic.dest_Trueprop (concl_of th)) ([],[]);
 
 (*Literals like X=X are tautologous*)
-fun taut_poslit (Const(@{const_name HOL.eq},_) $ t $ u) = t aconv u
+fun taut_poslit (Const(@{const_name IHOL.eq},_) $ t $ u) = t aconv u
   | taut_poslit (Const(@{const_name True},_)) = true
   | taut_poslit _ = false;
 
@@ -261,18 +261,18 @@ fun eliminable (t as Var _, u) = t aconv u orelse not (Logic.occs(t,u))
 fun refl_clause_aux 0 th = th
   | refl_clause_aux n th =
        case HOLogic.dest_Trueprop (concl_of th) of
-          (Const (@{const_name HOL.disj}, _) $ (Const (@{const_name HOL.disj}, _) $ _ $ _) $ _) =>
+          (Const (@{const_name IHOL.disj}, _) $ (Const (@{const_name IHOL.disj}, _) $ _ $ _) $ _) =>
             refl_clause_aux n (th RS disj_assoc)    (*isolate an atom as first disjunct*)
-        | (Const (@{const_name HOL.disj}, _) $ (Const(@{const_name Not},_) $ (Const(@{const_name HOL.eq},_) $ t $ u)) $ _) =>
+        | (Const (@{const_name IHOL.disj}, _) $ (Const(@{const_name Not},_) $ (Const(@{const_name IHOL.eq},_) $ t $ u)) $ _) =>
             if eliminable(t,u)
             then refl_clause_aux (n-1) (th RS not_refl_disj_D)  (*Var inequation: delete*)
             else refl_clause_aux (n-1) (th RS disj_comm)  (*not between Vars: ignore*)
-        | (Const (@{const_name HOL.disj}, _) $ _ $ _) => refl_clause_aux n (th RS disj_comm)
+        | (Const (@{const_name IHOL.disj}, _) $ _ $ _) => refl_clause_aux n (th RS disj_comm)
         | _ => (*not a disjunction*) th;
 
-fun notequal_lits_count (Const (@{const_name HOL.disj}, _) $ P $ Q) =
+fun notequal_lits_count (Const (@{const_name IHOL.disj}, _) $ P $ Q) =
       notequal_lits_count P + notequal_lits_count Q
-  | notequal_lits_count (Const(@{const_name Not},_) $ (Const(@{const_name HOL.eq},_) $ _ $ _)) = 1
+  | notequal_lits_count (Const(@{const_name Not},_) $ (Const(@{const_name IHOL.eq},_) $ _ $ _)) = 1
   | notequal_lits_count _ = 0;
 
 (*Simplify a clause by applying reflexivity to its negated equality literals*)
@@ -318,16 +318,16 @@ fun estimated_num_clauses bound t =
   (*Estimate the number of clauses in order to detect infeasible theorems*)
   fun signed_nclauses b (Const(@{const_name Trueprop},_) $ t) = signed_nclauses b t
     | signed_nclauses b (Const(@{const_name Not},_) $ t) = signed_nclauses (not b) t
-    | signed_nclauses b (Const(@{const_name HOL.conj},_) $ t $ u) =
+    | signed_nclauses b (Const(@{const_name IHOL.conj},_) $ t $ u) =
         if b then sum (signed_nclauses b t) (signed_nclauses b u)
              else prod (signed_nclauses b t) (signed_nclauses b u)
-    | signed_nclauses b (Const(@{const_name HOL.disj},_) $ t $ u) =
+    | signed_nclauses b (Const(@{const_name IHOL.disj},_) $ t $ u) =
         if b then prod (signed_nclauses b t) (signed_nclauses b u)
              else sum (signed_nclauses b t) (signed_nclauses b u)
-    | signed_nclauses b (Const(@{const_name HOL.implies},_) $ t $ u) =
+    | signed_nclauses b (Const(@{const_name IHOL.implies},_) $ t $ u) =
         if b then prod (signed_nclauses (not b) t) (signed_nclauses b u)
              else sum (signed_nclauses (not b) t) (signed_nclauses b u)
-    | signed_nclauses b (Const(@{const_name HOL.eq}, Type ("fun", [T, _])) $ t $ u) =
+    | signed_nclauses b (Const(@{const_name IHOL.eq}, Type ("fun", [T, _])) $ t $ u) =
         if T = HOLogic.boolT then (*Boolean equality is if-and-only-if*)
             if b then sum (prod (signed_nclauses (not b) t) (signed_nclauses b u))
                           (prod (signed_nclauses (not b) u) (signed_nclauses b t))
@@ -379,10 +379,10 @@ fun cnf old_skolem_ths ctxt ctxt0 (th, ths) =
   let val ctxt0r = Unsynchronized.ref ctxt0   (* FIXME ??? *)
       fun cnf_aux (th,ths) =
         if not (can HOLogic.dest_Trueprop (prop_of th)) then ths (*meta-level: ignore*)
-        else if not (has_conns [@{const_name All}, @{const_name Ex}, @{const_name HOL.conj}] (prop_of th))
+        else if not (has_conns [@{const_name All}, @{const_name Ex}, @{const_name IHOL.conj}] (prop_of th))
         then nodups ctxt0 th :: ths (*no work to do, terminate*)
         else case head_of (HOLogic.dest_Trueprop (concl_of th)) of
-            Const (@{const_name HOL.conj}, _) => (*conjunction*)
+            Const (@{const_name IHOL.conj}, _) => (*conjunction*)
                 cnf_aux (th RS conjunct1, cnf_aux (th RS conjunct2, ths))
           | Const (@{const_name All}, _) => (*universal quantifier*)
                 let val (th',ctxt0') = freeze_spec th (!ctxt0r)
@@ -390,7 +390,7 @@ fun cnf old_skolem_ths ctxt ctxt0 (th, ths) =
           | Const (@{const_name Ex}, _) =>
               (*existential quantifier: Insert Skolem functions*)
               cnf_aux (apply_skolem_theorem (th, old_skolem_ths), ths)
-          | Const (@{const_name HOL.disj}, _) =>
+          | Const (@{const_name IHOL.disj}, _) =>
               (*Disjunction of P, Q: Create new goal of proving ?P | ?Q and solve it using
                 all combinations of converting P, Q to CNF.*)
               let val tac =
@@ -416,7 +416,7 @@ fun finish_cnf ths = filter (not o is_taut) (map refl_clause ths);
 (**** Generation of contrapositives ****)
 
 fun is_left (Const (@{const_name Trueprop}, _) $
-               (Const (@{const_name HOL.disj}, _) $ (Const (@{const_name HOL.disj}, _) $ _ $ _) $ _)) = true
+               (Const (@{const_name IHOL.disj}, _) $ (Const (@{const_name IHOL.disj}, _) $ _ $ _) $ _)) = true
   | is_left _ = false;
 
 (*Associate disjuctions to right -- make leftmost disjunct a LITERAL*)
@@ -437,7 +437,7 @@ fun make_goal th =   (*Must check for negative literal first!*)
 
 fun rigid t = not (is_Var (head_of t));
 
-fun ok4horn (Const (@{const_name Trueprop},_) $ (Const (@{const_name HOL.disj}, _) $ t $ _)) = rigid t
+fun ok4horn (Const (@{const_name Trueprop},_) $ (Const (@{const_name IHOL.disj}, _) $ t $ _)) = rigid t
   | ok4horn (Const (@{const_name Trueprop},_) $ t) = rigid t
   | ok4horn _ = false;
 
@@ -627,7 +627,7 @@ val F_ext_cong_neq =
 fun cong_extensionalize_thm thy th =
   case concl_of th of
     @{const Trueprop} $ (@{const Not}
-        $ (Const (@{const_name HOL.eq}, Type (_, [T, _]))
+        $ (Const (@{const_name IHOL.eq}, Type (_, [T, _]))
            $ (t as _ $ _) $ (u as _ $ _))) =>
     (case get_F_pattern T t u of
        SOME p =>
@@ -642,7 +642,7 @@ fun cong_extensionalize_thm thy th =
    proof in "Tarski" that relies on the current behavior. *)
 fun abs_extensionalize_conv ctxt ct =
   case term_of ct of
-    Const (@{const_name HOL.eq}, _) $ _ $ Abs _ =>
+    Const (@{const_name IHOL.eq}, _) $ _ $ Abs _ =>
     ct |> (Conv.rewr_conv @{thm fun_eq_iff [THEN eq_reflection]}
            then_conv abs_extensionalize_conv ctxt)
   | _ $ _ => Conv.comb_conv (abs_extensionalize_conv ctxt) ct
