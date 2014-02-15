@@ -7,31 +7,7 @@ subsubsection {* Axioms and basic definitions *}
 
 axiomatization where
   True_or_False: "(P=True) | (P=False)"
-
-defs
-  True_def:     "True      == ((%x::bool. x) = (%x. x))"
-  All_def:      "All(P)    == (P = (%x. True))"
-  Ex_def:       "Ex(P)     == !Q. (!x. P x --> Q) --> Q"
-  False_def:    "False     == (!P. P)"
-  not_def:      "~ P       == P-->False"
-  and_def:      "P & Q     == !R. (P-->Q-->R) --> R"
-  or_def:       "P | Q     == !R. (P-->R) --> (Q-->R) --> R"
-  Ex1_def:      "Ex1(P)    == ? x. P(x) & (! y. P(y) --> y=x)"
-
-definition If :: "bool \<Rightarrow> 'a \<Rightarrow> 'a \<Rightarrow> 'a" ("(if (_)/ then (_)/ else (_))" [0, 0, 10] 10)
-  where "If P x y \<equiv> (THE z::'a. (P=True --> z=x) & (P=False --> z=y))"
-
-definition Let :: "'a \<Rightarrow> ('a \<Rightarrow> 'b) \<Rightarrow> 'b"
-  where "Let s f \<equiv> f s"
-
-translations
-  "_Let (_binds b bs) e"  == "_Let b (_Let bs e)"
-  "let x = a in e"        == "CONST Let a (%x. e)"
-
-axiomatization undefined :: 'a
-
-class default = fixes default :: 'a
-
+  
 
 subsection {* Fundamental rules *}
 
