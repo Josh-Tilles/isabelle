@@ -139,6 +139,11 @@ sig
 
   val mk_proj: typ -> int -> int -> term
 
+  val mk_partial_compN: int -> typ -> term -> term
+  val mk_partial_comp: typ -> typ -> term -> term
+  val mk_compN: int -> typ list -> term * term -> term
+  val mk_comp: typ list -> term * term -> term
+
   val mk_convol: term * term -> term
 
   val Inl_const: typ -> typ -> term
@@ -156,6 +161,9 @@ sig
   val dest_sumTN: int -> typ -> typ list
   val dest_sumTN_balanced: int -> typ -> typ list
   val dest_tupleT: int -> typ -> typ list
+
+  val exists_subtype_in: typ list -> typ -> bool
+  val exists_strict_subtype_in: typ list -> typ -> bool
 
   val If_const: typ -> term
 
@@ -372,10 +380,32 @@ fun dest_tupleT 0 @{typ unit} = []
 val mk_sumTN = Library.foldr1 mk_sumT;
 val mk_sumTN_balanced = Balanced_Tree.make mk_sumT;
 
+val exists_subtype_in = Term.exists_subtype o member (op =);
+
+fun exists_strict_subtype_in Ts T = exists_subtype_in (filter_out (curry (op =) T) Ts) T;
+
 fun mk_proj T n k =
   let val (binders, _) = strip_typeN n T in
     fold_rev (fn T => fn t => Abs (Name.uu, T, t)) binders (Bound (n - k - 1))
   end;
+
+fun mk_partial_comp gT fT g =
+  let val T = domain_type fT --> range_type gT in
+    Const (@{const_name Fun.comp}, gT --> fT --> T) $ g
+  end;
+
+fun mk_partial_compN 0 _ g = g
+  | mk_partial_compN n fT g =
+    let val g' = mk_partial_compN (n - 1) (range_type fT) g in
+      mk_partial_comp (fastype_of g') fT g'
+    end;
+
+fun mk_compN n bound_Ts (g, f) =
+  let val typof = curry fastype_of1 bound_Ts in
+    mk_partial_compN n (typof f) g $ f
+  end;
+
+val mk_comp = mk_compN 1;
 
 fun mk_convol (f, g) =
   let

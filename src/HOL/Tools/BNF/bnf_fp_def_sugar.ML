@@ -35,7 +35,6 @@ sig
   val strong_co_induct_of: 'a list -> 'a
 
   val tvar_subst: theory -> typ list -> typ list -> ((string * int) * typ) list
-  val exists_subtype_in: typ list -> typ -> bool
   val flat_rec_arg_args: 'a list list -> 'a list
   val flat_corec_preds_predsss_gettersss: 'a list -> 'a list list list -> 'a list list list ->
     'a list
@@ -65,7 +64,7 @@ sig
      * (typ list list * typ list list list list * term list list
         * term list list list list) list option
      * (string * term list * term list list
-        * ((term list list * term list list list) * (typ list * typ list list)) list) option)
+        * ((term list list * term list list list) * typ list) list) option)
     * Proof.context
   val mk_iter_fun_arg_types: typ list list list -> int list -> int list list -> term ->
     typ list list list list
@@ -77,7 +76,7 @@ sig
     (string -> binding) -> typ list -> typ list -> term list -> Proof.context ->
     (term list * thm list) * Proof.context
   val define_coiters: string list -> string * term list * term list list
-    * ((term list list * term list list list) * (typ list * typ list list)) list ->
+    * ((term list list * term list list list) * typ list) list ->
     (string -> binding) -> typ list -> typ list -> term list -> Proof.context ->
     (term list * thm list) * Proof.context
   val derive_induct_iters_thms_for_types: BNF_Def.bnf list ->
@@ -87,7 +86,7 @@ sig
     thm list list -> local_theory -> lfp_sugar_thms
   val derive_coinduct_coiters_thms_for_types: BNF_Def.bnf list ->
     string * term list * term list list * ((term list list * term list list list)
-      * (typ list * typ list list)) list ->
+      * typ list) list ->
     thm -> thm list -> thm list -> thm list list -> BNF_Def.bnf list -> typ list -> typ list ->
     typ list -> typ list list list -> int list list -> int list list -> int list -> thm list list ->
     Ctr_Sugar.ctr_sugar list -> term list list -> thm list list -> (thm list -> thm list) ->
@@ -220,8 +219,6 @@ val simp_attrs = @{attributes [simp]};
 
 fun tvar_subst thy Ts Us =
   Vartab.fold (cons o apsnd snd) (fold (Sign.typ_match thy) (Ts ~~ Us) Vartab.empty) [];
-
-val exists_subtype_in = Term.exists_subtype o member (op =);
 
 val lists_bmoc = fold (fn xs => fn t => Term.list_comb (t, xs));
 
@@ -443,9 +440,8 @@ fun mk_coiters_args_types ctr_Tsss Cs ns dtor_coiter_fun_Tss lthy =
       let
         val fun_Ts = map get_Ts dtor_coiter_fun_Tss;
         val (q_Tssss, f_Tsss, f_Tssss, f_sum_prod_Ts) = mk_coiter_fun_arg_types0 ctr_Tsss Cs ns fun_Ts;
-        val pf_Tss = map3 flat_corec_preds_predsss_gettersss p_Tss q_Tssss f_Tssss;
       in
-        (q_Tssss, f_Tsss, f_Tssss, (f_sum_prod_Ts, pf_Tss))
+        (q_Tssss, f_Tsss, f_Tssss, f_sum_prod_Ts)
       end;
 
     val (r_Tssss, g_Tsss, g_Tssss, unfold_types) = mk_types un_fold_of;
@@ -537,7 +533,7 @@ fun define_iters iterNs iter_args_typess' mk_binding fpTs Cs ctor_iters lthy =
   let
     val nn = length fpTs;
 
-    val fpT_to_C as Type (_, [fpT, _]) = snd (strip_typeN nn (fastype_of (hd ctor_iters)));
+    val Type (_, [fpT, _]) = snd (strip_typeN nn (fastype_of (hd ctor_iters)));
 
     fun generate_iter pre (_, _, fss, xssss) ctor_iter =
       (mk_binding pre,
@@ -552,9 +548,9 @@ fun define_coiters coiterNs (_, cs, cpss, coiter_args_typess') mk_binding fpTs C
   let
     val nn = length fpTs;
 
-    val C_to_fpT as Type (_, [_, fpT]) = snd (strip_typeN nn (fastype_of (hd dtor_coiters)));
+    val Type (_, [_, fpT]) = snd (strip_typeN nn (fastype_of (hd dtor_coiters)));
 
-    fun generate_coiter pre ((pfss, cqfsss), (f_sum_prod_Ts, pf_Tss)) dtor_coiter =
+    fun generate_coiter pre ((pfss, cqfsss), f_sum_prod_Ts) dtor_coiter =
       (mk_binding pre,
        fold_rev (fold_rev Term.lambda) pfss (Term.list_comb (dtor_coiter,
          map4 mk_preds_getterss_join cs cpss f_sum_prod_Ts cqfsss)));
@@ -875,7 +871,7 @@ fun derive_coinduct_coiters_thms_for_types pre_bnfs (z, cs, cpss,
           let val T = fastype_of cqf in
             if exists_subtype_in Cs T then
               let val U = mk_U maybe_mk_sumT T in
-                build_map lthy (indexify snd fpTs (fn kk => fn _ =>
+                build_map lthy (indexify fst (map2 maybe_mk_sumT fpTs Cs) (fn kk => fn _ =>
                   maybe_tack (nth cs kk, nth us kk) (nth fcoiters kk))) (T, U) $ cqf
               end
             else

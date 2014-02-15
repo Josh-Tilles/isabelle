@@ -162,8 +162,8 @@ fun rec_specs_of bs arg_Ts res_Ts get_indices callssss0 lthy0 =
     val perm_fun_arg_Tssss =
       mk_iter_fun_arg_types perm_ctr_Tsss perm_ns perm_mss (co_rec_of ctor_iters1);
 
-    fun unpermute0 perm0_xs = permute_like (op =) perm0_kks kks perm0_xs;
-    fun unpermute perm_xs = permute_like (op =) perm_indices indices perm_xs;
+    fun unpermute0 perm0_xs = permute_like_unique (op =) perm0_kks kks perm0_xs;
+    fun unpermute perm_xs = permute_like_unique (op =) perm_indices indices perm_xs;
 
     val induct_thms = unpermute0 (conj_dests nn induct_thm);
 
@@ -513,14 +513,19 @@ fun prepare_primrec fixes specs lthy =
             mk_primrec_tac lthy num_extra_args nested_map_idents nested_map_comps def_thms rec_thm
             |> K |> Goal.prove_sorry lthy [] [] user_eqn
             |> Thm.close_derivation);
-        val poss = find_indices (op = o pairself #ctr) fun_data eqns_data;
+        val poss =
+          find_indices (op = o pairself (fn {fun_name, ctr, ...} => (fun_name, ctr)))
+            fun_data eqns_data;
       in
         (poss, simp_thmss)
       end;
 
     val notes =
-      (if n2m then map2 (fn name => fn thm =>
-        (name, inductN, [thm], [])) fun_names (take actual_nn induct_thms) else [])
+      (if n2m then
+         map2 (fn name => fn thm =>
+           (name, inductN, [thm], [])) fun_names (take actual_nn induct_thms)
+       else
+         [])
       |> map (fn (prefix, thmN, thms, attrs) =>
         ((Binding.qualify true prefix (Binding.name thmN), attrs), [(thms, [])]));
 
