@@ -122,10 +122,10 @@ val dest_funT =
 
 (* terms *)
 
-fun dest_conj (@{const HOL.conj} $ t $ u) = (t, u)
+fun dest_conj (@{const IHOL.conj} $ t $ u) = (t, u)
   | dest_conj t = raise TERM ("not a conjunction", [t])
 
-fun dest_disj (@{const HOL.disj} $ t $ u) = (t, u)
+fun dest_disj (@{const IHOL.disj} $ t $ u) = (t, u)
   | dest_disj t = raise TERM ("not a disjunction", [t])
 
 fun under_quant f t =

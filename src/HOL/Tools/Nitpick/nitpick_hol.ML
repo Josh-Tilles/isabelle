@@ -355,13 +355,13 @@ fun strip_connective conn_t (t as (t0 $ t1 $ t2)) =
     if t0 = conn_t then strip_connective t0 t2 @ strip_connective t0 t1 else [t]
   | strip_connective _ t = [t]
 fun strip_any_connective (t as (t0 $ _ $ _)) =
-    if t0 = @{const HOL.conj} orelse t0 = @{const HOL.disj} then
+    if t0 = @{const IHOL.conj} orelse t0 = @{const IHOL.disj} then
       (strip_connective t0 t, t0)
     else
       ([t], @{const Not})
   | strip_any_connective t = ([t], @{const Not})
-val conjuncts_of = strip_connective @{const HOL.conj}
-val disjuncts_of = strip_connective @{const HOL.disj}
+val conjuncts_of = strip_connective @{const IHOL.conj}
+val disjuncts_of = strip_connective @{const IHOL.disj}
 
 (* When you add constants to these lists, make sure to handle them in
    "Nitpick_Nut.nut_from_term", and perhaps in "Nitpick_Mono.consider_term" as
@@ -377,10 +377,10 @@ val built_in_consts =
    (@{const_name True}, 0),
    (@{const_name All}, 1),
    (@{const_name Ex}, 1),
-   (@{const_name HOL.eq}, 1),
-   (@{const_name HOL.conj}, 2),
-   (@{const_name HOL.disj}, 2),
-   (@{const_name HOL.implies}, 2),
+   (@{const_name IHOL.eq}, 1),
+   (@{const_name IHOL.conj}, 2),
+   (@{const_name IHOL.disj}, 2),
+   (@{const_name IHOL.implies}, 2),
    (@{const_name If}, 3),
    (@{const_name Let}, 2),
    (@{const_name Pair}, 2),
@@ -1128,7 +1128,7 @@ fun loose_bvar1_count (Bound i, k) = if i = k then 1 else 0
 
 fun s_betapply _ (t1 as Const (@{const_name "=="}, _) $ t1', t2) =
     if t1' aconv t2 then @{prop True} else t1 $ t2
-  | s_betapply _ (t1 as Const (@{const_name HOL.eq}, _) $ t1', t2) =
+  | s_betapply _ (t1 as Const (@{const_name IHOL.eq}, _) $ t1', t2) =
     if t1' aconv t2 then @{term True} else t1 $ t2
   | s_betapply _ (Const (@{const_name If}, _) $ @{const True} $ t1', _) = t1'
   | s_betapply _ (Const (@{const_name If}, _) $ @{const False} $ _, t2) = t2
@@ -1379,7 +1379,7 @@ fun term_under_def t =
     @{const "==>"} $ _ $ t2 => term_under_def t2
   | Const (@{const_name "=="}, _) $ t1 $ _ => term_under_def t1
   | @{const Trueprop} $ t1 => term_under_def t1
-  | Const (@{const_name HOL.eq}, _) $ t1 $ _ => term_under_def t1
+  | Const (@{const_name IHOL.eq}, _) $ t1 $ _ => term_under_def t1
   | Abs (_, _, t') => term_under_def t'
   | t1 $ _ => term_under_def t1
   | _ => t
@@ -1403,7 +1403,7 @@ fun normalized_rhs_of t =
     val (lhs, rhs) =
       case t of
         Const (@{const_name "=="}, _) $ t1 $ t2 => (t1, t2)
-      | @{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ t1 $ t2) =>
+      | @{const Trueprop} $ (Const (@{const_name IHOL.eq}, _) $ t1 $ t2) =>
         (t1, t2)
       | _ => raise TERM ("Nitpick_HOL.normalized_rhs_of", [t])
     val args = strip_comb lhs |> snd
@@ -1493,8 +1493,8 @@ fun lhs_of_equation t =
   | @{const "==>"} $ _ $ t2 => lhs_of_equation t2
   | @{const Trueprop} $ t1 => lhs_of_equation t1
   | Const (@{const_name All}, _) $ Abs (_, _, t1) => lhs_of_equation t1
-  | Const (@{const_name HOL.eq}, _) $ t1 $ _ => SOME t1
-  | @{const HOL.implies} $ _ $ t2 => lhs_of_equation t2
+  | Const (@{const_name IHOL.eq}, _) $ t1 $ _ => SOME t1
+  | @{const IHOL.implies} $ _ $ t2 => lhs_of_equation t2
   | _ => NONE
 fun is_constr_pattern _ (Bound _) = true
   | is_constr_pattern _ (Var _) = true
@@ -1878,7 +1878,7 @@ fun extensional_equal j T t1 t2 =
                         (betapply (t2, var_t))
     end
   else
-    Const (@{const_name HOL.eq}, T --> T --> bool_T) $ t1 $ t2
+    Const (@{const_name IHOL.eq}, T --> T --> bool_T) $ t1 $ t2
 
 (* FIXME: needed? *)
 fun equationalize_term ctxt tag t =
@@ -1888,7 +1888,7 @@ fun equationalize_term ctxt tag t =
   in
     Logic.list_implies (prems,
         case concl of
-          @{const Trueprop} $ (Const (@{const_name HOL.eq}, Type (_, [T, _]))
+          @{const Trueprop} $ (Const (@{const_name IHOL.eq}, Type (_, [T, _]))
                                $ t1 $ t2) =>
           @{const Trueprop} $ extensional_equal j T t1 t2
         | @{const Trueprop} $ t' =>
@@ -2203,8 +2203,8 @@ val linear_pred_base_and_step_rhss =
           fun repair_rec j (Const (@{const_name Ex}, T1) $ Abs (s2, T2, t2')) =
               Const (@{const_name Ex}, T1)
               $ Abs (s2, T2, repair_rec (j + 1) t2')
-            | repair_rec j (@{const HOL.conj} $ t1 $ t2) =
-              @{const HOL.conj} $ repair_rec j t1 $ repair_rec j t2
+            | repair_rec j (@{const IHOL.conj} $ t1 $ t2) =
+              @{const IHOL.conj} $ repair_rec j t1 $ repair_rec j t2
             | repair_rec j t =
               let val (head, args) = strip_comb t in
                 if head = Bound j then
@@ -2360,7 +2360,7 @@ fun equational_fun_axioms (hol_ctxt as {thy, ctxt, stds, def_tables, simp_table,
   | simps => simps
 fun is_equational_fun_surely_complete hol_ctxt x =
   case equational_fun_axioms hol_ctxt x of
-    [@{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ t1 $ _)] =>
+    [@{const Trueprop} $ (Const (@{const_name IHOL.eq}, _) $ t1 $ _)] =>
     strip_comb t1 |> snd |> forall is_Var
   | _ => false
 

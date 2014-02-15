@@ -79,12 +79,12 @@ end
 *}
 
 lemma [code]:
-  "HOL.equal (Typerep tyco1 tys1) (Typerep tyco2 tys2) \<longleftrightarrow> HOL.equal tyco1 tyco2
-     \<and> list_all2 HOL.equal tys1 tys2"
+  "IHOL.equal (Typerep tyco1 tys1) (Typerep tyco2 tys2) \<longleftrightarrow> IHOL.equal tyco1 tyco2
+     \<and> list_all2 IHOL.equal tys1 tys2"
   by (auto simp add: eq_equal [symmetric] list_all2_eq [symmetric])
 
 lemma [code nbe]:
-  "HOL.equal (x :: typerep) x \<longleftrightarrow> True"
+  "IHOL.equal (x :: typerep) x \<longleftrightarrow> True"
   by (fact equal_refl)
 
 code_printing

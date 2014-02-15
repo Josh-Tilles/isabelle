@@ -206,7 +206,7 @@ fun term_of_atp ctxt textual sym_tab =
             if textual andalso length ts = 2 andalso loose_aconv (hd ts, List.last ts) then
               @{const True}
             else
-              list_comb (Const (@{const_name HOL.eq}, HOLogic.typeT), ts)
+              list_comb (Const (@{const_name IHOL.eq}, HOLogic.typeT), ts)
           end
         else
           (case unprefix_and_unascii const_prefix s of

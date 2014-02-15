@@ -1519,26 +1519,26 @@ instantiation int :: equal
 begin
 
 definition
-  "HOL.equal k l \<longleftrightarrow> k = (l::int)"
+  "IHOL.equal k l \<longleftrightarrow> k = (l::int)"
 
 instance by default (rule equal_int_def)
 
 end
 
 lemma equal_int_code [code]:
-  "HOL.equal 0 (0::int) \<longleftrightarrow> True"
-  "HOL.equal 0 (Pos l) \<longleftrightarrow> False"
-  "HOL.equal 0 (Neg l) \<longleftrightarrow> False"
-  "HOL.equal (Pos k) 0 \<longleftrightarrow> False"
-  "HOL.equal (Pos k) (Pos l) \<longleftrightarrow> HOL.equal k l"
-  "HOL.equal (Pos k) (Neg l) \<longleftrightarrow> False"
-  "HOL.equal (Neg k) 0 \<longleftrightarrow> False"
-  "HOL.equal (Neg k) (Pos l) \<longleftrightarrow> False"
-  "HOL.equal (Neg k) (Neg l) \<longleftrightarrow> HOL.equal k l"
+  "IHOL.equal 0 (0::int) \<longleftrightarrow> True"
+  "IHOL.equal 0 (Pos l) \<longleftrightarrow> False"
+  "IHOL.equal 0 (Neg l) \<longleftrightarrow> False"
+  "IHOL.equal (Pos k) 0 \<longleftrightarrow> False"
+  "IHOL.equal (Pos k) (Pos l) \<longleftrightarrow> IHOL.equal k l"
+  "IHOL.equal (Pos k) (Neg l) \<longleftrightarrow> False"
+  "IHOL.equal (Neg k) 0 \<longleftrightarrow> False"
+  "IHOL.equal (Neg k) (Pos l) \<longleftrightarrow> False"
+  "IHOL.equal (Neg k) (Neg l) \<longleftrightarrow> IHOL.equal k l"
   by (auto simp add: equal)
 
 lemma equal_int_refl [code nbe]:
-  "HOL.equal (k::int) k \<longleftrightarrow> True"
+  "IHOL.equal (k::int) k \<longleftrightarrow> True"
   by (fact equal_refl)
 
 lemma less_eq_int_code [code]:

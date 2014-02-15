@@ -255,7 +255,7 @@ fun simplify_code_eq ctxt def_thm =
 
 fun can_generate_code_cert quot_thm  =
   case quot_thm_rel quot_thm of
-    Const (@{const_name HOL.eq}, _) => true
+    Const (@{const_name IHOL.eq}, _) => true
     | Const (@{const_name invariant}, _) $ _  => true
     | _ => false
 
@@ -267,7 +267,7 @@ fun generate_code_cert ctxt def_thm rsp_thm (rty, qty) =
     val abs_rep_thm = [quot_thm, fun_rel] MRSL @{thm Quotient_rep_abs}
     val abs_rep_eq = 
       case (HOLogic.dest_Trueprop o prop_of) fun_rel of
-        Const (@{const_name HOL.eq}, _) $ _ $ _ => abs_rep_thm
+        Const (@{const_name IHOL.eq}, _) $ _ $ _ => abs_rep_thm
         | Const (@{const_name invariant}, _) $ _ $ _ $ _ => abs_rep_thm RS @{thm invariant_to_eq}
         | _ => raise CODE_CERT_GEN "relation is neither equality nor invariant"
     val unfolded_def = Conv.fconv_rule (Conv.arg_conv unfold_fun_maps_beta) def_thm
@@ -478,7 +478,7 @@ fun mk_readable_rsp_thm_eq tm lthy =
     val unfold_ret_val_invs = Conv.bottom_conv 
       (K (Conv.try_conv (Conv.rewr_conv @{thm invariant_same_args}))) lthy 
     val simp_conv = HOLogic.Trueprop_conv (Conv.fun2_conv simp_arrows_conv)
-    val univq_conv = Conv.rewr_conv @{thm HOL.all_simps(6)[symmetric, THEN eq_reflection]}
+    val univq_conv = Conv.rewr_conv @{thm IHOL.all_simps(6)[symmetric, THEN eq_reflection]}
     val univq_prenex_conv = Conv.top_conv (K (Conv.try_conv univq_conv)) lthy
     val beta_conv = Thm.beta_conversion true
     val eq_thm = 

@@ -197,10 +197,10 @@ fun add_pconsts_in_term thy =
       | @{const Not} $ t1 => do_formula t1
       | Const (@{const_name All}, _) $ Abs (_, _, t') => do_formula t'
       | Const (@{const_name Ex}, _) $ Abs (_, _, t') => do_formula t'
-      | @{const HOL.conj} $ t1 $ t2 => do_formula t1 #> do_formula t2
-      | @{const HOL.disj} $ t1 $ t2 => do_formula t1 #> do_formula t2
-      | @{const HOL.implies} $ t1 $ t2 => do_formula t1 #> do_formula t2
-      | Const (@{const_name HOL.eq}, Type (_, [T, _])) $ t1 $ t2 =>
+      | @{const IHOL.conj} $ t1 $ t2 => do_formula t1 #> do_formula t2
+      | @{const IHOL.disj} $ t1 $ t2 => do_formula t1 #> do_formula t2
+      | @{const IHOL.implies} $ t1 $ t2 => do_formula t1 #> do_formula t2
+      | Const (@{const_name IHOL.eq}, Type (_, [T, _])) $ t1 $ t2 =>
         do_term_or_formula false T t1 #> do_term_or_formula true T t2
       | Const (@{const_name If}, Type (_, [_, Type (_, [T, _])]))
         $ t1 $ t2 $ t3 =>

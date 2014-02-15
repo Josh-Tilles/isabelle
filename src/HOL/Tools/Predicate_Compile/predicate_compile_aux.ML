@@ -462,7 +462,7 @@ fun map_indprem f (Prem t) = Prem (f t)
 
 fun is_equationlike_term (Const ("==", _) $ _ $ _) = true
   | is_equationlike_term
-      (Const (@{const_name Trueprop}, _) $ (Const (@{const_name HOL.eq}, _) $ _ $ _)) = true
+      (Const (@{const_name Trueprop}, _) $ (Const (@{const_name IHOL.eq}, _) $ _ $ _)) = true
   | is_equationlike_term _ = false
 
 val is_equationlike = is_equationlike_term o prop_of
@@ -866,7 +866,7 @@ fun split_conjuncts_in_assms ctxt th =
 
 fun dest_conjunct_prem th =
   (case HOLogic.dest_Trueprop (prop_of th) of
-    (Const (@{const_name HOL.conj}, _) $ _ $ _) =>
+    (Const (@{const_name IHOL.conj}, _) $ _ $ _) =>
       dest_conjunct_prem (th RS @{thm conjunct1})
         @ dest_conjunct_prem (th RS @{thm conjunct2})
    | _ => [th])
@@ -1195,10 +1195,10 @@ fun preprocess_intro thy = expand_tuples thy #> preprocess_equality thy
 
 (* defining a quickcheck predicate *)
 
-fun strip_imp_prems (Const(@{const_name HOL.implies}, _) $ A $ B) = A :: strip_imp_prems B
+fun strip_imp_prems (Const(@{const_name IHOL.implies}, _) $ A $ B) = A :: strip_imp_prems B
   | strip_imp_prems _ = [];
 
-fun strip_imp_concl (Const(@{const_name HOL.implies}, _) $ _ $ B) = strip_imp_concl B
+fun strip_imp_concl (Const(@{const_name IHOL.implies}, _) $ _ $ B) = strip_imp_concl B
   | strip_imp_concl A = A;
 
 fun strip_horn A = (strip_imp_prems A, strip_imp_concl A)

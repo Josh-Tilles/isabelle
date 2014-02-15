@@ -87,7 +87,7 @@ fun is_rec_eq lhs = Term.exists_subterm (curry (op =) (head_of lhs))
 fun is_rec_def (@{const Trueprop} $ t) = is_rec_def t
   | is_rec_def (@{const ==>} $ _ $ t2) = is_rec_def t2
   | is_rec_def (Const (@{const_name "=="}, _) $ t1 $ t2) = is_rec_eq t1 t2
-  | is_rec_def (Const (@{const_name HOL.eq}, _) $ t1 $ t2) = is_rec_eq t1 t2
+  | is_rec_def (Const (@{const_name IHOL.eq}, _) $ t1 $ t2) = is_rec_eq t1 t2
   | is_rec_def _ = false
 
 fun is_assum assms th = exists (fn ct => prop_of th aconv term_of ct) assms
@@ -346,10 +346,10 @@ fun clasimpset_rule_table_of ctxt =
       end
   end
 
-fun normalize_eq (@{const Trueprop} $ (t as (t0 as Const (@{const_name HOL.eq}, _)) $ t1 $ t2)) =
+fun normalize_eq (@{const Trueprop} $ (t as (t0 as Const (@{const_name IHOL.eq}, _)) $ t1 $ t2)) =
     if Term_Ord.fast_term_ord (t1, t2) <> GREATER then t else t0 $ t2 $ t1
   | normalize_eq (@{const Trueprop} $ (t as @{const Not}
-        $ ((t0 as Const (@{const_name HOL.eq}, _)) $ t1 $ t2))) =
+        $ ((t0 as Const (@{const_name IHOL.eq}, _)) $ t1 $ t2))) =
     if Term_Ord.fast_term_ord (t1, t2) <> GREATER then t else HOLogic.mk_not (t0 $ t2 $ t1)
   | normalize_eq (Const (@{const_name "=="}, Type (_, [T, _])) $ t1 $ t2) =
     (if Term_Ord.fast_term_ord (t1, t2) <> GREATER then (t1, t2) else (t2, t1))

@@ -523,11 +523,11 @@ lemma less_eq_pred_code [code]:
 
 lemma eq_pred_code [code]:
   fixes P Q :: "'a pred"
-  shows "HOL.equal P Q \<longleftrightarrow> P \<le> Q \<and> Q \<le> P"
+  shows "IHOL.equal P Q \<longleftrightarrow> P \<le> Q \<and> Q \<le> P"
   by (auto simp add: equal)
 
 lemma [code nbe]:
-  "HOL.equal (x :: 'a pred) x \<longleftrightarrow> True"
+  "IHOL.equal (x :: 'a pred) x \<longleftrightarrow> True"
   by (fact equal_refl)
 
 lemma [code]:

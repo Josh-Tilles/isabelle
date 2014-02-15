@@ -516,13 +516,13 @@ struct
 
 fun all_exists_conv cv ctxt ct =
   (case Thm.term_of ct of
-    Const (@{const_name HOL.Ex}, _) $ Abs _ =>
+    Const (@{const_name IHOL.Ex}, _) $ Abs _ =>
       Conv.arg_conv (Conv.abs_conv (all_exists_conv cv o #2) ctxt) ct
   | _ => cv ctxt ct)
 
 fun all_but_last_exists_conv cv ctxt ct =
   (case Thm.term_of ct of
-    Const (@{const_name HOL.Ex}, _) $ Abs (_, _, Const (@{const_name HOL.Ex}, _) $ _) =>
+    Const (@{const_name IHOL.Ex}, _) $ Abs (_, _, Const (@{const_name IHOL.Ex}, _) $ _) =>
       Conv.arg_conv (Conv.abs_conv (all_but_last_exists_conv cv o #2) ctxt) ct
   | _ => cv ctxt ct)
 
@@ -665,7 +665,7 @@ fun simproc ctxt redex =
             val constr_t =
               list_comb
                 (Const (constr_name, map snd vs ---> T), map Bound (((length vs) - 1) downto 0))
-            val constr_eq = Const (@{const_name HOL.eq}, T --> T --> @{typ bool}) $ constr_t $ x'
+            val constr_eq = Const (@{const_name IHOL.eq}, T --> T --> @{typ bool}) $ constr_t $ x'
           in
             make_inner_eqs (rev vs @ bound_vs) (Case (T, i) :: Tis) (constr_eq :: eqs') body
           end
@@ -680,7 +680,7 @@ fun simproc ctxt redex =
                 val pat_eq =
                   (case try dest_singleton_list t of
                     SOME t' =>
-                      Const (@{const_name HOL.eq}, rT --> rT --> @{typ bool}) $
+                      Const (@{const_name IHOL.eq}, rT --> rT --> @{typ bool}) $
                         Bound (length bound_vs) $ t'
                   | NONE =>
                       Const (@{const_name Set.member}, rT --> HOLogic.mk_setT rT --> @{typ bool}) $
@@ -6208,8 +6208,8 @@ lemma eq_Nil_null: (* FIXME delete candidate *)
   by (simp add: null_def)
 
 lemma equal_Nil_null [code_unfold]:
-  "HOL.equal xs [] \<longleftrightarrow> null xs"
-  "HOL.equal [] = null"
+  "IHOL.equal xs [] \<longleftrightarrow> null xs"
+  "IHOL.equal [] = null"
   by (auto simp add: equal null_def)
 
 definition maps :: "('a \<Rightarrow> 'b list) \<Rightarrow> 'a list \<Rightarrow> 'b list" where
@@ -6373,7 +6373,7 @@ code_printing
     and (Scala) "!Nil"
 | class_instance list :: equal \<rightharpoonup>
     (Haskell) -
-| constant "HOL.equal :: 'a list \<Rightarrow> 'a list \<Rightarrow> bool" \<rightharpoonup>
+| constant "IHOL.equal :: 'a list \<Rightarrow> 'a list \<Rightarrow> bool" \<rightharpoonup>
     (Haskell) infix 4 "=="
 
 setup {* fold (List_Code.add_literal_list) ["SML", "OCaml", "Haskell", "Scala"] *}

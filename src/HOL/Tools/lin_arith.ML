@@ -46,7 +46,7 @@ fun mk_Eq thm = thm RS @{thm Eq_FalseI} handle THM _ => thm RS @{thm Eq_TrueI};
 val mk_Trueprop = HOLogic.mk_Trueprop;
 
 fun atomize thm = case Thm.prop_of thm of
-    Const (@{const_name Trueprop}, _) $ (Const (@{const_name HOL.conj}, _) $ _ $ _) =>
+    Const (@{const_name Trueprop}, _) $ (Const (@{const_name IHOL.conj}, _) $ _ $ _) =>
     atomize (thm RS conjunct1) @ atomize (thm RS conjunct2)
   | _ => [thm];
 
@@ -230,9 +230,9 @@ let
   val (q, j) = poly (rhs, Rat.one, ([], Rat.zero))
 in
   case rel of
-    @{const_name Orderings.less}    => SOME (p, i, "<", q, j)
-  | @{const_name Orderings.less_eq} => SOME (p, i, "<=", q, j)
-  | @{const_name HOL.eq}            => SOME (p, i, "=", q, j)
+    @{const_name Orderings.less}     => SOME (p, i, "<", q, j)
+  | @{const_name Orderings.less_eq}  => SOME (p, i, "<=", q, j)
+  | @{const_name IHOL.eq}            => SOME (p, i, "=", q, j)
   | _                   => NONE
 end handle Rat.DIVZERO => NONE;
 
@@ -432,7 +432,7 @@ in
         val t2'             = incr_boundvars 1 t2
         val t1_lt_t2        = Const (@{const_name Orderings.less},
                                 split_type --> split_type --> HOLogic.boolT) $ t1 $ t2
-        val t1_eq_t2_plus_d = Const (@{const_name HOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
+        val t1_eq_t2_plus_d = Const (@{const_name IHOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
                                 (Const (@{const_name Groups.plus},
                                   split_type --> split_type --> split_type) $ t2' $ d)
         val not_false       = HOLogic.mk_Trueprop (HOLogic.Not $ @{term False})
@@ -452,7 +452,7 @@ in
                             (map (incr_boundvars 1) rev_terms)
         val terms2      = map (subst_term [(split_term, zero_nat)]) rev_terms
         val t1'         = incr_boundvars 1 t1
-        val t1_eq_nat_n = Const (@{const_name HOL.eq}, HOLogic.intT --> HOLogic.intT --> HOLogic.boolT) $ t1' $
+        val t1_eq_nat_n = Const (@{const_name IHOL.eq}, HOLogic.intT --> HOLogic.intT --> HOLogic.boolT) $ t1' $
                             (Const (@{const_name of_nat}, HOLogic.natT --> HOLogic.intT) $ n)
         val t1_lt_zero  = Const (@{const_name Orderings.less},
                             HOLogic.intT --> HOLogic.intT --> HOLogic.boolT) $ t1 $ zero_int
@@ -476,13 +476,13 @@ in
                                         (map (incr_boundvars 2) rev_terms)
         val t1'                     = incr_boundvars 2 t1
         val t2'                     = incr_boundvars 2 t2
-        val t2_eq_zero              = Const (@{const_name HOL.eq},
+        val t2_eq_zero              = Const (@{const_name IHOL.eq},
                                         split_type --> split_type --> HOLogic.boolT) $ t2 $ zero
-        val t2_neq_zero             = HOLogic.mk_not (Const (@{const_name HOL.eq},
+        val t2_neq_zero             = HOLogic.mk_not (Const (@{const_name IHOL.eq},
                                         split_type --> split_type --> HOLogic.boolT) $ t2' $ zero)
         val j_lt_t2                 = Const (@{const_name Orderings.less},
                                         split_type --> split_type--> HOLogic.boolT) $ j $ t2'
-        val t1_eq_t2_times_i_plus_j = Const (@{const_name HOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
+        val t1_eq_t2_times_i_plus_j = Const (@{const_name IHOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
                                        (Const (@{const_name Groups.plus}, split_type --> split_type --> split_type) $
                                          (Const (@{const_name Groups.times},
                                            split_type --> split_type --> split_type) $ t2' $ i) $ j)
@@ -508,13 +508,13 @@ in
                                         (map (incr_boundvars 2) rev_terms)
         val t1'                     = incr_boundvars 2 t1
         val t2'                     = incr_boundvars 2 t2
-        val t2_eq_zero              = Const (@{const_name HOL.eq},
+        val t2_eq_zero              = Const (@{const_name IHOL.eq},
                                         split_type --> split_type --> HOLogic.boolT) $ t2 $ zero
-        val t2_neq_zero             = HOLogic.mk_not (Const (@{const_name HOL.eq},
+        val t2_neq_zero             = HOLogic.mk_not (Const (@{const_name IHOL.eq},
                                         split_type --> split_type --> HOLogic.boolT) $ t2' $ zero)
         val j_lt_t2                 = Const (@{const_name Orderings.less},
                                         split_type --> split_type--> HOLogic.boolT) $ j $ t2'
-        val t1_eq_t2_times_i_plus_j = Const (@{const_name HOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
+        val t1_eq_t2_times_i_plus_j = Const (@{const_name IHOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
                                        (Const (@{const_name Groups.plus}, split_type --> split_type --> split_type) $
                                          (Const (@{const_name Groups.times},
                                            split_type --> split_type --> split_type) $ t2' $ i) $ j)
@@ -546,7 +546,7 @@ in
                                         (map (incr_boundvars 2) rev_terms)
         val t1'                     = incr_boundvars 2 t1
         val t2'                     = incr_boundvars 2 t2
-        val t2_eq_zero              = Const (@{const_name HOL.eq},
+        val t2_eq_zero              = Const (@{const_name IHOL.eq},
                                         split_type --> split_type --> HOLogic.boolT) $ t2 $ zero
         val zero_lt_t2              = Const (@{const_name Orderings.less},
                                         split_type --> split_type --> HOLogic.boolT) $ zero $ t2'
@@ -560,7 +560,7 @@ in
                                         split_type --> split_type--> HOLogic.boolT) $ j $ t2'
         val t2_lt_j                 = Const (@{const_name Orderings.less},
                                         split_type --> split_type--> HOLogic.boolT) $ t2' $ j
-        val t1_eq_t2_times_i_plus_j = Const (@{const_name HOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
+        val t1_eq_t2_times_i_plus_j = Const (@{const_name IHOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
                                        (Const (@{const_name Groups.plus}, split_type --> split_type --> split_type) $
                                          (Const (@{const_name Groups.times},
                                            split_type --> split_type --> split_type) $ t2' $ i) $ j)
@@ -600,7 +600,7 @@ in
                                         (map (incr_boundvars 2) rev_terms)
         val t1'                     = incr_boundvars 2 t1
         val t2'                     = incr_boundvars 2 t2
-        val t2_eq_zero              = Const (@{const_name HOL.eq},
+        val t2_eq_zero              = Const (@{const_name IHOL.eq},
                                         split_type --> split_type --> HOLogic.boolT) $ t2 $ zero
         val zero_lt_t2              = Const (@{const_name Orderings.less},
                                         split_type --> split_type --> HOLogic.boolT) $ zero $ t2'
@@ -614,7 +614,7 @@ in
                                         split_type --> split_type--> HOLogic.boolT) $ j $ t2'
         val t2_lt_j                 = Const (@{const_name Orderings.less},
                                         split_type --> split_type--> HOLogic.boolT) $ t2' $ j
-        val t1_eq_t2_times_i_plus_j = Const (@{const_name HOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
+        val t1_eq_t2_times_i_plus_j = Const (@{const_name IHOL.eq}, split_type --> split_type --> HOLogic.boolT) $ t1' $
                                        (Const (@{const_name Groups.plus}, split_type --> split_type --> split_type) $
                                          (Const (@{const_name Groups.times},
                                            split_type --> split_type --> split_type) $ t2' $ i) $ j)

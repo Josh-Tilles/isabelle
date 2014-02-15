@@ -35,8 +35,8 @@ fun is_zapped_var_name s =
 
 (**** Transformation of Elimination Rules into First-Order Formulas****)
 
-val cfalse = cterm_of @{theory HOL} @{term False};
-val ctp_false = cterm_of @{theory HOL} (HOLogic.mk_Trueprop @{term False});
+val cfalse = cterm_of @{theory IHOL} @{term False};
+val ctp_false = cterm_of @{theory IHOL} (HOLogic.mk_Trueprop @{term False});
 
 (* Converts an elim-rule into an equivalent theorem that does not have the
    predicate variable. Leaves other theorems unchanged. We simply instantiate
@@ -45,9 +45,9 @@ val ctp_false = cterm_of @{theory HOL} (HOLogic.mk_Trueprop @{term False});
 fun transform_elim_theorem th =
   case concl_of th of    (*conclusion variable*)
        @{const Trueprop} $ (v as Var (_, @{typ bool})) =>
-           Thm.instantiate ([], [(cterm_of @{theory HOL} v, cfalse)]) th
+           Thm.instantiate ([], [(cterm_of @{theory IHOL} v, cfalse)]) th
     | v as Var(_, @{typ prop}) =>
-           Thm.instantiate ([], [(cterm_of @{theory HOL} v, ctp_false)]) th
+           Thm.instantiate ([], [(cterm_of @{theory IHOL} v, ctp_false)]) th
     | _ => th
 
 
@@ -178,7 +178,7 @@ fun introduce_combinators_in_theorem ctxt th =
             TrueI)
 
 (*cterms are used throughout for efficiency*)
-val cTrueprop = cterm_of @{theory HOL} HOLogic.Trueprop;
+val cTrueprop = cterm_of @{theory IHOL} HOLogic.Trueprop;
 
 (*Given an abstraction over n variables, replace the bound variables by free
   ones. Return the body, along with the list of free variables.*)
@@ -254,10 +254,10 @@ fun rename_bound_vars_to_be_zapped ax_no =
         else
           t
       | (t1 as Const (s, _)) $ t2 $ t3 =>
-        if s = @{const_name "==>"} orelse s = @{const_name HOL.implies} then
+        if s = @{const_name "==>"} orelse s = @{const_name IHOL.implies} then
           t1 $ aux cluster index_no (not pos) t2 $ aux cluster index_no pos t3
-        else if s = @{const_name HOL.conj} orelse
-                s = @{const_name HOL.disj} then
+        else if s = @{const_name IHOL.conj} orelse
+                s = @{const_name IHOL.disj} then
           t1 $ aux cluster index_no pos t2 $ aux cluster index_no pos t3
         else
           t

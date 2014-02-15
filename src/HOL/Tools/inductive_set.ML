@@ -70,7 +70,7 @@ val collect_mem_simproc =
 val anyt = Free ("t", TFree ("'t", []));
 
 fun strong_ind_simproc tab =
-  Simplifier.simproc_global_i @{theory HOL} "strong_ind" [anyt] (fn ctxt => fn t =>
+  Simplifier.simproc_global_i @{theory IHOL} "strong_ind" [anyt] (fn ctxt => fn t =>
     let
       val thy = Proof_Context.theory_of ctxt;
       fun close p t f =
@@ -78,9 +78,9 @@ fun strong_ind_simproc tab =
         in Drule.instantiate' [] (rev (map (SOME o cterm_of thy o Var) vs))
           (p (fold (Logic.all o Var) vs t) f)
         end;
-      fun mkop @{const_name HOL.conj} T x =
+      fun mkop @{const_name IHOL.conj} T x =
             SOME (Const (@{const_name Lattices.inf}, T --> T --> T), x)
-        | mkop @{const_name HOL.disj} T x =
+        | mkop @{const_name IHOL.disj} T x =
             SOME (Const (@{const_name Lattices.sup}, T --> T --> T), x)
         | mkop _ _ _ = NONE;
       fun mk_collect p T t =
@@ -277,7 +277,7 @@ exception Malformed of string;
 
 fun add context thm (tab as {to_set_simps, to_pred_simps, set_arities, pred_arities}) =
   (case prop_of thm of
-    Const (@{const_name Trueprop}, _) $ (Const (@{const_name HOL.eq}, Type (_, [T, _])) $ lhs $ rhs) =>
+    Const (@{const_name Trueprop}, _) $ (Const (@{const_name IHOL.eq}, Type (_, [T, _])) $ lhs $ rhs) =>
       (case body_type T of
          @{typ bool} =>
            let
@@ -336,7 +336,7 @@ fun is_pred tab t =
 fun to_pred_simproc rules =
   let val rules' = map mk_meta_eq rules
   in
-    Simplifier.simproc_global_i @{theory HOL} "to_pred" [anyt]
+    Simplifier.simproc_global_i @{theory IHOL} "to_pred" [anyt]
       (fn ctxt => (lookup_rule (Proof_Context.theory_of ctxt) (prop_of #> Logic.dest_equals) rules'))
   end;
 
