@@ -112,25 +112,6 @@ done
 
 subsection {* Package setup *}
 
-subsubsection {* Sledgehammer setup *}
-
-text {*
-Theorems blacklisted to Sledgehammer. These theorems typically produce clauses
-that are prolific (match too many equality or membership literals) and relate to
-seldom-used facts. Some duplicate other rules.
-*}
-
-ML {*
-structure No_ATPs = Named_Thms
-(
-  val name = @{binding no_atp}
-  val description = "theorems that should be filtered out by Sledgehammer"
-)
-*}
-
-setup {* No_ATPs.setup *}
-
-
 subsubsection {* Classical Reasoner setup *}
 
 lemma imp_elim: "P --> Q ==> (~ R ==> P) ==> (Q ==> R) ==> R"
@@ -269,24 +250,7 @@ lemma simp_thms:
     "(x = x) = True"
   and not_True_eq_False [code]: "(\<not> True) = False"
   and not_False_eq_True [code]: "(\<not> False) = True"
-  and
-    "(~P) ~= P"  "P ~= (~P)"
-    "(True=P) = P"
-  and eq_True: "(P = True) = P"
-  and "(False=P) = (~P)"
-  and eq_False: "(P = False) = (\<not> P)"
-  and
-    "(True --> P) = P"  "(False --> P) = True"
-    "(P --> True) = True"  "(P --> P) = True"
-    "(P --> False) = (~P)"  "(P --> ~P) = (~P)"
-    "(P & True) = P"  "(True & P) = P"
-    "(P & False) = False"  "(False & P) = False"
-    "(P & P) = P"  "(P & (P & Q)) = (P & Q)"
-    "(P & ~P) = False"    "(~P & P) = False"
-    "(P | True) = True"  "(True | P) = True"
-    "(P | False) = P"  "(False | P) = P"
-    "(P | P) = P"  "(P | (P | Q)) = (P | Q)" and
-    "(ALL x. P) = P"  "(EX x. P) = P"  "EX x. x=t"  "EX x. t=x"
+
   and
     "!!P. (EX x. x=t & P(x)) = P(t)"
     "!!P. (EX x. t=x & P(x)) = P(t)"
@@ -668,6 +632,7 @@ lemmas [simp] =
   the_sym_eq_trivial
   ex_simps
   all_simps
+  IHOL.simp_thms
   simp_thms
 
 lemmas [cong] = imp_cong simp_implies_cong
@@ -1044,33 +1009,6 @@ setup {*
 *}
 
 
-subsubsection {* Equality *}
-
-class equal =
-  fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-  assumes equal_eq: "equal x y \<longleftrightarrow> x = y"
-begin
-
-lemma equal: "equal = (op =)"
-  by (rule ext equal_eq)+
-
-lemma equal_refl: "equal x x \<longleftrightarrow> True"
-  unfolding equal by rule+
-
-lemma eq_equal: "(op =) \<equiv> equal"
-  by (rule eq_reflection) (rule ext, rule ext, rule sym, rule equal_eq)
-
-end
-
-declare eq_equal [symmetric, code_post]
-declare eq_equal [code]
-
-setup {*
-  Code_Preproc.map_pre (fn ctxt =>
-    ctxt addsimprocs [Simplifier.simproc_global_i @{theory} "equal" [@{term IHOL.eq}]
-      (fn _ => fn Const (_, Type ("fun", [Type _, _])) => SOME @{thm eq_equal} | _ => NONE)])
-*}
-
 
 subsubsection {* Generic code generator foundation *}
 
@@ -1220,7 +1158,7 @@ text {* using built-in Haskell equality *}
 
 code_printing
   type_class equal \<rightharpoonup> (Haskell) "Eq"
-| constant CHOL.equal \<rightharpoonup> (Haskell) infix 4 "=="
+| constant IHOL.equal \<rightharpoonup> (Haskell) infix 4 "=="
 | constant IHOL.eq \<rightharpoonup> (Haskell) infix 4 "=="
 
 text {* undefined *}

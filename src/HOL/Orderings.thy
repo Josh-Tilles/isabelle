@@ -5,7 +5,7 @@
 header {* Abstract orderings *}
 
 theory Orderings
-imports IHOL
+imports CHOL
 keywords "print_orders" :: diag
 begin
 

@@ -683,4 +683,72 @@ subsection {* Package setup *}
 
 ML_file "Tools/hologic.ML"
 
+subsubsection {* Sledgehammer setup *}
+
+text {*
+Theorems blacklisted to Sledgehammer. These theorems typically produce clauses
+that are prolific (match too many equality or membership literals) and relate to
+seldom-used facts. Some duplicate other rules.
+*}
+
+ML {*
+structure No_ATPs = Named_Thms
+(
+  val name = @{binding no_atp}
+  val description = "theorems that should be filtered out by Sledgehammer"
+)
+*}
+
+setup {* No_ATPs.setup *}
+
+subsection {* Code generator setup *}
+subsubsection {* Equality *}
+
+class equal =
+  fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+  assumes equal_eq: "equal x y \<longleftrightarrow> x = y"
+begin
+
+lemma equal: "equal = (op =)"
+  by (rule ext equal_eq)+
+
+lemma equal_refl: "equal x x \<longleftrightarrow> True"
+  unfolding equal by rule+
+
+lemma eq_equal: "(op =) \<equiv> equal"
+  by (rule eq_reflection) (rule ext, rule ext, rule sym, rule equal_eq)
+
+end
+
+declare eq_equal [symmetric, code_post]
+declare eq_equal [code]
+
+setup {*
+  Code_Preproc.map_pre (fn ctxt =>
+    ctxt addsimprocs [Simplifier.simproc_global_i @{theory} "equal" [@{term IHOL.eq}]
+      (fn _ => fn Const (_, Type ("fun", [Type _, _])) => SOME @{thm eq_equal} | _ => NONE)])
+*}
+
+lemma simp_thms:
+  shows eq_True: "(P = True) = P"
+  and eq_False: "(P = False) = (\<not> P)"
+  and
+      "(~P) ~= P"  "P ~= (~P)"
+    "(True=P) = P"
+  and "(False=P) = (~P)"
+  and
+    "(True --> P) = P"  "(False --> P) = True"
+    "(P --> True) = True"  "(P --> P) = True"
+    "(P --> False) = (~P)"  "(P --> ~P) = (~P)"
+    "(P & True) = P"  "(True & P) = P"
+    "(P & False) = False"  "(False & P) = False"
+    "(P & P) = P"  "(P & (P & Q)) = (P & Q)"
+    "(P & ~P) = False"    "(~P & P) = False"
+    "(P | True) = True"  "(True | P) = True"
+    "(P | False) = P"  "(False | P) = P"
+    "(P | P) = P"  "(P | (P | Q)) = (P | Q)" and
+    "(ALL x. P) = P"  "(EX x. P) = P"  "EX x. x=t"  "EX x. t=x"
+by iprover+
+
+
 end
