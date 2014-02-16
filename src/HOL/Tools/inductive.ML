@@ -96,7 +96,7 @@ struct
 (** theory context references **)
 
 val inductive_forall_def = @{thm induct_forall_def};
-val inductive_conj_name = "IHOL.induct_conj";
+val inductive_conj_name = "CHOL.induct_conj";
 val inductive_conj_def = @{thm induct_conj_def};
 val inductive_conj = @{thms induct_conj};
 val inductive_atomize = @{thms induct_atomize};
