@@ -42,7 +42,7 @@ open Ctr_Sugar_Util
 
 val meta_mp = @{thm meta_mp};
 
-fun clean_blast_tac ctxt = blast_tac (put_claset (claset_of @{theory_context IHOL}) ctxt);
+fun clean_blast_tac ctxt = blast_tac (put_claset (claset_of @{theory_context CHOL}) ctxt);
 
 fun select_prem_tac n tac k = DETERM o (EVERY' [REPEAT_DETERM_N (k - 1) o etac thin_rl,
   tac, REPEAT_DETERM_N (n - k) o etac thin_rl]);
