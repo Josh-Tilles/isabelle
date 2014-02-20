@@ -260,11 +260,11 @@ qed
 
 end
 
-interpretation Abs_Int_wn
+permanent_interpretation Abs_Int_wn
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = "op +"
 and test_num' = in_ivl
 and inv_plus' = inv_plus_ivl and inv_less' = inv_less_ivl
-defines AI_wn_ivl is AI_wn
+defining AI_wn_ivl = AI_wn
 ..
 
 
@@ -545,7 +545,7 @@ by(auto simp add: m_rep_def narrow_rep_def is_empty_rep_def empty_rep_def \<gamm
          split: prod.splits if_splits extended.split)
 
 
-interpretation Abs_Int_wn_measure
+permanent_interpretation Abs_Int_wn_measure
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = "op +"
 and test_num' = in_ivl
 and inv_plus' = inv_plus_ivl and inv_less' = inv_less_ivl

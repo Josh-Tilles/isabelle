@@ -165,7 +165,7 @@ fun filter_less_ivl :: "bool \<Rightarrow> ivl \<Rightarrow> ivl \<Rightarrow> i
          I (max_option False (l1 + Some 1) l2) h2)
    else (I (max_option False l1 l2) h1, I l2 (min_option True h1 h2)))"
 
-interpretation Val_abs
+permanent_interpretation Val_abs
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = plus_ivl
 proof
   case goal1 thus ?case
@@ -179,9 +179,9 @@ next
     by(auto simp add: \<gamma>_ivl_def plus_ivl_def split: ivl.split option.splits)
 qed
 
-interpretation Val_abs1_gamma
+permanent_interpretation Val_abs1_gamma
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = plus_ivl
-defines aval_ivl is aval'
+defining aval_ivl = aval'
 proof
   case goal1 thus ?case
     by(auto simp add: \<gamma>_ivl_def meet_ivl_def empty_def min_option_def max_option_def split: ivl.split option.split)
@@ -198,7 +198,7 @@ apply(simp split: option.splits)
 done
 
 
-interpretation Val_abs1
+permanent_interpretation Val_abs1
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = plus_ivl
 and test_num' = in_ivl
 and filter_plus' = filter_plus_ivl and filter_less' = filter_less_ivl
@@ -215,21 +215,21 @@ next
       auto simp: \<gamma>_ivl_def min_option_def max_option_def le_option_def split: if_splits option.splits)
 qed
 
-interpretation Abs_Int1
+permanent_interpretation Abs_Int1
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = plus_ivl
 and test_num' = in_ivl
 and filter_plus' = filter_plus_ivl and filter_less' = filter_less_ivl
-defines afilter_ivl is afilter
-and bfilter_ivl is bfilter
-and step_ivl is step'
-and AI_ivl is AI
-and aval_ivl' is aval''
+defining afilter_ivl = afilter
+and bfilter_ivl = bfilter
+and step_ivl = step'
+and AI_ivl = AI
+and aval_ivl' = aval''
 ..
 
 
 text{* Monotonicity: *}
 
-interpretation Abs_Int1_mono
+permanent_interpretation Abs_Int1_mono
 where \<gamma> = \<gamma>_ivl and num' = num_ivl and plus' = plus_ivl
 and test_num' = in_ivl
 and filter_plus' = filter_plus_ivl and filter_less' = filter_less_ivl

@@ -1,6 +1,6 @@
 theory Collecting
 imports Complete_Lattice Big_Step ACom
-        "~~/src/HOL/ex/Interpretation_with_Defs"
+  "~~/src/Tools/Permanent_Interpretation"
 begin
 
 subsection "The generic Step function"
@@ -95,7 +95,7 @@ by(auto simp: post_def less_eq_acom_def last_conv_nth[OF annos_ne] anno_def
 definition Inf_acom :: "com \<Rightarrow> 'a::complete_lattice acom set \<Rightarrow> 'a acom" where
 "Inf_acom c M = annotate (\<lambda>p. INF C:M. anno C p) c"
 
-interpretation
+permanent_interpretation
   Complete_Lattice "{C. strip C = c}" "Inf_acom c" for c
 proof
   case goal1 thus ?case
