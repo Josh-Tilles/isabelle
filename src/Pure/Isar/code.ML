@@ -24,6 +24,7 @@ sig
   val mk_eqn: theory -> thm * bool -> thm * bool
   val mk_eqn_liberal: theory -> thm -> (thm * bool) option
   val assert_eqn: theory -> thm * bool -> thm * bool
+  val assert_abs_eqn: theory -> string option -> thm -> thm * string
   val const_typ_eqn: theory -> thm -> string * typ
   val expand_eta: theory -> int -> thm -> thm
   type cert
@@ -47,6 +48,8 @@ sig
   val add_eqn: thm -> theory -> theory
   val add_nbe_eqn: thm -> theory -> theory
   val add_abs_eqn: thm -> theory -> theory
+  val add_abs_eqn_attribute: attribute
+  val add_abs_eqn_attrib: Attrib.src
   val add_default_eqn: thm -> theory -> theory
   val add_default_eqn_attribute: attribute
   val add_default_eqn_attrib: Attrib.src
@@ -546,7 +549,7 @@ fun assert_abs_eqn thy some_tyco thm =
       else error ("Type arguments do not satisfy sort constraints of abstype certificate.");
   in (thm, tyco) end;
 
-fun assert_eqn thy = error_thm (gen_assert_eqn thy true) thy;
+fun assert_eqn thy = gen_assert_eqn thy true;
 
 fun meta_rewrite thy = Local_Defs.meta_rewrite_rule (Proof_Context.init_global thy);
 
@@ -750,7 +753,7 @@ fun cert_of_eqns ctxt c [] = Equations (dummy_thm ctxt c, [])
       let
         val thy = Proof_Context.theory_of ctxt;
         val eqns = burrow_fst (canonize_thms thy) raw_eqns;
-        val _ = map (assert_eqn thy) eqns;
+        val _ = map (error_thm (assert_eqn thy) thy) eqns;
         val (thms, propers) = split_list eqns;
         val _ = map (fn thm => if c = const_eqn thy thm then ()
           else error ("Wrong head of code equation,\nexpected constant "
@@ -1120,6 +1123,10 @@ val add_nbe_default_eqn_attribute = Thm.declaration_attribute
 val add_nbe_default_eqn_attrib = Attrib.internal (K add_nbe_default_eqn_attribute);
 
 fun add_abs_eqn raw_thm thy = gen_add_abs_eqn (mk_abs_eqn thy raw_thm) thy;
+
+val add_abs_eqn_attribute = Thm.declaration_attribute
+  (fn thm => Context.mapping (add_abs_eqn thm) I);
+val add_abs_eqn_attrib = Attrib.internal (K add_abs_eqn_attribute);
 
 fun add_eqn_maybe_abs thm thy =
   case mk_eqn_maybe_abs thy thm
