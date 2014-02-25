@@ -296,7 +296,10 @@ lemma invariant_to_eq:
   shows "x = y"
 using assms by (simp add: invariant_def)
 
-lemma fun_rel_eq_invariant:
+lemma fun_rel_eq_invariant: "(op= ===> Lifting.invariant P) = Lifting.invariant (\<lambda>f. \<forall>x. P(f x))"
+unfolding invariant_def fun_rel_def by auto
+
+lemma fun_rel_invariant_rel:
   shows "((invariant R) ===> S) = (\<lambda>f g. \<forall>x. R x \<longrightarrow> S (f x) (g x))"
 by (auto simp add: invariant_def fun_rel_def)
 
@@ -590,6 +593,21 @@ shows "(R OO R' ===> S OO S') \<le> ((R ===> S) OO (R' ===> S'))"
   by metis
 
 subsection {* Domains *}
+
+lemma composed_equiv_rel_invariant:
+  assumes "left_unique R"
+  assumes "(R ===> op=) P P'"
+  assumes "Domainp R = P''"
+  shows "(R OO Lifting.invariant P' OO R\<inverse>\<inverse>) = Lifting.invariant (inf P'' P)"
+using assms unfolding OO_def conversep_iff Domainp_iff[abs_def] left_unique_def fun_rel_def invariant_def
+fun_eq_iff by blast
+
+lemma composed_equiv_rel_eq_invariant:
+  assumes "left_unique R"
+  assumes "Domainp R = P"
+  shows "(R OO op= OO R\<inverse>\<inverse>) = Lifting.invariant P"
+using assms unfolding OO_def conversep_iff Domainp_iff[abs_def] left_unique_def invariant_def
+fun_eq_iff is_equality_def by metis
 
 lemma pcr_Domainp_par_left_total:
   assumes "Domainp B = P"
