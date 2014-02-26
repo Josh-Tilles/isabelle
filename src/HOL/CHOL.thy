@@ -5,10 +5,11 @@ begin
 subsection {* Primitive logic *}
 subsubsection {* Axioms and basic definitions *}
 
-axiomatization where
-  True_or_False: "(P=True) | (P=False)"
-
 subsubsection {*Classical logic*}
+
+locale Classical_Locale =
+  assumes True_or_False: "(P=True) | (P=False)"
+begin
 
 lemma classical:
   assumes prem: "~P ==> P"
@@ -45,6 +46,7 @@ lemma contrapos_pp:
   shows "P"
 by (iprover intro: classical p1 p2 notE)
 
+end
 
 subsubsection {*Unique existence*}
 
@@ -134,6 +136,8 @@ done
 
 
 subsubsection {*Classical intro rules for disjunction and existential quantifiers*}
+context Classical_Locale
+begin
 
 lemma disjCI:
   assumes "~Q ==> P" shows "P|Q"
@@ -193,6 +197,7 @@ apply (rule ccontr)
 apply (iprover intro: assms exI allI notI notE [of "\<exists>x. P x"])
 done
 
+end
 
 subsubsection {* Intuitionistic Reasoning *}
 
@@ -342,11 +347,16 @@ setup {* No_ATPs.setup *}
 
 subsubsection {* Classical Reasoner setup *}
 
+context Classical_Locale
+begin
+
 lemma imp_elim: "P --> Q ==> (~ R ==> P) ==> (Q ==> R) ==> R"
   by (rule classical) iprover
 
 lemma swap: "~ P ==> (~ R ==> P) ==> R"
   by (rule classical) iprover
+
+end
 
 lemma thin_refl:
   "\<And>X. \<lbrakk> x=x; PROP W \<rbrakk> \<Longrightarrow> PROP W" .
@@ -369,10 +379,10 @@ open Hypsubst;
 
 structure Classical = Classical
 (
-  val imp_elim = @{thm imp_elim}
+  val imp_elim = @{thm Classical_Locale.imp_elim}
   val not_elim = @{thm notE}
-  val swap = @{thm swap}
-  val classical = @{thm classical}
+  val swap = @{thm Classical_Locale.swap}
+  val classical = @{thm Classical_Locale.classical}
   val sizef = Drule.size_of_thm
   val hyp_subst_tacs = [Hypsubst.hyp_subst_tac]
 );
@@ -402,14 +412,14 @@ end
 declare iffI [intro!]
   and notI [intro!]
   and impI [intro!]
-  and disjCI [intro!]
+  and Classical_Locale.disjCI [intro!]
   and conjI [intro!]
   and TrueI [intro!]
   and refl [intro!]
 
-declare iffCE [elim!]
+declare Classical_Locale.iffCE [elim!]
   and FalseE [elim!]
-  and impCE [elim!]
+  and Classical_Locale.impCE [elim!]
   and disjE [elim!]
   and conjE [elim!]
 
@@ -420,6 +430,10 @@ declare ex_ex1I [intro!]
 
 declare exE [elim!]
   allE [elim]
+
+
+context Classical_Locale
+begin
 
 ML {* val HOL_cs = claset_of @{context} *}
 
@@ -461,6 +475,7 @@ ML {*
   );
   val blast_tac = Blast.blast_tac;
 *}
+end
 
 setup Blast.setup
 
@@ -468,6 +483,9 @@ setup Blast.setup
 subsubsection {* Simplifier *}
 
 lemma eta_contract_eq: "(%s. f s) = f" ..
+
+context Classical_Locale
+begin
 
 lemma simp_thms:
   shows not_not: "(~ ~ P) = P"
@@ -501,7 +519,10 @@ lemma simp_thms:
     "!!P. (EX x. t=x & P(x)) = P(t)"
     "!!P. (ALL x. x=t --> P(x)) = P(t)"
     "!!P. (ALL x. t=x --> P(x)) = P(t)"
+(*
   by (blast, blast, blast, blast, blast, iprover+)
+*)
+    sorry
 
 lemma disj_absorb: "(A | A) = A"
   by blast
