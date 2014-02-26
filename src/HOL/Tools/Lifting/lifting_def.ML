@@ -531,7 +531,7 @@ fun mk_readable_rsp_thm_eq tm lthy =
       (K (Conv.try_conv (Conv.rewr_conv @{thm invariant_same_args}))) lthy
     val cr_to_pcr_conv = Raw_Simplifier.rewrite lthy false (get_cr_pcr_eqs lthy)
     val simp_conv = HOLogic.Trueprop_conv (Conv.fun2_conv (cr_to_pcr_conv then_conv simp_arrows_conv))
-    val univq_conv = Conv.rewr_conv @{thm IHOL.all_simps(6)[symmetric, THEN eq_reflection]}
+    val univq_conv = Conv.rewr_conv @{thm CHOL.all_simps(6)[symmetric, THEN eq_reflection]}
     val univq_prenex_conv = Conv.top_conv (K (Conv.try_conv univq_conv)) lthy
     val beta_conv = Thm.beta_conversion true
     val eq_thm = 
