@@ -5,7 +5,7 @@
 header {* Groups, also combined with orderings *}
 
 theory Groups
-imports Orderings
+imports COrderings
 begin
 
 subsection {* Fact collections *}

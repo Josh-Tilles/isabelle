@@ -174,13 +174,13 @@ fun dest_setT (Type ("Set.set", [T])) = T
 fun mk_set T ts =
   let
     val sT = mk_setT T;
-    val empty = Const ("Orderings.bot_class.bot", sT);
+    val empty = Const ("COrderings.bot_class.bot", sT);
     fun insert t u = Const ("Set.insert", T --> sT --> sT) $ t $ u;
   in fold_rev insert ts empty end;
 
-fun mk_UNIV T = Const ("Orderings.top_class.top", mk_setT T);
+fun mk_UNIV T = Const ("COrderings.top_class.top", mk_setT T);
 
-fun dest_set (Const ("Orderings.bot_class.bot", _)) = []
+fun dest_set (Const ("COrderings.bot_class.bot", _)) = []
   | dest_set (Const ("Set.insert", _) $ t $ u) = t :: dest_set u
   | dest_set t = raise TERM ("dest_set", [t]);
 

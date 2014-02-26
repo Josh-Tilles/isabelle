@@ -4,7 +4,7 @@
 
 header {* Abstract orderings *}
 
-theory Orderings
+theory COrderings
 imports CHOL
 keywords "print_orders" :: diag
 begin
@@ -1093,7 +1093,7 @@ lemma strict_mono_less:
   assumes "strict_mono f"
   shows "f x < f y \<longleftrightarrow> x < y"
   using assms
-    by (auto simp add: less_le Orderings.less_le strict_mono_eq strict_mono_less_eq)
+    by (auto simp add: less_le COrderings.less_le strict_mono_eq strict_mono_less_eq)
 
 end
 
