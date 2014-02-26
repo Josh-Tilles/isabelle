@@ -169,4 +169,13 @@ axiomatization where
   mp: "[| P-->Q;  P |] ==> Q" and
   iff: "(P-->Q) --> (Q-->P) --> (P=Q)"
 
+  
+subsection {* Code generator setup *}
+
+subsubsection {* Equality *}
+
+class equal =
+  fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
+  assumes equal_eq: "equal x y \<longleftrightarrow> x = y"
+
 end

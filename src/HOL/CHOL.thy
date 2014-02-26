@@ -1551,9 +1551,7 @@ setup {*
 
 subsubsection {* Equality *}
 
-class equal =
-  fixes equal :: "'a \<Rightarrow> 'a \<Rightarrow> bool"
-  assumes equal_eq: "equal x y \<longleftrightarrow> x = y"
+context equal
 begin
 
 lemma equal: "equal = (op =)"
