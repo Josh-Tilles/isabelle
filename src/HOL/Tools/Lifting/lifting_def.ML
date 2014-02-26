@@ -261,18 +261,6 @@ fun can_generate_code_cert quot_thm  =
 
 fun generate_rep_eq ctxt def_thm rsp_thm (rty, qty) =
   let
-<<<<<<< HEAD
-=======
-    val thy = Proof_Context.theory_of ctxt
-    val quot_thm = Lifting_Term.prove_quot_thm ctxt (get_body_types (rty, qty))
-    val fun_rel = prove_rel ctxt rsp_thm (rty, qty)
-    val abs_rep_thm = [quot_thm, fun_rel] MRSL @{thm Quotient_rep_abs}
-    val abs_rep_eq = 
-      case (HOLogic.dest_Trueprop o prop_of) fun_rel of
-        Const (@{const_name IHOL.eq}, _) $ _ $ _ => abs_rep_thm
-        | Const (@{const_name invariant}, _) $ _ $ _ $ _ => abs_rep_thm RS @{thm invariant_to_eq}
-        | _ => raise CODE_CERT_GEN "relation is neither equality nor invariant"
->>>>>>> 3b7847c... Rename HOL.thy to IHOL.thy
     val unfolded_def = Conv.fconv_rule (Conv.arg_conv unfold_fun_maps_beta) def_thm
     val unabs_def = unabs_all_def ctxt unfolded_def
   in  
