@@ -34,11 +34,10 @@ sig
   val permute_args: int -> term -> term
 
   val mk_partial_compN: int -> typ -> term -> term
-  val mk_partial_comp: typ -> typ -> term -> term
   val mk_compN: int -> typ list -> term * term -> term
   val mk_comp: typ list -> term * term -> term
 
-  val mk_co_iter: theory -> fp_kind -> typ -> typ list -> term -> term
+  val mk_co_rec: theory -> fp_kind -> typ -> typ list -> term -> term
 
   val mk_conjunctN: int -> int -> thm
   val conj_dests: int -> thm -> thm list
@@ -93,13 +92,10 @@ fun drop_all t =
 fun permute_args n t =
   list_comb (t, map Bound (0 :: (n downto 1))) |> fold (K (Term.abs (Name.uu, dummyT))) (0 upto n);
 
-fun mk_partial_comp gT fT g = fst (Term.dest_comb (HOLogic.mk_comp (g, Free (Name.uu, fT))));
+fun mk_partial_comp fT g = fst (Term.dest_comb (HOLogic.mk_comp (g, Free (Name.uu, fT))));
 
 fun mk_partial_compN 0 _ g = g
-  | mk_partial_compN n fT g =
-    let val g' = mk_partial_compN (n - 1) (range_type fT) g in
-      mk_partial_comp (fastype_of g') fT g'
-    end;
+  | mk_partial_compN n fT g = mk_partial_comp fT (mk_partial_compN (n - 1) (range_type fT) g);
 
 fun mk_compN n bound_Ts (g, f) =
   let val typof = curry fastype_of1 bound_Ts in
@@ -108,7 +104,7 @@ fun mk_compN n bound_Ts (g, f) =
 
 val mk_comp = mk_compN 1;
 
-fun mk_co_iter thy fp fpT Cs t =
+fun mk_co_rec thy fp fpT Cs t =
   let
     val ((f_Cs, prebody), body) = strip_type (fastype_of t) |>> split_last;
     val fpT0 = fp_case fp prebody body;

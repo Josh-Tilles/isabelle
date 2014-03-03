@@ -13,7 +13,8 @@ sig
      bnfs: BNF_Def.bnf list,
      ctors: term list,
      dtors: term list,
-     xtor_co_iterss: term list list,
+     xtor_co_folds: term list,
+     xtor_co_recs: term list,
      xtor_co_induct: thm,
      dtor_ctors: thm list,
      ctor_dtors: thm list,
@@ -22,15 +23,17 @@ sig
      xtor_map_thms: thm list,
      xtor_set_thmss: thm list list,
      xtor_rel_thms: thm list,
-     xtor_co_iter_thmss: thm list list,
-     xtor_co_iter_o_map_thmss: thm list list,
+     xtor_co_fold_thms: thm list,
+     xtor_co_rec_thms: thm list,
+     xtor_co_fold_o_map_thms: thm list,
+     xtor_co_rec_o_map_thms: thm list,
      rel_xtor_co_induct_thm: thm}
 
   val morph_fp_result: morphism -> fp_result -> fp_result
-  val un_fold_of: 'a list -> 'a
-  val co_rec_of: 'a list -> 'a
 
   val time: Proof.context -> Timer.real_timer -> string -> Timer.real_timer
+
+  val fixpoint: ('a * 'a -> bool) -> ('a list -> 'a list) -> 'a list -> 'a list
 
   val IITN: string
   val LevN: string
@@ -60,8 +63,6 @@ sig
   val ctor_relN: string
   val ctor_set_inclN: string
   val ctor_set_set_inclN: string
-  val disc_unfoldN: string
-  val disc_unfold_iffN: string
   val disc_corecN: string
   val disc_corec_iffN: string
   val dtorN: string
@@ -85,7 +86,6 @@ sig
   val dtor_unfold_transferN: string
   val dtor_unfold_uniqueN: string
   val exhaustN: string
-  val foldN: string
   val hsetN: string
   val hset_recN: string
   val inductN: string
@@ -106,7 +106,6 @@ sig
   val sel_corecN: string
   val set_inclN: string
   val set_set_inclN: string
-  val sel_unfoldN: string
   val setN: string
   val simpsN: string
   val strTN: string
@@ -114,7 +113,6 @@ sig
   val strong_coinductN: string
   val sum_bdN: string
   val sum_bdTN: string
-  val unfoldN: string
   val uniqueN: string
 
   (* TODO: Don't index set facts. Isabelle packages traditionally generate uniform names. *)
@@ -164,7 +162,8 @@ sig
   val mk_sum_caseN: int -> int -> thm
   val mk_sum_caseN_balanced: int -> int -> thm
 
-  val fixpoint: ('a * 'a -> bool) -> ('a list -> 'a list) -> 'a list -> 'a list
+  val mk_sum_Cinfinite: thm list -> thm
+  val mk_sum_card_order: thm list -> thm
 
   val mk_rel_xtor_co_induct_thm: BNF_Util.fp_kind -> term list -> term list -> term list ->
     term list -> term list -> term list -> term list -> term list ->
@@ -195,7 +194,8 @@ type fp_result =
    bnfs: BNF_Def.bnf list,
    ctors: term list,
    dtors: term list,
-   xtor_co_iterss: term list list,
+   xtor_co_folds: term list,
+   xtor_co_recs: term list,
    xtor_co_induct: thm,
    dtor_ctors: thm list,
    ctor_dtors: thm list,
@@ -204,18 +204,22 @@ type fp_result =
    xtor_map_thms: thm list,
    xtor_set_thmss: thm list list,
    xtor_rel_thms: thm list,
-   xtor_co_iter_thmss: thm list list,
-   xtor_co_iter_o_map_thmss: thm list list,
+   xtor_co_fold_thms: thm list,
+   xtor_co_rec_thms: thm list,
+   xtor_co_fold_o_map_thms: thm list,
+   xtor_co_rec_o_map_thms: thm list,
    rel_xtor_co_induct_thm: thm};
 
-fun morph_fp_result phi {Ts, bnfs, ctors, dtors, xtor_co_iterss, xtor_co_induct, dtor_ctors,
-    ctor_dtors, ctor_injects, dtor_injects, xtor_map_thms, xtor_set_thmss, xtor_rel_thms,
-    xtor_co_iter_thmss, xtor_co_iter_o_map_thmss, rel_xtor_co_induct_thm} =
+fun morph_fp_result phi {Ts, bnfs, ctors, dtors, xtor_co_folds, xtor_co_recs, xtor_co_induct,
+    dtor_ctors, ctor_dtors, ctor_injects, dtor_injects, xtor_map_thms, xtor_set_thmss,
+    xtor_rel_thms, xtor_co_fold_thms, xtor_co_rec_thms, xtor_co_fold_o_map_thms,
+    xtor_co_rec_o_map_thms, rel_xtor_co_induct_thm} =
   {Ts = map (Morphism.typ phi) Ts,
    bnfs = map (morph_bnf phi) bnfs,
    ctors = map (Morphism.term phi) ctors,
    dtors = map (Morphism.term phi) dtors,
-   xtor_co_iterss = map (map (Morphism.term phi)) xtor_co_iterss,
+   xtor_co_folds = map (Morphism.term phi) xtor_co_folds,
+   xtor_co_recs = map (Morphism.term phi) xtor_co_recs,
    xtor_co_induct = Morphism.thm phi xtor_co_induct,
    dtor_ctors = map (Morphism.thm phi) dtor_ctors,
    ctor_dtors = map (Morphism.thm phi) ctor_dtors,
@@ -224,12 +228,11 @@ fun morph_fp_result phi {Ts, bnfs, ctors, dtors, xtor_co_iterss, xtor_co_induct,
    xtor_map_thms = map (Morphism.thm phi) xtor_map_thms,
    xtor_set_thmss = map (map (Morphism.thm phi)) xtor_set_thmss,
    xtor_rel_thms = map (Morphism.thm phi) xtor_rel_thms,
-   xtor_co_iter_thmss = map (map (Morphism.thm phi)) xtor_co_iter_thmss,
-   xtor_co_iter_o_map_thmss = map (map (Morphism.thm phi)) xtor_co_iter_o_map_thmss,
+   xtor_co_fold_thms = map (Morphism.thm phi) xtor_co_fold_thms,
+   xtor_co_rec_thms = map (Morphism.thm phi) xtor_co_rec_thms,
+   xtor_co_fold_o_map_thms = map (Morphism.thm phi) xtor_co_fold_o_map_thms,
+   xtor_co_rec_o_map_thms = map (Morphism.thm phi) xtor_co_rec_o_map_thms,
    rel_xtor_co_induct_thm = Morphism.thm phi rel_xtor_co_induct_thm};
-
-fun un_fold_of [f, _] = f;
-fun co_rec_of [_, r] = r;
 
 fun time ctxt timer msg = (if Config.get ctxt bnf_timing
   then warning (msg ^ ": " ^ string_of_int (Time.toMilliseconds (Timer.checkRealTimer timer)) ^
@@ -322,10 +325,8 @@ val dtor_set_set_inclN = dtorN ^ "_" ^ set_set_inclN
 
 val caseN = "case"
 val discN = "disc"
-val disc_unfoldN = discN ^ "_" ^ unfoldN
 val disc_corecN = discN ^ "_" ^ corecN
 val iffN = "_iff"
-val disc_unfold_iffN = discN ^ "_" ^ unfoldN ^ iffN
 val disc_corec_iffN = discN ^ "_" ^ corecN ^ iffN
 val distinctN = "distinct"
 val rel_distinctN = relN ^ "_" ^ distinctN
@@ -334,7 +335,6 @@ val rel_injectN = relN ^ "_" ^ injectN
 val rel_coinductN = relN ^ "_" ^ coinductN
 val rel_inductN = relN ^ "_" ^ inductN
 val selN = "sel"
-val sel_unfoldN = selN ^ "_" ^ unfoldN
 val sel_corecN = selN ^ "_" ^ corecN
 
 fun co_prefix fp = (if fp = Greatest_FP then "co" else "");
@@ -473,6 +473,12 @@ fun mk_sum_caseN_balanced 1 1 = refl
   | mk_sum_caseN_balanced n k =
     Balanced_Tree.access {left = mk_sum_step @{thm sum.case(1)} @{thm case_sum_step(1)},
       right = mk_sum_step @{thm sum.case(2)} @{thm case_sum_step(2)}, init = refl} n k;
+
+fun mk_sum_Cinfinite [thm] = thm
+  | mk_sum_Cinfinite (thm :: thms) = @{thm Cinfinite_csum_weak} OF [thm, mk_sum_Cinfinite thms];
+
+fun mk_sum_card_order [thm] = thm
+  | mk_sum_card_order (thm :: thms) = @{thm card_order_csum} OF [thm, mk_sum_card_order thms];
 
 fun mk_rel_xtor_co_induct_thm fp pre_rels pre_phis rels phis xs ys xtors xtor's tac lthy =
   let

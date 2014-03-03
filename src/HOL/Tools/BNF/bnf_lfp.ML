@@ -587,17 +587,8 @@ fun construct_lfp mixfixes map_bs rel_bs set_bss0 bs resBs (resDs, Dss) bnfs _ l
           val Abs_sbdT_inj = mk_Abs_inj_thm (#Abs_inject sbdT_loc_info);
           val Abs_sbdT_bij = mk_Abs_bij_thm lthy Abs_sbdT_inj (#Abs_cases sbdT_loc_info);
 
-          fun mk_sum_Cinfinite [thm] = thm
-            | mk_sum_Cinfinite (thm :: thms) =
-              @{thm Cinfinite_csum_strong} OF [thm, mk_sum_Cinfinite thms];
-
           val sum_Cinfinite = mk_sum_Cinfinite bd_Cinfinites;
           val sum_Card_order = sum_Cinfinite RS conjunct2;
-
-          fun mk_sum_card_order [thm] = thm
-            | mk_sum_card_order (thm :: thms) =
-              @{thm card_order_csum} OF [thm, mk_sum_card_order thms];
-
           val sum_card_order = mk_sum_card_order bd_card_orders;
 
           val sbd_ordIso = @{thm ssubst_Pair_rhs} OF
@@ -1863,14 +1854,13 @@ fun construct_lfp mixfixes map_bs rel_bs set_bss0 bs resBs (resDs, Dss) bnfs _ l
     val maybe_conceal_notes = note_all = false ? map (apfst (apfst Binding.conceal));
   in
     timer;
-    ({Ts = Ts, bnfs = Ibnfs, ctors = ctors, dtors = dtors, xtor_co_iterss = transpose [folds, recs],
-      xtor_co_induct = ctor_induct_thm, dtor_ctors = dtor_ctor_thms, ctor_dtors = ctor_dtor_thms,
-      ctor_injects = ctor_inject_thms, dtor_injects = dtor_inject_thms,
+    ({Ts = Ts, bnfs = Ibnfs, ctors = ctors, dtors = dtors, xtor_co_folds = folds,
+      xtor_co_recs = recs, xtor_co_induct = ctor_induct_thm, dtor_ctors = dtor_ctor_thms,
+      ctor_dtors = ctor_dtor_thms, ctor_injects = ctor_inject_thms, dtor_injects = dtor_inject_thms,
       xtor_map_thms = ctor_Imap_thms, xtor_set_thmss = ctor_Iset_thmss',
-      xtor_rel_thms = ctor_Irel_thms,
-      xtor_co_iter_thmss = transpose [ctor_fold_thms, ctor_rec_thms],
-      xtor_co_iter_o_map_thmss = transpose [ctor_fold_o_Imap_thms, ctor_rec_o_Imap_thms],
-      rel_xtor_co_induct_thm = Irel_induct_thm},
+      xtor_rel_thms = ctor_Irel_thms, xtor_co_fold_thms = ctor_fold_thms,
+      xtor_co_rec_thms = ctor_rec_thms, xtor_co_fold_o_map_thms = ctor_fold_o_Imap_thms,
+      xtor_co_rec_o_map_thms = ctor_rec_o_Imap_thms, rel_xtor_co_induct_thm = Irel_induct_thm},
      lthy |> Local_Theory.notes (maybe_conceal_notes (common_notes @ notes @ Ibnf_notes)) |> snd)
   end;
 

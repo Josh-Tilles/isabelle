@@ -94,7 +94,7 @@ fun invalid_map ctxt t =
 fun unexpected_corec_call ctxt t =
   error ("Unexpected corecursive call: " ^ quote (Syntax.string_of_term ctxt t));
 
-fun order_list_duplicates xs = map snd (sort (int_ord o pairself fst) xs)
+fun sort_list_duplicates xs = map snd (sort (int_ord o pairself fst) xs);
 
 val mk_conjs = try (foldr1 HOLogic.mk_conj) #> the_default @{const True};
 val mk_disjs = try (foldr1 HOLogic.mk_disj) #> the_default @{const False};
@@ -374,9 +374,8 @@ fun corec_specs_of bs arg_Ts res_Ts callers callssss0 lthy0 =
   let
     val thy = Proof_Context.theory_of lthy0;
 
-    val ((missing_res_Ts, perm0_kks, fp_sugars as {nested_bnfs, co_iters = coiter1 :: _,
-            common_co_inducts = common_coinduct_thms, ...} :: _,
-          (_, gfp_sugar_thms)), lthy) =
+    val ((missing_res_Ts, perm0_kks, fp_sugars as {nested_bnfs,
+          common_co_inducts = common_coinduct_thms, ...} :: _, (_, gfp_sugar_thms)), lthy) =
       nested_to_mutual_fps Greatest_FP bs res_Ts callers callssss0 lthy0;
 
     val perm_fp_sugars = sort (int_ord o pairself #fp_res_index) fp_sugars;
@@ -394,7 +393,7 @@ fun corec_specs_of bs arg_Ts res_Ts callers callssss0 lthy0 =
 
     val perm_Ts = map #T perm_fp_sugars;
     val perm_Xs = map #X perm_fp_sugars;
-    val perm_Cs = map (domain_type o body_fun_type o fastype_of o co_rec_of o #co_iters) perm_fp_sugars;
+    val perm_Cs = map (domain_type o body_fun_type o fastype_of o #co_rec) perm_fp_sugars;
     val Xs_TCs = perm_Xs ~~ (perm_Ts ~~ perm_Cs);
 
     fun zip_corecT (Type (s, Us)) = [Type (s, map (mk_sumTN o zip_corecT) Us)]
@@ -403,7 +402,7 @@ fun corec_specs_of bs arg_Ts res_Ts callers callssss0 lthy0 =
           SOME (T, C) => [T, C]
         | NONE => [U]);
 
-    val perm_p_Tss = mk_coiter_p_pred_types perm_Cs perm_ns';
+    val perm_p_Tss = mk_corec_p_pred_types perm_Cs perm_ns';
     val perm_f_Tssss =
       map2 (fn C => map (map (map (curry (op -->) C) o zip_corecT))) perm_Cs perm_ctrXs_Tsss';
     val perm_q_Tssss =
@@ -454,27 +453,22 @@ fun corec_specs_of bs arg_Ts res_Ts callers callssss0 lthy0 =
       end;
 
     fun mk_ctr_specs ({ctrs, discs, selss, discIs, sel_thmss, disc_excludesss, collapses, ...}
-        : ctr_sugar) p_is q_isss f_isss f_Tsss coiter_thmss disc_coiterss sel_coitersss =
-      let
-        val p_ios = map SOME p_is @ [NONE];
-        val corec_thms = co_rec_of coiter_thmss;
-        val disc_corecs = co_rec_of disc_coiterss;
-        val sel_corecss = co_rec_of sel_coitersss;
-      in
+        : ctr_sugar) p_is q_isss f_isss f_Tsss corec_thms disc_corecs sel_corecss =
+      let val p_ios = map SOME p_is @ [NONE] in
         map14 mk_ctr_spec ctrs discs selss p_ios q_isss f_isss f_Tsss discIs sel_thmss
           disc_excludesss collapses corec_thms disc_corecs sel_corecss
       end;
 
-    fun mk_spec ({T, ctr_sugar as {disc_exhausts, ...}, co_iters = coiters,
-        co_iter_thmss = coiter_thmss, disc_co_iterss = disc_coiterss,
-        sel_co_itersss = sel_coitersss, ...} : fp_sugar) p_is q_isss f_isss f_Tsss =
-      {corec = mk_co_iter thy Greatest_FP (substAT T) perm_Cs' (co_rec_of coiters),
+    fun mk_spec ({T, ctr_sugar as {disc_exhausts, ...}, co_rec = corec,
+        co_rec_thms = corec_thms, disc_co_recs = disc_corecs,
+        sel_co_recss = sel_corecss, ...} : fp_sugar) p_is q_isss f_isss f_Tsss =
+      {corec = mk_co_rec thy Greatest_FP (substAT T) perm_Cs' corec,
        disc_exhausts = disc_exhausts,
        nested_maps = maps (map_thms_of_typ lthy o T_of_bnf) nested_bnfs,
        nested_map_idents = map (unfold_thms lthy @{thms id_def} o map_id0_of_bnf) nested_bnfs,
        nested_map_comps = map map_comp_of_bnf nested_bnfs,
-       ctr_specs = mk_ctr_specs ctr_sugar p_is q_isss f_isss f_Tsss coiter_thmss disc_coiterss
-         sel_coitersss};
+       ctr_specs = mk_ctr_specs ctr_sugar p_is q_isss f_isss f_Tsss corec_thms disc_corecs
+         sel_corecss};
   in
     ((is_some gfp_sugar_thms, map5 mk_spec fp_sugars p_iss q_issss f_issss f_Tssss, missing_res_Ts,
       co_induct_of common_coinduct_thms, strong_co_induct_of common_coinduct_thms,
@@ -929,8 +923,8 @@ fun add_primcorec_ursive auto opts fixes specs of_specs_opt lthy =
     val frees = map (fst #>> Binding.name_of #> Free) fixes;
     val has_call = exists_subterm (member (op =) frees);
     val eqns_data =
-      fold_map2 (dissect_coeqn lthy has_call fun_names sequentials basic_ctr_specss) (tag_list 0 (map snd specs))
-        of_specs_opt []
+      fold_map2 (dissect_coeqn lthy has_call fun_names sequentials basic_ctr_specss)
+        (tag_list 0 (map snd specs)) of_specs_opt []
       |> flat o fst;
 
     val callssss =
@@ -1270,14 +1264,14 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
         val disc_alistss = map3 (map oo prove_disc) corec_specs excludessss disc_eqnss;
         val disc_alists = map (map snd o flat) disc_alistss;
         val sel_alists = map4 (map ooo prove_sel) corec_specs disc_eqnss excludessss sel_eqnss;
-        val disc_thmss = map (map snd o order_list_duplicates o flat) disc_alistss;
+        val disc_thmss = map (map snd o sort_list_duplicates o flat) disc_alistss;
         val disc_thmsss' = map (map (map (snd o snd))) disc_alistss;
-        val sel_thmss = map (map snd o order_list_duplicates) sel_alists;
+        val sel_thmss = map (map snd o sort_list_duplicates) sel_alists;
 
         fun prove_disc_iff ({ctr_specs, ...} : corec_spec) exhaust_thms disc_thmss'
             (({fun_args = exhaust_fun_args, ...} : coeqn_data_disc) :: _) disc_thms
             ({fun_name, fun_T, fun_args, ctr_no, prems, eqn_pos, ...} : coeqn_data_disc) =
-          if null exhaust_thms orelse null (tl ctr_specs) then
+          if null exhaust_thms orelse null disc_thms then
             []
           else
             let
@@ -1291,7 +1285,7 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
                 (the_single exhaust_thms) disc_thms disc_thmss' (flat disc_excludess)
               |> K |> Goal.prove_sorry lthy [] [] goal
               |> Thm.close_derivation
-              |> fold (fn rule => perhaps (try (fn thm => thm RS rule)))
+              |> fold (fn rule => perhaps (try (fn thm => Meson.first_order_resolve thm rule)))
                 @{thms eqTrueE eq_False[THEN iffD1] notnotD}
               |> pair eqn_pos
               |> single
@@ -1299,10 +1293,10 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
 
         val disc_iff_thmss = map6 (flat ooo map2 oooo prove_disc_iff) corec_specs exhaust_thmss
           disc_thmsss' disc_eqnss disc_thmsss' disc_eqnss
-          |> map order_list_duplicates;
+          |> map sort_list_duplicates;
 
-        val ctr_alists = map5 (maps oooo prove_ctr) disc_alists (map (map snd) sel_alists) disc_eqnss
-          sel_eqnss ctr_specss;
+        val ctr_alists = map5 (maps oooo prove_ctr) disc_alists (map (map snd) sel_alists)
+          disc_eqnss sel_eqnss ctr_specss;
         val ctr_thmss' = map (map snd) ctr_alists;
         val ctr_thmss = map (map snd o order_list) ctr_alists;
 
@@ -1315,11 +1309,15 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
 
         val common_name = mk_common_name fun_names;
 
+        val anonymous_notes =
+          [(flat disc_iff_or_disc_thmss, simp_attrs)]
+          |> map (fn (thms, attrs) => ((Binding.empty, attrs), [(thms, [])]));
+
         val notes =
           [(coinductN, map (if n2m then single else K []) coinduct_thms, []),
            (codeN, code_thmss, code_nitpicksimp_attrs),
            (ctrN, ctr_thmss, []),
-           (discN, disc_thmss, simp_attrs),
+           (discN, disc_thmss, []),
            (disc_iffN, disc_iff_thmss, []),
            (excludeN, exclude_thmss, []),
            (exhaustN, nontriv_exhaust_thmss, []),
@@ -1343,7 +1341,7 @@ val _ = tracing ("exclusiveness properties:\n    \<cdot> " ^
         |> Spec_Rules.add Spec_Rules.Equational (map fst def_infos, flat sel_thmss)
         |> Spec_Rules.add Spec_Rules.Equational (map fst def_infos, flat ctr_thmss)
         |> Spec_Rules.add Spec_Rules.Equational (map fst def_infos, flat code_thmss)
-        |> Local_Theory.notes (notes @ common_notes)
+        |> Local_Theory.notes (anonymous_notes @ notes @ common_notes)
         |> snd
       end;
 

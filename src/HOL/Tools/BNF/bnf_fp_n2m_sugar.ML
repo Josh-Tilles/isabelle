@@ -223,8 +223,8 @@ fun mutualize_fp_sugars fp bs fpTs callers callssss fp_sugars0 no_defs_lthy0 =
 
         val fp_absT_infos = map #absT_info fp_sugars0;
 
-        val ((pre_bnfs, absT_infos), (fp_res as {xtor_co_iterss = xtor_co_iterss0, xtor_co_induct,
-               dtor_injects, dtor_ctors, xtor_co_iter_thmss, ...}, lthy)) =
+        val ((pre_bnfs, absT_infos), (fp_res as {xtor_co_recs = xtor_co_recs0, xtor_co_induct,
+               dtor_injects, dtor_ctors, xtor_co_rec_thms, ...}, lthy)) =
           fp_bnf (construct_mutualized_fp fp fpTs fp_sugars0) fp_bs As' killed_As' fp_eqs
             no_defs_lthy0;
 
@@ -240,61 +240,53 @@ fun mutualize_fp_sugars fp bs fpTs callers callssss fp_sugars0 no_defs_lthy0 =
         val nesting_bnfs = nesty_bnfs lthy ctrXs_Tsss As;
         val nested_bnfs = nesty_bnfs lthy ctrXs_Tsss Xs;
 
-        val ((xtor_co_iterss, iters_args_types, coiters_args_types), _) =
-          mk_co_iters_prelims fp ctr_Tsss fpTs Cs absTs repTs ns mss xtor_co_iterss0 lthy;
+        val ((xtor_co_recs, recs_args_types, corecs_args_types), _) =
+          mk_co_recs_prelims fp ctr_Tsss fpTs Cs absTs repTs ns mss xtor_co_recs0 lthy;
 
         fun mk_binding b suf = Binding.suffix_name ("_" ^ suf) b;
 
-        val ((co_iterss, co_iter_defss), lthy) =
+        val ((co_recs, co_rec_defs), lthy) =
           fold_map2 (fn b =>
-            if fp = Least_FP then
-              define_iters [foldN, recN] (the iters_args_types) (mk_binding b) fpTs Cs reps
-            else
-              define_coiters [unfoldN, corecN] (the coiters_args_types) (mk_binding b) fpTs Cs abss)
-            fp_bs xtor_co_iterss lthy
+              if fp = Least_FP then define_rec recs_args_types (mk_binding b) fpTs Cs reps
+              else define_corec (the corecs_args_types) (mk_binding b) fpTs Cs abss)
+            fp_bs xtor_co_recs lthy
           |>> split_list;
 
-        val ((common_co_inducts, co_inductss, un_fold_thmss, co_rec_thmss, disc_unfold_thmss,
-              disc_corec_thmss, sel_unfold_thmsss, sel_corec_thmsss), fp_sugar_thms) =
+        val ((common_co_inducts, co_inductss, co_rec_thmss, disc_corec_thmss, sel_corec_thmsss),
+             fp_sugar_thms) =
           if fp = Least_FP then
-            derive_induct_iters_thms_for_types pre_bnfs (the iters_args_types) xtor_co_induct
-              xtor_co_iter_thmss nesting_bnfs nested_bnfs fpTs Cs Xs ctrXs_Tsss fp_abs_inverses
-              fp_type_definitions abs_inverses ctrss ctr_defss co_iterss co_iter_defss lthy
-            |> `(fn ((inducts, induct, _), (fold_thmss, rec_thmss, _)) =>
-              ([induct], [inducts], fold_thmss, rec_thmss, replicate nn [],
-               replicate nn [], replicate nn [], replicate nn []))
+            derive_induct_recs_thms_for_types pre_bnfs recs_args_types xtor_co_induct
+              xtor_co_rec_thms nesting_bnfs nested_bnfs fpTs Cs Xs ctrXs_Tsss fp_abs_inverses
+              fp_type_definitions abs_inverses ctrss ctr_defss co_recs co_rec_defs lthy
+            |> `(fn ((inducts, induct, _), (rec_thmss, _)) =>
+              ([induct], [inducts], rec_thmss, replicate nn [], replicate nn []))
             ||> (fn info => (SOME info, NONE))
           else
-            derive_coinduct_coiters_thms_for_types pre_bnfs (the coiters_args_types) xtor_co_induct
-              dtor_injects dtor_ctors xtor_co_iter_thmss nesting_bnfs fpTs Cs Xs ctrXs_Tsss kss mss
-              ns fp_abs_inverses abs_inverses (fn thm => thm RS @{thm vimage2p_refl}) ctr_defss
-              ctr_sugars co_iterss co_iter_defss (Proof_Context.export lthy no_defs_lthy) lthy
-            |> `(fn ((coinduct_thms_pairs, _), (unfold_thmss, corec_thmss, _),
-                    (disc_unfold_thmss, disc_corec_thmss, _), _,
-                    (sel_unfold_thmsss, sel_corec_thmsss, _)) =>
-              (map snd coinduct_thms_pairs, map fst coinduct_thms_pairs, unfold_thmss,
-               corec_thmss, disc_unfold_thmss, disc_corec_thmss, sel_unfold_thmsss,
-               sel_corec_thmsss))
+            derive_coinduct_corecs_thms_for_types pre_bnfs (the corecs_args_types) xtor_co_induct
+              dtor_injects dtor_ctors xtor_co_rec_thms nesting_bnfs fpTs Cs Xs ctrXs_Tsss kss mss ns
+              fp_abs_inverses abs_inverses (fn thm => thm RS @{thm vimage2p_refl}) ctr_defss
+              ctr_sugars co_recs co_rec_defs (Proof_Context.export lthy no_defs_lthy) lthy
+            |> `(fn ((coinduct_thms_pairs, _), (corec_thmss, _), (disc_corec_thmss, _), _,
+                     (sel_corec_thmsss, _)) =>
+              (map snd coinduct_thms_pairs, map fst coinduct_thms_pairs, corec_thmss,
+               disc_corec_thmss, sel_corec_thmsss))
             ||> (fn info => (NONE, SOME info));
 
         val phi = Proof_Context.export_morphism no_defs_lthy no_defs_lthy0;
 
-        fun mk_target_fp_sugar T X kk pre_bnf absT_info ctrXs_Tss ctr_defs ctr_sugar co_iters maps
-            co_inducts un_fold_thms co_rec_thms disc_unfold_thms disc_corec_thms sel_unfold_thmss
-            sel_corec_thmss =
+        fun mk_target_fp_sugar T X kk pre_bnf absT_info ctrXs_Tss ctr_defs ctr_sugar co_rec maps
+            co_inducts co_rec_thms disc_corec_thms sel_corec_thmss =
           {T = T, X = X, fp = fp, fp_res = fp_res, fp_res_index = kk, pre_bnf = pre_bnf,
            absT_info = absT_info, nested_bnfs = nested_bnfs, nesting_bnfs = nesting_bnfs,
-           ctrXs_Tss = ctrXs_Tss, ctr_defs = ctr_defs, ctr_sugar = ctr_sugar, co_iters = co_iters,
+           ctrXs_Tss = ctrXs_Tss, ctr_defs = ctr_defs, ctr_sugar = ctr_sugar, co_rec = co_rec,
            maps = maps, common_co_inducts = common_co_inducts, co_inducts = co_inducts,
-           co_iter_thmss = [un_fold_thms, co_rec_thms],
-           disc_co_iterss = [disc_unfold_thms, disc_corec_thms],
-           sel_co_itersss = [sel_unfold_thmss, sel_corec_thmss]}
+           co_rec_thms = co_rec_thms, disc_co_recs = disc_corec_thms,
+           sel_co_recss = sel_corec_thmss}
           |> morph_fp_sugar phi;
 
         val target_fp_sugars =
-          map17 mk_target_fp_sugar fpTs Xs kks pre_bnfs absT_infos ctrXs_Tsss ctr_defss ctr_sugars
-            co_iterss mapss (transpose co_inductss) un_fold_thmss co_rec_thmss disc_unfold_thmss
-            disc_corec_thmss sel_unfold_thmsss sel_corec_thmsss;
+          map14 mk_target_fp_sugar fpTs Xs kks pre_bnfs absT_infos ctrXs_Tsss ctr_defss ctr_sugars
+            co_recs mapss (transpose co_inductss) co_rec_thmss disc_corec_thmss sel_corec_thmsss;
 
         val n2m_sugar = (target_fp_sugars, fp_sugar_thms);
       in

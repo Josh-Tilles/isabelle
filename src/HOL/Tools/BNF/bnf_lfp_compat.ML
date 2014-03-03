@@ -146,8 +146,8 @@ fun datatype_compat_cmd raw_fpT_names lthy =
       (kk, (T_name, map (mk_dtyp (map snd (take 1 parents))) Ts, map2 (mk_ctr_descr Ts) kksss ctrs0));
 
     val descr = map3 mk_typ_descr kkssss Tparentss ctrss0;
-    val recs = map (fst o dest_Const o co_rec_of o #co_iters) fp_sugars;
-    val rec_thms = maps (co_rec_of o #co_iter_thmss) fp_sugars;
+    val recs = map (fst o dest_Const o #co_rec) fp_sugars;
+    val rec_thms = maps #co_rec_thms fp_sugars;
 
     fun mk_info (kk, {T = Type (T_name0, _), ctr_sugar = {casex, exhaust, nchotomy, injects,
         distincts, case_thms, case_cong, weak_case_cong, split, split_asm, ...}, ...} : fp_sugar) =
@@ -163,7 +163,7 @@ fun datatype_compat_cmd raw_fpT_names lthy =
     val all_notes =
       (case lfp_sugar_thms of
         NONE => []
-      | SOME ((induct_thms, induct_thm, induct_attrs), (fold_thmss, rec_thmss, _)) =>
+      | SOME ((induct_thms, induct_thm, induct_attrs), (rec_thmss, _)) =>
         let
           val common_notes =
             (if nn > 1 then [(inductN, [induct_thm], induct_attrs)] else [])
@@ -172,8 +172,7 @@ fun datatype_compat_cmd raw_fpT_names lthy =
               ((Binding.qualify true common_name (Binding.name thmN), attrs), [(thms, [])]));
 
           val notes =
-            [(foldN, fold_thmss, []),
-             (inductN, map single induct_thms, induct_attrs),
+            [(inductN, map single induct_thms, induct_attrs),
              (recN, rec_thmss, code_nitpicksimp_simp_attrs)]
             |> filter_out (null o #2)
             |> maps (fn (thmN, thmss, attrs) =>
