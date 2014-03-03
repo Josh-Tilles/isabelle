@@ -91,8 +91,12 @@ apply (simp add: Pi_def, auto)
 txt{*Converse direction requires Axiom of Choice to exhibit a function
 picking an element from each non-empty @{term "B x"}*}
 apply (drule spec[where x="\<lambda>u. \<some> y. y \<in> B u"], auto)
-apply (cut_tac P= "%y. y \<in> B x" in some_eq_ex, auto)
-done
+proof -
+  fix x
+  assume "x \<in> A" and "(\<some> y. y \<in> B x) \<notin> B x"
+  thus "\<exists>x\<in>A. B x = {}"
+    by (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
+qed
 
 lemma Pi_empty [simp]: "Pi {} B = UNIV"
 by (simp add: Pi_def)
