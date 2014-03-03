@@ -103,7 +103,8 @@ proof -
     then obtain x where "x \<in> A" and "(\<some> y. y \<in> B x) \<notin> B x"
       by (elim exE conjE)
     thus "\<exists>x\<in>A. B x = {}"
-      by (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
+      using some_eq_ex[where ?P="\<lambda>y. y \<in> B x"]
+      by auto
   qed
   finally show ?thesis .
 qed
