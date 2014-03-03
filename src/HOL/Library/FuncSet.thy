@@ -100,7 +100,8 @@ proof -
     assume "\<forall>f. \<exists>x. x \<in> A \<and> f x \<notin> B x"
     hence "\<exists>x. x \<in> A \<and> (\<some> y. y \<in> B x) \<notin> B x"
       by (rule spec[where x="\<lambda>u. \<some> y. y \<in> B u"])
-    then guess x ..
+    then obtain x where "x \<in> A" and "(\<some> y. y \<in> B x) \<notin> B x"
+      by (elim exE conjE)
     thus "\<exists>x\<in>A. B x = {}"
       by (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
   qed
