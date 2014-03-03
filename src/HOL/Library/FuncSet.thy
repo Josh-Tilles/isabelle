@@ -87,16 +87,24 @@ lemma image_subset_iff_funcset: "F ` A \<subseteq> B \<longleftrightarrow> F \<i
   by auto
 
 lemma Pi_eq_empty[simp]: "((PI x: A. B x) = {}) = (\<exists>x\<in>A. B x = {})"
-apply (simp add: Pi_def, auto)
-txt{*Converse direction requires Axiom of Choice to exhibit a function
-picking an element from each non-empty @{term "B x"}*}
 proof -
-  assume "\<forall>f. \<exists>x. x \<in> A \<and> f x \<notin> B x"
-  hence "\<exists>x. x \<in> A \<and> (\<some> y. y \<in> B x) \<notin> B x"
-    by (rule spec[where x="\<lambda>u. \<some> y. y \<in> B u"])
-  then guess x ..
-  thus "\<exists>x\<in>A. B x = {}"
-    by (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
+  have "((\<Pi> x\<in>A. B x) = {}) = (\<forall>f. \<exists>x. x\<in>A \<and> f x \<notin> B x)"
+    by (simp add: Pi_def)
+  also have "\<dots> = (\<exists>x\<in>A. B x = {})"
+  proof (rule iffI)
+    assume "\<exists>x\<in>A. B x = {}"
+    thus "\<forall>f. \<exists>x. x \<in> A \<and> f x \<notin> B x" by auto
+  next
+    txt{*Converse direction requires Axiom of Choice to exhibit a function
+    picking an element from each non-empty @{term "B x"}*}
+    assume "\<forall>f. \<exists>x. x \<in> A \<and> f x \<notin> B x"
+    hence "\<exists>x. x \<in> A \<and> (\<some> y. y \<in> B x) \<notin> B x"
+      by (rule spec[where x="\<lambda>u. \<some> y. y \<in> B u"])
+    then guess x ..
+    thus "\<exists>x\<in>A. B x = {}"
+      by (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
+  qed
+  finally show ?thesis .
 qed
 
 lemma Pi_empty [simp]: "Pi {} B = UNIV"
