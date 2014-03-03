@@ -90,7 +90,7 @@ lemma Pi_eq_empty[simp]: "((PI x: A. B x) = {}) = (\<exists>x\<in>A. B x = {})"
 apply (simp add: Pi_def, auto)
 txt{*Converse direction requires Axiom of Choice to exhibit a function
 picking an element from each non-empty @{term "B x"}*}
-apply (drule_tac x = "%u. SOME y. y \<in> B u" in spec, auto)
+apply (drule spec[where x="\<lambda>u. \<some> y. y \<in> B u"], auto)
 apply (cut_tac P= "%y. y \<in> B x" in some_eq_ex, auto)
 done
 
