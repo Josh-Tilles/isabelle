@@ -10,7 +10,7 @@ Shared fixed point operations on bounded natural functors.
 header {* Shared Fixed Point Operations on Bounded Natural Functors *}
 
 theory BNF_FP_Base
-imports BNF_Comp
+imports BNF_Comp Basic_BNFs
 begin
 
 lemma mp_conj: "(P \<longrightarrow> Q) \<and> R \<Longrightarrow> P \<Longrightarrow> R \<and> Q"
@@ -98,13 +98,6 @@ lemma sum_set_simps:
 "setr (Inr x) = {x}"
 unfolding sum_set_defs by simp+
 
-lemma UN_compreh_eq_eq:
-"\<Union>{y. y = A} = A"
-by blast+
-
-lemma ex_in_single: "(\<exists>x \<in> {y}. P x) = P y"
-by blast
-
 lemma spec2: "\<forall>x y. P x y \<Longrightarrow> P x y"
 by blast
 
@@ -123,24 +116,24 @@ lemma rewriteL_comp_comp2: "\<lbrakk>f o g = l1 o l2; l2 o h = r\<rbrakk> \<Long
 lemma convol_o: "<f, g> o h = <f o h, g o h>"
   unfolding convol_def by auto
 
-lemma map_pair_o_convol: "map_pair h1 h2 o <f, g> = <h1 o f, h2 o g>"
+lemma map_prod_o_convol: "map_prod h1 h2 o <f, g> = <h1 o f, h2 o g>"
   unfolding convol_def by auto
 
-lemma map_pair_o_convol_id: "(map_pair f id \<circ> <id , g>) x = <id \<circ> f , g> x"
-  unfolding map_pair_o_convol id_comp comp_id ..
+lemma map_prod_o_convol_id: "(map_prod f id \<circ> <id , g>) x = <id \<circ> f , g> x"
+  unfolding map_prod_o_convol id_comp comp_id ..
 
 lemma o_case_sum: "h o case_sum f g = case_sum (h o f) (h o g)"
   unfolding comp_def by (auto split: sum.splits)
 
-lemma case_sum_o_sum_map: "case_sum f g o sum_map h1 h2 = case_sum (f o h1) (g o h2)"
+lemma case_sum_o_map_sum: "case_sum f g o map_sum h1 h2 = case_sum (f o h1) (g o h2)"
   unfolding comp_def by (auto split: sum.splits)
 
-lemma case_sum_o_sum_map_id: "(case_sum id g o sum_map f id) x = case_sum (f o id) g x"
-  unfolding case_sum_o_sum_map id_comp comp_id ..
+lemma case_sum_o_map_sum_id: "(case_sum id g o map_sum f id) x = case_sum (f o id) g x"
+  unfolding case_sum_o_map_sum id_comp comp_id ..
 
-lemma fun_rel_def_butlast:
-  "fun_rel R (fun_rel S T) f g = (\<forall>x y. R x y \<longrightarrow> (fun_rel S T) (f x) (g y))"
-  unfolding fun_rel_def ..
+lemma rel_fun_def_butlast:
+  "rel_fun R (rel_fun S T) f g = (\<forall>x y. R x y \<longrightarrow> (rel_fun S T) (f x) (g y))"
+  unfolding rel_fun_def ..
 
 lemma subst_eq_imp: "(\<forall>a b. a = b \<longrightarrow> P a b) \<equiv> (\<forall>a. P a a)"
   by auto

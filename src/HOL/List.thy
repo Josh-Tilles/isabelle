@@ -5251,7 +5251,7 @@ primrec -- {*The lexicographic ordering for lists of the specified length*}
   lexn :: "('a \<times> 'a) set \<Rightarrow> nat \<Rightarrow> ('a list \<times> 'a list) set" where
 "lexn r 0 = {}" |
 "lexn r (Suc n) =
-  (map_pair (%(x, xs). x#xs) (%(x, xs). x#xs) ` (r <*lex*> lexn r n)) Int
+  (map_prod (%(x, xs). x#xs) (%(x, xs). x#xs) ` (r <*lex*> lexn r n)) Int
   {(xs, ys). length xs = Suc n \<and> length ys = Suc n}"
 
 definition lex :: "('a \<times> 'a) set \<Rightarrow> ('a list \<times> 'a list) set" where
@@ -5265,7 +5265,7 @@ lemma wf_lexn: "wf r ==> wf (lexn r n)"
 apply (induct n, simp, simp)
 apply(rule wf_subset)
  prefer 2 apply (rule Int_lower1)
-apply(rule wf_map_pair_image)
+apply(rule wf_map_prod_image)
  prefer 2 apply (rule inj_onI, auto)
 done
 
@@ -6713,17 +6713,17 @@ lemma Nil_transfer [transfer_rule]: "(list_all2 A) [] []"
 
 lemma Cons_transfer [transfer_rule]:
   "(A ===> list_all2 A ===> list_all2 A) Cons Cons"
-  unfolding fun_rel_def by simp
+  unfolding rel_fun_def by simp
 
 lemma case_list_transfer [transfer_rule]:
   "(B ===> (A ===> list_all2 A ===> B) ===> list_all2 A ===> B)
     case_list case_list"
-  unfolding fun_rel_def by (simp split: list.split)
+  unfolding rel_fun_def by (simp split: list.split)
 
 lemma rec_list_transfer [transfer_rule]:
   "(B ===> (A ===> list_all2 A ===> B ===> B) ===> list_all2 A ===> B)
     rec_list rec_list"
-  unfolding fun_rel_def by (clarify, erule list_all2_induct, simp_all)
+  unfolding rel_fun_def by (clarify, erule list_all2_induct, simp_all)
 
 lemma tl_transfer [transfer_rule]:
   "(list_all2 A ===> list_all2 A) tl tl"
@@ -6731,10 +6731,10 @@ lemma tl_transfer [transfer_rule]:
 
 lemma butlast_transfer [transfer_rule]:
   "(list_all2 A ===> list_all2 A) butlast butlast"
-  by (rule fun_relI, erule list_all2_induct, auto)
+  by (rule rel_funI, erule list_all2_induct, auto)
 
 lemma set_transfer [transfer_rule]:
-  "(list_all2 A ===> set_rel A) set set"
+  "(list_all2 A ===> rel_set A) set set"
   unfolding set_rec[abs_def] by transfer_prover
 
 lemma map_rec: "map f xs = rec_list Nil (%x _ y. Cons (f x) y) xs"
@@ -6793,11 +6793,11 @@ lemma dropWhile_transfer [transfer_rule]:
   unfolding dropWhile_def by transfer_prover
 
 lemma zip_transfer [transfer_rule]:
-  "(list_all2 A ===> list_all2 B ===> list_all2 (prod_rel A B)) zip zip"
+  "(list_all2 A ===> list_all2 B ===> list_all2 (rel_prod A B)) zip zip"
   unfolding zip_def by transfer_prover
 
 lemma product_transfer [transfer_rule]:
-  "(list_all2 A ===> list_all2 B ===> list_all2 (prod_rel A B)) List.product List.product"
+  "(list_all2 A ===> list_all2 B ===> list_all2 (rel_prod A B)) List.product List.product"
   unfolding List.product_def by transfer_prover
 
 lemma product_lists_transfer [transfer_rule]:
@@ -6836,7 +6836,7 @@ lemma remdups_transfer [transfer_rule]:
 lemma remdups_adj_transfer [transfer_rule]:
   assumes [transfer_rule]: "bi_unique A"
   shows "(list_all2 A ===> list_all2 A) remdups_adj remdups_adj"
-  proof (rule fun_relI, erule list_all2_induct)
+  proof (rule rel_funI, erule list_all2_induct)
   qed (auto simp: remdups_adj_Cons assms[unfolded bi_unique_def] split: list.splits)
 
 lemma replicate_transfer [transfer_rule]:
@@ -6864,39 +6864,39 @@ lemma list_all2_transfer [transfer_rule]:
   done
 
 lemma sublist_transfer [transfer_rule]:
-  "(list_all2 A ===> set_rel (op =) ===> list_all2 A) sublist sublist"
+  "(list_all2 A ===> rel_set (op =) ===> list_all2 A) sublist sublist"
   unfolding sublist_def [abs_def] by transfer_prover
 
 lemma partition_transfer [transfer_rule]:
-  "((A ===> op =) ===> list_all2 A ===> prod_rel (list_all2 A) (list_all2 A))
+  "((A ===> op =) ===> list_all2 A ===> rel_prod (list_all2 A) (list_all2 A))
     partition partition"
   unfolding partition_def by transfer_prover
 
 lemma lists_transfer [transfer_rule]:
-  "(set_rel A ===> set_rel (list_all2 A)) lists lists"
-  apply (rule fun_relI, rule set_relI)
+  "(rel_set A ===> rel_set (list_all2 A)) lists lists"
+  apply (rule rel_funI, rule rel_setI)
   apply (erule lists.induct, simp)
-  apply (simp only: set_rel_def list_all2_Cons1, metis lists.Cons)
+  apply (simp only: rel_set_def list_all2_Cons1, metis lists.Cons)
   apply (erule lists.induct, simp)
-  apply (simp only: set_rel_def list_all2_Cons2, metis lists.Cons)
+  apply (simp only: rel_set_def list_all2_Cons2, metis lists.Cons)
   done
 
 lemma set_Cons_transfer [transfer_rule]:
-  "(set_rel A ===> set_rel (list_all2 A) ===> set_rel (list_all2 A))
+  "(rel_set A ===> rel_set (list_all2 A) ===> rel_set (list_all2 A))
     set_Cons set_Cons"
-  unfolding fun_rel_def set_rel_def set_Cons_def
+  unfolding rel_fun_def rel_set_def set_Cons_def
   apply safe
   apply (simp add: list_all2_Cons1, fast)
   apply (simp add: list_all2_Cons2, fast)
   done
 
 lemma listset_transfer [transfer_rule]:
-  "(list_all2 (set_rel A) ===> set_rel (list_all2 A)) listset listset"
+  "(list_all2 (rel_set A) ===> rel_set (list_all2 A)) listset listset"
   unfolding listset_def by transfer_prover
 
 lemma null_transfer [transfer_rule]:
   "(list_all2 A ===> op =) List.null List.null"
-  unfolding fun_rel_def List.null_def by auto
+  unfolding rel_fun_def List.null_def by auto
 
 lemma list_all_transfer [transfer_rule]:
   "((A ===> op =) ===> list_all2 A ===> op =) list_all list_all"
@@ -6908,9 +6908,9 @@ lemma list_ex_transfer [transfer_rule]:
 
 lemma splice_transfer [transfer_rule]:
   "(list_all2 A ===> list_all2 A ===> list_all2 A) splice splice"
-  apply (rule fun_relI, erule list_all2_induct, simp add: fun_rel_def, simp)
-  apply (rule fun_relI)
-  apply (erule_tac xs=x in list_all2_induct, simp, simp add: fun_rel_def)
+  apply (rule rel_funI, erule list_all2_induct, simp add: rel_fun_def, simp)
+  apply (rule rel_funI)
+  apply (erule_tac xs=x in list_all2_induct, simp, simp add: rel_fun_def)
   done
 
 lemma listsum_transfer[transfer_rule]:

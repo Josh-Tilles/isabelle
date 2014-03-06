@@ -20,7 +20,7 @@ subsection{* Transporting the Characteristic Lemmas from @{text "fset"} to @{tex
 
 definition "Node n as \<equiv> NNode n (the_inv fset as)"
 definition "cont \<equiv> fset o ccont"
-definition "unfold rt ct \<equiv> corec_dtree rt (the_inv fset o image (sum_map id Inr) o ct)"
+definition "unfold rt ct \<equiv> corec_dtree rt (the_inv fset o image (map_sum id Inr) o ct)"
 definition "corec rt ct \<equiv> corec_dtree rt (the_inv fset o ct)"
 
 lemma finite_cont[simp]: "finite (cont tr)"
@@ -60,25 +60,25 @@ assumes "root tr = root tr'" and "cont tr = cont tr'"
 shows "tr = tr'"
 by (metis Node_root_cont assms)
 
-lemma set_rel_cont:
-"set_rel \<chi> (cont tr1) (cont tr2) = fset_rel \<chi> (ccont tr1) (ccont tr2)"
-unfolding cont_def comp_def fset_rel_fset ..
+lemma rel_set_cont:
+"rel_set \<chi> (cont tr1) (cont tr2) = rel_fset \<chi> (ccont tr1) (ccont tr2)"
+unfolding cont_def comp_def rel_fset_fset ..
 
 lemma dtree_coinduct[elim, consumes 1, case_names Lift, induct pred: "HOL.eq"]:
 assumes phi: "\<phi> tr1 tr2" and
 Lift: "\<And> tr1 tr2. \<phi> tr1 tr2 \<Longrightarrow>
-                  root tr1 = root tr2 \<and> set_rel (sum_rel op = \<phi>) (cont tr1) (cont tr2)"
+                  root tr1 = root tr2 \<and> rel_set (rel_sum op = \<phi>) (cont tr1) (cont tr2)"
 shows "tr1 = tr2"
 using phi apply(elim dtree.coinduct)
-apply(rule Lift[unfolded set_rel_cont]) .
+apply(rule Lift[unfolded rel_set_cont]) .
 
 lemma unfold:
 "root (unfold rt ct b) = rt b"
 "finite (ct b) \<Longrightarrow> cont (unfold rt ct b) = image (id \<oplus> unfold rt ct) (ct b)"
-using dtree.sel_corec[of rt "the_inv fset o image (sum_map id Inr) o ct" b] unfolding unfold_def
+using dtree.sel_corec[of rt "the_inv fset o image (map_sum id Inr) o ct" b] unfolding unfold_def
 apply blast
 unfolding cont_def comp_def
-by (simp add: case_sum_o_inj sum_map.compositionality image_image)
+by (simp add: case_sum_o_inj map_sum.compositionality image_image)
 
 lemma corec:
 "root (corec rt ct b) = rt b"

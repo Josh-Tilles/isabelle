@@ -8,7 +8,7 @@ Composition of bounded natural functors.
 header {* Composition of Bounded Natural Functors *}
 
 theory BNF_Comp
-imports Basic_BNFs
+imports BNF_Def
 begin
 
 lemma empty_natural: "(\<lambda>_. {}) o f = image g o (\<lambda>_. {})"
@@ -42,6 +42,17 @@ apply (rule ordIso_refl)
 apply (rule Card_order_cprod)
 done
 
+lemma csum_dup: "cinfinite r \<Longrightarrow> Card_order r \<Longrightarrow> p +c p' =o r +c r \<Longrightarrow> p +c p' =o r"
+apply (erule ordIso_transitive)
+apply (frule csum_absorb2')
+apply (erule ordLeq_refl)
+by simp
+
+lemma cprod_dup: "cinfinite r \<Longrightarrow> Card_order r \<Longrightarrow> p *c p' =o r *c r \<Longrightarrow> p *c p' =o r"
+apply (erule ordIso_transitive)
+apply (rule cprod_infinite)
+by simp
+
 lemma Union_image_insert: "\<Union>(f ` insert a B) = f a \<union> \<Union>(f ` B)"
 by simp
 
@@ -56,14 +67,6 @@ by blast
 
 lemma UN_image_subset: "\<Union>(f ` g x) \<subseteq> X = (g x \<subseteq> {x. f x \<subseteq> X})"
 by blast
-
-lemma mem_UN_compreh_ex_eq: "(z : \<Union>{y. \<exists>x\<in>A. y = F x}) = (\<exists>x\<in>A. z : F x)"
-by blast
-
-lemma UN_compreh_ex_eq_eq:
-"\<Union>{y. \<exists>x\<in>A. y = {}} = {}"
-"\<Union>{y. \<exists>x\<in>A. y = {x}} = A"
-by blast+
 
 lemma comp_set_bd_Union_o_collect: "|\<Union>\<Union>((\<lambda>f. f x) ` X)| \<le>o hbd \<Longrightarrow> |(Union \<circ> collect X) x| \<le>o hbd"
 by (unfold comp_apply collect_def SUP_def)
@@ -136,21 +139,27 @@ lemma vimage2p_relcompp_converse:
 
 end
 
-definition id_bnf_comp :: "'a \<Rightarrow> 'a" where "id_bnf_comp = (\<lambda>x. x)"
+bnf DEADID: 'a
+  map: "id :: 'a \<Rightarrow> 'a"
+  bd: natLeq
+  rel: "op = :: 'a \<Rightarrow> 'a \<Rightarrow> bool"
+by (auto simp add: Grp_def natLeq_card_order natLeq_cinfinite)
+
+definition id_bnf_comp :: "'a \<Rightarrow> 'a" where "id_bnf_comp \<equiv> (\<lambda>x. x)"
+
+bnf ID: 'a
+  map: "id_bnf_comp :: ('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b"
+  sets: "\<lambda>x. {x}"
+  bd: natLeq
+  rel: "id_bnf_comp :: ('a \<Rightarrow> 'b \<Rightarrow> bool) \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> bool"
+unfolding id_bnf_comp_def
+apply (auto simp: Grp_def fun_eq_iff relcompp.simps natLeq_card_order natLeq_cinfinite)
+apply (rule ordLess_imp_ordLeq[OF finite_ordLess_infinite[OF _ natLeq_Well_order]])
+apply (auto simp add: Field_card_of Field_natLeq card_of_well_order_on)[3]
+done
 
 lemma type_definition_id_bnf_comp_UNIV: "type_definition id_bnf_comp id_bnf_comp UNIV"
   unfolding id_bnf_comp_def by unfold_locales auto
-
-lemma csum_dup: "cinfinite r \<Longrightarrow> Card_order r \<Longrightarrow> p +c p' =o r +c r \<Longrightarrow> p +c p' =o r"
-apply (erule ordIso_transitive)
-apply (frule csum_absorb2')
-apply (erule ordLeq_refl)
-by simp
-
-lemma cprod_dup: "cinfinite r \<Longrightarrow> Card_order r \<Longrightarrow> p *c p' =o r *c r \<Longrightarrow> p *c p' =o r"
-apply (erule ordIso_transitive)
-apply (rule cprod_infinite)
-by simp
 
 ML_file "Tools/BNF/bnf_comp_tactics.ML"
 ML_file "Tools/BNF/bnf_comp.ML"

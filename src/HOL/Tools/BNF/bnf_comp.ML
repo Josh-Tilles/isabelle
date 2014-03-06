@@ -56,8 +56,8 @@ open BNF_Util
 open BNF_Tactics
 open BNF_Comp_Tactics
 
-val ID_bnf = the (bnf_of @{context} "Basic_BNFs.ID");
-val DEADID_bnf = the (bnf_of @{context} "Basic_BNFs.DEADID");
+val ID_bnf = the (bnf_of @{context} "BNF_Comp.ID");
+val DEADID_bnf = the (bnf_of @{context} "BNF_Comp.DEADID");
 
 type comp_cache = (bnf * (typ list * typ list)) Typtab.table;
 
@@ -109,12 +109,17 @@ fun mk_liftN n = "_lift" ^ string_of_int n;
 fun mk_permuteN src dest =
   "_permute_" ^ implode (map string_of_int src) ^ "_" ^ implode (map string_of_int dest);
 
+
 (*copied from Envir.expand_term_free*)
 fun expand_term_const defs =
   let
     val eqs = map ((fn ((x, U), u) => (x, (U, u))) o apfst dest_Const) defs;
     val get = fn Const (x, _) => AList.lookup (op =) eqs x | _ => NONE;
   in Envir.expand_term get end;
+
+val id_bnf_comp_def = @{thm id_bnf_comp_def};
+val expand_id_bnf_comp_def =
+  expand_term_const [Thm.prop_of id_bnf_comp_def |> Logic.dest_equals];
 
 fun is_sum_prod_natLeq (Const (@{const_name csum}, _) $ t $ u) = forall is_sum_prod_natLeq [t, u]
   | is_sum_prod_natLeq (Const (@{const_name cprod}, _) $ t $ u) = forall is_sum_prod_natLeq [t, u]
@@ -197,7 +202,8 @@ fun clean_compose_bnf const_policy qualify b outer inners (unfold_set, lthy) =
         val setT = fastype_of set;
         val var_set' = Const (@{const_name id_bnf_comp}, setT --> setT) $ Var ((Name.uu, 0), setT);
         val goal = mk_Trueprop_eq (var_set', set);
-        fun tac {context = ctxt, prems = _} = mk_simplified_set_tac ctxt;
+        fun tac {context = ctxt, prems = _} =
+          mk_simplified_set_tac ctxt (collect_set_map_of_bnf outer);
         val set'_eq_set =
           Goal.prove names_lthy [] [] goal tac
           |> Thm.close_derivation;
@@ -338,9 +344,8 @@ fun clean_compose_bnf const_policy qualify b outer inners (unfold_set, lthy) =
         Binding.empty [] ((((((b, CCA), mapx), sets'), bd'), wits), SOME rel) lthy;
 
     val phi =
-      Morphism.thm_morphism "BNF" (unfold_thms lthy' @{thms id_bnf_comp_def})
-      $> Morphism.term_morphism "BNF" (Raw_Simplifier.rewrite_term (Proof_Context.theory_of lthy')
-        @{thms id_bnf_comp_def[abs_def]} []);
+      Morphism.thm_morphism "BNF" (unfold_thms lthy' [id_bnf_comp_def])
+      $> Morphism.term_morphism "BNF" expand_id_bnf_comp_def;
 
     val bnf'' = morph_bnf phi bnf';
   in
@@ -758,21 +763,21 @@ fun seal_bnf qualify (unfold_set : unfold_set) b Ds bnf lthy =
 
     val (((fs, fs'), (Rs, Rs')), _(*names_lthy*)) = lthy
       |> mk_Frees' "f" (map2 (curry op -->) As Bs)
-      ||>> mk_Frees' "R" (map2 mk_pred2T As Bs)
+      ||>> mk_Frees' "R" (map2 mk_pred2T As Bs);
 
     val map_unfolds = #map_unfolds unfold_set;
     val set_unfoldss = #set_unfoldss unfold_set;
     val rel_unfolds = #rel_unfolds unfold_set;
 
-    val expand_maps =
+    val expand_maps = expand_id_bnf_comp_def o
       fold expand_term_const (map (single o Logic.dest_equals o Thm.prop_of) map_unfolds);
     val expand_sets =
       fold expand_term_const (map (map (Logic.dest_equals o Thm.prop_of)) set_unfoldss);
-    val expand_rels =
+    val expand_rels = expand_id_bnf_comp_def o
       fold expand_term_const (map (single o Logic.dest_equals o Thm.prop_of) rel_unfolds);
-    fun unfold_maps ctxt = fold (unfold_thms ctxt o single) map_unfolds;
+    fun unfold_maps ctxt = fold (unfold_thms ctxt o single) (id_bnf_comp_def :: map_unfolds);
     fun unfold_sets ctxt = fold (unfold_thms ctxt) set_unfoldss;
-    fun unfold_rels ctxt = unfold_thms ctxt rel_unfolds;
+    fun unfold_rels ctxt = fold (unfold_thms ctxt o single) (id_bnf_comp_def :: rel_unfolds);
     fun unfold_all ctxt = unfold_sets ctxt o unfold_maps ctxt o unfold_rels ctxt;
 
     val repTA = mk_T_of_bnf Ds As bnf;
@@ -853,7 +858,7 @@ fun seal_bnf qualify (unfold_set : unfold_set) b Ds bnf lthy =
 
     val bnf_wits = map (fn (I, t) =>
         fold Term.absdummy (map (nth As) I)
-          (AbsA $ Term.list_comb (t, map Bound (0 upto length I - 1))))
+          (AbsA $ Term.list_comb (expand_id_bnf_comp_def t, map Bound (0 upto length I - 1))))
       (mk_wits_of_bnf (replicate nwits Ds) (replicate nwits As) bnf);
 
     fun wit_tac ctxt = ALLGOALS (dtac (type_definition RS @{thm type_copy_wit})) THEN

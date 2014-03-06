@@ -33,17 +33,17 @@ by transfer_prover
 definition equal_None :: "'a option \<Rightarrow> bool" where "equal_None x \<equiv> x = None"
 
 lemma [transfer_rule]: "(rel_option A ===> op=) equal_None equal_None" 
-unfolding fun_rel_def rel_option_iff equal_None_def by (auto split: option.split)
+unfolding rel_fun_def rel_option_iff equal_None_def by (auto split: option.split)
 
 lemma dom_transfer:
   assumes [transfer_rule]: "bi_total A"
-  shows "((A ===> rel_option B) ===> set_rel A) dom dom" 
+  shows "((A ===> rel_option B) ===> rel_set A) dom dom" 
 unfolding dom_def[abs_def] equal_None_def[symmetric] 
 by transfer_prover
 
 lemma map_of_transfer [transfer_rule]:
   assumes [transfer_rule]: "bi_unique R1"
-  shows "(list_all2 (prod_rel R1 R2) ===> R1 ===> rel_option R2) map_of map_of"
+  shows "(list_all2 (rel_prod R1 R2) ===> R1 ===> rel_option R2) map_of map_of"
 unfolding map_of_def by transfer_prover
 
 lemma tabulate_transfer: 
@@ -55,7 +55,7 @@ by transfer_prover
 lemma bulkload_transfer: 
   "(list_all2 A ===> op= ===> rel_option A) 
     (\<lambda>xs k. if k < length xs then Some (xs ! k) else None) (\<lambda>xs k. if k < length xs then Some (xs ! k) else None)"
-unfolding fun_rel_def 
+unfolding rel_fun_def 
 apply clarsimp 
 apply (erule list_all2_induct) 
   apply simp 
