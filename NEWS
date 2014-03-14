@@ -98,6 +98,14 @@ differently).
 
 *** HOL ***
 
+* Simplifier: Enhanced solver of preconditions of rewrite rules
+  can now deal with conjunctions.
+  For help with converting proofs, the old behaviour of the simplifier
+  can be restored like this:  declare/using [[simp_legacy_precond]]
+  This configuration option will disappear again in the future.
+
+* Dropped facts INF_comp, SUP_comp.  INCOMPATIBILITY.
+
 * HOL-Word:
   * Abandoned fact collection "word_arith_alts", which is a
   duplicate of "word_arith_wis".
@@ -154,7 +162,7 @@ spurious crashes and other surprises.  Potential INCOMPATIBILITY.
     BNF/Equiv_Relations_More.thy
   INCOMPATIBILITY.
 
-* New datatype package:
+* New (co)datatype package:
   * "primcorec" is fully implemented.
   * Renamed commands:
       datatype_new_compat ~> datatype_compat
@@ -215,7 +223,14 @@ spurious crashes and other surprises.  Potential INCOMPATIBILITY.
 * Theory reorganizations:
   * Big_Operators.thy ~> Groups_Big.thy and Lattices_Big.thy
 
+* SMT module:
+  * A new version of the SMT module, temporarily called "SMT2", uses SMT-LIB 2
+    and supports recent versions of Z3 (e.g., 4.3). The new proof method is
+    called "smt2", and the new Z3 is called "z3_new" in Sledgehammer and
+    elsewhere.
+
 * Sledgehammer:
+  - New prover "z3_new" with support for Isar proofs
   - New option:
       smt_proofs
   - Renamed options:

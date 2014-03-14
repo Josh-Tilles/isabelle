@@ -481,7 +481,8 @@ datatypes specified by their constructors.
 The syntactic entity \synt{target} can be used to specify a local
 context---e.g., @{text "(in linorder)"} \cite{isabelle-isar-ref}.
 
-The optional target is potentially followed by datatype-specific options:
+The optional target is optionally followed by one or both of the following
+options:
 
 \begin{itemize}
 \setlength{\itemsep}{0pt}
@@ -1355,7 +1356,7 @@ subsection {* Command Syntax
   \label{ssec:primrec-command-syntax} *}
 
 
-subsubsection {* \keyw{primrec\_new}
+subsubsection {* \keyw{primrec}
   \label{sssec:primrec-new} *}
 
 text {*
@@ -1364,7 +1365,10 @@ text {*
 \end{matharray}
 
 @{rail \<open>
-  @@{command primrec} target? fixes \<newline> @'where' (@{syntax pr_equation} + '|')
+  @@{command primrec} target? @{syntax pr_option}? fixes \<newline>
+  @'where' (@{syntax pr_equation} + '|')
+  ;
+  @{syntax_def pr_option}: '(' 'nonexhaustive' ')'
   ;
   @{syntax_def pr_equation}: thmdecl? prop
 \<close>}
@@ -1379,6 +1383,17 @@ The syntactic entity \synt{target} can be used to specify a local context,
 \synt{fixes} denotes a list of names with optional type signatures,
 \synt{thmdecl} denotes an optional name for the formula that follows, and
 \synt{prop} denotes a HOL proposition \cite{isabelle-isar-ref}.
+
+The optional target is optionally followed by the following option:
+
+\begin{itemize}
+\setlength{\itemsep}{0pt}
+
+\item
+The @{text "nonexhaustive"} option indicates that the functions are not
+necessarily specified for all constructors. It can be used to suppress the
+warning that is normally emitted when some constructors are missing.
+\end{itemize}
 
 %%% TODO: elaborate on format of the equations
 %%% TODO: elaborate on mutual and nested-to-mutual
@@ -1815,8 +1830,8 @@ element in a stream:
 
 text {*
 \noindent
-Constructs such as @{text "let"}---@{text "in"}, @{text
-"if"}---@{text "then"}---@{text "else"}, and @{text "case"}---@{text "of"} may
+Constructs such as @{text "let"}--@{text "in"}, @{text
+"if"}--@{text "then"}--@{text "else"}, and @{text "case"}--@{text "of"} may
 appear around constructors that guard corecursive calls:
 *}
 
@@ -2266,7 +2281,8 @@ The syntactic entity \synt{target} can be used to specify a local context,
 \synt{thmdecl} denotes an optional name for the formula that follows, and
 \synt{prop} denotes a HOL proposition \cite{isabelle-isar-ref}.
 
-The optional target is potentially followed by a corecursion-specific option:
+The optional target is optionally followed by one or both of the following
+options:
 
 \begin{itemize}
 \setlength{\itemsep}{0pt}

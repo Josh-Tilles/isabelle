@@ -20,10 +20,6 @@ begin
 definition INFI :: "'b set \<Rightarrow> ('b \<Rightarrow> 'a) \<Rightarrow> 'a" where
   INF_def: "INFI A f = \<Sqinter>(f ` A)"
 
-lemma INF_comp: -- {* FIXME drop *}
-  "INFI A (g \<circ> f) = INFI (f ` A) g"
-  by (simp add: INF_def image_comp)
-
 lemma INF_image [simp]: "INFI (f`A) g = INFI A (\<lambda>x. g (f x))"
   by (simp add: INF_def image_image)
 
@@ -38,10 +34,6 @@ begin
 
 definition SUPR :: "'b set \<Rightarrow> ('b \<Rightarrow> 'a) \<Rightarrow> 'a" where
   SUP_def: "SUPR A f = \<Squnion>(f ` A)"
-
-lemma SUP_comp: -- {* FIXME drop *}
-  "SUPR A (g \<circ> f) = SUPR (f ` A) g"
-  by (simp add: SUP_def image_comp)
 
 lemma SUP_image [simp]: "SUPR (f`A) g = SUPR A (%x. g (f x))"
   by (simp add: SUP_def image_image)
@@ -502,6 +494,21 @@ lemma INF_sup_distrib2:
 lemma SUP_inf_distrib2:
   "(\<Squnion>a\<in>A. f a) \<sqinter> (\<Squnion>b\<in>B. g b) = (\<Squnion>a\<in>A. \<Squnion>b\<in>B. f a \<sqinter> g b)"
   by (subst SUP_commute) (simp add: inf_SUP SUP_inf)
+
+context
+  fixes f :: "'a \<Rightarrow> 'b::complete_lattice"
+  assumes "mono f"
+begin
+
+lemma mono_Inf:
+  shows "f (\<Sqinter>A) \<le> (\<Sqinter>x\<in>A. f x)"
+  using `mono f` by (auto intro: complete_lattice_class.INF_greatest Inf_lower dest: monoD)
+
+lemma mono_Sup:
+  shows "(\<Squnion>x\<in>A. f x) \<le> f (\<Squnion>A)"
+  using `mono f` by (auto intro: complete_lattice_class.SUP_least Sup_upper dest: monoD)
+
+end
 
 end
 

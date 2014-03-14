@@ -31,14 +31,13 @@ should mention at least all quantified variables of the preceding
 quantifier block.
 *}
 
-datatype pattern = Pattern
+typedecl pattern
 
-definition pat :: "'a \<Rightarrow> pattern" where "pat _ = Pattern"
-definition nopat :: "'a \<Rightarrow> pattern" where "nopat _ = Pattern"
+consts
+  pat :: "'a \<Rightarrow> pattern"
+  nopat :: "'a \<Rightarrow> pattern"
 
-definition trigger :: "pattern list list \<Rightarrow> bool \<Rightarrow> bool"
-where "trigger _ P = P"
-
+definition trigger :: "pattern list list \<Rightarrow> bool \<Rightarrow> bool" where "trigger _ P = P"
 
 
 subsection {* Quantifier weights *}
@@ -67,7 +66,6 @@ quantifier has triggers).  Valid usages of weights are as follows:
 *}
 
 
-
 subsection {* Higher-order encoding *}
 
 text {*
@@ -88,7 +86,6 @@ lemmas array_rules = ext fun_upd_apply fun_upd_same fun_upd_other
   fun_upd_upd fun_app_def
 
 
-
 subsection {* First-order logic *}
 
 text {*
@@ -107,7 +104,6 @@ definition term_true where "term_true = True"
 definition term_false where "term_false = False"
 
 
-
 subsection {* Integer division and modulo for Z3 *}
 
 definition z3div :: "int \<Rightarrow> int \<Rightarrow> int" where
@@ -115,7 +111,6 @@ definition z3div :: "int \<Rightarrow> int \<Rightarrow> int" where
 
 definition z3mod :: "int \<Rightarrow> int \<Rightarrow> int" where
   "z3mod k l = (if 0 \<le> l then k mod l else k mod (-l))"
-
 
 
 subsection {* Setup *}
@@ -426,7 +421,7 @@ lemma [z3_rule]:  (* for def-axiom *)
 
 
 hide_type (open) pattern
-hide_const Pattern fun_app term_true term_false z3div z3mod
+hide_const fun_app term_true term_false z3div z3mod
 hide_const (open) trigger pat nopat weight
 
 end
