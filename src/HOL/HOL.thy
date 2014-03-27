@@ -543,13 +543,25 @@ lemma the_equality:
   assumes prema: "P a"
       and premx: "!!x. P x ==> x=a"
   shows "(THE x. P x) = a"
-apply (rule trans [OF _ the_eq_trivial])
-apply (rule_tac f = "The" in arg_cong)
-apply (rule ext)
-apply (rule iffI)
- apply (erule premx)
-apply (erule ssubst, rule prema)
-done
+proof -
+  have "(THE x. P x) = (THE x. x = a)"
+  proof (rule arg_cong[where ?f="The"])
+    show "P = (\<lambda>x. x = a)"
+    proof (rule ext)
+      fix x
+      show "P x = (x = a)"
+      proof (rule iffI)
+        assume "P x"
+        thus "x = a" by (rule premx)
+      next
+        assume "x = a"
+        thus "P x" by (rule ssubst) (rule prema)
+      qed
+    qed
+  qed
+  moreover have "(THE x. x = a) = a" by (rule the_eq_trivial)
+  ultimately show "(THE x. P x) = a" by (rule trans)
+qed
 
 lemma theI:
   assumes "P a" and "!!x. P x ==> x=a"
