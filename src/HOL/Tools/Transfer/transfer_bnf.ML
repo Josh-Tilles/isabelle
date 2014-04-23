@@ -18,6 +18,7 @@ struct
 
 open BNF_Util
 open BNF_Def
+open BNF_FP_Util
 open BNF_FP_Def_Sugar
 
 (* util functions *)
@@ -64,8 +65,10 @@ fun bnf_only_type_ctr f bnf = if is_Type (T_of_bnf bnf) then f bnf else I
 
 fun bnf_of_fp_sugar (fp_sugar:fp_sugar) = nth (#bnfs (#fp_res fp_sugar)) (#fp_res_index fp_sugar)
 
-fun fp_sugar_only_type_ctr f fp_sugar = 
-  if is_Type (T_of_bnf (bnf_of_fp_sugar fp_sugar)) then f fp_sugar else I
+fun fp_sugar_only_type_ctr f fp_sugars =
+  (case filter (is_Type o T_of_bnf o bnf_of_fp_sugar) fp_sugars of
+    [] => I
+  | fp_sugars' => f fp_sugars')
 
 (* relation constraints - bi_total & co. *)
 
@@ -344,7 +347,7 @@ fun transfer_fp_sugar_interpretation fp_sugar lthy =
     snd (Local_Theory.note ((pred_inject_thm_name, simp_attrs), pred_injects) lthy)
   end
 
-val _ = Context.>> (Context.map_theory (fp_sugar_interpretation
-  (fp_sugar_only_type_ctr (fn fp_sugar => map_local_theory (transfer_fp_sugar_interpretation fp_sugar)))))
+val _ = Context.>> (Context.map_theory (fp_sugar_interpretation (fp_sugar_only_type_ctr
+  (fn fp_sugars => map_local_theory (fold transfer_fp_sugar_interpretation fp_sugars)))))
 
 end

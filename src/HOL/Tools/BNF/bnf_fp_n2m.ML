@@ -8,7 +8,7 @@ Flattening of nested to mutual (co)recursion.
 signature BNF_FP_N2M =
 sig
   val construct_mutualized_fp: BNF_Util.fp_kind -> int list -> typ list ->
-    BNF_FP_Def_Sugar.fp_sugar list -> binding list -> (string * sort) list ->
+    BNF_FP_Util.fp_sugar list -> binding list -> (string * sort) list ->
     typ list * typ list list -> BNF_Def.bnf list -> BNF_Comp.absT_info list -> local_theory ->
     BNF_FP_Util.fp_result * local_theory
 end;
@@ -25,7 +25,7 @@ open BNF_Tactics
 open BNF_FP_N2M_Tactics
 
 fun force_typ ctxt T =
-  map_types Type_Infer.paramify_vars
+  Term.map_types Type_Infer.paramify_vars
   #> Type.constraint T
   #> Syntax.check_term ctxt
   #> singleton (Variable.polymorphic ctxt);
@@ -239,7 +239,7 @@ fun construct_mutualized_fp fp cliques fpTs (fp_sugars : fp_sugar list) bs resBs
     val co_recs = of_fp_res #xtor_co_recs;
     val ns = map (length o #Ts o #fp_res) fp_sugars;
 
-    fun substT rho (Type (@{type_name "fun"}, [T, U])) = substT rho T --> substT rho U
+    fun substT rho (Type (@{type_name fun}, [T, U])) = substT rho T --> substT rho U
       | substT rho (Type (s, Ts)) = Type (s, map (typ_subst_nonatomic rho) Ts)
       | substT _ T = T;
 

@@ -103,7 +103,7 @@ describes how to specify datatypes using the @{command datatype_new} command.
 
 \item Section \ref{sec:defining-recursive-functions}, ``Defining Recursive
 Functions,'' describes how to specify recursive functions using
-@{command primrec}, \keyw{fun}, and \keyw{function}.
+@{command primrec}.
 
 \item Section \ref{sec:defining-codatatypes}, ``Defining Codatatypes,''
 describes how to specify codatatypes using the @{command codatatype} command.
@@ -570,8 +570,8 @@ associated with other constructors. The specified default value must be of type
 *}
 
 
-subsubsection {* \keyw{datatype\_new\_compat}
-  \label{sssec:datatype-new-compat} *}
+subsubsection {* \keyw{datatype\_compat}
+  \label{sssec:datatype-compat} *}
 
 text {*
 \begin{matharray}{rcl}
@@ -593,27 +593,14 @@ old-style datatypes. For example:
 
 text {* \blankline *}
 
-    thm even_nat_odd_nat.size
-
-text {* \blankline *}
-
     ML {* Datatype_Data.get_info @{theory} @{type_name even_nat} *}
 
 text {*
 The syntactic entity \synt{name} denotes an identifier \cite{isabelle-isar-ref}.
 
 The command is interesting because the old datatype package provides some
-functionality that is not yet replicated in the new package:
-
-\begin{itemize}
-\setlength{\itemsep}{0pt}
-
-\item It is integrated with \keyw{fun} \cite{isabelle-function},
-Nitpick \cite{isabelle-nitpick}, Quickcheck, and other packages.
-
-\item It is extended by various add-ons, notably to produce instances of the
-@{const size} function.
-\end{itemize}
+functionality that is not yet replicated in the new package, such as the
+integration with Quickcheck.
 
 A few remarks concern nested recursive datatypes:
 
@@ -630,8 +617,8 @@ datatypes as well, but this has not been implemented yet (and there is currently
 no way to register old-style datatypes as new-style datatypes).
 
 \item The recursor produced for types that recurse through functions has a
-different signature than with the old package. This makes it impossible to use
-the old \keyw{primrec} command.
+different signature than with the old package. This might affect the behavior of
+some third-party extensions.
 \end{itemize}
 
 An alternative to @{command datatype_compat} is to use the old package's
@@ -661,13 +648,15 @@ Selectors: &
 & \quad\vdots \\
 & @{text t.un_C\<^sub>n1}$, \ldots, $@{text t.un_C\<^sub>nk\<^sub>n} \\
 Set functions: &
-  @{text set1_t}, \ldots, @{text t.setm_t} \\
+  @{text t.set1_t}, \ldots, @{text t.setm_t} \\
 Map function: &
   @{text t.map_t} \\
 Relator: &
   @{text t.rel_t} \\
 Recursor: &
-  @{text t.rec_t}
+  @{text t.rec_t} \\
+Size function: &
+  @{text t.size_t}
 \end{tabular}
 
 \medskip
@@ -676,6 +665,9 @@ Recursor: &
 The case combinator, discriminators, and selectors are collectively called
 \emph{destructors}. The prefix ``@{text "t."}'' is an optional component of the
 names and is normally hidden.
+
+In addition to the above, the @{class size} class is instantiated to overload the
+@{const size} function based on @{text t.size_t}.
 *}
 
 
@@ -689,15 +681,16 @@ three broad categories:
 \begin{itemize}
 \setlength{\itemsep}{0pt}
 
-\item The \emph{free constructor theorems} are properties about the constructors
-and destructors that can be derived for any freely generated type. Internally,
-the derivation is performed by @{command free_constructors}.
+\item The \emph{free constructor theorems}
+(Section~\ref{sssec:free-constructor-theorems}) are properties of the
+constructors and destructors that can be derived for any freely generated type.
+Internally, the derivation is performed by @{command free_constructors}.
 
-\item The \emph{functorial theorems} are properties of datatypes related to
-their BNF nature.
+\item The \emph{functorial theorems} (Section~\ref{sssec:functorial-theorems})
+are properties of datatypes related to their BNF nature.
 
-\item The \emph{inductive theorems} are properties of datatypes related to
-their inductive nature.
+\item The \emph{inductive theorems} (Section~\ref{sssec:inductive-theorems})
+are properties of datatypes related to their inductive nature.
 
 \end{itemize}
 
@@ -937,6 +930,18 @@ prove $m$ properties simultaneously.
 @{thm list.rec(1)[no_vars]} \\
 @{thm list.rec(2)[no_vars]}
 
+\item[@{text "t."}\hthm{rec\_o\_map}\rm:] ~ \\
+@{thm list.rec_o_map[no_vars]}
+
+\item[@{text "t."}\hthm{size} @{text "[simp, code]"}\rm:] ~ \\
+@{thm list.size(1)[no_vars]} \\
+@{thm list.size(2)[no_vars]} \\
+@{thm list.size(3)[no_vars]} \\
+@{thm list.size(4)[no_vars]}
+
+\item[@{text "t."}\hthm{size\_o\_map}\rm:] ~ \\
+@{thm list.size_o_map[no_vars]}
+
 \end{description}
 \end{indentblock}
 
@@ -967,12 +972,12 @@ incompatibilities that may arise when porting to the new package:
 
 \item \emph{The Standard ML interfaces are different.} Tools and extensions
 written to call the old ML interfaces will need to be adapted to the new
-interfaces. Little has been done so far in this direction. Whenever possible, it
-is recommended to use @{command datatype_compat} or \keyw{rep\_datatype}
-to register new-style datatypes as old-style datatypes.
+interfaces. This concerns Quickcheck in particular. Whenever possible, it is
+recommended to use @{command datatype_compat} to register new-style datatypes
+as old-style datatypes.
 
-\item \emph{The constants @{text t_case} and @{text t_rec} are now called
-@{text case_t} and @{text rec_t}.}
+\item \emph{The constants @{text t_case}, @{text t_rec}, and @{text t_size} are
+now called @{text case_t}, @{text rec_t}, and @{text size_t}.}
 
 \item \emph{The recursor @{text rec_t} has a different signature for nested
 recursive datatypes.} In the old package, nested recursion through non-functions
@@ -980,26 +985,27 @@ was internally reduced to mutual recursion. This reduction was visible in the
 type of the recursor, used by \keyw{primrec}. Recursion through functions was
 handled specially. In the new package, nested recursion (for functions and
 non-functions) is handled in a more modular fashion. The old-style recursor can
-be generated on demand using @{command primrec}, as explained in
-Section~\ref{sssec:primrec-nested-as-mutual-recursion}, if the recursion is via
-new-style datatypes.
+be generated on demand using @{command primrec} if the recursion is via
+new-style datatypes, as explained in
+Section~\ref{sssec:primrec-nested-as-mutual-recursion}.
 
 \item \emph{Accordingly, the induction rule is different for nested recursive
 datatypes.} Again, the old-style induction rule can be generated on demand using
-@{command primrec}, as explained in
-Section~\ref{sssec:primrec-nested-as-mutual-recursion}, if the recursion is via
-new-style datatypes.
+@{command primrec} if the recursion is via new-style datatypes, as explained in
+Section~\ref{sssec:primrec-nested-as-mutual-recursion}.
 
 \item \emph{The internal constructions are completely different.} Proof texts
 that unfold the definition of constants introduced by \keyw{datatype} will be
 difficult to port.
 
-\item \emph{Some induction rules have different names.}
+\item \emph{Some theorems have different names.}
 For non-mutually recursive datatypes,
 the alias @{text t.inducts} for @{text t.induct} is no longer generated.
 For $m > 1$ mutually recursive datatypes,
 @{text "t\<^sub>1_\<dots>_t\<^sub>m.inducts(i)"} has been renamed
-@{text "t\<^sub>i.induct"} for each @{text "i \<in> {1, \<dots>, t}"}.
+@{text "t\<^sub>i.induct"} for each @{text "i \<in> {1, \<dots>, t}"}, and similarly the
+collection @{text "t\<^sub>1_\<dots>_t\<^sub>m.size"} has been divided into @{text "t\<^sub>1.size"},
+\ldots, @{text "t\<^sub>m.size"}.
 
 \item \emph{The @{text t.simps} collection has been extended.}
 Previously available theorems are available at the same index.
@@ -1129,7 +1135,7 @@ The next example is defined using \keyw{fun} to escape the syntactic
 restrictions imposed on primitively recursive functions. The
 @{command datatype_compat} command is needed to register new-style datatypes
 for use with \keyw{fun} and \keyw{function}
-(Section~\ref{sssec:datatype-new-compat}):
+(Section~\ref{sssec:datatype-compat}):
 *}
 
     datatype_compat nat
@@ -1636,13 +1642,13 @@ Given a codatatype @{text "('a\<^sub>1, \<dots>, 'a\<^sub>m) t"}
 with $m > 0$ live type variables and $n$ constructors @{text "t.C\<^sub>1"},
 \ldots, @{text "t.C\<^sub>n"}, the same auxiliary constants are generated as for
 datatypes (Section~\ref{ssec:datatype-generated-constants}), except that the
-recursor is replaced by a dual concept:
+recursor is replaced by a dual concept and no size function is produced:
 
 \medskip
 
 \begin{tabular}{@ {}ll@ {}}
 Corecursor: &
-  @{text corec_t}
+  @{text t.corec_t}
 \end{tabular}
 *}
 
@@ -1657,20 +1663,20 @@ three broad categories:
 \begin{itemize}
 \setlength{\itemsep}{0pt}
 
-\item The \emph{free constructor theorems} are properties about the constructors
-and destructors that can be derived for any freely generated type.
+\item The \emph{free constructor theorems}
+(Section~\ref{sssec:free-constructor-theorems}) are properties of the
+constructors and destructors that can be derived for any freely generated type.
 
-\item The \emph{functorial theorems} are properties of datatypes related to
+\item The \emph{functorial theorems}
+(Section~\ref{sssec:functorial-theorems}) are properties of datatypes related to
 their BNF nature.
 
-\item The \emph{coinductive theorems} are properties of datatypes related to
-their coinductive nature.
+\item The \emph{coinductive theorems} (Section~\ref{sssec:coinductive-theorems})
+are properties of datatypes related to their coinductive nature.
 \end{itemize}
 
 \noindent
-The first two categories are exactly as for datatypes and are described in
-Sections
-\ref{sssec:free-constructor-theorems}~and~\ref{sssec:functorial-theorems}.
+The first two categories are exactly as for datatypes.
 *}
 
 
@@ -2696,11 +2702,7 @@ Known open issues of the package.
 *}
 
 text {*
-%* primcorecursive and primcorec is unfinished
-%
 %* slow n-ary mutual (co)datatype, avoid as much as possible (e.g. using nesting)
-%
-%* issues with HOL-Proofs?
 %
 %* partial documentation
 %
@@ -2723,7 +2725,7 @@ text {*
 
 Tobias Nipkow and Makarius Wenzel encouraged us to implement the new
 (co)datatype package. Andreas Lochbihler provided lots of comments on earlier
-versions of the package, especially for the coinductive part. Brian Huffman
+versions of the package, especially on the coinductive part. Brian Huffman
 suggested major simplifications to the internal constructions, many of which
 have yet to be implemented. Florian Haftmann and Christian Urban provided
 general advice on Isabelle and package writing. Stefan Milius and Lutz
