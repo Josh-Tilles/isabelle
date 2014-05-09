@@ -2114,7 +2114,7 @@ text {*
   \end{matharray}
 
   @{rail \<open>
-    @@{command (HOL) value} ( '[' @{syntax name} ']' )? modes? @{syntax term}
+    @@{command (HOL) value} modes? @{syntax term}
     ;
 
     @@{command (HOL) values} modes? @{syntax nat}? @{syntax term}
@@ -2144,13 +2144,8 @@ text {*
   \item @{command (HOL) "value"}~@{text t} evaluates and prints a
   term; optionally @{text modes} can be specified, which are appended
   to the current print mode; see \secref{sec:print-modes}.
-  Internally, the evaluation is performed by registered evaluators,
-  which are invoked sequentially until a result is returned.
-  Alternatively a specific evaluator can be selected using square
-  brackets; typical evaluators use the current set of code equations
-  to normalize and include @{text simp} for fully symbolic evaluation
-  using the simplifier, @{text nbe} for \emph{normalization by
-  evaluation} and \emph{code} for code generation in SML.
+  Evaluation is tried first using ML, falling
+  back to normalization by evaluation if this fails.
 
   \item @{command (HOL) "values"}~@{text t} enumerates a set
   comprehension by evaluation and prints its values up to the given
@@ -2611,7 +2606,8 @@ text {* For validation purposes, it is often useful to \emph{execute}
   "del"}'' removes) theorems which are applied as rewrite rules to any
   result of an evaluation.
 
-  \item @{attribute (HOL) code_abbrev} declares equations which are
+  \item @{attribute (HOL) code_abbrev} declares (or with option ``@{text
+  "del"}'' removes) equations which are
   applied as rewrite rules to any result of an evaluation and
   symmetrically during preprocessing to any code equation or evaluation
   input.

@@ -6,6 +6,7 @@ header {* Term evaluation using the generic code generator *}
 
 theory Code_Evaluation
 imports Typerep Limited_Sequence
+keywords "value" :: diag
 begin
 
 subsection {* Term representation *}
@@ -72,11 +73,18 @@ lemma eq_eq_TrueD:
   shows "x \<equiv> y"
   using assms by simp
 
+code_printing
+  type_constructor "term" \<rightharpoonup> (Eval) "Term.term"
+| constant Const \<rightharpoonup> (Eval) "Term.Const/ ((_), (_))"
+| constant App \<rightharpoonup> (Eval) "Term.$/ ((_), (_))"
+| constant Abs \<rightharpoonup> (Eval) "Term.Abs/ ((_), (_), (_))"
+| constant Free \<rightharpoonup> (Eval) "Term.Free/ ((_), (_))"
+
 ML_file "Tools/code_evaluation.ML"
 
 code_reserved Eval Code_Evaluation
 
-setup {* Code_Evaluation.setup *}
+ML_file "~~/src/HOL/Tools/value.ML"
 
 
 subsection {* @{text term_of} instances *}
@@ -105,19 +113,9 @@ instance ..
 
 end
 
-
-subsubsection {* Code generator setup *}
-
-lemmas [code del] = term.rec term.case term.size
-lemma [code, code del]: "HOL.equal (t1\<Colon>term) t2 \<longleftrightarrow> HOL.equal t1 t2" ..
-
-lemma [code, code del]: "(term_of \<Colon> typerep \<Rightarrow> term) = term_of" ..
-lemma [code, code del]: "(term_of \<Colon> term \<Rightarrow> term) = term_of" ..
-lemma [code, code del]: "(term_of \<Colon> String.literal \<Rightarrow> term) = term_of" ..
-lemma [code, code del]: "(Code_Evaluation.term_of \<Colon> 'a::{type, term_of} Predicate.pred \<Rightarrow> Code_Evaluation.term)
-  = Code_Evaluation.term_of" ..
-lemma [code, code del]: "(Code_Evaluation.term_of \<Colon> 'a::{type, term_of} Predicate.seq \<Rightarrow> Code_Evaluation.term)
-  = Code_Evaluation.term_of" ..
+declare [[code drop: rec_term case_term size_term "size :: term \<Rightarrow> _" "HOL.equal :: term \<Rightarrow> _"
+  "term_of :: typerep \<Rightarrow> _" "term_of :: term \<Rightarrow> _" "term_of :: String.literal \<Rightarrow> _"
+  "term_of :: _ Predicate.pred \<Rightarrow> term" "term_of :: _ Predicate.seq \<Rightarrow> term"]]
 
 lemma term_of_char [unfolded typerep_fun_def typerep_char_def typerep_nibble_def, code]:
   "Code_Evaluation.term_of c = (case c of Char x y \<Rightarrow>
@@ -127,30 +125,15 @@ lemma term_of_char [unfolded typerep_fun_def typerep_char_def typerep_nibble_def
   by (subst term_of_anything) rule 
 
 code_printing
-  type_constructor "term" \<rightharpoonup> (Eval) "Term.term"
-| constant Const \<rightharpoonup> (Eval) "Term.Const/ ((_), (_))"
-| constant App \<rightharpoonup> (Eval) "Term.$/ ((_), (_))"
-| constant Abs \<rightharpoonup> (Eval) "Term.Abs/ ((_), (_), (_))"
-| constant Free \<rightharpoonup> (Eval) "Term.Free/ ((_), (_))"
-| constant "term_of \<Colon> integer \<Rightarrow> term" \<rightharpoonup> (Eval) "HOLogic.mk'_number/ HOLogic.code'_integerT"
+  constant "term_of \<Colon> integer \<Rightarrow> term" \<rightharpoonup> (Eval) "HOLogic.mk'_number/ HOLogic.code'_integerT"
 | constant "term_of \<Colon> String.literal \<Rightarrow> term" \<rightharpoonup> (Eval) "HOLogic.mk'_literal"
 
 code_reserved Eval HOLogic
 
 
-subsubsection {* Obfuscation *}
+subsection {* Generic reification *}
 
-print_translation {*
-  let
-    val term = Const ("<TERM>", dummyT);
-    fun tr1' _ [_, _] = term;
-    fun tr2' _ [] = term;
-  in
-   [(@{const_syntax Const}, tr1'),
-    (@{const_syntax App}, tr1'),
-    (@{const_syntax dummy_term}, tr2')]
-  end
-*}
+ML_file "~~/src/HOL/Tools/reification.ML"
 
 
 subsection {* Diagnostic *}
@@ -160,11 +143,6 @@ definition tracing :: "String.literal \<Rightarrow> 'a \<Rightarrow> 'a" where
 
 code_printing
   constant "tracing :: String.literal => 'a => 'a" \<rightharpoonup> (Eval) "Code'_Evaluation.tracing"
-
-
-subsection {* Generic reification *}
-
-ML_file "~~/src/HOL/Tools/reification.ML"
 
 
 hide_const dummy_term valapp
