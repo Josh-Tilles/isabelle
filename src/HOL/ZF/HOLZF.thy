@@ -1,12 +1,12 @@
 (*  Title:      HOL/ZF/HOLZF.thy
     Author:     Steven Obua
 
-Axiomatizes the ZFC universe as an HOL type.  See "Partizan Games in
+Axiomatizes the ZFC universe as a HOL type.  See "Partizan Games in
 Isabelle/HOLZF", available from http://www4.in.tum.de/~obua/partizan
 *)
 
 theory HOLZF 
-imports Main
+imports "../Main"
 begin
 
 typedecl ZF
