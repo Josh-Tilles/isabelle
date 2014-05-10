@@ -1,0 +1,8 @@
+*~
+*.class
+*.jar
+*.orig
+*.rej
+.DS_Store
+.swp
+/src/Tools/jEdit/dist/

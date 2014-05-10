@@ -45,34 +45,34 @@ notation (xsymbols)
 notation (HTML output)
   comp  (infixl "\<circ>" 55)
 
-lemma comp_apply [simp]: "(f o g) x = f (g x)"
+lemma comp_apply [simp]: "(f \<circ> g) x = f (g x)"
   by (simp add: comp_def)
 
-lemma comp_assoc: "(f o g) o h = f o (g o h)"
+lemma comp_assoc: "(f \<circ> g) \<circ> h = f \<circ> (g \<circ> h)"
   by (simp add: fun_eq_iff)
 
-lemma id_comp [simp]: "id o g = g"
+lemma id_comp [simp]: "id \<circ> g = g"
   by (simp add: fun_eq_iff)
 
-lemma comp_id [simp]: "f o id = f"
+lemma comp_id [simp]: "f \<circ> id = f"
   by (simp add: fun_eq_iff)
 
 lemma comp_eq_dest:
-  "a o b = c o d \<Longrightarrow> a (b v) = c (d v)"
+  "a \<circ> b = c \<circ> d \<Longrightarrow> a (b v) = c (d v)"
   by (simp add: fun_eq_iff)
 
 lemma comp_eq_elim:
-  "a o b = c o d \<Longrightarrow> ((\<And>v. a (b v) = c (d v)) \<Longrightarrow> R) \<Longrightarrow> R"
+  "a \<circ> b = c \<circ> d \<Longrightarrow> ((\<And>v. a (b v) = c (d v)) \<Longrightarrow> R) \<Longrightarrow> R"
   by (simp add: fun_eq_iff) 
 
-lemma comp_eq_dest_lhs: "a o b = c \<Longrightarrow> a (b v) = c v"
+lemma comp_eq_dest_lhs: "a \<circ> b = c \<Longrightarrow> a (b v) = c v"
   by clarsimp
 
-lemma comp_eq_id_dest: "a o b = id o c \<Longrightarrow> a (b v) = c v"
+lemma comp_eq_id_dest: "a \<circ> b = id \<circ> c \<Longrightarrow> a (b v) = c v"
   by clarsimp
 
 lemma image_comp:
-  "f ` (g ` r) = (f o g) ` r"
+  "f ` (g ` r) = (f \<circ> g) ` r"
   by auto
 
 lemma vimage_comp:
@@ -145,17 +145,17 @@ lemma injI:
   shows "inj f"
   using assms unfolding inj_on_def by auto
 
-theorem range_ex1_eq: "inj f \<Longrightarrow> b : range f = (EX! x. b = f x)"
+theorem range_ex1_eq: "inj f \<Longrightarrow> b \<in> range f \<longleftrightarrow> (\<exists>! x. b = f x)"
   by (unfold inj_on_def, blast)
 
-lemma injD: "[| inj(f); f(x) = f(y) |] ==> x=y"
+lemma injD: "\<lbrakk>inj(f); f(x) = f(y)\<rbrakk> \<Longrightarrow> x=y"
 by (simp add: inj_on_def)
 
-lemma inj_on_eq_iff: "inj_on f A ==> x:A ==> y:A ==> (f(x) = f(y)) = (x=y)"
+lemma inj_on_eq_iff: "inj_on f A \<Longrightarrow> x\<in>A \<Longrightarrow> y\<in>A \<Longrightarrow> (f(x) = f(y)) = (x=y)"
 by (force simp add: inj_on_def)
 
 lemma inj_on_cong:
-  "(\<And> a. a : A \<Longrightarrow> f a = g a) \<Longrightarrow> inj_on f A = inj_on g A"
+  "(\<And> a. a \<in> A \<Longrightarrow> f a = g a) \<Longrightarrow> inj_on f A = inj_on g A"
 unfolding inj_on_def by auto
 
 lemma inj_on_strict_subset:
@@ -169,13 +169,13 @@ lemma inj_comp:
 lemma inj_fun: "inj f \<Longrightarrow> inj (\<lambda>x y. f x)"
   by (simp add: inj_on_def fun_eq_iff)
 
-lemma inj_eq: "inj f ==> (f(x) = f(y)) = (x=y)"
-by (simp add: inj_on_eq_iff)
+lemma inj_eq: "inj f \<Longrightarrow> (f(x) = f(y)) = (x=y)"
+  by (simp add: inj_on_eq_iff)
 
 lemma inj_on_id[simp]: "inj_on id A"
   by (simp add: inj_on_def)
 
-lemma inj_on_id2[simp]: "inj_on (%x. x) A"
+lemma inj_on_id2[simp]: "inj_on (\<lambda>x. x) A"
 by (simp add: inj_on_def)
 
 lemma inj_on_Int: "inj_on f A \<or> inj_on f B \<Longrightarrow> inj_on f (A \<inter> B)"
@@ -188,67 +188,69 @@ lemma bij_id[simp]: "bij id"
 by (simp add: bij_betw_def)
 
 lemma inj_onI:
-    "(!! x y. [|  x:A;  y:A;  f(x) = f(y) |] ==> x=y) ==> inj_on f A"
+    "(\<And> x y. \<lbrakk>x\<in>A; y\<in>A; f(x) = f(y)\<rbrakk> \<Longrightarrow> x=y) \<Longrightarrow> inj_on f A"
 by (simp add: inj_on_def)
 
-lemma inj_on_inverseI: "(!!x. x:A ==> g(f(x)) = x) ==> inj_on f A"
+lemma inj_on_inverseI: "(\<And>x. x\<in>A \<Longrightarrow> g(f(x)) = x) \<Longrightarrow> inj_on f A"
 by (auto dest:  arg_cong [of concl: g] simp add: inj_on_def)
 
-lemma inj_onD: "[| inj_on f A;  f(x)=f(y);  x:A;  y:A |] ==> x=y"
+lemma inj_onD: "\<lbrakk> inj_on f A;  f(x)=f(y);  x\<in>A;  y\<in>A \<rbrakk> \<Longrightarrow> x=y"
 by (unfold inj_on_def, blast)
 
-lemma inj_on_iff: "[| inj_on f A;  x:A;  y:A |] ==> (f(x)=f(y)) = (x=y)"
+lemma inj_on_iff: "\<lbrakk> inj_on f A;  x\<in>A;  y\<in>A \<rbrakk> \<Longrightarrow> (f(x)=f(y)) = (x=y)"
   by (fact inj_on_eq_iff)
 
 lemma comp_inj_on:
-     "[| inj_on f A;  inj_on g (f`A) |] ==> inj_on (g o f) A"
+     "\<lbrakk> inj_on f A;  inj_on g (f`A) \<rbrakk> \<Longrightarrow> inj_on (g \<circ> f) A"
 by (simp add: comp_def inj_on_def)
 
-lemma inj_on_imageI: "inj_on (g o f) A \<Longrightarrow> inj_on g (f ` A)"
+lemma inj_on_imageI: "inj_on (g \<circ> f) A \<Longrightarrow> inj_on g (f ` A)"
   by (simp add: inj_on_def) blast
 
-lemma inj_on_image_iff: "\<lbrakk> ALL x:A. ALL y:A. (g(f x) = g(f y)) = (g x = g y);
-  inj_on f A \<rbrakk> \<Longrightarrow> inj_on g (f ` A) = inj_on g A"
-apply(unfold inj_on_def)
-apply blast
-done
+lemma inj_on_image_iff:
+  assumes "\<forall>x\<in>A. \<forall>y\<in>A. g (f x) = g (f y) \<longleftrightarrow> g x = g y"
+      and "inj_on f A"
+  shows "inj_on g (f ` A) \<longleftrightarrow> inj_on g A"
+  using assms
+  unfolding inj_on_def
+  by blast
 
-lemma inj_on_contraD: "[| inj_on f A;  ~x=y;  x:A;  y:A |] ==> ~ f(x)=f(y)"
+lemma inj_on_contraD: "\<lbrakk> inj_on f A; x\<noteq>y; x\<in>A; y\<in>A \<rbrakk> \<Longrightarrow> f(x)\<noteq>f(y)"
 by (unfold inj_on_def, blast)
 
-lemma inj_singleton: "inj (%s. {s})"
+lemma inj_singleton: "inj (\<lambda>s. {s})"
 by (simp add: inj_on_def)
 
 lemma inj_on_empty[iff]: "inj_on f {}"
 by(simp add: inj_on_def)
 
-lemma subset_inj_on: "[| inj_on f B; A <= B |] ==> inj_on f A"
+lemma subset_inj_on: "\<lbrakk> inj_on f B; A \<subseteq> B \<rbrakk> \<Longrightarrow> inj_on f A"
 by (unfold inj_on_def, blast)
 
 lemma inj_on_Un:
- "inj_on f (A Un B) =
-  (inj_on f A & inj_on f B & f`(A-B) Int f`(B-A) = {})"
+ "inj_on f (A \<union> B) \<longleftrightarrow>
+  (inj_on f A  \<and>  inj_on f B  \<and>  f`(A-B) \<inter> f`(B-A) = {})"
 apply(unfold inj_on_def)
 apply (blast intro:sym)
 done
 
 lemma inj_on_insert[iff]:
-  "inj_on f (insert a A) = (inj_on f A & f a ~: f`(A-{a}))"
+  "inj_on f (insert a A) = (inj_on f A \<and> f a \<notin> f`(A-{a}))"
 apply(unfold inj_on_def)
 apply (blast intro:sym)
 done
 
-lemma inj_on_diff: "inj_on f A ==> inj_on f (A-B)"
+lemma inj_on_diff: "inj_on f A \<Longrightarrow> inj_on f (A-B)"
 apply(unfold inj_on_def)
 apply (blast)
 done
 
 lemma comp_inj_on_iff:
-  "inj_on f A \<Longrightarrow> inj_on f' (f ` A) \<longleftrightarrow> inj_on (f' o f) A"
+  "inj_on f A \<Longrightarrow> inj_on f' (f ` A) \<longleftrightarrow> inj_on (f' \<circ> f) A"
 by(auto simp add: comp_inj_on inj_on_def)
 
 lemma inj_on_imageI2:
-  "inj_on (f' o f) A \<Longrightarrow> inj_on f A"
+  "inj_on (f' \<circ> f) A \<Longrightarrow> inj_on f A"
 by(auto simp add: comp_inj_on inj_on_def)
 
 lemma inj_img_insertE:
@@ -268,7 +270,7 @@ proof -
 qed
 
 lemma linorder_injI:
-  assumes hyp: "\<And>x y. x < (y::'a::linorder) \<Longrightarrow> f x \<noteq> f y"
+  assumes hyp: "\<And>x y :: 'a::linorder. x < y \<Longrightarrow> f x \<noteq> f y"
   shows "inj f"
   -- {* Courtesy of Stephan Merz *}
 proof (rule inj_onI)
@@ -280,8 +282,8 @@ qed
 lemma surj_def: "surj f \<longleftrightarrow> (\<forall>y. \<exists>x. y = f x)"
   by auto
 
-lemma surjI: assumes *: "\<And> x. g (f x) = x" shows "surj g"
-  using *[symmetric] by auto
+lemma surjI: assumes "\<And>x. g (f x) = x" shows "surj g"
+  using assms[symmetric] by auto
 
 lemma surjD: "surj f \<Longrightarrow> \<exists>x. y = f x"
   by (simp add: surj_def)
@@ -289,7 +291,9 @@ lemma surjD: "surj f \<Longrightarrow> \<exists>x. y = f x"
 lemma surjE: "surj f \<Longrightarrow> (\<And>x. y = f x \<Longrightarrow> C) \<Longrightarrow> C"
   by (simp add: surj_def, blast)
 
-lemma comp_surj: "[| surj f;  surj g |] ==> surj (g o f)"
+(* Article II Exercise 8
+@TODO *)
+lemma comp_surj: "\<lbrakk> surj f;  surj g \<rbrakk> \<Longrightarrow> surj (g \<circ> f)"
 apply (simp add: comp_def surj_def, clarify)
 apply (drule_tac x = y in spec, clarify)
 apply (drule_tac x = x in spec, blast)
@@ -315,32 +319,32 @@ unfolding bij_betw_def by simp
 lemma bij_def: "bij f \<longleftrightarrow> inj f \<and> surj f"
   unfolding bij_betw_def ..
 
-lemma bijI: "[| inj f; surj f |] ==> bij f"
+lemma bijI: "\<lbrakk> inj f; surj f \<rbrakk> \<Longrightarrow> bij f"
 by (simp add: bij_def)
 
-lemma bij_is_inj: "bij f ==> inj f"
+lemma bij_is_inj: "bij f \<Longrightarrow> inj f"
 by (simp add: bij_def)
 
-lemma bij_is_surj: "bij f ==> surj f"
+lemma bij_is_surj: "bij f \<Longrightarrow> surj f"
 by (simp add: bij_def)
 
 lemma bij_betw_imp_inj_on: "bij_betw f A B \<Longrightarrow> inj_on f A"
 by (simp add: bij_betw_def)
 
 lemma bij_betw_trans:
-  "bij_betw f A B \<Longrightarrow> bij_betw g B C \<Longrightarrow> bij_betw (g o f) A C"
+  "bij_betw f A B \<Longrightarrow> bij_betw g B C \<Longrightarrow> bij_betw (g \<circ> f) A C"
 by(auto simp add:bij_betw_def comp_inj_on)
 
-lemma bij_comp: "bij f \<Longrightarrow> bij g \<Longrightarrow> bij (g o f)"
+lemma bij_comp: "bij f \<Longrightarrow> bij g \<Longrightarrow> bij (g \<circ> f)"
   by (rule bij_betw_trans)
 
 lemma bij_betw_comp_iff:
-  "bij_betw f A A' \<Longrightarrow> bij_betw f' A' A'' \<longleftrightarrow> bij_betw (f' o f) A A''"
+  "bij_betw f A A' \<Longrightarrow> bij_betw f' A' A'' \<longleftrightarrow> bij_betw (f' \<circ> f) A A''"
 by(auto simp add: bij_betw_def inj_on_def)
 
 lemma bij_betw_comp_iff2:
-  assumes BIJ: "bij_betw f' A' A''" and IM: "f ` A \<le> A'"
-  shows "bij_betw f A A' \<longleftrightarrow> bij_betw (f' o f) A A''"
+  assumes BIJ: "bij_betw f' A' A''" and IM: "f`A \<subseteq> A'"
+  shows "bij_betw f A A' \<longleftrightarrow> bij_betw (f' \<circ> f) A A''"
 using assms
 proof(auto simp add: bij_betw_comp_iff)
   assume *: "bij_betw (f' \<circ> f) A A''"
@@ -364,7 +368,7 @@ lemma bij_betw_inv: assumes "bij_betw f A B" shows "EX g. bij_betw g B A"
 proof -
   have i: "inj_on f A" and s: "f ` A = B"
     using assms by(auto simp:bij_betw_def)
-  let ?P = "%b a. a:A \<and> f a = b" let ?g = "%b. The (?P b)"
+  let ?P = "\<lambda>b a. a:A \<and> f a = b" let ?g = "\<lambda>b. The (?P b)"
   { fix a b assume P: "?P b a"
     hence ex1: "\<exists>a. ?P b a" using s by blast
     hence uex1: "\<exists>!a. ?P b a" by(blast dest:inj_onD[OF i])
@@ -410,12 +414,12 @@ lemma bij_betw_combine:
 
 lemma bij_betw_subset:
   assumes BIJ: "bij_betw f A A'" and
-          SUB: "B \<le> A" and IM: "f ` B = B'"
+          SUB: "B \<subseteq> A" and IM: "f ` B = B'"
   shows "bij_betw f B B'"
 using assms
 by(unfold bij_betw_def inj_on_def, auto simp add: inj_on_def)
 
-lemma surj_image_vimage_eq: "surj f ==> f ` (f -` A) = A"
+lemma surj_image_vimage_eq: "surj f \<Longrightarrow> f ` (f -` A) = A"
 by simp
 
 lemma surj_vimage_empty:
@@ -423,16 +427,16 @@ lemma surj_vimage_empty:
   using surj_image_vimage_eq[OF `surj f`, of A]
   by (intro iffI) fastforce+
 
-lemma inj_vimage_image_eq: "inj f ==> f -` (f ` A) = A"
+lemma inj_vimage_image_eq: "inj f \<Longrightarrow> f -` (f ` A) = A"
 by (simp add: inj_on_def, blast)
 
-lemma vimage_subsetD: "surj f ==> f -` B <= A ==> B <= f ` A"
+lemma vimage_subsetD: "surj f \<Longrightarrow> f -` B \<subseteq> A \<Longrightarrow> B \<subseteq> f ` A"
 by (blast intro: sym)
 
-lemma vimage_subsetI: "inj f ==> B <= f ` A ==> f -` B <= A"
+lemma vimage_subsetI: "inj f \<Longrightarrow> B \<subseteq> f ` A \<Longrightarrow> f -` B \<subseteq> A"
 by (unfold inj_on_def, blast)
 
-lemma vimage_subset_eq: "bij f ==> (f -` B <= A) = (B <= f ` A)"
+lemma vimage_subset_eq: "bij f \<Longrightarrow> (f -` B \<subseteq> A) = (B \<subseteq> f ` A)"
 apply (unfold bij_def)
 apply (blast del: subsetI intro: vimage_subsetI vimage_subsetD)
 done
@@ -444,37 +448,37 @@ lemma inj_on_Un_image_eq_iff: "inj_on f (A \<union> B) \<Longrightarrow> f ` A =
 by(erule inj_on_image_eq_iff) simp_all
 
 lemma inj_on_image_Int:
-   "[| inj_on f C;  A<=C;  B<=C |] ==> f`(A Int B) = f`A Int f`B"
+   "\<lbrakk> inj_on f C;  A \<subseteq> C;  B \<subseteq> C \<rbrakk> \<Longrightarrow> f`(A \<inter> B) = f`A \<inter> f`B"
 apply (simp add: inj_on_def, blast)
 done
 
 lemma inj_on_image_set_diff:
-   "[| inj_on f C;  A<=C;  B<=C |] ==> f`(A-B) = f`A - f`B"
+   "\<lbrakk> inj_on f C;  A \<subseteq> C;  B \<subseteq> C \<rbrakk> \<Longrightarrow> f`(A-B) = f`A - f`B"
 apply (simp add: inj_on_def, blast)
 done
 
-lemma image_Int: "inj f ==> f`(A Int B) = f`A Int f`B"
+lemma image_Int: "inj f \<Longrightarrow> f`(A \<inter> B) = f`A \<inter> f`B"
 by (simp add: inj_on_def, blast)
 
-lemma image_set_diff: "inj f ==> f`(A-B) = f`A - f`B"
+lemma image_set_diff: "inj f \<Longrightarrow> f`(A-B) = f`A - f`B"
 by (simp add: inj_on_def, blast)
 
-lemma inj_image_mem_iff: "inj f ==> (f a : f`A) = (a : A)"
+lemma inj_image_mem_iff: "inj f \<Longrightarrow> (f a : f`A) = (a : A)"
 by (blast dest: injD)
 
-lemma inj_image_subset_iff: "inj f ==> (f`A <= f`B) = (A<=B)"
+lemma inj_image_subset_iff: "inj f \<Longrightarrow> (f`A \<subseteq> f`B) = (A \<subseteq> B)"
 by (simp add: inj_on_def, blast)
 
-lemma inj_image_eq_iff: "inj f ==> (f`A = f`B) = (A = B)"
+lemma inj_image_eq_iff: "inj f \<Longrightarrow> (f`A = f`B) = (A = B)"
 by (blast dest: injD)
 
-lemma surj_Compl_image_subset: "surj f ==> -(f`A) <= f`(-A)"
+lemma surj_Compl_image_subset: "surj f \<Longrightarrow> -(f`A) \<subseteq> f`(-A)"
 by auto
 
-lemma inj_image_Compl_subset: "inj f ==> f`(-A) <= -(f`A)"
+lemma inj_image_Compl_subset: "inj f \<Longrightarrow> f`(-A) \<subseteq> -(f`A)"
 by (auto simp add: inj_on_def)
 
-lemma bij_image_Compl_eq: "bij f ==> f`(-A) = -(f`A)"
+lemma bij_image_Compl_eq: "bij f \<Longrightarrow> f`(-A) = -(f`A)"
 apply (simp add: bij_def)
 apply (rule equalityI)
 apply (simp_all (no_asm_simp) add: inj_image_Compl_subset surj_Compl_image_subset)
@@ -562,8 +566,8 @@ qed
 
 subsection{*Function Updating*}
 
-definition fun_upd :: "('a => 'b) => 'a => 'b => ('a => 'b)" where
-  "fun_upd f a b == % x. if x=a then b else f x"
+definition fun_upd :: "('a \<Rightarrow> 'b) \<Rightarrow> 'a \<Rightarrow> 'b \<Rightarrow> ('a \<Rightarrow> 'b)" where
+  "fun_upd f a b \<equiv> \<lambda>x. if x=a then b else f x"
 
 nonterminal updbinds and updbind
 
@@ -589,7 +593,7 @@ apply (erule subst)
 apply (rule_tac [2] ext, auto)
 done
 
-lemma fun_upd_idem: "f x = y ==> f(x:=y) = f"
+lemma fun_upd_idem: "f x = y \<Longrightarrow> f(x:=y) = f"
   by (simp only: fun_upd_idem_iff)
 
 lemma fun_upd_triv [iff]: "f(x := f x) = f"
@@ -603,13 +607,13 @@ by (simp add: fun_upd_def)
 lemma fun_upd_same: "(f(x:=y)) x = y"
 by simp
 
-lemma fun_upd_other: "z~=x ==> (f(x:=y)) z = f z"
+lemma fun_upd_other: "z \<noteq> x \<Longrightarrow> (f(x:=y)) z = f z"
 by simp
 
 lemma fun_upd_upd [simp]: "f(x:=y,x:=z) = f(x:=z)"
 by (simp add: fun_eq_iff)
 
-lemma fun_upd_twist: "a ~= c ==> (m(a:=b))(c:=d) = (m(c:=d))(a:=b)"
+lemma fun_upd_twist: "a \<noteq> c \<Longrightarrow> (m(a:=b))(c:=d) = (m(c:=d))(a:=b)"
 by (rule ext, auto)
 
 lemma inj_on_fun_updI:
@@ -632,10 +636,10 @@ definition override_on :: "('a \<Rightarrow> 'b) \<Rightarrow> ('a \<Rightarrow>
 lemma override_on_emptyset[simp]: "override_on f g {} = f"
 by(simp add:override_on_def)
 
-lemma override_on_apply_notin[simp]: "a ~: A ==> (override_on f g A) a = f a"
+lemma override_on_apply_notin[simp]: "a ~: A \<Longrightarrow> (override_on f g A) a = f a"
 by(simp add:override_on_def)
 
-lemma override_on_apply_in[simp]: "a : A ==> (override_on f g A) a = g a"
+lemma override_on_apply_in[simp]: "a : A \<Longrightarrow> (override_on f g A) a = g a"
 by(simp add:override_on_def)
 
 
@@ -718,17 +722,16 @@ hide_const (open) swap
 
 subsection {* Inversion of injective functions *}
 
-definition the_inv_into :: "'a set => ('a => 'b) => ('b => 'a)" where
-  "the_inv_into A f == %x. THE y. y : A & f y = x"
+definition the_inv_into :: "'a set \<Rightarrow> ('a \<Rightarrow> 'b) \<Rightarrow> ('b \<Rightarrow> 'a)" where
+  "the_inv_into A f \<equiv> \<lambda>x. THE y. y \<in> A \<and> f y = x"
 
-lemma the_inv_into_f_f:
-  "[| inj_on f A;  x : A |] ==> the_inv_into A f (f x) = x"
-apply (simp add: the_inv_into_def inj_on_def)
-apply blast
-done
+lemma the_inv_into_f_f: "\<lbrakk>inj_on f A; x \<in> A\<rbrakk> \<Longrightarrow> the_inv_into A f (f x) = x"
+  unfolding the_inv_into_def inj_on_def
+  by blast
 
+(* @TODO Chap0 I.2.2 *)
 lemma f_the_inv_into_f:
-  "inj_on f A ==> y : f`A  ==> f (the_inv_into A f y) = y"
+  "inj_on f A \<Longrightarrow> y \<in> f`A  \<Longrightarrow> f (the_inv_into A f y) = y"
 apply (simp add: the_inv_into_def)
 apply (rule the1I2)
  apply(blast dest: inj_onD)
@@ -736,7 +739,7 @@ apply blast
 done
 
 lemma the_inv_into_into:
-  "[| inj_on f A; x : f ` A; A <= B |] ==> the_inv_into A f x : B"
+  "\<lbrakk> inj_on f A; x \<in> f`A; A \<subseteq> B \<rbrakk> \<Longrightarrow> the_inv_into A f x \<in> B"
 apply (simp add: the_inv_into_def)
 apply (rule the1I2)
  apply(blast dest: inj_onD)
@@ -744,18 +747,18 @@ apply blast
 done
 
 lemma the_inv_into_onto[simp]:
-  "inj_on f A ==> the_inv_into A f ` (f ` A) = A"
+  "inj_on f A \<Longrightarrow> the_inv_into A f ` (f ` A) = A"
 by (fast intro:the_inv_into_into the_inv_into_f_f[symmetric])
 
 lemma the_inv_into_f_eq:
-  "[| inj_on f A; f x = y; x : A |] ==> the_inv_into A f y = x"
+  "\<lbrakk> inj_on f A; f x = y; x \<in> A \<rbrakk> \<Longrightarrow> the_inv_into A f y = x"
   apply (erule subst)
   apply (erule the_inv_into_f_f, assumption)
   done
 
 lemma the_inv_into_comp:
-  "[| inj_on f (g ` A); inj_on g A; x : f ` g ` A |] ==>
-  the_inv_into A (f o g) x = (the_inv_into A g o the_inv_into (g ` A) f) x"
+  "\<lbrakk> inj_on f (g ` A); inj_on g A; x \<in> f ` g ` A \<rbrakk> \<Longrightarrow>
+  the_inv_into A (f \<circ> g) x = (the_inv_into A g \<circ> the_inv_into (g ` A) f) x"
 apply (rule the_inv_into_f_eq)
   apply (fast intro: comp_inj_on)
  apply (simp add: f_the_inv_into_f the_inv_into_into)

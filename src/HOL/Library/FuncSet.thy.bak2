@@ -8,14 +8,13 @@ theory FuncSet
 imports "../Main"
 begin
 
-(* simulates "Type Families"? Cf. Dependent Type Theory *)
 definition
   Pi :: "['a set, 'a \<Rightarrow> 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set" where
-  "Pi A B = {f. (\<forall>x. x \<in> A \<longrightarrow> f x \<in> B x)}"
+  "Pi A B = {f. \<forall>x. x \<in> A \<longrightarrow> f x \<in> B x}"
 
 definition
   extensional :: "'a set \<Rightarrow> ('a \<Rightarrow> 'b) set" where
-  "extensional A = {f. (\<forall>x. x\<notin>A \<longrightarrow> f x = undefined)}"
+  "extensional A = {f. \<forall>x. x\<notin>A \<longrightarrow> f x = undefined}"
 
 definition
   "restrict" :: "['a \<Rightarrow> 'b, 'a set] \<Rightarrow> ('a \<Rightarrow> 'b)" where
@@ -24,17 +23,14 @@ definition
 abbreviation
   funcset :: "['a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"
     (infixr "->" 60) where
-  "A -> B \<equiv> Pi A (%_. B)"
-(* The case in which B does *not* depend on the element of `A` *)
+  "A -> B == Pi A (%_. B)"
 
 notation (xsymbols)
   funcset  (infixr "\<rightarrow>" 60)
 
 syntax
   "_Pi"  :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3PI _:_./ _)" 10)
-    (* pretty-printing block of indentation level three *)
   "_lam" :: "[pttrn, 'a set, 'a \<Rightarrow> 'b] \<Rightarrow> ('a\<Rightarrow>'b)"  ("(3%_:_./ _)" [0,0,3] 3)
-    (* pretty-printing block of indentation level three *)
 
 syntax (xsymbols)
   "_Pi" :: "[pttrn, 'a set, 'b set] \<Rightarrow> ('a \<Rightarrow> 'b) set"  ("(3\<Pi> _\<in>_./ _)"   10)
@@ -45,8 +41,8 @@ syntax (HTML output)
   "_lam" :: "[pttrn, 'a set, 'a \<Rightarrow> 'b] \<Rightarrow> ('a\<Rightarrow>'b)"  ("(3\<lambda>_\<in>_./ _)" [0,0,3] 3)
 
 translations
-  "PI x:A. B" \<rightleftharpoons> "CONST Pi A (%x. B)"
-  "%x:A. f" \<rightleftharpoons> "CONST restrict (%x. f) A"
+  "PI x:A. B" == "CONST Pi A (%x. B)"
+  "%x:A. f" == "CONST restrict (%x. f) A"
 
 definition
   "compose" :: "['a set, 'b \<Rightarrow> 'c, 'a \<Rightarrow> 'b] \<Rightarrow> ('a \<Rightarrow> 'c)" where
@@ -59,12 +55,12 @@ lemma Pi_I[intro!]: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B x) \<Long
   by (simp add: Pi_def)
 
 lemma Pi_I'[simp]: "(\<And>x. x \<in> A \<longrightarrow> f x \<in> B x) \<Longrightarrow> f \<in> Pi A B"
-  by (simp add: Pi_def)
+by(simp add:Pi_def)
 
 lemma funcsetI: "(\<And>x. x \<in> A \<Longrightarrow> f x \<in> B) \<Longrightarrow> f \<in> A \<rightarrow> B"
   by (simp add: Pi_def)
 
-lemma Pi_mem: "\<lbrakk> f \<in> Pi A B; x \<in> A\<rbrakk> \<Longrightarrow> f x \<in> B x"
+lemma Pi_mem: "\<lbrakk>f: Pi A B; x \<in> A\<rbrakk> \<Longrightarrow> f x \<in> B x"
   by (simp add: Pi_def)
 
 lemma Pi_iff: "f \<in> Pi I X \<longleftrightarrow> (\<forall>i\<in>I. f i \<in> X i)"
@@ -72,16 +68,16 @@ lemma Pi_iff: "f \<in> Pi I X \<longleftrightarrow> (\<forall>i\<in>I. f i \<in>
 
 lemma PiE [elim]:
   "f \<in> Pi A B \<Longrightarrow> (f x \<in> B x \<Longrightarrow> Q) \<Longrightarrow> (x \<notin> A \<Longrightarrow> Q) \<Longrightarrow> Q"
-  by (auto simp: Pi_def)
+by(auto simp: Pi_def)
 
 lemma Pi_cong:
   "(\<And> w. w \<in> A \<Longrightarrow> f w = g w) \<Longrightarrow> f \<in> Pi A B \<longleftrightarrow> g \<in> Pi A B"
   by (auto simp: Pi_def)
 
-lemma funcset_id [simp]: "(\<lambda>x. x) \<in> A\<rightarrow>A"
+lemma funcset_id [simp]: "(\<lambda>x. x) \<in> A \<rightarrow> A"
   by auto
 
-lemma funcset_mem: "\<lbrakk>f \<in> A\<rightarrow>B; x \<in> A\<rbrakk> \<Longrightarrow> f x \<in> B"
+lemma funcset_mem: "\<lbrakk>f \<in> A \<rightarrow> B; x \<in> A\<rbrakk> \<Longrightarrow> f x \<in> B"
   by (simp add: Pi_def)
 
 lemma funcset_image: "f \<in> A\<rightarrow>B \<Longrightarrow> f`A \<subseteq> B"
@@ -90,28 +86,13 @@ lemma funcset_image: "f \<in> A\<rightarrow>B \<Longrightarrow> f`A \<subseteq> 
 lemma image_subset_iff_funcset: "F`A \<subseteq> B \<longleftrightarrow> F \<in> A\<rightarrow>B"
   by auto
 
-lemma Pi_eq_empty[simp]: "((\<Pi> x\<in>A. B x) = {}) = (\<exists>x\<in>A. B x = {})"
-proof -
-  have "((\<Pi> x\<in>A. B x) = {}) = (\<forall>f. \<exists>x. x\<in>A \<and> f x \<notin> B x)"
-    by (simp add: Pi_def)
-  also have "\<dots> = (\<exists>x\<in>A. B x = {})"
-  proof (rule iffI)
-    assume "\<exists>x\<in>A. B x = {}"
-    thus "\<forall>f. \<exists>x. x \<in> A \<and> f x \<notin> B x" by auto
-  next
-    txt{*Converse direction requires Axiom of Choice to exhibit a function
-    picking an element from each non-empty @{term "B x"}*}
-    assume "\<forall>f. \<exists>x. x \<in> A \<and> f x \<notin> B x"
-    hence "\<exists>x. x \<in> A \<and> (\<some> y. y \<in> B x) \<notin> B x"
-      by (rule spec[where x="\<lambda>u. \<some> y. y \<in> B u"])
-    then obtain x where "x \<in> A" and "(\<some> y. y \<in> B x) \<notin> B x"
-      by (elim exE conjE)
-    thus "\<exists>x\<in>A. B x = {}"
-      using some_eq_ex[where ?P="\<lambda>y. y \<in> B x"]
-      by auto
-  qed
-  finally show ?thesis .
-qed
+lemma Pi_eq_empty[simp]: "((PI x: A. B x) = {}) = (\<exists>x\<in>A. B x = {})"
+apply (simp add: Pi_def, auto)
+txt{*Converse direction requires Axiom of Choice to exhibit a function
+picking an element from each non-empty @{term "B x"}*}
+apply (drule_tac x = "\<lambda>u. SOME y. y \<in> B u" in spec, auto)
+apply (cut_tac P= "\<lambda>y. y \<in> B x" in some_eq_ex, auto)
+done
 
 lemma Pi_empty [simp]: "Pi {} B = UNIV"
 by (simp add: Pi_def)
@@ -178,14 +159,14 @@ lemma Pi_fupd_iff: "i \<in> I \<Longrightarrow> f \<in> Pi I (B(i := A)) \<longl
   apply auto
   apply (drule_tac x=x in Pi_mem)
   apply (simp_all split: split_if_asm)
-  apply (drule Pi_mem[where ?x=i])
+  apply (drule_tac x=i in Pi_mem)
   apply (auto dest!: Pi_mem)
   done
 
 subsection{*Composition With a Restricted Domain: @{term compose}*}
 
 lemma funcset_compose:
-  "\<lbrakk> f \<in> A \<rightarrow> B; g \<in> B \<rightarrow> C \<rbrakk> \<Longrightarrow> compose A g f \<in> A \<rightarrow> C"
+  "\<lbrakk> f \<in> A \<rightarrow> B; g \<in> B \<rightarrow> C \<rbrakk>\<Longrightarrow> compose A g f \<in> A \<rightarrow> C"
 by (simp add: Pi_def compose_def restrict_def)
 
 lemma compose_assoc:
@@ -196,7 +177,7 @@ by (simp add: fun_eq_iff Pi_def compose_def restrict_def)
 lemma compose_eq: "x \<in> A \<Longrightarrow> compose A g f x = g(f(x))"
 by (simp add: compose_def restrict_def)
 
-lemma surj_compose: "\<lbrakk> f`A = B; g`B = C \<rbrakk> \<Longrightarrow> compose A g f`A = C"
+lemma surj_compose: "\<lbrakk> f ` A = B; g ` B = C \<rbrakk> \<Longrightarrow> compose A g f ` A = C"
   by (auto simp add: image_def compose_eq)
 
 
@@ -371,7 +352,7 @@ syntax (xsymbols) "_PiE" :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3\<P
 
 syntax (HTML output) "_PiE" :: "[pttrn, 'a set, 'b set] => ('a => 'b) set"  ("(3\<Pi>\<^sub>E _\<in>_./ _)" 10)
 
-translations "PIE x:A. B" \<rightleftharpoons> "CONST Pi\<^sub>E A (%x. B)"
+translations "PIE x:A. B" == "CONST Pi\<^sub>E A (%x. B)"
 
 abbreviation extensional_funcset :: "'a set \<Rightarrow> 'b set \<Rightarrow> ('a \<Rightarrow> 'b) set" (infixr "->\<^sub>E" 60) where
   "A ->\<^sub>E B \<equiv> (\<Pi>\<^sub>E i\<in>A. B)"
@@ -561,9 +542,7 @@ proof (safe intro!: inj_onI ext)
 qed
 
 lemma card_PiE:
-  assumes "finite S"
-  shows "card (\<Pi>\<^sub>E i\<in>S. T i) = (\<Prod> i\<in>S. card (T i))"
-using `finite S`
+  "finite S \<Longrightarrow> card (PIE i : S. T i) = (\<Prod> i\<in>S. card (T i))"
 proof (induct rule: finite_induct)
   case empty then show ?case by auto
 next
