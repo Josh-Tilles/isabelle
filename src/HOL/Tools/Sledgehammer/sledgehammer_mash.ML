@@ -32,9 +32,12 @@ sig
   val decode_str : string -> string
   val decode_strs : string -> string list
   val encode_features : (string * real) list -> string
-  val extract_suggestions : string -> string * string list
+  val extract_suggestions : string -> string * (string * real) list
 
-  datatype mash_engine = MaSh_Py | MaSh_SML_kNN | MaSh_SML_NB
+  datatype mash_engine = MaSh_Py | MaSh_SML_kNN | MaSh_SML_NB | MaSh_SML_NB_Py
+
+  val is_mash_enabled : unit -> bool
+  val the_mash_engine : unit -> mash_engine
 
   structure MaSh_Py :
   sig
@@ -45,12 +48,18 @@ sig
     val query : Proof.context -> bool -> int ->
       (string * string list * string list * string list) list * string list * string list
         * (string * real) list ->
-      string list
+      (string * real) list
   end
 
   structure MaSh_SML :
   sig
-    val query : Proof.context -> mash_engine -> string list -> int ->
+    val k_nearest_neighbors : int -> int -> (int -> int list) -> (int -> (int * real) list) ->
+      int -> (int * real) list -> (int * real) list
+    val naive_bayes : int -> int -> (int -> int list) -> (int -> int list) -> int -> int ->
+      (int * real) list -> (int * real) list
+    val naive_bayes_py : Proof.context -> bool -> int -> int -> (int -> int list) ->
+      (int -> int list) -> int -> int -> (int * real) list -> (int * real) list
+    val query : Proof.context -> bool -> mash_engine -> string list -> int ->
       (string * (string * real) list * string list) list * string list * (string * real) list ->
       string list
   end
@@ -82,6 +91,8 @@ sig
   val mash_suggested_facts : Proof.context -> params -> int -> term list -> term -> raw_fact list ->
     fact list * fact list
   val mash_learn_proof : Proof.context -> params -> term -> ('a * thm) list -> thm list -> unit
+  val mash_learn_facts : Proof.context -> params -> string -> bool -> int -> bool -> Time.time ->
+    raw_fact list -> string
   val mash_learn : Proof.context -> params -> fact_override -> thm list -> bool -> unit
 
   val mash_can_suggest_facts : Proof.context -> bool -> bool
@@ -135,7 +146,7 @@ fun wipe_out_mash_state_dir () =
     ()
   end
 
-datatype mash_engine = MaSh_Py | MaSh_SML_kNN | MaSh_SML_NB
+datatype mash_engine = MaSh_Py | MaSh_SML_kNN | MaSh_SML_NB | MaSh_SML_NB_Py
 
 fun mash_engine () =
   let val flag1 = Options.default_string @{system_option MaSh} in
@@ -145,6 +156,7 @@ fun mash_engine () =
     | "sml" => SOME MaSh_SML_NB
     | "sml_knn" => SOME MaSh_SML_kNN
     | "sml_nb" => SOME MaSh_SML_NB
+    | "sml_nb_py" => SOME MaSh_SML_NB_Py
     | _ => NONE)
   end
 
@@ -157,7 +169,7 @@ val the_mash_engine = the_default MaSh_SML_NB o mash_engine
 val save_models_arg = "--saveModels"
 val shutdown_server_arg = "--shutdownServer"
 
-fun wipe_out_file file = (try (File.rm o Path.explode) file; ())
+fun wipe_out_file file = ignore (try (File.rm o Path.explode) file)
 
 fun write_file banner (xs, f) path =
   (case banner of SOME s => File.write path s | NONE => ();
@@ -258,8 +270,8 @@ fun str_of_query max_suggs (learns, hints, parents, feats) =
 (* The suggested weights do not make much sense. *)
 fun extract_suggestion sugg =
   (case space_explode "=" sugg of
-    [name, _ (* weight *)] => SOME (decode_str name)
-  | [name] => SOME (decode_str name)
+    [name, weight] => SOME (decode_str name, Real.fromString weight |> the_default 1.0)
+  | [name] => SOME (decode_str name, 1.0)
   | _ => NONE)
 
 fun extract_suggestions line =
@@ -445,14 +457,11 @@ fun k_nearest_neighbors num_facts num_visible_facts get_deps get_sym_ths max_sug
     ret [] (Integer.max 0 (num_visible_facts - max_suggs))
   end
 
-val nb_tau = 0.02 (* FUDGE *)
-val nb_pos_weight = 2.0 (* FUDGE *)
-val nb_def_val = ~15.0 (* FUDGE *)
 val nb_def_prior_weight = 20 (* FUDGE *)
 
 (* TODO: Either use IDF or don't use it. See commented out code portions below. *)
 
-fun naive_bayes_learn num_facts get_deps get_th_feats num_feats =
+fun naive_bayes_learn num_facts get_deps get_feats num_feats =
   let
     val tfreq = Array.array (num_facts, 0)
     val sfreq = Array.array (num_facts, Inttab.empty)
@@ -477,10 +486,16 @@ fun naive_bayes_learn num_facts get_deps get_th_feats num_feats =
       end
 
     fun for i =
-      if i = num_facts then () else (learn i (get_th_feats i) (get_deps i); for (i + 1))
+      if i = num_facts then () else (learn i (get_feats i) (get_deps i); for (i + 1))
   in
     for 0; (Array.vector tfreq, Array.vector sfreq (*, Array.vector dffreq *))
   end
+
+val nb_kuehlwein_style = false
+
+val nb_tau = if nb_kuehlwein_style then 0.05 else 0.02 (* FUDGE *)
+val nb_pos_weight = if nb_kuehlwein_style then 20.0 else 2.0 (* FUDGE *)
+val nb_def_val = ~15.0 (* FUDGE *)
 
 fun naive_bayes_query _ (* num_facts *) num_visible_facts max_suggs feats (tfreq, sfreq (*, dffreq*)) =
   let
@@ -503,8 +518,12 @@ fun naive_bayes_query _ (* num_facts *) num_visible_facts max_suggs feats (tfreq
 
         val (res, sfh) = fold fold_feats feats (Math.ln tfreq, Vector.sub (sfreq, i))
 
-        fun fold_sfh (f, sf) sow =
-          sow + tfidf f * (Math.ln (1.0 + (1.0 - Real.fromInt sf) / tfreq))
+        val fold_sfh =
+          if nb_kuehlwein_style then
+            (fn (f, sf) => fn sow => sow - tfidf f * (tfreq / Math.ln (Real.fromInt sf)))
+          else
+            (fn (f, sf) => fn sow =>
+               sow + tfidf f * Math.ln (1.0 + (1.0 - Real.fromInt sf) / tfreq))
 
         val sum_of_weights = Inttab.fold fold_sfh sfh 0.0
       in
@@ -520,15 +539,34 @@ fun naive_bayes_query _ (* num_facts *) num_visible_facts max_suggs feats (tfreq
     ret [] (Integer.max 0 (num_visible_facts - max_suggs))
   end
 
-fun naive_bayes num_facts num_visible_facts get_deps get_th_feats num_feats max_suggs feats =
-  naive_bayes_learn num_facts get_deps get_th_feats num_feats
+fun naive_bayes num_facts num_visible_facts get_deps get_feats num_feats max_suggs feats =
+  naive_bayes_learn num_facts get_deps get_feats num_feats
   |> naive_bayes_query num_facts num_visible_facts max_suggs feats
+
+(* experimental *)
+fun naive_bayes_py ctxt overlord num_facts num_visible_facts get_deps get_feats num_feats max_suggs
+    feats =
+  let
+    fun name_of_fact j = "f" ^ string_of_int j
+    fun fact_of_name s = the (Int.fromString (unprefix "f" s))
+    fun name_of_feature j = "F" ^ string_of_int j
+    fun parents_of j = if j = 0 then [] else [name_of_fact (j - 1)]
+
+    val learns = map (fn j => (name_of_fact j, parents_of j, map name_of_feature (get_feats j),
+      map name_of_fact (get_deps j))) (0 upto num_facts - 1)
+    val parents' = parents_of num_visible_facts
+    val feats' = map (apfst name_of_feature) feats
+  in
+    MaSh_Py.unlearn ctxt overlord;
+    MaSh_Py.query ctxt overlord max_suggs (learns, [], parents', feats')
+    |> map (apfst fact_of_name)
+  end
 
 fun add_to_xtab key (next, tab, keys) = (next + 1, Symtab.update_new (key, next) tab, key :: keys)
 
 fun map_array_at ary f i = Array.update (ary, i, f (Array.sub (ary, i)))
 
-fun query ctxt engine visible_facts max_suggs (learns, hints, feats) =
+fun query ctxt overlord engine visible_facts max_suggs (learns, hints, feats) =
   let
     val visible_fact_set = Symtab.make_set visible_facts
 
@@ -586,8 +624,8 @@ fun query ctxt engine visible_facts max_suggs (learns, hints, feats) =
          val get_unweighted_feats = curry Vector.sub unweighted_feats_ary
          val feats' = map (apfst (the_default ~1 o Symtab.lookup feat_tab)) feats
        in
-         naive_bayes num_facts num_visible_facts get_deps get_unweighted_feats num_feats max_suggs
-           feats'
+         (if engine = MaSh_SML_NB then naive_bayes else naive_bayes_py ctxt overlord)
+           num_facts num_visible_facts get_deps get_unweighted_feats num_feats max_suggs feats'
        end)
     |> map (curry Vector.sub fact_vec o fst)
   end
@@ -1285,6 +1323,7 @@ fun mash_suggested_facts ctxt ({debug, overlord, ...} : params) max_facts hyp_ts
            if engine = MaSh_Py then
              let val (parents, hints, feats) = query_args access_G in
                MaSh_Py.query ctxt overlord max_facts ([], hints, parents, feats)
+               |> map fst
              end
            else
              []))
@@ -1299,7 +1338,7 @@ fun mash_suggested_facts ctxt ({debug, overlord, ...} : params) max_facts hyp_ts
           val learns =
             Graph.schedule (fn _ => fn (fact, (_, feats, deps)) => (fact, feats, deps)) access_G
         in
-          MaSh_SML.query ctxt engine visible_facts max_facts (learns, hints, feats)
+          MaSh_SML.query ctxt overlord engine visible_facts max_facts (learns, hints, feats)
         end
 
     val unknown = filter_out (is_fact_in_graph access_G o snd) facts
@@ -1574,7 +1613,7 @@ fun mash_can_suggest_facts ctxt overlord =
 
 (* Generate more suggestions than requested, because some might be thrown out
    later for various reasons. *)
-fun generous_max_suggestions max_facts = max_facts (*### 11 * max_facts div 10 + 20 *)
+fun generous_max_suggestions max_facts = 11 * max_facts div 10 + 20
 
 val mepo_weight = 0.5
 val mash_weight = 0.5
