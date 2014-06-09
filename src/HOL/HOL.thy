@@ -530,11 +530,13 @@ apply (erule conjE)
 apply (iprover intro: minor)
 done
 
-lemma ex1_implies_ex: "EX! x. P x ==> EX x. P x"
-apply (erule ex1E)
-apply (rule exI)
-apply assumption
-done
+lemma ex1_implies_ex: 
+  assumes "\<exists>!x. P x"
+  shows "\<exists>x. P x"
+proof -
+  from assms obtain x where "P x" by (rule ex1E)
+  thus "\<exists>x. P x" by (rule exI)
+qed
 
 
 subsubsection {*THE: definite description operator*}
@@ -568,13 +570,20 @@ lemma theI:
   shows "P (THE x. P x)"
 by (iprover intro: assms the_equality [THEN ssubst])
 
-lemma theI': "EX! x. P x ==> P (THE x. P x)"
-apply (erule ex1E)
+lemma theI': 
+  assumes "\<exists>!x. P x"
+  shows "P (THE x. P x)"
+(* @TODO is this impossible to prove if you apply `theI` *before* `ex1E`? *)
+using assms
+apply (rule ex1E)
 apply (erule theI)
-apply (erule allE)
-apply (erule mp)
-apply assumption
-done
+proof -
+  fix x y
+  assume "P y"
+  assume "\<forall>z. P z \<longrightarrow> z = x"
+  hence "P y \<longrightarrow> y = x" by (rule allE)
+  with `P y` show "y = x" by (rule rev_mp)
+qed
 
 (*Easier to apply than theI: only one occurrence of P*)
 lemma theI2:
@@ -600,10 +609,12 @@ apply assumption
 done
 
 lemma the_sym_eq_trivial: "(THE y. x=y) = x"
-apply (rule the_equality)
-apply (rule refl)
-apply (erule sym)
-done
+proof (rule the_equality)
+  show "x = x" by (rule refl)
+next
+  fix y assume "x = y"
+  thus "y = x" by (rule sym)
+qed
 
 
 subsubsection {*Classical intro rules for disjunction and existential quantifiers*}

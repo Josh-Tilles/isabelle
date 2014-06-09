@@ -947,54 +947,54 @@ text {* These support proving chains of decreasing inequalities
     a >= b >= c ... in Isar proofs. *}
 
 lemma xt1 [no_atp]:
-  "a = b ==> b > c ==> a > c"
-  "a > b ==> b = c ==> a > c"
-  "a = b ==> b >= c ==> a >= c"
-  "a >= b ==> b = c ==> a >= c"
-  "(x::'a::order) >= y ==> y >= x ==> x = y"
-  "(x::'a::order) >= y ==> y >= z ==> x >= z"
-  "(x::'a::order) > y ==> y >= z ==> x > z"
-  "(x::'a::order) >= y ==> y > z ==> x > z"
-  "(a::'a::order) > b ==> b > a ==> P"
-  "(x::'a::order) > y ==> y > z ==> x > z"
-  "(a::'a::order) >= b ==> a ~= b ==> a > b"
-  "(a::'a::order) ~= b ==> a >= b ==> a > b"
-  "a = f b ==> b > c ==> (!!x y. x > y ==> f x > f y) ==> a > f c" 
-  "a > b ==> f b = c ==> (!!x y. x > y ==> f x > f y) ==> f a > c"
-  "a = f b ==> b >= c ==> (!!x y. x >= y ==> f x >= f y) ==> a >= f c"
-  "a >= b ==> f b = c ==> (!! x y. x >= y ==> f x >= f y) ==> f a >= c"
+  "a = b \<Longrightarrow> b > c \<Longrightarrow> a > c"
+  "a > b \<Longrightarrow> b = c \<Longrightarrow> a > c"
+  "a = b \<Longrightarrow> b >= c \<Longrightarrow> a >= c"
+  "a >= b \<Longrightarrow> b = c \<Longrightarrow> a >= c"
+  "(x::'a::order) >= y \<Longrightarrow> y >= x \<Longrightarrow> x = y"
+  "(x::'a::order) >= y \<Longrightarrow> y >= z \<Longrightarrow> x >= z"
+  "(x::'a::order) > y \<Longrightarrow> y >= z \<Longrightarrow> x > z"
+  "(x::'a::order) >= y \<Longrightarrow> y > z \<Longrightarrow> x > z"
+  "(a::'a::order) > b \<Longrightarrow> b > a \<Longrightarrow> P"
+  "(x::'a::order) > y \<Longrightarrow> y > z \<Longrightarrow> x > z"
+  "(a::'a::order) >= b \<Longrightarrow> a ~= b \<Longrightarrow> a > b"
+  "(a::'a::order) ~= b \<Longrightarrow> a >= b \<Longrightarrow> a > b"
+  "a = f b \<Longrightarrow> b > c \<Longrightarrow> (!!x y. x > y \<Longrightarrow> f x > f y) \<Longrightarrow> a > f c" 
+  "a > b \<Longrightarrow> f b = c \<Longrightarrow> (!!x y. x > y \<Longrightarrow> f x > f y) \<Longrightarrow> f a > c"
+  "a = f b \<Longrightarrow> b >= c \<Longrightarrow> (!!x y. x >= y \<Longrightarrow> f x >= f y) \<Longrightarrow> a >= f c"
+  "a >= b \<Longrightarrow> f b = c \<Longrightarrow> (!! x y. x >= y \<Longrightarrow> f x >= f y) \<Longrightarrow> f a >= c"
   by auto
 
 lemma xt2 [no_atp]:
-  "(a::'a::order) >= f b ==> b >= c ==> (!!x y. x >= y ==> f x >= f y) ==> a >= f c"
+  "(a::'a::order) >= f b \<Longrightarrow> b >= c \<Longrightarrow> (!!x y. x >= y \<Longrightarrow> f x >= f y) \<Longrightarrow> a >= f c"
 by (subgoal_tac "f b >= f c", force, force)
 
-lemma xt3 [no_atp]: "(a::'a::order) >= b ==> (f b::'b::order) >= c ==>
-    (!!x y. x >= y ==> f x >= f y) ==> f a >= c"
+lemma xt3 [no_atp]: "(a::'a::order) >= b \<Longrightarrow> (f b::'b::order) >= c \<Longrightarrow>
+    (!!x y. x >= y \<Longrightarrow> f x >= f y) \<Longrightarrow> f a >= c"
 by (subgoal_tac "f a >= f b", force, force)
 
-lemma xt4 [no_atp]: "(a::'a::order) > f b ==> (b::'b::order) >= c ==>
-  (!!x y. x >= y ==> f x >= f y) ==> a > f c"
+lemma xt4 [no_atp]: "(a::'a::order) > f b \<Longrightarrow> (b::'b::order) >= c \<Longrightarrow>
+  (!!x y. x >= y \<Longrightarrow> f x >= f y) \<Longrightarrow> a > f c"
 by (subgoal_tac "f b >= f c", force, force)
 
-lemma xt5 [no_atp]: "(a::'a::order) > b ==> (f b::'b::order) >= c==>
-    (!!x y. x > y ==> f x > f y) ==> f a > c"
+lemma xt5 [no_atp]: "(a::'a::order) > b \<Longrightarrow> (f b::'b::order) >= c\<Longrightarrow>
+    (!!x y. x > y \<Longrightarrow> f x > f y) \<Longrightarrow> f a > c"
 by (subgoal_tac "f a > f b", force, force)
 
-lemma xt6 [no_atp]: "(a::'a::order) >= f b ==> b > c ==>
-    (!!x y. x > y ==> f x > f y) ==> a > f c"
+lemma xt6 [no_atp]: "(a::'a::order) >= f b \<Longrightarrow> b > c \<Longrightarrow>
+    (!!x y. x > y \<Longrightarrow> f x > f y) \<Longrightarrow> a > f c"
 by (subgoal_tac "f b > f c", force, force)
 
-lemma xt7 [no_atp]: "(a::'a::order) >= b ==> (f b::'b::order) > c ==>
-    (!!x y. x >= y ==> f x >= f y) ==> f a > c"
+lemma xt7 [no_atp]: "(a::'a::order) >= b \<Longrightarrow> (f b::'b::order) > c \<Longrightarrow>
+    (!!x y. x >= y \<Longrightarrow> f x >= f y) \<Longrightarrow> f a > c"
 by (subgoal_tac "f a >= f b", force, force)
 
-lemma xt8 [no_atp]: "(a::'a::order) > f b ==> (b::'b::order) > c ==>
-    (!!x y. x > y ==> f x > f y) ==> a > f c"
+lemma xt8 [no_atp]: "(a::'a::order) > f b \<Longrightarrow> (b::'b::order) > c \<Longrightarrow>
+    (!!x y. x > y \<Longrightarrow> f x > f y) \<Longrightarrow> a > f c"
 by (subgoal_tac "f b > f c", force, force)
 
-lemma xt9 [no_atp]: "(a::'a::order) > b ==> (f b::'b::order) > c ==>
-    (!!x y. x > y ==> f x > f y) ==> f a > c"
+lemma xt9 [no_atp]: "(a::'a::order) > b \<Longrightarrow> (f b::'b::order) > c \<Longrightarrow>
+    (!!x y. x > y \<Longrightarrow> f x > f y) \<Longrightarrow> f a > c"
 by (subgoal_tac "f a > f b", force, force)
 
 lemmas xtrans = xt1 xt2 xt3 xt4 xt5 xt6 xt7 xt8 xt9
@@ -1527,18 +1527,11 @@ subsection {* Order on unary and binary predicates *}
 lemma predicate1I:
   assumes PQ: "\<And>x. P x \<Longrightarrow> Q x"
   shows "P \<le> Q"
-  apply (rule le_funI)
-  apply (rule le_boolI)
-  apply (rule PQ)
-  apply assumption
-  done
+  by (intro le_funI le_boolI PQ)
 
 lemma predicate1D:
   "P \<le> Q \<Longrightarrow> P x \<Longrightarrow> Q x"
-  apply (erule le_funE)
-  apply (erule le_boolE)
-  apply assumption+
-  done
+  by (elim le_funE le_boolE)
 
 lemma rev_predicate1D:
   "P x \<Longrightarrow> P \<le> Q \<Longrightarrow> Q x"
@@ -1547,18 +1540,11 @@ lemma rev_predicate1D:
 lemma predicate2I:
   assumes PQ: "\<And>x y. P x y \<Longrightarrow> Q x y"
   shows "P \<le> Q"
-  apply (rule le_funI)+
-  apply (rule le_boolI)
-  apply (rule PQ)
-  apply assumption
-  done
+  by (intro le_funI le_boolI PQ)
 
 lemma predicate2D:
   "P \<le> Q \<Longrightarrow> P x y \<Longrightarrow> Q x y"
-  apply (erule le_funE)+
-  apply (erule le_boolE)
-  apply assumption+
-  done
+  by (elim le_funE le_boolE)
 
 lemma rev_predicate2D:
   "P x y \<Longrightarrow> P \<le> Q \<Longrightarrow> Q x y"
