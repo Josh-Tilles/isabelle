@@ -33,9 +33,8 @@ fun outcome_of unsat sat unknown solver_name line =
 
 fun on_first_line test_outcome solver_name lines =
   let
-    val empty_line = (fn "" => true | _ => false)
     val split_first = (fn [] => ("", []) | l :: ls => (l, ls))
-    val (l, ls) = split_first (snd (take_prefix empty_line lines))
+    val (l, ls) = split_first (snd (take_prefix (curry (op =) "") lines))
   in (test_outcome solver_name l, ls) end
 
 
@@ -44,7 +43,7 @@ fun on_first_line test_outcome solver_name lines =
 local
   fun cvc3_options ctxt = [
     "-seed", string_of_int (Config.get ctxt SMT2_Config.random_seed),
-    "-lang", "smtlib", "-output-lang", "presentation",
+    "-lang", "smt2",
     "-timeout", string_of_int (Real.ceil (Config.get ctxt SMT2_Config.timeout))]
 in
 
@@ -54,30 +53,37 @@ val cvc3: SMT2_Solver.solver_config = {
   avail = make_avail "CVC3",
   command = make_command "CVC3",
   options = cvc3_options,
+  smt_options = [],
   default_max_relevant = 400 (* FUDGE *),
-  outcome = on_first_line (outcome_of "Unsatisfiable." "Satisfiable." "Unknown."),
+  outcome = on_first_line (outcome_of "unsat" "sat" "unknown"),
   parse_proof = NONE,
   replay = NONE }
 
 end
 
 
-(* Yices *)
+(* CVC4 *)
 
-val yices: SMT2_Solver.solver_config = {
-  name = "yices",
+local
+  fun cvc4_options ctxt = [
+    "--random-seed=" ^ string_of_int (Config.get ctxt SMT2_Config.random_seed),
+    "--lang=smt2",
+    "--tlimit", string_of_int (Real.ceil (1000.0 * Config.get ctxt SMT2_Config.timeout))]
+in
+
+val cvc4: SMT2_Solver.solver_config = {
+  name = "cvc4",
   class = K SMTLIB2_Interface.smtlib2C,
-  avail = make_avail "YICES",
-  command = make_command "YICES",
-  options = (fn ctxt => [
-    "--rand-seed=" ^ string_of_int (Config.get ctxt SMT2_Config.random_seed),
-    "--timeout=" ^
-      string_of_int (Real.ceil (Config.get ctxt SMT2_Config.timeout)),
-    "--smtlib"]),
-  default_max_relevant = 350 (* FUDGE *),
+  avail = make_avail "CVC4",
+  command = make_command "CVC4",
+  options = cvc4_options,
+  smt_options = [],
+  default_max_relevant = 400 (* FUDGE *),
   outcome = on_first_line (outcome_of "unsat" "sat" "unknown"),
   parse_proof = NONE,
   replay = NONE }
+
+end
 
 
 (* Z3 *)
@@ -140,6 +146,7 @@ val z3: SMT2_Solver.solver_config = {
   avail = make_avail "Z3_NEW",
   command = z3_make_command "Z3_NEW",
   options = z3_options,
+  smt_options = [(":produce-proofs", "true")],
   default_max_relevant = 350 (* FUDGE *),
   outcome = on_first_line (outcome_of "unsat" "sat" "unknown"),
   parse_proof = SOME Z3_New_Replay.parse_proof,
@@ -152,7 +159,7 @@ end
 
 val _ = Theory.setup (
   SMT2_Solver.add_solver cvc3 #>
-  SMT2_Solver.add_solver yices #>
+  SMT2_Solver.add_solver cvc4 #>
   SMT2_Solver.add_solver z3)
 
 end;

@@ -28,7 +28,6 @@ open Sledgehammer_MaSh
 open Sledgehammer
 
 (* val cvc3N = "cvc3" *)
-val yicesN = "yices"
 val z3N = "z3"
 
 val runN = "run"
@@ -95,8 +94,8 @@ val default_default_params =
    ("max_mono_iters", "smart"),
    ("max_new_mono_instances", "smart"),
    ("isar_proofs", "smart"),
-   ("compress_isar", "10"),
-   ("try0_isar", "true"),
+   ("compress", "10"),
+   ("try0", "true"),
    ("smt_proofs", "smart"),
    ("slice", "true"),
    ("minimize", "smart"),
@@ -105,7 +104,7 @@ val default_default_params =
 val alias_params =
   [("prover", ("provers", [])), (* undocumented *)
    ("dont_preplay", ("preplay_timeout", ["0"])),
-   ("dont_compress_isar", ("compress_isar", ["0"])),
+   ("dont_compress", ("compress", ["0"])),
    ("isar_proof", ("isar_proofs", [])) (* legacy *)]
 val negated_alias_params =
   [("no_debug", "debug"),
@@ -119,7 +118,7 @@ val negated_alias_params =
    ("no_isar_proofs", "isar_proofs"),
    ("dont_slice", "slice"),
    ("dont_minimize", "minimize"),
-   ("dont_try0_isar", "try0_isar"),
+   ("dont_try0", "try0"),
    ("no_smt_proofs", "smt_proofs")]
 
 val params_not_for_minimize =
@@ -204,15 +203,13 @@ fun remotify_prover_if_supported_and_not_already_remote ctxt name =
     end
 
 fun remotify_prover_if_not_installed ctxt name =
-  if is_prover_supported ctxt name andalso is_prover_installed ctxt name then
-    SOME name
-  else
-    remotify_prover_if_supported_and_not_already_remote ctxt name
+  if is_prover_supported ctxt name andalso is_prover_installed ctxt name then SOME name
+  else remotify_prover_if_supported_and_not_already_remote ctxt name
 
 (* The first ATP of the list is used by Auto Sledgehammer. Because of the low
    timeout, it makes sense to put E first. *)
 fun default_provers_param_value mode ctxt =
-  [eN, spassN, z3N, e_sineN, vampireN, yicesN]
+  [eN, spassN, z3N, e_sineN, vampireN]
   |> map_filter (remotify_prover_if_not_installed ctxt)
   (* In "try" mode, leave at least one thread to another slow tool (e.g. Nitpick) *)
   |> take (Multithreading.max_threads_value () - (if mode = Try then 1 else 0))
@@ -302,8 +299,8 @@ fun extract_params mode default_params override_params =
     val max_new_mono_instances =
       lookup_option lookup_int "max_new_mono_instances"
     val isar_proofs = lookup_option lookup_bool "isar_proofs"
-    val compress_isar = Real.max (1.0, lookup_real "compress_isar")
-    val try0_isar = lookup_bool "try0_isar"
+    val compress = Real.max (1.0, lookup_real "compress")
+    val try0 = lookup_bool "try0"
     val smt_proofs = lookup_option lookup_bool "smt_proofs"
     val slice = mode <> Auto_Try andalso lookup_bool "slice"
     val minimize = if mode = Auto_Try then NONE else lookup_option lookup_bool "minimize"
@@ -316,8 +313,8 @@ fun extract_params mode default_params override_params =
      uncurried_aliases = uncurried_aliases, learn = learn, fact_filter = fact_filter,
      max_facts = max_facts, fact_thresholds = fact_thresholds, max_mono_iters = max_mono_iters,
      max_new_mono_instances = max_new_mono_instances, isar_proofs = isar_proofs,
-     compress_isar = compress_isar, try0_isar = try0_isar, smt_proofs = smt_proofs, slice = slice,
-     minimize = minimize, timeout = timeout, preplay_timeout = preplay_timeout, expect = expect}
+     compress = compress, try0 = try0, smt_proofs = smt_proofs, slice = slice, minimize = minimize,
+     timeout = timeout, preplay_timeout = preplay_timeout, expect = expect}
   end
 
 fun get_params mode = extract_params mode o default_raw_params mode

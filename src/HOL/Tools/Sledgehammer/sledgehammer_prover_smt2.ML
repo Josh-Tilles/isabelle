@@ -177,12 +177,14 @@ fun smt2_filter_loop name ({debug, overlord, max_mono_iters, max_new_mono_instan
     do_slice timeout 1 NONE Time.zeroTime
   end
 
-fun run_smt2_solver mode name (params as {debug, verbose, isar_proofs, compress_isar,
-      try0_isar, smt_proofs, minimize, preplay_timeout, ...})
+fun run_smt2_solver mode name (params as {debug, verbose, isar_proofs, compress, try0, smt_proofs,
+      minimize, preplay_timeout, ...})
     minimize_command ({state, goal, subgoal, subgoal_count, factss, ...} : prover_problem) =
   let
     val thy = Proof.theory_of state
     val ctxt = Proof.context_of state
+
+    val factss = map (apsnd (map (apsnd (Thm.transfer thy)))) factss
 
     val {outcome, filter_result = {fact_ids, atp_proof, ...}, used_from, run_time} =
       smt2_filter_loop name params state goal subgoal factss
@@ -199,8 +201,8 @@ fun run_smt2_solver mode name (params as {debug, verbose, isar_proofs, compress_
          fn preplay =>
             let
               fun isar_params () =
-                (verbose, (NONE, NONE), preplay_timeout, compress_isar, try0_isar,
-                 minimize <> SOME false, atp_proof (), goal)
+                (verbose, (NONE, NONE), preplay_timeout, compress, try0, minimize <> SOME false,
+                 atp_proof (), goal)
 
               val one_line_params =
                 (preplay, proof_banner mode name, used_facts,
