@@ -155,6 +155,8 @@ fun monomorphize_term ctxt t =
 fun heading_sort_key heading =
   if String.isPrefix "Relevant fact" heading then "_" ^ heading else heading
 
+val max_dependencies = 100
+
 fun problem_of_theory ctxt thy format infer_policy type_enc =
   let
     val css_table = Sledgehammer_Fact.clasimpset_rule_table_of ctxt
@@ -182,11 +184,10 @@ fun problem_of_theory ctxt thy format infer_policy type_enc =
         facts
         |> map (fn (_, th) =>
                    (fact_name_of (Thm.get_name_hint th),
-                    th |> Sledgehammer_Util.thms_in_proof (SOME name_tabs)
-                       |> map fact_name_of))
+                    th |> Sledgehammer_Util.thms_in_proof max_dependencies (SOME name_tabs)
+                       |> these |> map fact_name_of))
     val all_problem_names =
-      problem |> maps (map ident_of_problem_line o snd)
-              |> distinct (op =)
+      problem |> maps (map ident_of_problem_line o snd) |> distinct (op =)
     val all_problem_name_set = Symtab.make (map (rpair ()) all_problem_names)
     val infers =
       infers |> filter (Symtab.defined all_problem_name_set o fst)
@@ -195,16 +196,13 @@ fun problem_of_theory ctxt thy format infer_policy type_enc =
     val ordered_names =
       String_Graph.empty
       |> fold (String_Graph.new_node o rpair ()) all_problem_names
-      |> fold (fn (to, froms) =>
-                  fold (fn from => maybe_add_edge (from, to)) froms)
-              infers
+      |> fold (fn (to, froms) => fold (fn from => maybe_add_edge (from, to)) froms) infers
       |> fold (fn (to, from) => maybe_add_edge (from, to))
-              (tl all_problem_names ~~ fst (split_last all_problem_names))
+        (tl all_problem_names ~~ fst (split_last all_problem_names))
       |> String_Graph.topological_order
     val order_tab =
       Symtab.empty
-      |> fold (Symtab.insert (op =))
-              (ordered_names ~~ (1 upto length ordered_names))
+      |> fold (Symtab.insert (op =)) (ordered_names ~~ (1 upto length ordered_names))
     val name_ord = int_ord o pairself (the o Symtab.lookup order_tab)
   in
     problem

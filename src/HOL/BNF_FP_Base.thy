@@ -16,6 +16,9 @@ begin
 lemma mp_conj: "(P \<longrightarrow> Q) \<and> R \<Longrightarrow> P \<Longrightarrow> R \<and> Q"
 by auto
 
+lemma predicate2D_conj: "P \<le> Q \<and> R \<Longrightarrow> P x y \<Longrightarrow> R \<and> Q x y"
+  by auto
+
 lemma eq_sym_Unity_conv: "(x = (() = ())) = x"
 by blast
 
@@ -82,6 +85,9 @@ lemma sum_set_simps:
 "setr (Inl x) = {}"
 "setr (Inr x) = {x}"
 unfolding sum_set_defs by simp+
+
+lemma Inl_Inr_False: "(Inl x = Inr y) = False"
+  by simp
 
 lemma spec2: "\<forall>x y. P x y \<Longrightarrow> P x y"
 by blast
