@@ -175,6 +175,12 @@ lemma lessThan_strict_subset_iff:
   shows "{..<m} < {..<n} \<longleftrightarrow> m < n"
   by (metis leD lessThan_subset_iff linorder_linear not_less_iff_gr_or_eq psubset_eq)
 
+lemma (in linorder) Ici_subset_Ioi_iff: "{a ..} \<subseteq> {b <..} \<longleftrightarrow> b < a"
+  by auto
+
+lemma (in linorder) Iic_subset_Iio_iff: "{.. a} \<subseteq> {..< b} \<longleftrightarrow> a < b"
+  by auto
+
 subsection {*Two-sided intervals*}
 
 context ord
@@ -457,6 +463,15 @@ lemma atLeastLessThan_eq_iff:
   shows "{a ..< b} = {c ..< d} \<longleftrightarrow> a = c \<and> b = d"
   using atLeastLessThan_inj assms by auto
 
+lemma (in linorder) Ioc_inj: "{a <.. b} = {c <.. d} \<longleftrightarrow> (b \<le> a \<and> d \<le> c) \<or> a = c \<and> b = d"
+  by (metis eq_iff greaterThanAtMost_empty_iff2 greaterThanAtMost_iff le_cases not_le)
+
+lemma (in order) Iio_Int_singleton: "{..<k} \<inter> {x} = (if x < k then {x} else {})"
+  by auto
+
+lemma (in linorder) Ioc_subset_iff: "{a<..b} \<subseteq> {c<..d} \<longleftrightarrow> (b \<le> a \<or> c \<le> a \<and> b \<le> d)"
+  by (auto simp: subset_eq Ball_def) (metis less_le not_less)
+
 lemma (in order_bot) atLeast_eq_UNIV_iff: "{x..} = UNIV \<longleftrightarrow> x = bot"
 by (auto simp: set_eq_iff intro: le_bot)
 
@@ -587,6 +602,9 @@ by auto
 
 lemma Int_atMost[simp]: "{..a} \<inter> {..b} = {.. min a b}"
   by (auto simp: min_def)
+
+lemma Ioc_disjoint: "{a<..b} \<inter> {c<..d} = {} \<longleftrightarrow> b \<le> a \<or> d \<le> c \<or> b \<le> c \<or> d \<le> a"
+  using assms by auto
 
 end
 

@@ -8,40 +8,10 @@ header {* Measure spaces and their properties *}
 
 theory Measure_Space
 imports
-  Measurable
-  "~~/src/HOL/Multivariate_Analysis/Extended_Real_Limits"
+  Measurable Multivariate_Analysis
 begin
 
-lemma sums_def2:
-  "f sums x \<longleftrightarrow> (\<lambda>n. (\<Sum>i\<le>n. f i)) ----> x"
-  unfolding sums_def
-  apply (subst LIMSEQ_Suc_iff[symmetric])
-  unfolding lessThan_Suc_atMost ..
-
 subsection "Relate extended reals and the indicator function"
-
-lemma ereal_indicator: "ereal (indicator A x) = indicator A x"
-  by (auto simp: indicator_def one_ereal_def)
-
-lemma ereal_mult_indicator: "ereal (x * indicator A y) = ereal x * indicator A y"
-  by (simp split: split_indicator)
-
-lemma ereal_indicator_pos[simp,intro]: "0 \<le> (indicator A x ::ereal)"
-  unfolding indicator_def by auto
-
-lemma LIMSEQ_indicator_UN:
-  "(\<lambda>k. indicator (\<Union> i<k. A i) x) ----> (indicator (\<Union>i. A i) x :: real)"
-proof cases
-  assume "\<exists>i. x \<in> A i" then guess i .. note i = this
-  then have *: "\<And>n. (indicator (\<Union> i<n + Suc i. A i) x :: real) = 1"
-    "(indicator (\<Union> i. A i) x :: real) = 1" by (auto simp: indicator_def)
-  show ?thesis
-    apply (rule LIMSEQ_offset[of _ "Suc i"]) unfolding * by auto
-qed (auto simp: indicator_def)
-
-lemma indicator_add:
-  "A \<inter> B = {} \<Longrightarrow> (indicator A x::_::monoid_add) + indicator B x = indicator (A \<union> B) x"
-  unfolding indicator_def by auto
 
 lemma suminf_cmult_indicator:
   fixes f :: "nat \<Rightarrow> ereal"
@@ -319,19 +289,19 @@ proof safe
 next
   assume cont: "\<forall>A. range A \<subseteq> M \<longrightarrow> incseq A \<longrightarrow> (\<Union>i. A i) \<in> M \<longrightarrow> (\<lambda>i. f (A i)) ----> f (\<Union>i. A i)"
   fix A :: "nat \<Rightarrow> 'a set" assume A: "range A \<subseteq> M" "disjoint_family A" "(\<Union>i. A i) \<in> M"
-  have *: "(\<Union>n. (\<Union>i\<le>n. A i)) = (\<Union>i. A i)" by auto
-  have "(\<lambda>n. f (\<Union>i\<le>n. A i)) ----> f (\<Union>i. A i)"
+  have *: "(\<Union>n. (\<Union>i<n. A i)) = (\<Union>i. A i)" by auto
+  have "(\<lambda>n. f (\<Union>i<n. A i)) ----> f (\<Union>i. A i)"
   proof (unfold *[symmetric], intro cont[rule_format])
-    show "range (\<lambda>i. \<Union> i\<le>i. A i) \<subseteq> M" "(\<Union>i. \<Union> i\<le>i. A i) \<in> M"
+    show "range (\<lambda>i. \<Union> i<i. A i) \<subseteq> M" "(\<Union>i. \<Union> i<i. A i) \<in> M"
       using A * by auto
   qed (force intro!: incseq_SucI)
-  moreover have "\<And>n. f (\<Union>i\<le>n. A i) = (\<Sum>i\<le>n. f (A i))"
+  moreover have "\<And>n. f (\<Union>i<n. A i) = (\<Sum>i<n. f (A i))"
     using A
     by (intro additive_sum[OF f, of _ A, symmetric])
        (auto intro: disjoint_family_on_mono[where B=UNIV])
   ultimately
   have "(\<lambda>i. f (A i)) sums f (\<Union>i. A i)"
-    unfolding sums_def2 by simp
+    unfolding sums_def by simp
   from sums_unique[OF this]
   show "(\<Sum>i. f (A i)) = f (\<Union>i. A i)" by simp
 qed
@@ -460,6 +430,10 @@ lemma suminf_emeasure:
   "range A \<subseteq> sets M \<Longrightarrow> disjoint_family A \<Longrightarrow> (\<Sum>i. emeasure M (A i)) = emeasure M (\<Union>i. A i)"
   using sets.countable_UN[of A UNIV M] emeasure_countably_additive[of M]
   by (simp add: countably_additive_def)
+
+lemma sums_emeasure:
+  "disjoint_family F \<Longrightarrow> (\<And>i. F i \<in> sets M) \<Longrightarrow> (\<lambda>i. emeasure M (F i)) sums emeasure M (\<Union>i. F i)"
+  unfolding sums_iff by (intro conjI summable_ereal_pos emeasure_nonneg suminf_emeasure) auto
 
 lemma emeasure_additive: "additive (sets M) (emeasure M)"
   by (metis sets.countably_additive_additive emeasure_positive emeasure_countably_additive)
@@ -620,6 +594,10 @@ proof -
   have "{x} \<inter> A = {}" using `x \<notin> A` by auto
   from plus_emeasure[OF sets this] show ?thesis by simp
 qed
+
+lemma emeasure_insert_ne:
+  "A \<noteq> {} \<Longrightarrow> {x} \<in> sets M \<Longrightarrow> A \<in> sets M \<Longrightarrow> x \<notin> A \<Longrightarrow> emeasure M (insert x A) = emeasure M {x} + emeasure M A"
+  by (rule emeasure_insert) 
 
 lemma emeasure_eq_setsum_singleton:
   assumes "finite S" "\<And>x. x \<in> S \<Longrightarrow> {x} \<in> sets M"
@@ -1067,8 +1045,34 @@ subsection {* @{text \<sigma>}-finite Measures *}
 
 locale sigma_finite_measure =
   fixes M :: "'a measure"
-  assumes sigma_finite: "\<exists>A::nat \<Rightarrow> 'a set.
-    range A \<subseteq> sets M \<and> (\<Union>i. A i) = space M \<and> (\<forall>i. emeasure M (A i) \<noteq> \<infinity>)"
+  assumes sigma_finite_countable:
+    "\<exists>A::'a set set. countable A \<and> A \<subseteq> sets M \<and> (\<Union>A) = space M \<and> (\<forall>a\<in>A. emeasure M a \<noteq> \<infinity>)"
+
+lemma (in sigma_finite_measure) sigma_finite:
+  obtains A :: "nat \<Rightarrow> 'a set"
+  where "range A \<subseteq> sets M" "(\<Union>i. A i) = space M" "\<And>i. emeasure M (A i) \<noteq> \<infinity>"
+proof -
+  obtain A :: "'a set set" where
+    [simp]: "countable A" and
+    A: "A \<subseteq> sets M" "(\<Union>A) = space M" "\<And>a. a \<in> A \<Longrightarrow> emeasure M a \<noteq> \<infinity>"
+    using sigma_finite_countable by metis
+  show thesis
+  proof cases
+    assume "A = {}" with `(\<Union>A) = space M` show thesis
+      by (intro that[of "\<lambda>_. {}"]) auto
+  next
+    assume "A \<noteq> {}" 
+    show thesis
+    proof
+      show "range (from_nat_into A) \<subseteq> sets M"
+        using `A \<noteq> {}` A by auto
+      have "(\<Union>i. from_nat_into A i) = \<Union>A"
+        using range_from_nat_into[OF `A \<noteq> {}` `countable A`] by auto
+      with A show "(\<Union>i. from_nat_into A i) = space M"
+        by auto
+    qed (intro A from_nat_into `A \<noteq> {}`)
+  qed
+qed
 
 lemma (in sigma_finite_measure) sigma_finite_disjoint:
   obtains A :: "nat \<Rightarrow> 'a set"
@@ -1164,6 +1168,16 @@ lemma distr_id[simp]: "distr N N (\<lambda>x. x) = N"
 lemma measure_distr:
   "f \<in> measurable M N \<Longrightarrow> S \<in> sets N \<Longrightarrow> measure (distr M N f) S = measure M (f -` S \<inter> space M)"
   by (simp add: emeasure_distr measure_def)
+
+lemma distr_cong_AE:
+  assumes 1: "M = K" "sets N = sets L" and 
+    2: "(AE x in M. f x = g x)" and "f \<in> measurable M N" and "g \<in> measurable K L"
+  shows "distr M N f = distr K L g"
+proof (rule measure_eqI)
+  fix A assume "A \<in> sets (distr M N f)"
+  with assms show "emeasure (distr M N f) A = emeasure (distr K L g) A"
+    by (auto simp add: emeasure_distr intro!: emeasure_eq_AE measurable_sets)
+qed (insert 1, simp)
 
 lemma AE_distrD:
   assumes f: "f \<in> measurable M M'"
@@ -1341,12 +1355,8 @@ locale finite_measure = sigma_finite_measure M for M +
   assumes finite_emeasure_space: "emeasure M (space M) \<noteq> \<infinity>"
 
 lemma finite_measureI[Pure.intro!]:
-  assumes *: "emeasure M (space M) \<noteq> \<infinity>"
-  shows "finite_measure M"
-proof
-  show "\<exists>A. range A \<subseteq> sets M \<and> (\<Union>i. A i) = space M \<and> (\<forall>i. emeasure M (A i) \<noteq> \<infinity>)"
-    using * by (auto intro!: exI[of _ "\<lambda>_. space M"])
-qed fact
+  "emeasure M (space M) \<noteq> \<infinity> \<Longrightarrow> finite_measure M"
+  proof qed (auto intro!: exI[of _ "{space M}"])
 
 lemma (in finite_measure) emeasure_finite[simp, intro]: "emeasure M A \<noteq> \<infinity>"
   using finite_emeasure_space emeasure_space[of M A] by auto
@@ -1654,16 +1664,7 @@ lemma AE_count_space: "(AE x in count_space A. P x) \<longleftrightarrow> (\<for
 lemma sigma_finite_measure_count_space_countable:
   assumes A: "countable A"
   shows "sigma_finite_measure (count_space A)"
-proof
-  show "\<exists>F::nat \<Rightarrow> 'a set. range F \<subseteq> sets (count_space A) \<and> (\<Union>i. F i) = space (count_space A) \<and>
-     (\<forall>i. emeasure (count_space A) (F i) \<noteq> \<infinity>)"
-     using A
-     apply (intro exI[of _ "\<lambda>i. {from_nat_into A i} \<inter> A"])
-     apply auto
-     apply (rule_tac x="to_nat_on A x" in exI)
-     apply simp
-     done
-qed
+  proof qed (auto intro!: exI[of _ "(\<lambda>a. {a}) ` A"] simp: A)
 
 lemma sigma_finite_measure_count_space:
   fixes A :: "'a::countable set" shows "sigma_finite_measure (count_space A)"
