@@ -367,7 +367,7 @@ fun naive_bayes (tfreq, sfreq, dffreq) num_facts max_suggs visible_facts goal_fe
     ret (Integer.max 0 (num_facts - max_suggs)) []
   end
 
-val number_of_nearest_neighbors = 1 (* FUDGE *)
+val initial_number_of_nearest_neighbors = 1
 
 fun k_nearest_neighbors dffreq num_facts num_feats depss featss max_suggs visible_facts goal_feats =
   let
@@ -424,7 +424,7 @@ fun k_nearest_neighbors dffreq num_facts num_feats depss featss max_suggs visibl
         end
 
     fun while1 () =
-      if !k = number_of_nearest_neighbors then () else (do_k (!k); k := !k + 1; while1 ())
+      if !k = initial_number_of_nearest_neighbors then () else (do_k (!k); k := !k + 1; while1 ())
       handle EXIT () => ()
 
     fun while2 () =
@@ -478,7 +478,7 @@ fun external_tool tool max_suggs learns goal_feats =
   end
 
 val k_nearest_neighbors_ext =
-  external_tool ("newknn/knn" ^ " " ^ string_of_int number_of_nearest_neighbors)
+  external_tool ("newknn/knn" ^ " " ^ string_of_int initial_number_of_nearest_neighbors)
 val naive_bayes_ext = external_tool "predict/nbayes"
 
 fun query_external ctxt algorithm max_suggs learns goal_feats =
@@ -583,16 +583,19 @@ fun graph_info G =
   string_of_int (fold (Integer.add o length o snd) (Graph.dest G) 0) ^ " edge(s), " ^
   string_of_int (length (Graph.maximals G)) ^ " maximal"
 
+type ffds = string vector * int list vector * int list vector
+type freqs = int vector * int Inttab.table vector * int vector
+
 type mash_state =
   {access_G : (proof_kind * string list * string list) Graph.T,
    xtabs : xtab * xtab,
-   ffds : string vector * int list vector * int list vector,
-   freqs : int vector * int Inttab.table vector * int vector,
+   ffds : ffds,
+   freqs : freqs,
    dirty_facts : string list option}
 
 val empty_xtabs = (empty_xtab, empty_xtab)
-val empty_ffds = (Vector.fromList [], Vector.fromList [], Vector.fromList [])
-val empty_freqs = (Vector.fromList [], Vector.fromList [], Vector.fromList [])
+val empty_ffds = (Vector.fromList [], Vector.fromList [], Vector.fromList []) : ffds
+val empty_freqs = (Vector.fromList [], Vector.fromList [], Vector.fromList []) : freqs
 
 val empty_state =
   {access_G = Graph.empty,
@@ -601,8 +604,8 @@ val empty_state =
    freqs = empty_freqs,
    dirty_facts = SOME []} : mash_state
 
-fun recompute_ffds_freqs_from_learns learns ((num_facts, fact_tab), (num_feats, feat_tab))
-    num_facts0 (fact_names0, featss0, depss0) freqs0 =
+fun recompute_ffds_freqs_from_learns (learns : (string * string list * string list) list)
+    ((num_facts, fact_tab), (num_feats, feat_tab)) num_facts0 (fact_names0, featss0, depss0) freqs0 =
   let
     val fact_names = Vector.concat [fact_names0, Vector.fromList (map #1 learns)]
     val featss = Vector.concat [featss0,
