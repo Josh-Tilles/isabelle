@@ -376,7 +376,7 @@ class Rendering private(val snapshot: Document.Snapshot, val options: Options)
                 case Position.Def_Line_File(line, name) =>
                   val offset = Position.Def_Offset.unapply(props) getOrElse 0
                   PIDE.editor.hyperlink_source_file(name, line, offset)
-                case Position.Def_Id_Offset(id, offset) =>
+                case Position.Def_Id_Offset0(id, offset) =>
                   PIDE.editor.hyperlink_command_id(snapshot, id, offset)
                 case _ => None
               }
@@ -388,7 +388,7 @@ class Rendering private(val snapshot: Document.Snapshot, val options: Options)
                 case Position.Line_File(line, name) =>
                   val offset = Position.Offset.unapply(props) getOrElse 0
                   PIDE.editor.hyperlink_source_file(name, line, offset)
-                case Position.Id_Offset(id, offset) =>
+                case Position.Id_Offset0(id, offset) =>
                   PIDE.editor.hyperlink_command_id(snapshot, id, offset)
                 case _ => None
               }

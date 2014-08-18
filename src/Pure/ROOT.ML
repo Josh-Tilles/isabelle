@@ -234,8 +234,10 @@ use "Isar/keyword.ML";
 use "Isar/parse.ML";
 use "Isar/args.ML";
 
-(*theory sources*)
+(*theory specifications*)
+use "Isar/local_theory.ML";
 use "Thy/thy_header.ML";
+use "PIDE/command_span.ML";
 use "Thy/thy_syntax.ML";
 use "Thy/html.ML";
 use "Thy/latex.ML";
@@ -263,7 +265,6 @@ use "Isar/obtain.ML";
 
 (*local theories and targets*)
 use "Isar/locale.ML";
-use "Isar/local_theory.ML";
 use "Isar/generic_target.ML";
 use "Isar/overloading.ML";
 use "axclass.ML";
@@ -309,7 +310,6 @@ use "Thy/thy_info.ML";
 use "PIDE/document.ML";
 
 (*theory and proof operations*)
-use "Thy/thm_deps.ML";
 use "Isar/isar_cmd.ML";
 
 use "subgoal.ML";

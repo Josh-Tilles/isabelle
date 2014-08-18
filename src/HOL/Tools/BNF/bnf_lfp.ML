@@ -168,7 +168,7 @@ fun construct_lfp mixfixes map_bs rel_bs set_bss0 bs resBs (resDs, Dss) bnfs _ l
     val map_ids = map map_id_of_bnf bnfs;
     val set_mapss = map set_map_of_bnf bnfs;
     val rel_mono_strongs = map rel_mono_strong_of_bnf bnfs;
-    val rel_OOs = map rel_OO_of_bnf bnfs;
+    val le_rel_OOs = map le_rel_OO_of_bnf bnfs;
 
     val timer = time (timer "Extracted terms & thms");
 
@@ -1197,7 +1197,7 @@ fun construct_lfp mixfixes map_bs rel_bs set_bss0 bs resBs (resDs, Dss) bnfs _ l
     val (ctor_rec_unique_thms, ctor_rec_unique_thm) =
       `split_conj_thm (split_conj_prems n
         (mor_UNIV_thm RS iffD2 RS rec_unique_mor_thm)
-        |> Local_Defs.unfold lthy (@{thms convol_o comp_id id_comp comp_assoc fst_convol} @
+        |> unfold_thms lthy (@{thms convol_o comp_id id_comp comp_assoc fst_convol} @
            map_id0s @ sym_map_comps) OF replicate n @{thm arg_cong2[of _ _ _ _ convol, OF refl]});
 
     val timer = time (timer "rec definitions & thms");
@@ -1691,7 +1691,7 @@ fun construct_lfp mixfixes map_bs rel_bs set_bss0 bs resBs (resDs, Dss) bnfs _ l
           in
             Goal.prove_sorry lthy [] [] goal
               (fn {context = ctxt, prems = _} => mk_le_rel_OO_tac ctxt m induct ctor_nchotomy_thms
-                ctor_Irel_thms rel_mono_strongs rel_OOs)
+                ctor_Irel_thms rel_mono_strongs le_rel_OOs)
             |> Thm.close_derivation
             |> singleton (Proof_Context.export names_lthy lthy)
           end;
@@ -1814,7 +1814,8 @@ fun construct_lfp mixfixes map_bs rel_bs set_bss0 bs resBs (resDs, Dss) bnfs _ l
        ctor_injects = ctor_inject_thms, dtor_injects = dtor_inject_thms,
        xtor_map_thms = ctor_Imap_thms, xtor_set_thmss = ctor_Iset_thmss',
        xtor_rel_thms = ctor_Irel_thms, xtor_co_rec_thms = ctor_rec_thms,
-       xtor_co_rec_o_map_thms = ctor_rec_o_Imap_thms, rel_xtor_co_induct_thm = Irel_induct_thm}
+       xtor_co_rec_o_map_thms = ctor_rec_o_Imap_thms, rel_xtor_co_induct_thm = Irel_induct_thm,
+       dtor_set_induct_thms = []}
       |> morph_fp_result (substitute_noted_thm noted);
   in
     timer; (fp_res, lthy')
