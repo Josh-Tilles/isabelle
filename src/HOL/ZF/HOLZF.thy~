@@ -53,7 +53,7 @@ thm Power[unfolded subset_def]
 
 theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
   apply (auto simp add: Sep_def Empty)
-  apply (auto simp add: Replace)
+  apply (auto simp add: Let_def Replace)
   apply (rule someI2)
   apply auto
   apply (rule someI2)
@@ -64,39 +64,19 @@ lemma "Elem b (Sep A p)"
   apply (split split_if)
   apply (rule conjI)
   apply auto oops
-lemma "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
-proof -
-  fix x and a
-  assume 3: "Elem x A" and 4: "p x"
-     and 5: "Elem a A" and 6: "\<not> (p a)"
-  have 1: "Elem (SOME x. Elem x A \<and> p x) A"
-    apply (rule someI2)
-      apply (rule conjI)
-        using `Elem x A` apply assumption
-      using `p x` apply assumption
-    apply (erule conjE)
-    apply assumption
-    done
-  have 2: "p (SOME x. Elem x A \<and> p x)"
-    apply (rule someI2)
-      apply (rule conjI)
-        using `Elem x A` apply assumption
-      using `p x` apply assumption
-    apply (erule conjE)
-    apply assumption
-    done
- oops
 
-lemma
-  fixes p q :: "'a \<Rightarrow> bool"
-  assumes "\<exists>x. q x" and "q x \<Longrightarrow> p x"
-  shows "p (\<some> y. q y)"
-  oops
 
 (*
 CRUCIAL
 *)
 thm Replace
+
+lemma 
+  assumes Q_asm: "Q"
+  and P_if_asm: "P (if Q then x else y)"
+  shows "P x"
+  oops
+
 
 theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
   unfolding Sep_def
@@ -132,44 +112,23 @@ thm split_if[where ?P="Elem b" and ?Q="\<forall> x. Elem x A \<longrightarrow> \
      Elem b (let z = SOME x. Elem x A \<and> p x in Let (\<lambda>y. if p y then y else z) (Replace A)))"
 apply (split split_if)
 oops
-
+declare [[simp_trace]]
+declare [[simp_trace_depth_limit=4]]
 theorem Sep: "Elem b (Sep A p) \<longleftrightarrow> (Elem b A \<and> p b)"
 proof (rule iffI)
   assume left_premise: "Elem b (Sep A p)"
   show "Elem b A \<and> p b"
   proof -(* (rule conjI) *)
     from `Elem b (Sep A p)` 
-     have unfolded_premise: "Elem b (if \<forall>x. Elem x A \<longrightarrow> \<not> p x then Empty else 
+     have left_premise_expanded: "Elem b (if \<forall>x. Elem x A \<longrightarrow> \<not> p x then Empty else 
                                           let z = \<some> x. Elem x A \<and> p x in let f = (\<lambda> y. (if p y then y else z)) in Replace A f)"
      by (simp only: Sep_def)
-    have "\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))"
-    proof (rule notI)
+    moreover from this have "\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))"
+    proof -
       assume "\<forall>x. Elem x A \<longrightarrow> \<not>(p x)"
-      with unfolded_premise (*have "Elem b
+      with left_premise_expanded have "Elem b
      (if True then Empty
-      else let z = SOME x. Elem x A \<and> p x in Let (\<lambda>y. if p y then y else z) (Replace A))" by simp (* @TODO Cf. "congruence rule": Q \<equiv> ?c \<Longrightarrow> if Q then x else y \<equiv> if ?c then x else y *)
-
-      hence*) have "Elem b Empty" by simp
-      with Empty show False by (simp only: HOL.simp_thms(27))
-    qed
-    with unfolded_premise
-     have "Elem b (let z = \<some> x. Elem x A \<and> p x in let f = (\<lambda> y. (if p y then y else z)) in Replace A f)"
-     by (simp only: if_False)
-    hence "Elem b (let z = \<some> x. Elem x A \<and> p x in Replace A (\<lambda> y. if p y then y else z))" by (unfold Let_def)
-    hence simplified_premise: "Elem b (Replace A (\<lambda> y. if p y then y else \<some> x. Elem x A \<and> p x))" by (unfold Let_def)
-    hence "\<exists> i. Elem i A \<and> b = ((\<lambda> y. if p y then y else \<some> x. Elem x A \<and> p x) i)" by (simp only: Replace)
-    hence "\<exists> i. Elem i A \<and> b = (if p i then i else \<some> x. Elem x A \<and> p x)" .
-
-obtain w where
-    
-    from `\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))`
-     obtain z where "Elem z A" and "p z"
-     by blast
-    
-    from `\<not>(\<forall>x. Elem x A \<longrightarrow> \<not>(p x))` have tmpex: "\<exists>x. Elem x A \<and> p x" by blast
-    thm someI2
-    find_theorems "(\<some>_. _) = _"
-thm HOL.simp_thms(27)
+      else let z = SOME x. Elem x A \<and> p x in Let (\<lambda>y. if p y then y else z) (Replace A))" apply simp
  have "Elem b Empty"
     hence "Elem b (let z = \<some> x. Elem x A \<and> p x in
                     let f = \<lambda> y. if p y then y else z in
@@ -189,38 +148,8 @@ thm HOL.simp_thms(27)
       fix t
       assume "Elem t A" and "b = ?f t"
       from `b = ?f t` have "b = (let z = SOME x. Elem x A \<and> p x in if p t then t else z)" by (unfold Let_def)
-      hence b_eq: "b = (if p t then t else (\<some> x. Elem x A \<and> p x))" by (unfold Let_def)
-      hence "p b"
-      proof (cases "p t")
-        assume "p t"
-        hence "b = t" using b_eq by simp (* @TODO which? *)
-        thus "p b" by (simp only: `p t`)
-      next
-        assume "\<not>(p t)"
-        hence b_eq_some: "b = (\<some> x. Elem x A \<and> p x)" using b_eq by simp (* @TODO which? *)
-        have "p (\<some> x. Elem x A \<and> p x)"
-          apply (rule someI2)
-          defer
-          apply (erule conjE)
-          apply assumption
-        proof -
-          show "Elem t A \<and> p t" apply (rule conjI)
- sorry
-        thus "p b" using b_eq_some by simp (* @TODO which? *)
-      qed
-        thm some_equality
-        show "b = (if p t then t else SOME x. Elem x A \<and> p x) \<Longrightarrow> p t \<Longrightarrow> p b" by simp
-
-      proof -
-        assume "b = (SOME x. Elem x A \<and> p x)"
-           and "\<not>(p t)"
-        from 
-        show "p (SOME x. Elem x A \<and> p x)"
-          using `b = (SOME x. Elem x A \<and> p x)` apply simp
-          apply (simp only: `b = (SOME x. Elem x A \<and> p x)`)
-        apply (subst `b = (SOME x. Elem x A \<and> p x)`)
-        apply (rule someI)
-thm someI
+      hence "b = (if p t then t else (\<some> x. Elem x A \<and> p x))" by (unfold Let_def)
+      hence "p t"
         apply (simp only: split_if)
         apply (erule conjE)
       
