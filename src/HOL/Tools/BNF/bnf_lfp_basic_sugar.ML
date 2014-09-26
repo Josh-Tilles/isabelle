@@ -76,19 +76,22 @@ fun fp_sugar_of_sum ctxt =
      absT_info = trivial_absT_info_of fpT,
      fp_nesting_bnfs = [],
      live_nesting_bnfs = [],
-     ctrXs_Tss = ctr_Tss,
-     ctr_defs = @{thms Inl_def_alt Inr_def_alt},
-     ctr_sugar = the_frozen_ctr_sugar_of ctxt fpT_name,
-     co_rec = Const (@{const_name case_sum}, map (fn Ts => (Ts ---> C)) ctr_Tss ---> fpT --> C),
-     co_rec_def = @{thm ctor_rec_def_alt[of "case_sum f1 f2" for f1 f2]},
-     maps = @{thms map_sum.simps},
-     common_co_inducts = @{thms sum.induct},
-     co_inducts = @{thms sum.induct},
-     co_rec_thms = @{thms sum.case},
-     co_rec_discs = [],
-     co_rec_selss = [],
-     rel_injects = @{thms rel_sum_simps(1,4)},
-     rel_distincts = @{thms rel_sum_simps(2,3)[THEN eq_False[THEN iffD1]]}}
+     fp_ctr_sugar =
+       {ctrXs_Tss = ctr_Tss,
+        ctr_defs = @{thms Inl_def_alt Inr_def_alt},
+        ctr_sugar = the_frozen_ctr_sugar_of ctxt fpT_name},
+     fp_bnf_sugar =
+       {map_thms = @{thms map_sum.simps},
+        rel_injects = @{thms rel_sum_simps(1,4)},
+        rel_distincts = @{thms rel_sum_simps(2,3)[THEN eq_False[THEN iffD1]]}},
+     fp_co_induct_sugar =
+       {co_rec = Const (@{const_name case_sum}, map (fn Ts => (Ts ---> C)) ctr_Tss ---> fpT --> C),
+        common_co_inducts = @{thms sum.induct},
+        co_inducts = @{thms sum.induct},
+        co_rec_def = @{thm ctor_rec_def_alt[of "case_sum f1 f2" for f1 f2]},
+        co_rec_thms = @{thms sum.case},
+        co_rec_discs = [],
+        co_rec_selss = []}}
   end;
 
 fun fp_sugar_of_prod ctxt =
@@ -117,19 +120,22 @@ fun fp_sugar_of_prod ctxt =
      absT_info = trivial_absT_info_of fpT,
      fp_nesting_bnfs = [],
      live_nesting_bnfs = [],
-     ctrXs_Tss = [ctr_Ts],
-     ctr_defs = @{thms Pair_def_alt},
-     ctr_sugar = the_frozen_ctr_sugar_of ctxt fpT_name,
-     co_rec = Const (@{const_name case_prod}, (ctr_Ts ---> C) --> fpT --> C),
-     co_rec_def = @{thm ctor_rec_def_alt[of "case_prod f" for f]},
-     maps = @{thms map_prod_simp},
-     common_co_inducts = @{thms prod.induct},
-     co_inducts = @{thms prod.induct},
-     co_rec_thms = @{thms prod.case},
-     co_rec_discs = [],
-     co_rec_selss = [],
-     rel_injects = @{thms rel_prod_apply},
-     rel_distincts = []}
+     fp_ctr_sugar =
+       {ctrXs_Tss = [ctr_Ts],
+        ctr_defs = @{thms Pair_def_alt},
+        ctr_sugar = the_frozen_ctr_sugar_of ctxt fpT_name},
+     fp_bnf_sugar =
+       {map_thms = @{thms map_prod_simp},
+        rel_injects = @{thms rel_prod_apply},
+        rel_distincts = []},
+     fp_co_induct_sugar =
+       {co_rec = Const (@{const_name case_prod}, (ctr_Ts ---> C) --> fpT --> C),
+        common_co_inducts = @{thms prod.induct},
+        co_inducts = @{thms prod.induct},
+        co_rec_def = @{thm ctor_rec_def_alt[of "case_prod f" for f]},
+        co_rec_thms = @{thms prod.case},
+        co_rec_discs = [],
+        co_rec_selss = []}}
   end;
 
 val _ = Theory.setup (map_local_theory (fn lthy =>

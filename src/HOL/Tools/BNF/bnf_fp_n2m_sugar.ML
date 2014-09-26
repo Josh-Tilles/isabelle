@@ -136,7 +136,7 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
     val nn = length fpTs;
     val kks = 0 upto nn - 1;
 
-    fun target_ctr_sugar_of_fp_sugar fpT ({T, ctr_sugar, ...} : fp_sugar) =
+    fun target_ctr_sugar_of_fp_sugar fpT ({T, fp_ctr_sugar = {ctr_sugar, ...}, ...} : fp_sugar) =
       let
         val rho = Vartab.fold (cons o apsnd snd) (Sign.typ_match thy (T, fpT) Vartab.empty) [];
         val phi = Morphism.term_morphism "BNF" (Term.subst_TVars rho);
@@ -144,8 +144,8 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
         morph_ctr_sugar phi ctr_sugar
       end;
 
-    val ctr_defss = map #ctr_defs fp_sugars0;
-    val mapss = map #maps fp_sugars0;
+    val ctr_defss = map (#ctr_defs o #fp_ctr_sugar) fp_sugars0;
+    val mapss = map (#map_thms o #fp_bnf_sugar) fp_sugars0;
     val ctr_sugars = map2 target_ctr_sugar_of_fp_sugar fpTs fp_sugars0;
 
     val ctrss = map #ctrs ctr_sugars;
@@ -292,16 +292,27 @@ fun mutualize_fp_sugars plugins fp mutual_cliques bs fpTs callers callssss fp_su
         val phi = Proof_Context.export_morphism names_lthy no_defs_lthy;
 
         fun mk_target_fp_sugar T X kk pre_bnf absT_info ctrXs_Tss ctr_defs ctr_sugar co_rec
-            co_rec_def maps co_inducts co_rec_thms co_rec_disc_thms co_rec_sel_thmss
-            ({rel_injects, rel_distincts, ...} : fp_sugar) =
+            co_rec_def map_thms co_inducts co_rec_thms co_rec_disc_thms co_rec_sel_thmss
+            ({fp_bnf_sugar = {rel_injects, rel_distincts, ...}, ...} : fp_sugar) =
           {T = T, BT = T (*wrong but harmless*), X = X, fp = fp, fp_res = fp_res, fp_res_index = kk,
            pre_bnf = pre_bnf, absT_info = absT_info, fp_nesting_bnfs = fp_nesting_bnfs,
-           live_nesting_bnfs = live_nesting_bnfs, ctrXs_Tss = ctrXs_Tss, ctr_defs = ctr_defs,
-           ctr_sugar = ctr_sugar, co_rec = co_rec, co_rec_def = co_rec_def, maps = maps,
-           common_co_inducts = common_co_inducts, co_inducts = co_inducts,
-           co_rec_thms = co_rec_thms, co_rec_discs = co_rec_disc_thms,
-           co_rec_selss = co_rec_sel_thmss, rel_injects = rel_injects,
-           rel_distincts = rel_distincts}
+           live_nesting_bnfs = live_nesting_bnfs,
+           fp_ctr_sugar =
+             {ctrXs_Tss = ctrXs_Tss,
+              ctr_defs = ctr_defs,
+              ctr_sugar = ctr_sugar},
+           fp_bnf_sugar =
+             {map_thms = map_thms,
+              rel_injects = rel_injects,
+              rel_distincts = rel_distincts},
+           fp_co_induct_sugar =
+             {co_rec = co_rec,
+              common_co_inducts = common_co_inducts,
+              co_inducts = co_inducts,
+              co_rec_def = co_rec_def, 
+              co_rec_thms = co_rec_thms,
+              co_rec_discs = co_rec_disc_thms,
+              co_rec_selss = co_rec_sel_thmss}}
           |> morph_fp_sugar phi;
 
         val target_fp_sugars =
@@ -451,7 +462,8 @@ fun nested_to_mutual_fps plugins fp actual_bs actual_Ts actual_callers actual_ca
     val perm_callssss0 = permute callssss0;
     val perm_fp_sugars0 = map (the o fp_sugar_of lthy o fst o dest_Type) perm_Ts;
 
-    val perm_callssss = map2 (indexify_callsss o #ctrs o #ctr_sugar) perm_fp_sugars0 perm_callssss0;
+    val perm_callssss =
+      map2 (indexify_callsss o #ctrs o #ctr_sugar o #fp_ctr_sugar) perm_fp_sugars0 perm_callssss0;
 
     val ((perm_fp_sugars, fp_sugar_thms), lthy) =
       if length perm_Tss = 1 then
