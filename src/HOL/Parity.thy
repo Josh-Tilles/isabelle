@@ -19,6 +19,20 @@ lemma two_dvd_Suc_iff:
   "2 dvd Suc n \<longleftrightarrow> \<not> 2 dvd n"
   by (induct n) auto
 
+lemma two_dvd_diff_nat_iff:
+  fixes m n :: nat
+  shows "2 dvd m - n \<longleftrightarrow> m < n \<or> 2 dvd m + n"
+proof (cases "n \<le> m")
+  case True
+  then have "m - n + n * 2 = m + n" by simp
+  moreover have "2 dvd m - n \<longleftrightarrow> 2 dvd m - n + n * 2" by simp
+  ultimately have "2 dvd m - n \<longleftrightarrow> 2 dvd m + n" by (simp only:)
+  then show ?thesis by auto
+next
+  case False
+  then show ?thesis by simp
+qed 
+  
 lemma two_dvd_diff_iff:
   fixes k l :: int
   shows "2 dvd k - l \<longleftrightarrow> 2 dvd k + l"
@@ -183,6 +197,14 @@ abbreviation odd :: "'a \<Rightarrow> bool"
 where
   "odd a \<equiv> \<not> even a"
 
+lemma evenE [elim?]:
+  assumes "even a"
+  obtains b where "a = 2 * b"
+proof -
+  from assms have "2 dvd a" by (simp add: even_def)
+  then show thesis using that ..
+qed
+
 lemma oddE [elim?]:
   assumes "odd a"
   obtains b where "a = 2 * b + 1"
@@ -267,239 +289,95 @@ lemma even_iff_mod_2_eq_zero [presburger]:
 end
 
 
-subsubsection {* Particularities for @{typ nat}/@{typ int} *}
+subsubsection {* Particularities for @{typ nat} and @{typ int} *}
+
+lemma even_Suc [simp, presburger, algebra]:
+  "even (Suc n) = odd n"
+  by (simp add: even_def two_dvd_Suc_iff)
+
+lemma odd_pos: 
+  "odd (n :: nat) \<Longrightarrow> 0 < n"
+  by (auto elim: oddE)
+  
+lemma even_diff_nat [simp]:
+  fixes m n :: nat
+  shows "even (m - n) \<longleftrightarrow> m < n \<or> even (m + n)"
+  by (simp add: even_def two_dvd_diff_nat_iff)
 
 lemma even_int_iff:
   "even (int n) \<longleftrightarrow> even n"
   by (simp add: even_def dvd_int_iff)
 
-declare transfer_morphism_int_nat [transfer add return:
-  even_int_iff
-]
-
-
-subsubsection {* Tools setup *}
-
-lemma [presburger]:
-  "even n \<longleftrightarrow> even (int n)"
-  using even_int_iff [of n] by simp
-
-lemma [presburger]:
-  "even (a + b) \<longleftrightarrow> even a \<and> even b \<or> odd a \<and> odd b"
-  by auto
-
-
-subsubsection {* Legacy cruft *}
-
-
-subsubsection {* Equivalent definitions *}
-
-lemma two_times_even_div_two:
-  "even (x::int) ==> 2 * (x div 2) = x" 
-  by presburger
-
-lemma two_times_odd_div_two_plus_one:
-  "odd (x::int) ==> 2 * (x div 2) + 1 = x"
-  by presburger
-  
-
-subsubsection {* even and odd for nats *}
-
-lemma pos_int_even_equiv_nat_even: "0 \<le> x ==> even x = even (nat x)"
-by (simp add: even_int_iff [symmetric])
-
-lemma even_difference_nat [simp,presburger,algebra]:
-  "even ((x::nat) - y) = (x < y | (even x & even y) | (odd x & odd y))"
-  by presburger
-
-lemma even_Suc [simp ,presburger, algebra]:
-  "even (Suc x) = odd x"
-  by presburger
-
-lemma even_power_nat[simp,presburger,algebra]:
-  "even ((x::nat)^y) = (even x & 0 < y)"
-  by simp
-
-
-subsubsection {* Equivalent definitions *}
-
-lemma even_nat_mod_two_eq_zero: "even (x::nat) ==> x mod (Suc (Suc 0)) = 0"
-by presburger
-
-lemma odd_nat_mod_two_eq_one: "odd (x::nat) ==> x mod (Suc (Suc 0)) = Suc 0"
-by presburger
-
-lemma even_nat_equiv_def: "even (x::nat) = (x mod Suc (Suc 0) = 0)"
-by presburger
-
-lemma odd_nat_equiv_def: "odd (x::nat) = (x mod Suc (Suc 0) = Suc 0)"
-by presburger
-
-lemma even_nat_div_two_times_two: "even (x::nat) ==>
-    Suc (Suc 0) * (x div Suc (Suc 0)) = x" by presburger
-
-lemma odd_nat_div_two_times_two_plus_one: "odd (x::nat) ==>
-    Suc( Suc (Suc 0) * (x div Suc (Suc 0))) = x" by presburger
+lemma even_nat_iff:
+  "0 \<le> k \<Longrightarrow> even (nat k) \<longleftrightarrow> even k"
+  by (simp add: even_int_iff [symmetric])
 
 
 subsubsection {* Parity and powers *}
 
-lemma (in comm_ring_1) neg_power_if:
-  "(- a) ^ n = (if even n then (a ^ n) else - (a ^ n))"
-  by (induct n) simp_all
+context comm_ring_1
+begin
 
-lemma (in comm_ring_1)
-  shows neg_one_even_power [simp]: "even n \<Longrightarrow> (- 1) ^ n = 1"
-  and neg_one_odd_power [simp]: "odd n \<Longrightarrow> (- 1) ^ n = - 1"
-  by (simp_all add: neg_power_if)
+lemma power_minus_even [simp]:
+  "even n \<Longrightarrow> (- a) ^ n = a ^ n"
+  by (auto elim: evenE)
 
-lemma zero_le_even_power: "even n ==>
-    0 <= (x::'a::{linordered_ring,monoid_mult}) ^ n"
-  apply (simp add: even_def)
-  apply (erule dvdE)
-  apply (erule ssubst)
-  unfolding mult.commute [of 2]
-  unfolding power_mult power2_eq_square
-  apply (rule zero_le_square)
-  done
+lemma power_minus_odd [simp]:
+  "odd n \<Longrightarrow> (- a) ^ n = - (a ^ n)"
+  by (auto elim: oddE)
+
+lemma neg_power_if:
+  "(- a) ^ n = (if even n then a ^ n else - (a ^ n))"
+  by simp
+
+lemma neg_one_even_power [simp]:
+  "even n \<Longrightarrow> (- 1) ^ n = 1"
+  by simp
+
+lemma neg_one_odd_power [simp]:
+  "odd n \<Longrightarrow> (- 1) ^ n = - 1"
+  by simp
+
+end  
+
+lemma zero_less_power_nat_eq_numeral [simp]: -- \<open>FIXME move\<close>
+  "0 < (n :: nat) ^ numeral w \<longleftrightarrow> 0 < n \<or> numeral w = (0 :: nat)"
+  by (fact nat_zero_less_power_iff)
+
+context linordered_idom
+begin
+
+lemma power_eq_0_iff' [simp]: -- \<open>FIXME move\<close>
+  "a ^ n = 0 \<longleftrightarrow> a = 0 \<and> n > 0"
+  by (induct n) auto
+
+lemma power2_less_eq_zero_iff [simp]: -- \<open>FIXME move\<close>
+  "a\<^sup>2 \<le> 0 \<longleftrightarrow> a = 0"
+proof (cases "a = 0")
+  case True then show ?thesis by simp
+next
+  case False then have "a < 0 \<or> a > 0" by auto
+  then have "a\<^sup>2 > 0" by auto
+  then have "\<not> a\<^sup>2 \<le> 0" by (simp add: not_le)
+  with False show ?thesis by simp
+qed
+
+lemma zero_le_even_power:
+  "even n \<Longrightarrow> 0 \<le> a ^ n"
+  by (auto elim: evenE)
 
 lemma zero_le_odd_power:
-  "odd n \<Longrightarrow> 0 \<le> (x::'a::{linordered_idom}) ^ n \<longleftrightarrow> 0 \<le> x"
-  by (erule oddE) (auto simp: power_add zero_le_mult_iff mult_2 order_antisym_conv)
+  "odd n \<Longrightarrow> 0 \<le> a ^ n \<longleftrightarrow> 0 \<le> a"
+  by (auto simp add: power_even_eq zero_le_mult_iff elim: oddE)
 
-lemma zero_le_power_eq [presburger]: "(0 <= (x::'a::{linordered_idom}) ^ n) =
-    (even n | (odd n & 0 <= x))"
-  apply auto
-  apply (subst zero_le_odd_power [symmetric])
-  apply assumption+
-  apply (erule zero_le_even_power)
-  done
-
-lemma zero_less_power_eq[presburger]: "(0 < (x::'a::{linordered_idom}) ^ n) =
-    (n = 0 | (even n & x ~= 0) | (odd n & 0 < x))"
-  unfolding order_less_le zero_le_power_eq by auto
-
-lemma power_less_zero_eq[presburger]: "((x::'a::{linordered_idom}) ^ n < 0) =
-    (odd n & x < 0)"
-  apply (subst linorder_not_le [symmetric])+
-  apply (subst zero_le_power_eq)
-  apply auto
-  done
-
-lemma power_le_zero_eq[presburger]: "((x::'a::{linordered_idom}) ^ n <= 0) =
-    (n ~= 0 & ((odd n & x <= 0) | (even n & x = 0)))"
-  apply (subst linorder_not_less [symmetric])+
-  apply (subst zero_less_power_eq)
-  apply auto
-  done
-
-lemma power_even_abs: "even n ==>
-    (abs (x::'a::{linordered_idom}))^n = x^n"
-  apply (subst power_abs [symmetric])
-  apply (simp add: zero_le_even_power)
-  done
-
-lemma power_minus_even [simp]: "even n ==>
-    (- x)^n = (x^n::'a::{comm_ring_1})"
-  apply (subst power_minus)
-  apply simp
-  done
-
-lemma power_minus_odd [simp]: "odd n ==>
-    (- x)^n = - (x^n::'a::{comm_ring_1})"
-  apply (subst power_minus)
-  apply simp
-  done
-
-lemma power_mono_even: fixes x y :: "'a :: {linordered_idom}"
-  assumes "even n" and "\<bar>x\<bar> \<le> \<bar>y\<bar>"
-  shows "x^n \<le> y^n"
-proof -
-  have "0 \<le> \<bar>x\<bar>" by auto
-  with `\<bar>x\<bar> \<le> \<bar>y\<bar>`
-  have "\<bar>x\<bar>^n \<le> \<bar>y\<bar>^n" by (rule power_mono)
-  thus ?thesis unfolding power_even_abs[OF `even n`] .
-qed
-
-lemma odd_pos: "odd (n::nat) \<Longrightarrow> 0 < n" by presburger
-
-lemma power_mono_odd: fixes x y :: "'a :: {linordered_idom}"
-  assumes "odd n" and "x \<le> y"
-  shows "x^n \<le> y^n"
-proof (cases "y < 0")
-  case True with `x \<le> y` have "-y \<le> -x" and "0 \<le> -y" by auto
-  hence "(-y)^n \<le> (-x)^n" by (rule power_mono)
-  thus ?thesis unfolding power_minus_odd[OF `odd n`] by auto
+lemma zero_le_power_iff [presburger]:
+  "0 \<le> a ^ n \<longleftrightarrow> 0 \<le> a \<or> even n"
+proof (cases "even n")
+  case True
+  then obtain k where "n = 2 * k" ..
+  then show ?thesis by simp
 next
   case False
-  show ?thesis
-  proof (cases "x < 0")
-    case True hence "n \<noteq> 0" and "x \<le> 0" using `odd n`[THEN odd_pos] by auto
-    hence "x^n \<le> 0" unfolding power_le_zero_eq using `odd n` by auto
-    moreover
-    from `\<not> y < 0` have "0 \<le> y" by auto
-    hence "0 \<le> y^n" by auto
-    ultimately show ?thesis by auto
-  next
-    case False hence "0 \<le> x" by auto
-    with `x \<le> y` show ?thesis using power_mono by auto
-  qed
-qed
-
-
-subsubsection {* More Even/Odd Results *}
- 
-lemma even_mult_two_ex: "even(n) = (\<exists>m::nat. n = 2*m)" by presburger
-lemma odd_Suc_mult_two_ex: "odd(n) = (\<exists>m. n = Suc (2*m))" by presburger
-
-lemma lemma_even_div2 [simp]: "even (n::nat) ==> (n + 1) div 2 = n div 2" by presburger
-
-lemma lemma_not_even_div2 [simp]: "~even n ==> (n + 1) div 2 = Suc (n div 2)"
-by presburger
-
-lemma even_num_iff: "0 < n ==> even n = (~ even(n - 1 :: nat))"  by presburger
-lemma even_even_mod_4_iff: "even (n::nat) = even (n mod 4)" by presburger
-
-lemma lemma_odd_mod_4_div_2: "n mod 4 = (3::nat) ==> odd((n - 1) div 2)" by presburger
-
-lemma lemma_even_mod_4_div_2: "n mod 4 = (1::nat) ==> even ((n - 1) div 2)"
-  by presburger
-
-text {* Simplify, when the exponent is a numeral *}
-
-lemmas zero_le_power_eq_numeral [simp] =
-  zero_le_power_eq [of _ "numeral w"] for w
-
-lemmas zero_less_power_eq_numeral [simp] =
-  zero_less_power_eq [of _ "numeral w"] for w
-
-lemmas power_le_zero_eq_numeral [simp] =
-  power_le_zero_eq [of _ "numeral w"] for w
-
-lemmas power_less_zero_eq_numeral [simp] =
-  power_less_zero_eq [of _ "numeral w"] for w
-
-lemmas zero_less_power_nat_eq_numeral [simp] =
-  nat_zero_less_power_iff [of _ "numeral w"] for w
-
-lemmas power_eq_0_iff_numeral [simp] =
-  power_eq_0_iff [of _ "numeral w"] for w
-
-lemmas power_even_abs_numeral [simp] =
-  power_even_abs [of "numeral w" _] for w
-
-
-subsubsection {* An Equivalence for @{term [source] "0 \<le> a^n"} *}
-
-lemma zero_le_power_iff[presburger]:
-  "(0 \<le> a^n) = (0 \<le> (a::'a::{linordered_idom}) | even n)"
-proof cases
-  assume even: "even n"
-  then have "2 dvd n" by (simp add: even_def)
-  then obtain k where "n = 2 * k" ..
-  thus ?thesis by (simp add: zero_le_even_power even)
-next
-  assume odd: "odd n"
   then obtain k where "n = 2 * k + 1" ..
   moreover have "a ^ (2 * k) \<le> 0 \<Longrightarrow> a = 0"
     by (induct k) (auto simp add: zero_le_mult_iff mult_le_0_iff)
@@ -507,20 +385,198 @@ next
     by (auto simp add: zero_le_mult_iff zero_le_even_power)
 qed
 
+lemma zero_le_power_eq [presburger]: -- \<open>FIXME weaker version of @{text zero_le_power_iff}\<close>
+  "0 \<le> a ^ n \<longleftrightarrow> even n \<or> odd n \<and> 0 \<le> a"
+  using zero_le_power_iff [of a n] by auto
+
+lemma zero_less_power_eq [presburger]:
+  "0 < a ^ n \<longleftrightarrow> n = 0 \<or> even n \<and> a \<noteq> 0 \<or> odd n \<and> 0 < a"
+proof -
+  have [simp]: "0 = a ^ n \<longleftrightarrow> a = 0 \<and> n > 0"
+    unfolding power_eq_0_iff' [of a n, symmetric] by blast
+  show ?thesis
+  unfolding less_le zero_le_power_iff by auto
+qed
+
+lemma power_less_zero_eq [presburger]:
+  "a ^ n < 0 \<longleftrightarrow> odd n \<and> a < 0"
+  unfolding not_le [symmetric] zero_le_power_eq by auto
+  
+lemma power_le_zero_eq [presburger]:
+  "a ^ n \<le> 0 \<longleftrightarrow> n > 0 \<and> (odd n \<and> a \<le> 0 \<or> even n \<and> a = 0)"
+  unfolding not_less [symmetric] zero_less_power_eq by auto 
+
+lemma power_even_abs:
+  "even n \<Longrightarrow> \<bar>a\<bar> ^ n = a ^ n"
+  using power_abs [of a n] by (simp add: zero_le_even_power)
+
+lemma power_mono_even:
+  assumes "even n" and "\<bar>a\<bar> \<le> \<bar>b\<bar>"
+  shows "a ^ n \<le> b ^ n"
+proof -
+  have "0 \<le> \<bar>a\<bar>" by auto
+  with `\<bar>a\<bar> \<le> \<bar>b\<bar>`
+  have "\<bar>a\<bar> ^ n \<le> \<bar>b\<bar> ^ n" by (rule power_mono)
+  with `even n` show ?thesis by (simp add: power_even_abs)  
+qed
+
+lemma power_mono_odd:
+  assumes "odd n" and "a \<le> b"
+  shows "a ^ n \<le> b ^ n"
+proof (cases "b < 0")
+  case True with `a \<le> b` have "- b \<le> - a" and "0 \<le> - b" by auto
+  hence "(- b) ^ n \<le> (- a) ^ n" by (rule power_mono)
+  with `odd n` show ?thesis by simp
+next
+  case False then have "0 \<le> b" by auto
+  show ?thesis
+  proof (cases "a < 0")
+    case True then have "n \<noteq> 0" and "a \<le> 0" using `odd n` [THEN odd_pos] by auto
+    then have "a ^ n \<le> 0" unfolding power_le_zero_eq using `odd n` by auto
+    moreover
+    from `0 \<le> b` have "0 \<le> b ^ n" by auto
+    ultimately show ?thesis by auto
+  next
+    case False then have "0 \<le> a" by auto
+    with `a \<le> b` show ?thesis using power_mono by auto
+  qed
+qed
+ 
+text {* Simplify, when the exponent is a numeral *}
+
+lemma zero_le_power_eq_numeral [simp]:
+  "0 \<le> a ^ numeral w \<longleftrightarrow> even (numeral w :: nat) \<or> odd (numeral w :: nat) \<and> 0 \<le> a"
+  by (fact zero_le_power_eq)
+
+lemma zero_less_power_eq_numeral [simp]:
+  "0 < a ^ numeral w \<longleftrightarrow> numeral w = (0 :: nat)
+    \<or> even (numeral w :: nat) \<and> a \<noteq> 0 \<or> odd (numeral w :: nat) \<and> 0 < a"
+  by (fact zero_less_power_eq)
+
+lemma power_le_zero_eq_numeral [simp]:
+  "a ^ numeral w \<le> 0 \<longleftrightarrow> (0 :: nat) < numeral w
+    \<and> (odd (numeral w :: nat) \<and> a \<le> 0 \<or> even (numeral w :: nat) \<and> a = 0)"
+  by (fact power_le_zero_eq)
+
+lemma power_less_zero_eq_numeral [simp]:
+  "a ^ numeral w < 0 \<longleftrightarrow> odd (numeral w :: nat) \<and> a < 0"
+  by (fact power_less_zero_eq)
+
+lemma power_eq_0_iff_numeral [simp]:
+  "a ^ numeral w = (0 :: nat) \<longleftrightarrow> a = 0 \<and> numeral w \<noteq> (0 :: nat)"
+  by (fact power_eq_0_iff)
+
+lemma power_even_abs_numeral [simp]:
+  "even (numeral w :: nat) \<Longrightarrow> \<bar>a\<bar> ^ numeral w = a ^ numeral w"
+  by (fact power_even_abs)
+
+end
+
+
+subsubsection {* Tools setup *}
+
+declare transfer_morphism_int_nat [transfer add return:
+  even_int_iff
+]
+
+lemma [presburger]:
+  "even n \<longleftrightarrow> even (int n)"
+  using even_int_iff [of n] by simp
+
+lemma (in semiring_parity) [presburger]:
+  "even (a + b) \<longleftrightarrow> even a \<and> even b \<or> odd a \<and> odd b"
+  by auto
+
+lemma [presburger, algebra]:
+  fixes m n :: nat
+  shows "even (m - n) \<longleftrightarrow> m < n \<or> even m \<and> even n \<or> odd m \<and> odd n"
+  by auto
+
+lemma [presburger, algebra]:
+  fixes m n :: nat
+  shows "even (m ^ n) \<longleftrightarrow> even m \<and> 0 < n"
+  by simp
+
+lemma [presburger]:
+  fixes k :: int
+  shows "(k + 1) div 2 = k div 2 \<longleftrightarrow> even k"
+  by presburger
+
+lemma [presburger]:
+  fixes k :: int
+  shows "(k + 1) div 2 = k div 2 + 1 \<longleftrightarrow> odd k"
+  by presburger
+  
+lemma [presburger]:
+  "Suc n div Suc (Suc 0) = n div Suc (Suc 0) \<longleftrightarrow> even n"
+  by presburger
+
 
 subsubsection {* Miscellaneous *}
 
-lemma [presburger]:"(x + 1) div 2 = x div 2 \<longleftrightarrow> even (x::int)" by presburger
-lemma [presburger]: "(x + 1) div 2 = x div 2 + 1 \<longleftrightarrow> odd (x::int)" by presburger
-lemma even_plus_one_div_two: "even (x::int) ==> (x + 1) div 2 = x div 2"  by presburger
-lemma odd_plus_one_div_two: "odd (x::int) ==> (x + 1) div 2 = x div 2 + 1" by presburger
+lemma even_mult_two_ex:
+  "even(n) = (\<exists>m::nat. n = 2*m)"
+  by presburger
 
-lemma [presburger]: "(Suc x) div Suc (Suc 0) = x div Suc (Suc 0) \<longleftrightarrow> even x" by presburger
-lemma even_nat_plus_one_div_two: "even (x::nat) ==>
-    (Suc x) div Suc (Suc 0) = x div Suc (Suc 0)" by presburger
+lemma odd_Suc_mult_two_ex:
+  "odd(n) = (\<exists>m. n = Suc (2*m))"
+  by presburger
 
-lemma odd_nat_plus_one_div_two: "odd (x::nat) ==>
-    (Suc x) div Suc (Suc 0) = Suc (x div Suc (Suc 0))" by presburger
+lemma even_nat_plus_one_div_two:
+  "even (x::nat) ==> (Suc x) div Suc (Suc 0) = x div Suc (Suc 0)"
+  by presburger
+
+lemma odd_nat_plus_one_div_two:
+  "odd (x::nat) ==> (Suc x) div Suc (Suc 0) = Suc (x div Suc (Suc 0))"
+  by presburger
+
+lemma even_nat_mod_two_eq_zero:
+  "even (x::nat) ==> x mod Suc (Suc 0) = 0"
+  by presburger
+
+lemma odd_nat_mod_two_eq_one:
+  "odd (x::nat) ==> x mod Suc (Suc 0) = Suc 0"
+  by presburger
+
+lemma even_nat_equiv_def:
+  "even (x::nat) = (x mod Suc (Suc 0) = 0)"
+  by presburger
+
+lemma odd_nat_equiv_def:
+  "odd (x::nat) = (x mod Suc (Suc 0) = Suc 0)"
+  by presburger
+
+lemma even_nat_div_two_times_two:
+  "even (x::nat) ==> Suc (Suc 0) * (x div Suc (Suc 0)) = x"
+  by presburger
+
+lemma odd_nat_div_two_times_two_plus_one:
+  "odd (x::nat) ==> Suc (Suc (Suc 0) * (x div Suc (Suc 0))) = x"
+  by presburger
+
+lemma lemma_even_div2 [simp]:
+  "even (n::nat) ==> (n + 1) div 2 = n div 2"
+  by presburger
+
+lemma lemma_odd_div2 [simp]:
+  "odd n ==> (n + 1) div 2 = Suc (n div 2)"
+  by presburger
+
+lemma even_num_iff:
+  "0 < n ==> even n = (odd (n - 1 :: nat))"
+  by presburger
+
+lemma even_even_mod_4_iff:
+  "even (n::nat) = even (n mod 4)"
+  by presburger
+
+lemma lemma_odd_mod_4_div_2:
+  "n mod 4 = (3::nat) ==> odd((n - 1) div 2)"
+  by presburger
+
+lemma lemma_even_mod_4_div_2:
+  "n mod 4 = (1::nat) ==> even ((n - 1) div 2)"
+  by presburger
 
 end
 
