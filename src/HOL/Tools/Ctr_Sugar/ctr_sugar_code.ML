@@ -49,7 +49,7 @@ fun mk_case_certificate thy raw_thms =
 
 fun mk_free_ctr_equations fcT ctrs inject_thms distinct_thms thy =
   let
-    fun mk_fcT_eq (t, u) = Const (@{const_name HOL.equal}, fcT --> fcT --> HOLogic.boolT) $ t $ u;
+    fun mk_fcT_eq (t, u) = Const (@{const_name IHOL.equal}, fcT --> fcT --> HOLogic.boolT) $ t $ u;
     fun true_eq tu = HOLogic.mk_eq (mk_fcT_eq tu, @{term True});
     fun false_eq tu = HOLogic.mk_eq (mk_fcT_eq tu, @{term False});
 
@@ -83,7 +83,7 @@ fun add_equality fcT fcT_name As ctrs inject_thms distinct_thms =
         fun mk_side const_name =
           Const (const_name, fcT --> fcT --> HOLogic.boolT) $ Free ("x", fcT) $ Free ("y", fcT);
         val spec =
-          mk_Trueprop_eq (mk_side @{const_name HOL.equal}, mk_side @{const_name HOL.eq})
+          mk_Trueprop_eq (mk_side @{const_name IHOL.equal}, mk_side @{const_name IHOL.eq})
           |> Syntax.check_term lthy;
         val ((_, (_, raw_def)), lthy') =
           Specification.definition (NONE, (Attrib.empty_binding, spec)) lthy;
