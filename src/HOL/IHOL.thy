@@ -1568,7 +1568,7 @@ structure Coherent = Coherent
   val atomize_exL = @{thm atomize_exL};
   val atomize_conjL = @{thm atomize_conjL};
   val atomize_disjL = @{thm atomize_disjL};
-  val operator_names = [@{const_name HOL.disj}, @{const_name HOL.conj}, @{const_name Ex}];
+  val operator_names = [@{const_name IHOL.disj}, @{const_name IHOL.conj}, @{const_name Ex}];
 );
 *}
 
