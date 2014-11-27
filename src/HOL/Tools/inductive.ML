@@ -95,7 +95,7 @@ struct
 (** theory context references **)
 
 val inductive_forall_def = @{thm induct_forall_def};
-val inductive_conj_name = "HOL.induct_conj";
+val inductive_conj_name = "IHOL.induct_conj";
 val inductive_conj_def = @{thm induct_conj_def};
 val inductive_conj = @{thms induct_conj};
 val inductive_atomize = @{thms induct_atomize};
@@ -258,7 +258,7 @@ fun mk_mono ctxt thm =
   in
     (case concl_of thm of
       Const (@{const_name Pure.eq}, _) $ _ $ _ => eq_to_mono (thm RS meta_eq_to_obj_eq)
-    | _ $ (Const (@{const_name HOL.eq}, _) $ _ $ _) => eq_to_mono thm
+    | _ $ (Const (@{const_name IHOL.eq}, _) $ _ $ _) => eq_to_mono thm
     | _ $ (Const (@{const_name Orderings.less_eq}, _) $ _ $ _) =>
       dest_less_concl (Seq.hd (REPEAT (FIRSTGOAL
         (resolve_tac [@{thm le_funI}, @{thm le_boolI'}])) thm))
@@ -543,7 +543,7 @@ fun prove_eqs quiet_mode cs params intr_ts intrs
 local
 
 (*delete needless equality assumptions*)
-val refl_thin = Goal.prove_global @{theory HOL} [] [] @{prop "!!P. a = a ==> P ==> P"}
+val refl_thin = Goal.prove_global @{theory IHOL} [] [] @{prop "!!P. a = a ==> P ==> P"}
   (fn {context = ctxt, ...} => assume_tac ctxt 1);
 val elim_rls = [asm_rl, FalseE, refl_thin, conjE, exE];
 val elim_tac = REPEAT o eresolve_tac elim_rls;
