@@ -4,7 +4,7 @@
 
 section {* The basis of Higher-Order Logic *}
 
-theory HOL
+theory IHOL
 imports Pure "~~/src/Tools/Code_Generator"
 keywords
   "try" "solve_direct" "quickcheck" "print_coercions" "print_claset"
