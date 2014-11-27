@@ -848,7 +848,7 @@ open Basic_Classical;
 setup {*
   (*prevent substitution on bool*)
   let
-    fun non_bool_eq (@{const_name HOL.eq}, Type (_, [T, _])) = T <> @{typ bool}
+    fun non_bool_eq (@{const_name IHOL.eq}, Type (_, [T, _])) = T <> @{typ bool}
       | non_bool_eq _ = false;
     fun hyp_subst_tac' ctxt =
       SUBGOAL (fn (goal, i) =>
@@ -914,7 +914,7 @@ ML {*
   (
     structure Classical = Classical
     val Trueprop_const = dest_Const @{const Trueprop}
-    val equality_name = @{const_name HOL.eq}
+    val equality_name = @{const_name IHOL.eq}
     val not_name = @{const_name Not}
     val notE = @{thm notE}
     val ccontr = @{thm ccontr}
