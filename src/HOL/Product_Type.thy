@@ -39,7 +39,7 @@ declare case_split [cases type: bool]
 
 lemma
   shows [code]: "IHOL.equal False P \<longleftrightarrow> \<not> P"
-    and [code]: "IHOL.equal True P \<longleftrightarrow> P" 
+    and [code]: "IHOL.equal True P \<longleftrightarrow> P"
     and [code]: "IHOL.equal P False \<longleftrightarrow> \<not> P"
     and [code]: "IHOL.equal P True \<longleftrightarrow> P"
     and [code nbe]: "IHOL.equal P P \<longleftrightarrow> True"
