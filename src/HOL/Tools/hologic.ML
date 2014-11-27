@@ -153,10 +153,10 @@ fun mk_comp (f, g) =
 
 (* bool and set *)
 
-val boolN = "HOL.bool";
+val boolN = "IHOL.bool";
 val boolT = Type (boolN, []);
 
-fun mk_induct_forall T = Const ("HOL.induct_forall", (T --> boolT) --> boolT);
+fun mk_induct_forall T = Const ("IHOL.induct_forall", (T --> boolT) --> boolT);
 
 fun mk_setT T = Type ("Set.set", [T]);
 
@@ -223,8 +223,8 @@ fun conj_elims th =
   let val (th1, th2) = conj_elim th
   in conj_elims th1 @ conj_elims th2 end handle THM _ => [th];
 
-val conj = @{term HOL.conj}
-and disj = @{term HOL.disj}
+val conj = @{term IHOL.conj}
+and disj = @{term IHOL.disj}
 and imp = @{term implies}
 and Not = @{term Not};
 
@@ -233,61 +233,61 @@ and mk_disj (t1, t2) = disj $ t1 $ t2
 and mk_imp (t1, t2) = imp $ t1 $ t2
 and mk_not t = Not $ t;
 
-fun dest_conj (Const ("HOL.conj", _) $ t $ t') = t :: dest_conj t'
+fun dest_conj (Const ("IHOL.conj", _) $ t $ t') = t :: dest_conj t'
   | dest_conj t = [t];
 
 (*Like dest_conj, but flattens conjunctions however nested*)
-fun conjuncts_aux (Const ("HOL.conj", _) $ t $ t') conjs = conjuncts_aux t (conjuncts_aux t' conjs)
+fun conjuncts_aux (Const ("IHOL.conj", _) $ t $ t') conjs = conjuncts_aux t (conjuncts_aux t' conjs)
   | conjuncts_aux t conjs = t::conjs;
 
 fun conjuncts t = conjuncts_aux t [];
 
-fun dest_disj (Const ("HOL.disj", _) $ t $ t') = t :: dest_disj t'
+fun dest_disj (Const ("IHOL.disj", _) $ t $ t') = t :: dest_disj t'
   | dest_disj t = [t];
 
 (*Like dest_disj, but flattens disjunctions however nested*)
-fun disjuncts_aux (Const ("HOL.disj", _) $ t $ t') disjs = disjuncts_aux t (disjuncts_aux t' disjs)
+fun disjuncts_aux (Const ("IHOL.disj", _) $ t $ t') disjs = disjuncts_aux t (disjuncts_aux t' disjs)
   | disjuncts_aux t disjs = t::disjs;
 
 fun disjuncts t = disjuncts_aux t [];
 
-fun dest_imp (Const ("HOL.implies", _) $ A $ B) = (A, B)
+fun dest_imp (Const ("IHOL.implies", _) $ A $ B) = (A, B)
   | dest_imp  t = raise TERM ("dest_imp", [t]);
 
-fun dest_not (Const ("HOL.Not", _) $ t) = t
+fun dest_not (Const ("IHOL.Not", _) $ t) = t
   | dest_not t = raise TERM ("dest_not", [t]);
 
 
 fun conj_conv cv1 cv2 ct =
   (case Thm.term_of ct of
-    Const (@{const_name HOL.conj}, _) $ _ $ _ =>
+    Const (@{const_name IHOL.conj}, _) $ _ $ _ =>
       Conv.combination_conv (Conv.arg_conv cv1) cv2 ct
   | _ => raise CTERM ("conj_conv", [ct]));
 
 
-fun eq_const T = Const (@{const_name HOL.eq}, T --> T --> boolT);
+fun eq_const T = Const (@{const_name IHOL.eq}, T --> T --> boolT);
 
 fun mk_eq (t, u) = eq_const (fastype_of t) $ t $ u;
 
-fun dest_eq (Const (@{const_name HOL.eq}, _) $ lhs $ rhs) = (lhs, rhs)
+fun dest_eq (Const (@{const_name IHOL.eq}, _) $ lhs $ rhs) = (lhs, rhs)
   | dest_eq t = raise TERM ("dest_eq", [t])
 
 fun eq_conv cv1 cv2 ct =
   (case Thm.term_of ct of
-    Const (@{const_name HOL.eq}, _) $ _ $ _ => Conv.combination_conv (Conv.arg_conv cv1) cv2 ct
+    Const (@{const_name IHOL.eq}, _) $ _ $ _ => Conv.combination_conv (Conv.arg_conv cv1) cv2 ct
   | _ => raise CTERM ("eq_conv", [ct]));
 
 
-fun all_const T = Const ("HOL.All", (T --> boolT) --> boolT);
+fun all_const T = Const ("IHOL.All", (T --> boolT) --> boolT);
 fun mk_all (x, T, P) = all_const T $ absfree (x, T) P;
 fun list_all (xs, t) = fold_rev (fn (x, T) => fn P => all_const T $ Abs (x, T, P)) xs t;
 
-fun exists_const T = Const ("HOL.Ex", (T --> boolT) --> boolT);
+fun exists_const T = Const ("IHOL.Ex", (T --> boolT) --> boolT);
 fun mk_exists (x, T, P) = exists_const T $ absfree (x, T) P;
 
 fun choice_const T = Const("Hilbert_Choice.Eps", (T --> boolT) --> T);
 
-val class_equal = "HOL.equal";
+val class_equal = "IHOL.equal";
 
 
 (* binary operations and relations *)
