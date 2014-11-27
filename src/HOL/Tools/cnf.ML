@@ -96,17 +96,17 @@ val cnftac_eq_imp        = @{lemma "[| P = Q; P |] ==> Q" by auto};
 
 fun is_atom (Const (@{const_name False}, _)) = false
   | is_atom (Const (@{const_name True}, _)) = false
-  | is_atom (Const (@{const_name HOL.conj}, _) $ _ $ _) = false
-  | is_atom (Const (@{const_name HOL.disj}, _) $ _ $ _) = false
-  | is_atom (Const (@{const_name HOL.implies}, _) $ _ $ _) = false
-  | is_atom (Const (@{const_name HOL.eq}, Type ("fun", @{typ bool} :: _)) $ _ $ _) = false
+  | is_atom (Const (@{const_name IHOL.conj}, _) $ _ $ _) = false
+  | is_atom (Const (@{const_name IHOL.disj}, _) $ _ $ _) = false
+  | is_atom (Const (@{const_name IHOL.implies}, _) $ _ $ _) = false
+  | is_atom (Const (@{const_name IHOL.eq}, Type ("fun", @{typ bool} :: _)) $ _ $ _) = false
   | is_atom (Const (@{const_name Not}, _) $ _) = false
   | is_atom _ = true;
 
 fun is_literal (Const (@{const_name Not}, _) $ x) = is_atom x
   | is_literal x = is_atom x;
 
-fun is_clause (Const (@{const_name HOL.disj}, _) $ x $ y) = is_clause x andalso is_clause y
+fun is_clause (Const (@{const_name IHOL.disj}, _) $ x $ y) = is_clause x andalso is_clause y
   | is_clause x = is_literal x;
 
 (* ------------------------------------------------------------------------- *)
@@ -177,28 +177,28 @@ fun inst_thm thy ts thm =
 (*      eliminated (possibly causing an exponential blowup)                  *)
 (* ------------------------------------------------------------------------- *)
 
-fun make_nnf_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
+fun make_nnf_thm thy (Const (@{const_name IHOL.conj}, _) $ x $ y) =
       let
         val thm1 = make_nnf_thm thy x
         val thm2 = make_nnf_thm thy y
       in
         conj_cong OF [thm1, thm2]
       end
-  | make_nnf_thm thy (Const (@{const_name HOL.disj}, _) $ x $ y) =
+  | make_nnf_thm thy (Const (@{const_name IHOL.disj}, _) $ x $ y) =
       let
         val thm1 = make_nnf_thm thy x
         val thm2 = make_nnf_thm thy y
       in
         disj_cong OF [thm1, thm2]
       end
-  | make_nnf_thm thy (Const (@{const_name HOL.implies}, _) $ x $ y) =
+  | make_nnf_thm thy (Const (@{const_name IHOL.implies}, _) $ x $ y) =
       let
         val thm1 = make_nnf_thm thy (HOLogic.Not $ x)
         val thm2 = make_nnf_thm thy y
       in
         make_nnf_imp OF [thm1, thm2]
       end
-  | make_nnf_thm thy (Const (@{const_name HOL.eq}, Type ("fun", @{typ bool} :: _)) $ x $ y) =
+  | make_nnf_thm thy (Const (@{const_name IHOL.eq}, Type ("fun", @{typ bool} :: _)) $ x $ y) =
       let
         val thm1 = make_nnf_thm thy x
         val thm2 = make_nnf_thm thy (HOLogic.Not $ x)
@@ -211,14 +211,14 @@ fun make_nnf_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
       make_nnf_not_false
   | make_nnf_thm _ (Const (@{const_name Not}, _) $ Const (@{const_name True}, _)) =
       make_nnf_not_true
-  | make_nnf_thm thy (Const (@{const_name Not}, _) $ (Const (@{const_name HOL.conj}, _) $ x $ y)) =
+  | make_nnf_thm thy (Const (@{const_name Not}, _) $ (Const (@{const_name IHOL.conj}, _) $ x $ y)) =
       let
         val thm1 = make_nnf_thm thy (HOLogic.Not $ x)
         val thm2 = make_nnf_thm thy (HOLogic.Not $ y)
       in
         make_nnf_not_conj OF [thm1, thm2]
       end
-  | make_nnf_thm thy (Const (@{const_name Not}, _) $ (Const (@{const_name HOL.disj}, _) $ x $ y)) =
+  | make_nnf_thm thy (Const (@{const_name Not}, _) $ (Const (@{const_name IHOL.disj}, _) $ x $ y)) =
       let
         val thm1 = make_nnf_thm thy (HOLogic.Not $ x)
         val thm2 = make_nnf_thm thy (HOLogic.Not $ y)
@@ -227,7 +227,7 @@ fun make_nnf_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
       end
   | make_nnf_thm thy
       (Const (@{const_name Not}, _) $
-        (Const (@{const_name HOL.implies}, _) $ x $ y)) =
+        (Const (@{const_name IHOL.implies}, _) $ x $ y)) =
       let
         val thm1 = make_nnf_thm thy x
         val thm2 = make_nnf_thm thy (HOLogic.Not $ y)
@@ -236,7 +236,7 @@ fun make_nnf_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
       end
   | make_nnf_thm thy
       (Const (@{const_name Not}, _) $
-        (Const (@{const_name HOL.eq}, Type ("fun", @{typ bool} :: _)) $ x $ y)) =
+        (Const (@{const_name IHOL.eq}, Type ("fun", @{typ bool} :: _)) $ x $ y)) =
       let
         val thm1 = make_nnf_thm thy x
         val thm2 = make_nnf_thm thy (HOLogic.Not $ x)
@@ -289,7 +289,7 @@ fun make_nnf_thm_under_quantifiers ctxt =
 
 (* Theory.theory -> Term.term -> Thm.thm *)
 
-fun simp_True_False_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
+fun simp_True_False_thm thy (Const (@{const_name IHOL.conj}, _) $ x $ y) =
       let
         val thm1 = simp_True_False_thm thy x
         val x'= (snd o HOLogic.dest_eq o HOLogic.dest_Trueprop o prop_of) thm1
@@ -311,7 +311,7 @@ fun simp_True_False_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
               conj_cong OF [thm1, thm2]  (* (x & y) = (x' & y') *)
           end
       end
-  | simp_True_False_thm thy (Const (@{const_name HOL.disj}, _) $ x $ y) =
+  | simp_True_False_thm thy (Const (@{const_name IHOL.disj}, _) $ x $ y) =
       let
         val thm1 = simp_True_False_thm thy x
         val x' = (snd o HOLogic.dest_eq o HOLogic.dest_Trueprop o prop_of) thm1
@@ -344,24 +344,24 @@ fun simp_True_False_thm thy (Const (@{const_name HOL.conj}, _) $ x $ y) =
 fun make_cnf_thm ctxt t =
   let
     val thy = Proof_Context.theory_of ctxt
-    fun make_cnf_thm_from_nnf (Const (@{const_name HOL.conj}, _) $ x $ y) =
+    fun make_cnf_thm_from_nnf (Const (@{const_name IHOL.conj}, _) $ x $ y) =
           let
             val thm1 = make_cnf_thm_from_nnf x
             val thm2 = make_cnf_thm_from_nnf y
           in
             conj_cong OF [thm1, thm2]
           end
-      | make_cnf_thm_from_nnf (Const (@{const_name HOL.disj}, _) $ x $ y) =
+      | make_cnf_thm_from_nnf (Const (@{const_name IHOL.disj}, _) $ x $ y) =
           let
             (* produces a theorem "(x' | y') = t'", where x', y', and t' are in CNF *)
-            fun make_cnf_disj_thm (Const (@{const_name HOL.conj}, _) $ x1 $ x2) y' =
+            fun make_cnf_disj_thm (Const (@{const_name IHOL.conj}, _) $ x1 $ x2) y' =
                   let
                     val thm1 = make_cnf_disj_thm x1 y'
                     val thm2 = make_cnf_disj_thm x2 y'
                   in
                     make_cnf_disj_conj_l OF [thm1, thm2]  (* ((x1 & x2) | y') = ((x1 | y')' & (x2 | y')') *)
                   end
-              | make_cnf_disj_thm x' (Const (@{const_name HOL.conj}, _) $ y1 $ y2) =
+              | make_cnf_disj_thm x' (Const (@{const_name IHOL.conj}, _) $ y1 $ y2) =
                   let
                     val thm1 = make_cnf_disj_thm x' y1
                     val thm2 = make_cnf_disj_thm x' y2
@@ -417,28 +417,28 @@ fun make_cnfx_thm ctxt t =
     val var_id = Unsynchronized.ref 0  (* properly initialized below *)
     fun new_free () =
       Free ("cnfx_" ^ string_of_int (Unsynchronized.inc var_id), HOLogic.boolT)
-    fun make_cnfx_thm_from_nnf (Const (@{const_name HOL.conj}, _) $ x $ y) : thm =
+    fun make_cnfx_thm_from_nnf (Const (@{const_name IHOL.conj}, _) $ x $ y) : thm =
           let
             val thm1 = make_cnfx_thm_from_nnf x
             val thm2 = make_cnfx_thm_from_nnf y
           in
             conj_cong OF [thm1, thm2]
           end
-      | make_cnfx_thm_from_nnf (Const (@{const_name HOL.disj}, _) $ x $ y) =
+      | make_cnfx_thm_from_nnf (Const (@{const_name IHOL.disj}, _) $ x $ y) =
           if is_clause x andalso is_clause y then
             inst_thm thy [HOLogic.mk_disj (x, y)] iff_refl
           else if is_literal y orelse is_literal x then
             let
               (* produces a theorem "(x' | y') = t'", where x', y', and t' are *)
               (* almost in CNF, and x' or y' is a literal                      *)
-              fun make_cnfx_disj_thm (Const (@{const_name HOL.conj}, _) $ x1 $ x2) y' =
+              fun make_cnfx_disj_thm (Const (@{const_name IHOL.conj}, _) $ x1 $ x2) y' =
                     let
                       val thm1 = make_cnfx_disj_thm x1 y'
                       val thm2 = make_cnfx_disj_thm x2 y'
                     in
                       make_cnf_disj_conj_l OF [thm1, thm2]  (* ((x1 & x2) | y') = ((x1 | y')' & (x2 | y')') *)
                     end
-                | make_cnfx_disj_thm x' (Const (@{const_name HOL.conj}, _) $ y1 $ y2) =
+                | make_cnfx_disj_thm x' (Const (@{const_name IHOL.conj}, _) $ y1 $ y2) =
                     let
                       val thm1 = make_cnfx_disj_thm x' y1
                       val thm2 = make_cnfx_disj_thm x' y2

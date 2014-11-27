@@ -1755,7 +1755,7 @@ declare eq_equal [code]
 
 setup {*
   Code_Preproc.map_pre (fn ctxt =>
-    ctxt addsimprocs [Simplifier.simproc_global_i @{theory} "equal" [@{term HOL.eq}]
+    ctxt addsimprocs [Simplifier.simproc_global_i @{theory} "equal" [@{term IHOL.eq}]
       (fn _ => fn Const (_, Type ("fun", [Type _, _])) => SOME @{thm eq_equal} | _ => NONE)])
 *}
 
@@ -1873,11 +1873,11 @@ code_reserved Scala
 code_printing
   constant Not \<rightharpoonup>
     (SML) "not" and (OCaml) "not" and (Haskell) "not" and (Scala) "'! _"
-| constant HOL.conj \<rightharpoonup>
+| constant IHOL.conj \<rightharpoonup>
     (SML) infixl 1 "andalso" and (OCaml) infixl 3 "&&" and (Haskell) infixr 3 "&&" and (Scala) infixl 3 "&&"
-| constant HOL.disj \<rightharpoonup>
+| constant IHOL.disj \<rightharpoonup>
     (SML) infixl 0 "orelse" and (OCaml) infixl 2 "||" and (Haskell) infixl 2 "||" and (Scala) infixl 1 "||"
-| constant HOL.implies \<rightharpoonup>
+| constant IHOL.implies \<rightharpoonup>
     (SML) "!(if (_)/ then (_)/ else true)"
     and (OCaml) "!(if (_)/ then (_)/ else true)"
     and (Haskell) "!(if (_)/ then (_)/ else True)"
@@ -1902,8 +1902,8 @@ text {* using built-in Haskell equality *}
 
 code_printing
   type_class equal \<rightharpoonup> (Haskell) "Eq"
-| constant HOL.equal \<rightharpoonup> (Haskell) infix 4 "=="
-| constant HOL.eq \<rightharpoonup> (Haskell) infix 4 "=="
+| constant IHOL.equal \<rightharpoonup> (Haskell) infix 4 "=="
+| constant IHOL.eq \<rightharpoonup> (Haskell) infix 4 "=="
 
 text {* undefined *}
 
