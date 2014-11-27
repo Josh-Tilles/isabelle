@@ -287,9 +287,9 @@ fun name_of_disc t =
   (case head_of t of
     Abs (_, _, @{const Not} $ (t' $ Bound 0)) =>
     Long_Name.map_base_name (prefix notN) (name_of_disc t')
-  | Abs (_, _, Const (@{const_name HOL.eq}, _) $ Bound 0 $ t') =>
+  | Abs (_, _, Const (@{const_name IHOL.eq}, _) $ Bound 0 $ t') =>
     Long_Name.map_base_name (prefix isN) (name_of_disc t')
-  | Abs (_, _, @{const Not} $ (Const (@{const_name HOL.eq}, _) $ Bound 0 $ t')) =>
+  | Abs (_, _, @{const Not} $ (Const (@{const_name IHOL.eq}, _) $ Bound 0 $ t')) =>
     Long_Name.map_base_name (prefix (notN ^ isN)) (name_of_disc t')
   | t' => name_of_const "discriminator" (perhaps (try domain_type)) t');
 

@@ -9,7 +9,7 @@ Wrapping existing freely generated type's constructors.
 section {* Wrapping Existing Freely Generated Type's Constructors *}
 
 theory Ctr_Sugar
-imports HOL
+imports IHOL
 keywords
   "print_case_translations" :: diag and
   "free_constructors" :: thy_goal
