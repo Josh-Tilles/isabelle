@@ -354,7 +354,7 @@ fun prove_pred_inject lthy (fp_sugar:fp_sugar) =
           @{thm refl[of True]} conjs
         val conjuncts = if is_eqn thm then thm |> get_rhs |> HOLogic.dest_conj else []
         val kill_top = Local_Defs.unfold lthy [kill_top2] #> Local_Defs.unfold lthy [kill_top1]
-        val kill_True = Local_Defs.unfold lthy [@{thm HOL.simp_thms(21)}]
+        val kill_True = Local_Defs.unfold lthy [@{thm IHOL.simp_thms(21)}]
       in
         thm
         |> Drule.instantiate' cTs cts
