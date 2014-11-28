@@ -47,7 +47,7 @@ fun try_prove_refl_rel ctxt rel =
         val T = fastype_of x
       in
         Const (@{const_name "less_eq"}, T --> T --> HOLogic.boolT) $ 
-          (Const (@{const_name HOL.eq}, T)) $ x
+          (Const (@{const_name IHOL.eq}, T)) $ x
       end;
     val goal = HOLogic.mk_Trueprop (mk_ge_eq rel);
   in
@@ -277,7 +277,7 @@ fun simplify_code_eq ctxt def_thm =
 
 fun can_generate_code_cert quot_thm  =
   case quot_thm_rel quot_thm of
-    Const (@{const_name HOL.eq}, _) => true
+    Const (@{const_name IHOL.eq}, _) => true
     | Const (@{const_name eq_onp}, _) $ _  => true
     | _ => false
 
@@ -564,7 +564,7 @@ fun mk_readable_rsp_thm_eq tm lthy =
     val unfold_inv_conv = 
       Conv.top_sweep_conv (K (Conv.rewr_conv @{thm eq_onp_def[THEN eq_reflection]})) lthy
     val simp_conv = HOLogic.Trueprop_conv (Conv.fun2_conv simp_arrows_conv)
-    val univq_conv = Conv.rewr_conv @{thm HOL.all_simps(6)[symmetric, THEN eq_reflection]}
+    val univq_conv = Conv.rewr_conv @{thm IHOL.all_simps(6)[symmetric, THEN eq_reflection]}
     val univq_prenex_conv = Conv.top_conv (K (Conv.try_conv univq_conv)) lthy
     val beta_conv = Thm.beta_conversion true
     val eq_thm = 

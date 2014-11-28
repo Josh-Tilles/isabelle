@@ -449,7 +449,7 @@ local
             (lhs, rhs)
         | Const (@{const_name less_eq}, _) $ rhs $ (lhs as Const (@{const_name relcompp},_) $ _ $ _) =>
             (lhs, rhs)
-        | Const (@{const_name HOL.eq}, _) $ (lhs as Const (@{const_name relcompp},_) $ _ $ _) $ rhs =>
+        | Const (@{const_name IHOL.eq}, _) $ (lhs as Const (@{const_name relcompp},_) $ _ $ _) $ rhs =>
             (lhs, rhs)
         | _ => error "The rule has a wrong format.")
       
@@ -484,7 +484,7 @@ in
           add_pos_distr_rule distr_rule ctxt
       | Const (@{const_name less_eq}, _) $ _ $ (Const (@{const_name relcompp},_) $ _ $ _) =>
           add_neg_distr_rule distr_rule ctxt
-      | Const (@{const_name HOL.eq}, _) $ (Const (@{const_name relcompp},_) $ _ $ _) $ _ =>
+      | Const (@{const_name IHOL.eq}, _) $ (Const (@{const_name relcompp},_) $ _ $ _) $ _ =>
           add_eq_distr_rule distr_rule ctxt)
     end
 end
