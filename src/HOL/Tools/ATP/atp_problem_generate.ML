@@ -321,7 +321,7 @@ val proxy_table =
        ("fdisj", @{const_name ATP.fdisj})))),
    ("c_implies", (@{const_name implies}, (@{thm fimplies_def},
        ("fimplies", @{const_name ATP.fimplies})))),
-   ("equal", (@{const_name HOL.eq}, (@{thm fequal_def},
+   ("equal", (@{const_name IHOL.eq}, (@{thm fequal_def},
        ("fequal", @{const_name ATP.fequal})))),
    ("c_All", (@{const_name All}, (@{thm fAll_def},
        ("fAll", @{const_name ATP.fAll})))),
@@ -339,7 +339,7 @@ val const_trans_table =
    (@{const_name conj}, "conj"),
    (@{const_name disj}, "disj"),
    (@{const_name implies}, "implies"),
-   (@{const_name HOL.eq}, "equal"),
+   (@{const_name IHOL.eq}, "equal"),
    (@{const_name All}, "All"),
    (@{const_name Ex}, "Ex"),
    (@{const_name If}, "If"),
@@ -380,12 +380,12 @@ fun make_tvar (s, i) = tvar_prefix ^ ascii_of_indexname (unquote_tvar s, i)
 fun make_tfree s = tfree_prefix ^ ascii_of (unquote_tvar s)
 fun tvar_name ((x as (s, _)), _) = (make_tvar x, s)
 
-(* "HOL.eq" and choice are mapped to the ATP's equivalents *)
+(* "IHOL.eq" and choice are mapped to the ATP's equivalents *)
 local
   val choice_const = (fst o dest_Const o HOLogic.choice_const) dummyT
   fun default c = const_prefix ^ lookup_const c
 in
-  fun make_fixed_const _ @{const_name HOL.eq} = tptp_old_equal
+  fun make_fixed_const _ @{const_name IHOL.eq} = tptp_old_equal
     | make_fixed_const (SOME (Native (Higher_Order THF_With_Choice, _, _))) c =
       if c = choice_const then tptp_choice else default c
     | make_fixed_const _ c = default c
@@ -412,7 +412,7 @@ val atp_logical_consts =
    handled specially via "fFalse", "fTrue", ..., "fequal". *)
 val atp_irrelevant_consts =
   [@{const_name False}, @{const_name True}, @{const_name Not}, @{const_name conj},
-   @{const_name disj}, @{const_name implies}, @{const_name HOL.eq}, @{const_name If},
+   @{const_name disj}, @{const_name implies}, @{const_name IHOL.eq}, @{const_name If},
    @{const_name Let}]
 
 val atp_widely_irrelevant_consts = atp_logical_consts @ atp_irrelevant_consts
@@ -709,10 +709,10 @@ fun is_lambda_free t =
   | Const (@{const_name All}, _) $ t1 => is_lambda_free t1
   | Const (@{const_name Ex}, _) $ Abs (_, _, t') => is_lambda_free t'
   | Const (@{const_name Ex}, _) $ t1 => is_lambda_free t1
-  | @{const HOL.conj} $ t1 $ t2 => is_lambda_free t1 andalso is_lambda_free t2
-  | @{const HOL.disj} $ t1 $ t2 => is_lambda_free t1 andalso is_lambda_free t2
-  | @{const HOL.implies} $ t1 $ t2 => is_lambda_free t1 andalso is_lambda_free t2
-  | Const (@{const_name HOL.eq}, Type (_, [@{typ bool}, _])) $ t1 $ t2 =>
+  | @{const IHOL.conj} $ t1 $ t2 => is_lambda_free t1 andalso is_lambda_free t2
+  | @{const IHOL.disj} $ t1 $ t2 => is_lambda_free t1 andalso is_lambda_free t2
+  | @{const IHOL.implies} $ t1 $ t2 => is_lambda_free t1 andalso is_lambda_free t2
+  | Const (@{const_name IHOL.eq}, Type (_, [@{typ bool}, _])) $ t1 $ t2 =>
     is_lambda_free t1 andalso is_lambda_free t2
   | _ => not (exists_subterm (fn Abs _ => true | _ => false) t))
 
@@ -730,10 +730,10 @@ fun simple_translate_lambdas do_lambdas ctxt t =
         | (t0 as Const (@{const_name Ex}, _)) $ Abs (s, T, t') =>
           t0 $ Abs (s, T, trans (T :: Ts) t')
         | (t0 as Const (@{const_name Ex}, _)) $ t1 => trans Ts (t0 $ eta_expand Ts t1 1)
-        | (t0 as @{const HOL.conj}) $ t1 $ t2 => t0 $ trans Ts t1 $ trans Ts t2
-        | (t0 as @{const HOL.disj}) $ t1 $ t2 => t0 $ trans Ts t1 $ trans Ts t2
-        | (t0 as @{const HOL.implies}) $ t1 $ t2 => t0 $ trans Ts t1 $ trans Ts t2
-        | (t0 as Const (@{const_name HOL.eq}, Type (_, [@{typ bool}, _]))) $ t1 $ t2 =>
+        | (t0 as @{const IHOL.conj}) $ t1 $ t2 => t0 $ trans Ts t1 $ trans Ts t2
+        | (t0 as @{const IHOL.disj}) $ t1 $ t2 => t0 $ trans Ts t1 $ trans Ts t2
+        | (t0 as @{const IHOL.implies}) $ t1 $ t2 => t0 $ trans Ts t1 $ trans Ts t2
+        | (t0 as Const (@{const_name IHOL.eq}, Type (_, [@{typ bool}, _]))) $ t1 $ t2 =>
           t0 $ trans Ts t1 $ trans Ts t2
         | _ =>
           if not (exists_subterm (fn Abs _ => true | _ => false) t) then t
@@ -800,7 +800,7 @@ fun lift_lams ctxt = lift_lams_part_2 ctxt oo lift_lams_part_1 ctxt
 
 fun intentionalize_def (Const (@{const_name All}, _) $ Abs (_, _, t)) =
     intentionalize_def t
-  | intentionalize_def (Const (@{const_name HOL.eq}, _) $ t $ u) =
+  | intentionalize_def (Const (@{const_name IHOL.eq}, _) $ t $ u) =
     let
       fun lam T t = Abs (Name.uu, T, t)
       val (head, args) = strip_comb t ||> rev
@@ -867,7 +867,7 @@ fun filter_type_args thy ctrss type_enc s ary T_args =
           val ctr_infer_type_args = gen_type_args fst strip_type
           val level = level_of_type_enc type_enc
         in
-          if level = No_Types orelse s = @{const_name HOL.eq} orelse
+          if level = No_Types orelse s = @{const_name IHOL.eq} orelse
              (case level of Const_Types _ => s = app_op_name | _ => false) then
             []
           else if poly = Mangled_Monomorphic then
@@ -1199,10 +1199,10 @@ fun iformula_of_prop ctxt type_enc iff_for_eq =
       | Const (@{const_name Ex}, _) $ Abs (s, T, t') => do_quant bs AExists pos s T t'
       | (t0 as Const (@{const_name Ex}, _)) $ t1 =>
         do_formula bs pos (t0 $ eta_expand (map (snd o snd) bs) t1 1)
-      | @{const HOL.conj} $ t1 $ t2 => do_conn bs AAnd pos t1 pos t2
-      | @{const HOL.disj} $ t1 $ t2 => do_conn bs AOr pos t1 pos t2
-      | @{const HOL.implies} $ t1 $ t2 => do_conn bs AImplies (Option.map not pos) t1 pos t2
-      | Const (@{const_name HOL.eq}, Type (_, [@{typ bool}, _])) $ t1 $ t2 =>
+      | @{const IHOL.conj} $ t1 $ t2 => do_conn bs AAnd pos t1 pos t2
+      | @{const IHOL.disj} $ t1 $ t2 => do_conn bs AOr pos t1 pos t2
+      | @{const IHOL.implies} $ t1 $ t2 => do_conn bs AImplies (Option.map not pos) t1 pos t2
+      | Const (@{const_name IHOL.eq}, Type (_, [@{typ bool}, _])) $ t1 $ t2 =>
         if iff_for_eq then do_conn bs AIff NONE t1 NONE t2 else do_term bs t
       | _ => do_term bs t)
   in do_formula [] end
@@ -1306,7 +1306,7 @@ fun type_arg_cover thy pos s ary =
   else
     let
       val footprint = tvar_footprint thy s ary
-      val eq = (s = @{const_name HOL.eq})
+      val eq = (s = @{const_name IHOL.eq})
       fun cover _ [] = []
         | cover seen ((i, tvars) :: args) =
           cover (union (op =) seen tvars) args

@@ -46,7 +46,7 @@ fun used_axioms axioms (th, Metis_Proof.Axiom _) = SOME (lookth axioms th)
 fun reflexive_or_trivial_of_metis ctxt type_enc sym_tab concealed mth =
   let val thy = Proof_Context.theory_of ctxt in
     (case hol_clause_of_metis ctxt type_enc sym_tab concealed mth of
-      Const (@{const_name HOL.eq}, _) $ _ $ t =>
+      Const (@{const_name IHOL.eq}, _) $ _ $ t =>
       let
         val ct = cterm_of thy t
         val cT = ctyp_of_term ct

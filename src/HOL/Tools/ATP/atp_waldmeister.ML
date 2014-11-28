@@ -99,7 +99,7 @@ fun skolemize' pos ctxt1 ctxt2 spets vars (Const (@{const_name Not}, _) $ trm') 
     in
       (ctxt1', ctxt2', map mk_not spets', mk_not trm'')
     end
-  | skolemize' pos ctxt1 ctxt2 spets vars (trm as (Const (@{const_name HOL.eq}, t) $ a $ b)) =
+  | skolemize' pos ctxt1 ctxt2 spets vars (trm as (Const (@{const_name IHOL.eq}, t) $ a $ b)) =
     if t = @{typ "bool \<Rightarrow> bool \<Rightarrow> bool"} andalso contains_quantor trm then
       skolemize' pos ctxt1 ctxt2 (trm :: spets) vars (mk_conj (mk_imp (a, b), mk_imp (b, a)))
     else
@@ -248,7 +248,7 @@ val WM_ERROR_MSG = "Waldmeister problem generator failed: "
 
 fun gen_ascii_tuple str = (str, ascii_of str)
 
-fun mk_eq_true (trm as (Const (@{const_name HOL.eq}, _) $ _ $ _)) = (NONE,trm)
+fun mk_eq_true (trm as (Const (@{const_name IHOL.eq}, _) $ _ $ _)) = (NONE,trm)
   | mk_eq_true trm = (SOME trm,HOLogic.mk_eq (trm, @{term True}))
 
 val is_lambda_name = String.isPrefix lam_lifted_poly_prefix
@@ -358,7 +358,7 @@ fun trm_to_atp'' thy (Const (x, ty)) args =
 
 fun trm_to_atp' thy trm = trm_to_atp'' thy trm [] |> hd
 
-fun eq_trm_to_atp thy (Const (@{const_name HOL.eq}, _) $ lhs $ rhs) =
+fun eq_trm_to_atp thy (Const (@{const_name IHOL.eq}, _) $ lhs $ rhs) =
     ATerm ((("equal", "equal"), []), [trm_to_atp' thy lhs, trm_to_atp' thy rhs])
   | eq_trm_to_atp _ _ = raise FailureMessage (WM_ERROR_MSG ^ "Non-eq term")
 

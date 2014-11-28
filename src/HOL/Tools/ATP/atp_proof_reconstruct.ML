@@ -121,7 +121,7 @@ fun simplify_bool ((all as Const (@{const_name All}, _)) $ Abs (s, T, t)) =
     s_disj (simplify_bool t, simplify_bool u)
   | simplify_bool (Const (@{const_name implies}, _) $ t $ u) =
     s_imp (simplify_bool t, simplify_bool u)
-  | simplify_bool ((t as Const (@{const_name HOL.eq}, _)) $ u $ v) =
+  | simplify_bool ((t as Const (@{const_name IHOL.eq}, _)) $ u $ v) =
     (case (u, v) of
       (Const (@{const_name True}, _), _) => v
     | (u, Const (@{const_name True}, _)) => u
@@ -177,7 +177,7 @@ fun atp_type_of_atp_term (ATerm ((s, _), us)) =
       AType ((s, []), tys)
   end
 
-(* Type variables are given the basic sort "HOL.type". Some will later be constrained by information
+(* Type variables are given the basic sort "IHOL.type". Some will later be constrained by information
    from type literals, or by type inference. *)
 fun typ_of_atp_type ctxt (ty as AType ((a, clss), tys)) =
     let val Ts = map (typ_of_atp_type ctxt) tys in
@@ -273,7 +273,7 @@ fun term_of_atp_ho ctxt sym_tab =
         then error "Isar proof reconstruction failed because the ATP proof \
                      \contains unparsable material."
         else if s = tptp_equal then
-          list_comb (Const (@{const_name HOL.eq}, Type_Infer.anyT @{sort type}),
+          list_comb (Const (@{const_name IHOL.eq}, Type_Infer.anyT @{sort type}),
             map (do_term NONE) us)
         else if not (null us) then
           let
@@ -353,7 +353,7 @@ fun term_of_atp_fo ctxt textual sym_tab =
         else if String.isPrefix native_type_prefix s then
           @{const True} (* ignore TPTP type information (needed?) *)
         else if s = tptp_equal then
-          list_comb (Const (@{const_name HOL.eq}, Type_Infer.anyT @{sort type}),
+          list_comb (Const (@{const_name IHOL.eq}, Type_Infer.anyT @{sort type}),
             map (do_term [] NONE) us)
         else
           (case unprefix_and_unascii const_prefix s of
