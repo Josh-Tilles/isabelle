@@ -352,7 +352,7 @@ fun grobner_strong vars pols pol =
 
 fun refute_disj rfn tm =
  case term_of tm of
-  Const(@{const_name HOL.disj},_)$_$_ =>
+  Const(@{const_name IHOL.disj},_)$_$_ =>
    Drule.compose
     (refute_disj rfn (Thm.dest_arg tm), 2,
       Drule.compose (refute_disj rfn (Thm.dest_arg1 tm), 2, disjE))
@@ -367,7 +367,7 @@ fun is_neg t =
     | _  => false;
 fun is_eq t =
  case term_of t of
- (Const(@{const_name HOL.eq},_)$_$_) => true
+ (Const(@{const_name IHOL.eq},_)$_$_) => true
 | _  => false;
 
 fun end_itlist f l =
@@ -416,7 +416,7 @@ fun initial_conv ctxt =
 val specl = fold_rev (fn x => fn th => instantiate' [] [SOME x] (th RS spec));
 
 val cTrp = @{cterm "Trueprop"};
-val cConj = @{cterm HOL.conj};
+val cConj = @{cterm IHOL.conj};
 val (cNot,false_tm) = (@{cterm "Not"}, @{cterm "False"});
 val assume_Trueprop = Thm.apply cTrp #> Thm.assume;
 val list_mk_conj = list_mk_binop cConj;
@@ -441,7 +441,7 @@ fun sym_conv eq =
   (* FIXME : copied from cqe.ML -- complex QE*)
 fun conjuncts ct =
  case term_of ct of
-  @{term HOL.conj}$_$_ => (Thm.dest_arg1 ct)::(conjuncts (Thm.dest_arg ct))
+  @{term IHOL.conj}$_$_ => (Thm.dest_arg1 ct)::(conjuncts (Thm.dest_arg ct))
 | _ => [ct];
 
 fun fold1 f = foldr1 (uncurry f);
@@ -449,12 +449,12 @@ fun fold1 f = foldr1 (uncurry f);
 fun mk_conj_tab th =
  let fun h acc th =
    case prop_of th of
-   @{term "Trueprop"}$(@{term HOL.conj}$_$_) =>
+   @{term "Trueprop"}$(@{term IHOL.conj}$_$_) =>
      h (h acc (th RS conjunct2)) (th RS conjunct1)
   | @{term "Trueprop"}$p => (p,th)::acc
 in fold (Termtab.insert Thm.eq_thm) (h [] th) Termtab.empty end;
 
-fun is_conj (@{term HOL.conj}$_$_) = true
+fun is_conj (@{term IHOL.conj}$_$_) = true
   | is_conj _ = false;
 
 fun prove_conj tab cjs =
@@ -818,15 +818,15 @@ fun poly_eq_conv t =
  fun unwind_polys_conv ctxt tm =
  let
   val (vars,bod) = strip_exists tm
-  val cjs = striplist (dest_binary @{cterm HOL.conj}) bod
+  val cjs = striplist (dest_binary @{cterm IHOL.conj}) bod
   val th1 = (the (get_first (try (isolate_variable vars)) cjs)
              handle Option.Option => raise CTERM ("unwind_polys_conv",[tm]))
   val eq = Thm.lhs_of th1
-  val bod' = list_mk_binop @{cterm HOL.conj} (eq::(remove op aconvc eq cjs))
+  val bod' = list_mk_binop @{cterm IHOL.conj} (eq::(remove op aconvc eq cjs))
   val th2 = conj_ac_rule (mk_eq bod bod')
   val th3 =
     Thm.transitive th2
-      (Drule.binop_cong_rule @{cterm HOL.conj} th1
+      (Drule.binop_cong_rule @{cterm IHOL.conj} th1
         (Thm.reflexive (Thm.dest_arg (Thm.rhs_of th2))))
   val v = Thm.dest_arg1(Thm.dest_arg1(Thm.rhs_of th3))
   val th4 = Conv.fconv_rule (Conv.arg_conv (simp_ex_conv ctxt)) (mk_exists v th3)
@@ -889,15 +889,15 @@ end;
 
 fun find_term bounds tm =
   (case term_of tm of
-    Const (@{const_name HOL.eq}, T) $ _ $ _ =>
+    Const (@{const_name IHOL.eq}, T) $ _ $ _ =>
       if domain_type T = HOLogic.boolT then find_args bounds tm
       else Thm.dest_arg tm
   | Const (@{const_name Not}, _) $ _ => find_term bounds (Thm.dest_arg tm)
   | Const (@{const_name All}, _) $ _ => find_body bounds (Thm.dest_arg tm)
   | Const (@{const_name Ex}, _) $ _ => find_body bounds (Thm.dest_arg tm)
-  | Const (@{const_name HOL.conj}, _) $ _ $ _ => find_args bounds tm
-  | Const (@{const_name HOL.disj}, _) $ _ $ _ => find_args bounds tm
-  | Const (@{const_name HOL.implies}, _) $ _ $ _ => find_args bounds tm
+  | Const (@{const_name IHOL.conj}, _) $ _ $ _ => find_args bounds tm
+  | Const (@{const_name IHOL.disj}, _) $ _ $ _ => find_args bounds tm
+  | Const (@{const_name IHOL.implies}, _) $ _ $ _ => find_args bounds tm
   | @{term "op ==>"} $_$_ => find_args bounds tm
   | Const("op ==",_)$_$_ => find_args bounds tm
   | @{term Trueprop}$_ => find_term bounds (Thm.dest_arg tm)
@@ -942,7 +942,7 @@ fun ring_tac add_ths del_ths ctxt =
 
 local
  fun lhs t = case term_of t of
-  Const(@{const_name HOL.eq},_)$_$_ => Thm.dest_arg1 t
+  Const(@{const_name IHOL.eq},_)$_$_ => Thm.dest_arg1 t
  | _=> raise CTERM ("ideal_tac - lhs",[t])
  fun exitac NONE = no_tac
    | exitac (SOME y) = rtac (instantiate' [SOME (ctyp_of_term y)] [NONE,SOME y] exI) 1

@@ -10,9 +10,9 @@ begin
 
 subsection {* Groebner Bases *}
 
-lemmas bool_simps = simp_thms(1-34) -- {* FIXME move to @{theory HOL} *}
+lemmas bool_simps = simp_thms(1-34) -- {* FIXME move to @{theory IHOL} *}
 
-lemma nnf_simps: -- {* FIXME shadows fact binding in @{theory HOL} *}
+lemma nnf_simps: -- {* FIXME shadows fact binding in @{theory IHOL} *}
   "(\<not>(P \<and> Q)) = (\<not>P \<or> \<not>Q)" "(\<not>(P \<or> Q)) = (\<not>P \<and> \<not>Q)"
   "(P \<longrightarrow> Q) = (\<not>P \<or> Q)"
   "(P = Q) = ((P \<and> Q) \<or> (\<not>P \<and> \<not> Q))" "(\<not> \<not>(P)) = P"
