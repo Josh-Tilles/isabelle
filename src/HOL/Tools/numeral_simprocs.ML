@@ -267,7 +267,7 @@ end;
 structure EqCancelNumerals = CancelNumeralsFun
  (open CancelNumeralsCommon
   val mk_bal   = HOLogic.mk_eq
-  val dest_bal = HOLogic.dest_bin @{const_name HOL.eq} dummyT
+  val dest_bal = HOLogic.dest_bin @{const_name IHOL.eq} dummyT
   val bal_add1 = @{thm eq_add_iff1} RS trans
   val bal_add2 = @{thm eq_add_iff2} RS trans
 );
@@ -419,7 +419,7 @@ structure DivideCancelNumeralFactor = CancelNumeralFactorFun
 structure EqCancelNumeralFactor = CancelNumeralFactorFun
  (open CancelNumeralFactorCommon
   val mk_bal   = HOLogic.mk_eq
-  val dest_bal = HOLogic.dest_bin @{const_name HOL.eq} dummyT
+  val dest_bal = HOLogic.dest_bin @{const_name IHOL.eq} dummyT
   val cancel = @{thm mult_cancel_left} RS trans
   val neg_exchanges = false
 )
@@ -483,7 +483,7 @@ fun cancel_simplify_meta_eq ctxt cancel_th th =
     simplify_one ctxt (([th, cancel_th]) MRS trans);
 
 local
-  val Tp_Eq = Thm.reflexive (Thm.cterm_of @{theory HOL} HOLogic.Trueprop)
+  val Tp_Eq = Thm.reflexive (Thm.cterm_of @{theory IHOL} HOLogic.Trueprop)
   fun Eq_True_elim Eq = 
     Thm.equal_elim (Thm.combination Tp_Eq (Thm.symmetric Eq)) @{thm TrueI}
 in
@@ -524,7 +524,7 @@ end;
 structure EqCancelFactor = ExtractCommonTermFun
  (open CancelFactorCommon
   val mk_bal   = HOLogic.mk_eq
-  val dest_bal = HOLogic.dest_bin @{const_name HOL.eq} dummyT
+  val dest_bal = HOLogic.dest_bin @{const_name IHOL.eq} dummyT
   fun simp_conv _ _ = SOME @{thm mult_cancel_left}
 );
 
@@ -588,7 +588,7 @@ fun divide_cancel_factor ctxt ct = DivideCancelFactor.proc ctxt (term_of ct)
 local
  val zr = @{cpat "0"}
  val zT = ctyp_of_term zr
- val geq = @{cpat HOL.eq}
+ val geq = @{cpat IHOL.eq}
  val eqT = Thm.dest_ctyp (ctyp_of_term geq) |> hd
  val add_frac_eq = mk_meta_eq @{thm "add_frac_eq"}
  val add_frac_num = mk_meta_eq @{thm "add_frac_num"}
@@ -658,7 +658,7 @@ local
         val T = ctyp_of_term c
         val th = instantiate' [SOME T] (map SOME [a,b,c]) @{thm "divide_le_eq"}
       in SOME (mk_meta_eq th) end
-  | Const(@{const_name HOL.eq},_)$(Const(@{const_name Fields.divide},_)$_$_)$_ =>
+  | Const(@{const_name IHOL.eq},_)$(Const(@{const_name Fields.divide},_)$_$_)$_ =>
       let
         val ((a,b),c) = Thm.dest_binop ct |>> Thm.dest_binop
         val _ = map is_number [a,b,c]
@@ -679,7 +679,7 @@ local
         val T = ctyp_of_term c
         val th = instantiate' [SOME T] (map SOME [a,b,c]) @{thm "le_divide_eq"}
       in SOME (mk_meta_eq th) end
-  | Const(@{const_name HOL.eq},_)$_$(Const(@{const_name Fields.divide},_)$_$_) =>
+  | Const(@{const_name IHOL.eq},_)$_$(Const(@{const_name Fields.divide},_)$_$_) =>
     let
       val (a,(b,c)) = Thm.dest_binop ct ||> Thm.dest_binop
         val _ = map is_number [a,b,c]
