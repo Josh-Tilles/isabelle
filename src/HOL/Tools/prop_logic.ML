@@ -353,14 +353,14 @@ fun prop_formula_of_term t table =
     fun aux (Const (@{const_name True}, _)) table = (True, table)
       | aux (Const (@{const_name False}, _)) table = (False, table)
       | aux (Const (@{const_name Not}, _) $ x) table = apfst Not (aux x table)
-      | aux (Const (@{const_name HOL.disj}, _) $ x $ y) table =
+      | aux (Const (@{const_name IHOL.disj}, _) $ x $ y) table =
           let
             val (fm1, table1) = aux x table
             val (fm2, table2) = aux y table1
           in
             (Or (fm1, fm2), table2)
           end
-      | aux (Const (@{const_name HOL.conj}, _) $ x $ y) table =
+      | aux (Const (@{const_name IHOL.conj}, _) $ x $ y) table =
           let
             val (fm1, table1) = aux x table
             val (fm2, table2) = aux y table1

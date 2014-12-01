@@ -87,7 +87,7 @@ val ex1_implies_iff = @{thm Fun_Def.fundef_ex1_iff}
 
 val acc_downward = @{thm accp_downward}
 val accI = @{thm accp.accI}
-val case_split = @{thm HOL.case_split}
+val case_split = @{thm IHOL.case_split}
 val fundef_default_value = @{thm Fun_Def.fundef_default_value}
 val not_acc_down = @{thm not_accp_down}
 
@@ -830,7 +830,7 @@ fun prepare_function config defname [((fname, fT), mixfix)] abstract_qglrs lthy 
   let
     val FunctionConfig {domintros, default=default_opt, ...} = config
 
-    val default_str = the_default "%x. HOL.undefined" default_opt
+    val default_str = the_default "%x. IHOL.undefined" default_opt
     val fvar = Free (fname, fT)
     val domT = domain_type fT
     val ranT = range_type fT
