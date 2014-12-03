@@ -26,7 +26,7 @@ val allowed_consts =
    @{term "op * :: int => _"}, @{term "op * :: nat => _"},
    @{term "op div :: int => _"}, @{term "op div :: nat => _"},
    @{term "op mod :: int => _"}, @{term "op mod :: nat => _"},
-   @{term HOL.conj}, @{term HOL.disj}, @{term HOL.implies}, 
+   @{term IHOL.conj}, @{term IHOL.disj}, @{term IHOL.implies}, 
    @{term "op = :: int => _"}, @{term "op = :: nat => _"}, @{term "op = :: bool => _"},
    @{term "op < :: int => _"}, @{term "op < :: nat => _"},
    @{term "op <= :: int => _"}, @{term "op <= :: nat => _"},
@@ -123,10 +123,10 @@ datatype fm = And of cterm*cterm| Or of cterm*cterm| Eq of cterm | NEq of cterm
 
 fun whatis x ct =
 ( case (term_of ct) of
-  Const(@{const_name HOL.conj},_)$_$_ => And (Thm.dest_binop ct)
-| Const (@{const_name HOL.disj},_)$_$_ => Or (Thm.dest_binop ct)
-| Const (@{const_name HOL.eq},_)$y$_ => if term_of x aconv y then Eq (Thm.dest_arg ct) else Nox
-| Const (@{const_name Not},_) $ (Const (@{const_name HOL.eq},_)$y$_) =>
+  Const(@{const_name IHOL.conj},_)$_$_ => And (Thm.dest_binop ct)
+| Const (@{const_name IHOL.disj},_)$_$_ => Or (Thm.dest_binop ct)
+| Const (@{const_name IHOL.eq},_)$y$_ => if term_of x aconv y then Eq (Thm.dest_arg ct) else Nox
+| Const (@{const_name Not},_) $ (Const (@{const_name IHOL.eq},_)$y$_) =>
   if term_of x aconv y then NEq (funpow 2 Thm.dest_arg ct) else Nox
 | Const (@{const_name Orderings.less}, _) $ y$ z =>
    if term_of x aconv y then Lt (Thm.dest_arg ct)
@@ -277,7 +277,7 @@ fun lin (vs as _::_) (Const (@{const_name Not}, _) $ (Const (@{const_name Orderi
   | lin vs (Const (@{const_name Not},T)$t) = Const (@{const_name Not},T)$ (lin vs t)
   | lin (vs as _::_) (Const(@{const_name Rings.dvd},_)$d$t) =
     HOLogic.mk_binrel @{const_name Rings.dvd} (numeral1 abs d, lint vs t)
-  | lin (vs as x::_) ((b as Const(@{const_name HOL.eq},_))$s$t) =
+  | lin (vs as x::_) ((b as Const(@{const_name IHOL.eq},_))$s$t) =
      (case lint vs (subC$t$s) of
       (t as _$(m$c$y)$r) =>
         if x <> y then b$zero$t
@@ -351,7 +351,7 @@ fun unify ctxt q =
    case (term_of t) of
     Const(s,_)$(Const(@{const_name Groups.times},_)$c$y)$ _ =>
     if x aconv y andalso member (op =)
-      [@{const_name HOL.eq}, @{const_name Orderings.less}, @{const_name Orderings.less_eq}] s
+      [@{const_name IHOL.eq}, @{const_name Orderings.less}, @{const_name Orderings.less_eq}] s
     then (ins (dest_number c) acc,dacc) else (acc,dacc)
   | Const(s,_)$_$(Const(@{const_name Groups.times},_)$c$y) =>
     if x aconv y andalso member (op =)
@@ -359,8 +359,8 @@ fun unify ctxt q =
     then (ins (dest_number c) acc, dacc) else (acc,dacc)
   | Const(@{const_name Rings.dvd},_)$_$(Const(@{const_name Groups.plus},_)$(Const(@{const_name Groups.times},_)$c$y)$_) =>
     if x aconv y then (acc,ins (dest_number c) dacc) else (acc,dacc)
-  | Const(@{const_name HOL.conj},_)$_$_ => h (h (acc,dacc) (Thm.dest_arg1 t)) (Thm.dest_arg t)
-  | Const(@{const_name HOL.disj},_)$_$_ => h (h (acc,dacc) (Thm.dest_arg1 t)) (Thm.dest_arg t)
+  | Const(@{const_name IHOL.conj},_)$_$_ => h (h (acc,dacc) (Thm.dest_arg1 t)) (Thm.dest_arg t)
+  | Const(@{const_name IHOL.disj},_)$_$_ => h (h (acc,dacc) (Thm.dest_arg1 t)) (Thm.dest_arg t)
   | Const (@{const_name Not},_)$_ => h (acc,dacc) (Thm.dest_arg t)
   | _ => (acc, dacc)
   val (cs,ds) = h ([],[]) p
@@ -388,12 +388,12 @@ fun unify ctxt q =
     end
   fun unit_conv t =
    case (term_of t) of
-   Const(@{const_name HOL.conj},_)$_$_ => Conv.binop_conv unit_conv t
-  | Const(@{const_name HOL.disj},_)$_$_ => Conv.binop_conv unit_conv t
+   Const(@{const_name IHOL.conj},_)$_$_ => Conv.binop_conv unit_conv t
+  | Const(@{const_name IHOL.disj},_)$_$_ => Conv.binop_conv unit_conv t
   | Const (@{const_name Not},_)$_ => Conv.arg_conv unit_conv t
   | Const(s,_)$(Const(@{const_name Groups.times},_)$c$y)$ _ =>
     if x=y andalso member (op =)
-      [@{const_name HOL.eq}, @{const_name Orderings.less}, @{const_name Orderings.less_eq}] s
+      [@{const_name IHOL.eq}, @{const_name Orderings.less}, @{const_name Orderings.less_eq}] s
     then cv (l div dest_number c) t else Thm.reflexive t
   | Const(s,_)$_$(Const(@{const_name Groups.times},_)$c$y) =>
     if x=y andalso member (op =)
@@ -581,7 +581,7 @@ fun conv ctxt p =
 fun add_bools t =
   let
     val ops = [@{term "op = :: int => _"}, @{term "op < :: int => _"}, @{term "op <= :: int => _"},
-      @{term HOL.conj}, @{term HOL.disj}, @{term HOL.implies}, @{term "op = :: bool => _"},
+      @{term IHOL.conj}, @{term IHOL.disj}, @{term IHOL.implies}, @{term "op = :: bool => _"},
       @{term "Not"}, @{term "All :: (int => _) => _"},
       @{term "Ex :: (int => _) => _"}, @{term "True"}, @{term "False"}];
     val is_op = member (op =) ops;
@@ -624,11 +624,11 @@ fun num_of_term vs (Free vT) = Proc.Bound (Proc.nat_of_integer (find_index (fn v
 
 fun fm_of_term ps vs (Const (@{const_name True}, _)) = Proc.T
   | fm_of_term ps vs (Const (@{const_name False}, _)) = Proc.F
-  | fm_of_term ps vs (Const (@{const_name HOL.conj}, _) $ t1 $ t2) =
+  | fm_of_term ps vs (Const (@{const_name IHOL.conj}, _) $ t1 $ t2) =
       Proc.And (fm_of_term ps vs t1, fm_of_term ps vs t2)
-  | fm_of_term ps vs (Const (@{const_name HOL.disj}, _) $ t1 $ t2) =
+  | fm_of_term ps vs (Const (@{const_name IHOL.disj}, _) $ t1 $ t2) =
       Proc.Or (fm_of_term ps vs t1, fm_of_term ps vs t2)
-  | fm_of_term ps vs (Const (@{const_name HOL.implies}, _) $ t1 $ t2) =
+  | fm_of_term ps vs (Const (@{const_name IHOL.implies}, _) $ t1 $ t2) =
       Proc.Imp (fm_of_term ps vs t1, fm_of_term ps vs t2)
   | fm_of_term ps vs (@{term "op = :: bool => _ "} $ t1 $ t2) =
       Proc.Iff (fm_of_term ps vs t1, fm_of_term ps vs t2)
@@ -702,7 +702,7 @@ val comp_ss =
 
 fun strip_objimp ct =
   (case Thm.term_of ct of
-    Const (@{const_name HOL.implies}, _) $ _ $ _ =>
+    Const (@{const_name IHOL.implies}, _) $ _ $ _ =>
       let val (A, B) = Thm.dest_binop ct
       in A :: strip_objimp B end
   | _ => [ct]);
@@ -729,7 +729,7 @@ fun thin_prems_tac ctxt P =
      val qs = filter P ps
      val q = if P c then c else @{cterm "False"}
      val ng = fold_rev (fn (a,v) => fn t => Thm.apply a (Thm.lambda v t)) qvs 
-         (fold_rev (fn p => fn q => Thm.apply (Thm.apply @{cterm HOL.implies} p) q) qs q)
+         (fold_rev (fn p => fn q => Thm.apply (Thm.apply @{cterm IHOL.implies} p) q) qs q)
      val g = Thm.apply (Thm.apply @{cterm "op ==>"} (Thm.apply @{cterm "Trueprop"} ng)) p'
      val ntac = (case qs of [] => q aconvc @{cterm "False"}
                          | _ => false)
