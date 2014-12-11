@@ -84,12 +84,12 @@ val is_exhaustive_finite =
       | (false, Const (@{const_name Ex}, _) $ Abs (_, _, t')) => do_formula pos t'
       | (_, @{const Pure.imp} $ t1 $ t2) =>
         do_formula (not pos) t1 andalso (t2 = @{prop False} orelse do_formula pos t2)
-      | (_, @{const HOL.implies} $ t1 $ t2) =>
+      | (_, @{const IHOL.implies} $ t1 $ t2) =>
         do_formula (not pos) t1 andalso (t2 = @{const False} orelse do_formula pos t2)
       | (_, @{const Not} $ t1) => do_formula (not pos) t1
-      | (true, @{const HOL.disj} $ t1 $ t2) => forall (do_formula pos) [t1, t2]
-      | (false, @{const HOL.conj} $ t1 $ t2) => forall (do_formula pos) [t1, t2]
-      | (true, Const (@{const_name HOL.eq}, _) $ t1 $ t2) => do_equals t1 t2
+      | (true, @{const IHOL.disj} $ t1 $ t2) => forall (do_formula pos) [t1, t2]
+      | (false, @{const IHOL.conj} $ t1 $ t2) => forall (do_formula pos) [t1, t2]
+      | (true, Const (@{const_name IHOL.eq}, _) $ t1 $ t2) => do_equals t1 t2
       | (true, Const (@{const_name Pure.eq}, _) $ t1 $ t2) => do_equals t1 t2
       | _ => false)
   in do_formula true end
