@@ -51,7 +51,7 @@ end
 
 fun norm_def thm =
   (case Thm.prop_of thm of
-    @{const Trueprop} $ (Const (@{const_name HOL.eq}, _) $ _ $ Abs _) =>
+    @{const Trueprop} $ (Const (@{const_name IHOL.eq}, _) $ _ $ Abs _) =>
       norm_def (thm RS @{thm fun_cong})
   | Const (@{const_name Pure.eq}, _) $ _ $ Abs _ => norm_def (thm RS @{thm meta_eq_to_obj_eq})
   | _ => thm)
@@ -140,8 +140,8 @@ local
 
   fun dest_cond_eq ct =
     (case Thm.term_of ct of
-      Const (@{const_name HOL.eq}, _) $ _ $ _ => Thm.dest_binop ct
-    | @{const HOL.implies} $ _ $ _ => dest_cond_eq (Thm.dest_arg ct)
+      Const (@{const_name IHOL.eq}, _) $ _ $ _ => Thm.dest_binop ct
+    | @{const IHOL.implies} $ _ $ _ => dest_cond_eq (Thm.dest_arg ct)
     | _ => raise CTERM ("no equation", [ct]))
 
   fun get_constrs thy (Type (n, _)) = these (BNF_LFP_Compat.get_constrs thy n)
@@ -255,7 +255,7 @@ fun gen_normalize1 ctxt =
   Drule.forall_intr_vars #>
   Conv.fconv_rule (gen_normalize1_conv ctxt) #>
   (* Z3 4.3.1 silently normalizes "P --> Q --> R" to "P & Q --> R" *)
-  Raw_Simplifier.rewrite_rule ctxt @{thms HOL.imp_conjL[symmetric, THEN eq_reflection]}
+  Raw_Simplifier.rewrite_rule ctxt @{thms IHOL.imp_conjL[symmetric, THEN eq_reflection]}
 
 fun gen_norm1_safe ctxt (i, thm) =
   (case try (gen_normalize1 ctxt) thm of
@@ -393,7 +393,7 @@ fun apply_extra_norms ctxt ithms =
 
 local
   val ignored = member (op =) [@{const_name All}, @{const_name Ex},
-    @{const_name Let}, @{const_name If}, @{const_name HOL.eq}]
+    @{const_name Let}, @{const_name If}, @{const_name IHOL.eq}]
 
   val schematic_consts_of =
     let

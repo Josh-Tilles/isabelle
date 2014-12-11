@@ -105,7 +105,7 @@ fun lookup_fun ({funs, ...}: ('a, 'b) context) = Symtab.lookup funs
 
 (* core type and term parser *)
 
-fun core_type_parser (SMTLIB.Sym "Bool", []) = SOME @{typ HOL.bool}
+fun core_type_parser (SMTLIB.Sym "Bool", []) = SOME @{typ IHOL.bool}
   | core_type_parser (SMTLIB.Sym "Int", []) = SOME @{typ Int.int}
   | core_type_parser _ = NONE
 
@@ -135,13 +135,13 @@ fun mk_binary_pred n S t1 t2 =
       if T1 <> Term.dummyT then T1
       else if T2 <> Term.dummyT then T2
       else TVar (("?a", serial ()), S)
-  in mk_binary' n T @{typ HOL.bool} t1 t2 end
+  in mk_binary' n T @{typ IHOL.bool} t1 t2 end
 
 fun mk_less t1 t2 = mk_binary_pred @{const_name ord_class.less} @{sort linorder} t1 t2
 fun mk_less_eq t1 t2 = mk_binary_pred @{const_name ord_class.less_eq} @{sort linorder} t1 t2
 
-fun core_term_parser (SMTLIB.Sym "true", _) = SOME @{const HOL.True}
-  | core_term_parser (SMTLIB.Sym "false", _) = SOME @{const HOL.False}
+fun core_term_parser (SMTLIB.Sym "true", _) = SOME @{const IHOL.True}
+  | core_term_parser (SMTLIB.Sym "false", _) = SOME @{const IHOL.False}
   | core_term_parser (SMTLIB.Sym "not", [t]) = SOME (HOLogic.mk_not t)
   | core_term_parser (SMTLIB.Sym "and", t :: ts) = SOME (mk_rassoc (curry HOLogic.mk_conj) t ts)
   | core_term_parser (SMTLIB.Sym "or", t :: ts) = SOME (mk_rassoc (curry HOLogic.mk_disj) t ts)
@@ -152,7 +152,7 @@ fun core_term_parser (SMTLIB.Sym "true", _) = SOME @{const HOL.True}
   | core_term_parser (SMTLIB.Sym "ite", [t1, t2, t3]) =
       let
         val T = fastype_of t2
-        val c = Const (@{const_name HOL.If}, [@{typ HOL.bool}, T, T] ---> T)
+        val c = Const (@{const_name IHOL.If}, [@{typ IHOL.bool}, T, T] ---> T)
       in SOME (c $ t1 $ t2 $ t3) end
   | core_term_parser (SMTLIB.Num i, []) = SOME (HOLogic.mk_number @{typ Int.int} i)
   | core_term_parser (SMTLIB.Sym "-", [t]) = SOME (mk_unary @{const_name uminus_class.uminus} t)

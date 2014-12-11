@@ -210,12 +210,12 @@ fun subst_types ctxt env bounds t =
     val subst = subst_of (fold match (patTs ~~ objTs) Vartab.empty)
   in Same.commit (Term_Subst.map_types_same (substTs_same subst)) t' end
 
-fun eq_quant (@{const_name HOL.All}, _) (@{const_name HOL.All}, _) = true
-  | eq_quant (@{const_name HOL.Ex}, _) (@{const_name HOL.Ex}, _) = true
+fun eq_quant (@{const_name IHOL.All}, _) (@{const_name IHOL.All}, _) = true
+  | eq_quant (@{const_name IHOL.Ex}, _) (@{const_name IHOL.Ex}, _) = true
   | eq_quant _ _ = false
 
-fun opp_quant (@{const_name HOL.All}, _) (@{const_name HOL.Ex}, _) = true
-  | opp_quant (@{const_name HOL.Ex}, _) (@{const_name HOL.All}, _) = true
+fun opp_quant (@{const_name IHOL.All}, _) (@{const_name IHOL.Ex}, _) = true
+  | opp_quant (@{const_name IHOL.Ex}, _) (@{const_name IHOL.All}, _) = true
   | opp_quant _ _ = false
 
 fun with_quant pred i (Const q1 $ Abs (_, T1, t1), Const q2 $ Abs (_, T2, t2)) =
@@ -225,7 +225,7 @@ fun with_quant pred i (Const q1 $ Abs (_, T1, t1), Const q2 $ Abs (_, T2, t2)) =
       else NONE
   | with_quant _ _ _ = NONE
 
-fun dest_quant_pair i (@{term HOL.Not} $ t1, t2) =
+fun dest_quant_pair i (@{term IHOL.Not} $ t1, t2) =
       Option.map (apfst HOLogic.mk_not) (with_quant opp_quant i (t1, t2))
   | dest_quant_pair i (t1, t2) = with_quant eq_quant i (t1, t2)
 

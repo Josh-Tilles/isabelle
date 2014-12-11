@@ -57,14 +57,14 @@ val rewrite_true = @{lemma "True == ~ False" by simp}
 val is_neg = (fn @{const Not} $ _ => true | _ => false)
 fun is_neg' f = (fn @{const Not} $ t => f t | _ => false)
 val is_dneg = is_neg' is_neg
-val is_conj = (fn @{const HOL.conj} $ _ $ _ => true | _ => false)
-val is_disj = (fn @{const HOL.disj} $ _ $ _ => true | _ => false)
+val is_conj = (fn @{const IHOL.conj} $ _ $ _ => true | _ => false)
+val is_disj = (fn @{const IHOL.disj} $ _ $ _ => true | _ => false)
 
 fun dest_disj_term' f = (fn
-    @{const Not} $ (@{const HOL.disj} $ t $ u) => SOME (f t, f u)
+    @{const Not} $ (@{const IHOL.disj} $ t $ u) => SOME (f t, f u)
   | _ => NONE)
 
-val dest_conj_term = (fn @{const HOL.conj} $ t $ u => SOME (t, u) | _ => NONE)
+val dest_conj_term = (fn @{const IHOL.conj} $ t $ u => SOME (t, u) | _ => NONE)
 val dest_disj_term =
   dest_disj_term' (fn @{const Not} $ t => t | t => @{const Not} $ t)
 
@@ -206,11 +206,11 @@ local
     | comp_disj ((true, thm1), (false, thm2)) = comp2 disj3 thm1 thm2
     | comp_disj ((true, thm1), (true, thm2)) = comp2 disj4 thm1 thm2
 
-  fun dest_conj (@{const HOL.conj} $ t $ u) = ((false, t), (false, u))
+  fun dest_conj (@{const IHOL.conj} $ t $ u) = ((false, t), (false, u))
     | dest_conj t = raise TERM ("dest_conj", [t])
 
   val neg = (fn @{const Not} $ t => (true, t) | t => (false, @{const Not} $ t))
-  fun dest_disj (@{const Not} $ (@{const HOL.disj} $ t $ u)) = (neg t, neg u)
+  fun dest_disj (@{const Not} $ (@{const IHOL.disj} $ t $ u)) = (neg t, neg u)
     | dest_disj t = raise TERM ("dest_disj", [t])
 
   val precomp = Z3_Replay_Util.precompose
@@ -222,8 +222,8 @@ local
   fun dni f = apsnd f o Thm.dest_binop o f o d1
   val negIffE = precomp2 (dni d1) @{lemma "~(P = (~Q)) ==> Q = P" by fast}
   val negIffI = precomp2 (dni I) @{lemma "P = Q ==> ~(Q = (~P))" by fast}
-  val iff_const = @{const HOL.eq (bool)}
-  fun as_negIff f (@{const HOL.eq (bool)} $ t $ u) =
+  val iff_const = @{const IHOL.eq (bool)}
+  fun as_negIff f (@{const IHOL.eq (bool)} $ t $ u) =
         f (@{const Not} $ (iff_const $ u $ (@{const Not} $ t)))
     | as_negIff _ _ = NONE
 in
@@ -238,9 +238,9 @@ fun join is_conj littab t =
     fun lookup_rule t =
       (case t of
         @{const Not} $ (@{const Not} $ t) => (Z3_Replay_Util.compose dnegI, lookup t)
-      | @{const Not} $ (@{const HOL.eq (bool)} $ t $ (@{const Not} $ u)) =>
+      | @{const Not} $ (@{const IHOL.eq (bool)} $ t $ (@{const Not} $ u)) =>
           (Z3_Replay_Util.compose negIffI, lookup (iff_const $ u $ t))
-      | @{const Not} $ ((eq as Const (@{const_name HOL.eq}, _)) $ t $ u) =>
+      | @{const Not} $ ((eq as Const (@{const_name IHOL.eq}, _)) $ t $ u) =>
           let fun rewr lit = lit COMP @{thm not_sym}
           in (rewr, lookup (@{const Not} $ (eq $ u $ t))) end
       | _ =>

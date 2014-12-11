@@ -227,8 +227,8 @@ fun find_in_which_step_defined var (VeriT_Node {id, bounds, ...} :: l) =
 
 (*Yes every case is possible: the introduced var is not on a special size of the equality sign.*)
 fun find_ite_var_in_term (Const (@{const_name If}, _) $ _ $
-      (Const (@{const_name HOL.eq}, _) $ Free (var1, _) $ Free (var2, _) ) $
-      (Const (@{const_name HOL.eq}, _) $ Free (var3, _) $ Free (var4, _) )) =
+      (Const (@{const_name IHOL.eq}, _) $ Free (var1, _) $ Free (var2, _) ) $
+      (Const (@{const_name IHOL.eq}, _) $ Free (var3, _) $ Free (var4, _) )) =
     let
       fun get_number_of_ite_transformed_var var =
         perhaps (try (unprefix "ite")) var
@@ -253,12 +253,12 @@ fun find_ite_var_in_term (Const (@{const_name If}, _) $ _ $
       | (SOME _, _) => var1_introduced_var)
     end
   | find_ite_var_in_term (Const (@{const_name If}, _) $ _ $
-      (Const (@{const_name HOL.eq}, _) $ Free (var, _) $ _ ) $
-      (Const (@{const_name HOL.eq}, _) $ Free (var', _) $ _ )) =
+      (Const (@{const_name IHOL.eq}, _) $ Free (var, _) $ _ ) $
+      (Const (@{const_name IHOL.eq}, _) $ Free (var', _) $ _ )) =
     if var = var' then SOME var else NONE
   | find_ite_var_in_term (Const (@{const_name If}, _) $ _ $
-      (Const (@{const_name HOL.eq}, _) $ _ $ Free (var, _)) $
-      (Const (@{const_name HOL.eq}, _) $ _ $ Free (var', _))) =
+      (Const (@{const_name IHOL.eq}, _) $ _ $ Free (var, _)) $
+      (Const (@{const_name IHOL.eq}, _) $ _ $ Free (var', _))) =
     if var = var' then SOME var else NONE
   | find_ite_var_in_term (p $ q) =
     (case find_ite_var_in_term p of

@@ -501,7 +501,7 @@ fun translate ctxt smt_options comments ithms =
 
     fun mk_trigger ((q as Const (@{const_name All}, _)) $ Abs (n, T, t)) =
           q $ Abs (n, T, mk_trigger t)
-      | mk_trigger (eq as (Const (@{const_name HOL.eq}, T) $ lhs $ _)) =
+      | mk_trigger (eq as (Const (@{const_name IHOL.eq}, T) $ lhs $ _)) =
           Term.domain_type T --> @{typ pattern}
           |> (fn T => Const (@{const_name pat}, T) $ lhs)
           |> SMT_Util.mk_symb_list @{typ pattern} o single

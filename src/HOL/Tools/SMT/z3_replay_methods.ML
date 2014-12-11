@@ -213,30 +213,30 @@ fun abstract_bin abs f t t1 t2 = abstract_sub t (abs t1 ##>> abs t2 #>> f)
 fun abstract_ter abs f t t1 t2 t3 =
   abstract_sub t (abs t1 ##>> abs t2 ##>> abs t3 #>> (Parse.triple1 #> f))
 
-fun abstract_lit (@{const HOL.Not} $ t) = abstract_term t #>> HOLogic.mk_not
+fun abstract_lit (@{const IHOL.Not} $ t) = abstract_term t #>> HOLogic.mk_not
   | abstract_lit t = abstract_term t
 
-fun abstract_not abs (t as @{const HOL.Not} $ t1) =
+fun abstract_not abs (t as @{const IHOL.Not} $ t1) =
       abstract_sub t (abs t1 #>> HOLogic.mk_not)
   | abstract_not _ t = abstract_lit t
 
-fun abstract_conj (t as @{const HOL.conj} $ t1 $ t2) =
+fun abstract_conj (t as @{const IHOL.conj} $ t1 $ t2) =
       abstract_bin abstract_conj HOLogic.mk_conj t t1 t2
   | abstract_conj t = abstract_lit t
 
-fun abstract_disj (t as @{const HOL.disj} $ t1 $ t2) =
+fun abstract_disj (t as @{const IHOL.disj} $ t1 $ t2) =
       abstract_bin abstract_disj HOLogic.mk_disj t t1 t2
   | abstract_disj t = abstract_lit t
 
 fun abstract_prop (t as (c as @{const If (bool)}) $ t1 $ t2 $ t3) =
       abstract_ter abstract_prop (fn (t1, t2, t3) => c $ t1 $ t2 $ t3) t t1 t2 t3
-  | abstract_prop (t as @{const HOL.disj} $ t1 $ t2) =
+  | abstract_prop (t as @{const IHOL.disj} $ t1 $ t2) =
       abstract_bin abstract_prop HOLogic.mk_disj t t1 t2
-  | abstract_prop (t as @{const HOL.conj} $ t1 $ t2) =
+  | abstract_prop (t as @{const IHOL.conj} $ t1 $ t2) =
       abstract_bin abstract_prop HOLogic.mk_conj t t1 t2
-  | abstract_prop (t as @{const HOL.implies} $ t1 $ t2) =
+  | abstract_prop (t as @{const IHOL.implies} $ t1 $ t2) =
       abstract_bin abstract_prop HOLogic.mk_imp t t1 t2
-  | abstract_prop (t as @{term "HOL.eq :: bool => _"} $ t1 $ t2) =
+  | abstract_prop (t as @{term "IHOL.eq :: bool => _"} $ t1 $ t2) =
       abstract_bin abstract_prop HOLogic.mk_eq t t1 t2
   | abstract_prop t = abstract_not abstract_prop t
 
@@ -246,8 +246,8 @@ fun abstract_arith ctxt u =
           abstract_sub t (abs t' #>> (fn u' => c $ Abs (s, T, u')))
       | abs (t as (c as Const (@{const_name If}, _)) $ t1 $ t2 $ t3) =
           abstract_ter abs (fn (t1, t2, t3) => c $ t1 $ t2 $ t3) t t1 t2 t3
-      | abs (t as @{const HOL.Not} $ t1) = abstract_sub t (abs t1 #>> HOLogic.mk_not)
-      | abs (t as @{const HOL.disj} $ t1 $ t2) =
+      | abs (t as @{const IHOL.Not} $ t1) = abstract_sub t (abs t1 #>> HOLogic.mk_not)
+      | abs (t as @{const IHOL.disj} $ t1 $ t2) =
           abstract_sub t (abs t1 ##>> abs t2 #>> HOLogic.mk_disj)
       | abs (t as (c as Const (@{const_name uminus_class.uminus}, _)) $ t1) =
           abstract_sub t (abs t1 #>> (fn u => c $ u))
@@ -261,7 +261,7 @@ fun abstract_arith ctxt u =
           abstract_sub t (abs t1 ##>> abs t2 #>> (fn (u1, u2) => c $ u1 $ u2))
       | abs (t as (c as Const (@{const_name z3mod}, _)) $ t1 $ t2) =
           abstract_sub t (abs t1 ##>> abs t2 #>> (fn (u1, u2) => c $ u1 $ u2))
-      | abs (t as (c as Const (@{const_name HOL.eq}, _)) $ t1 $ t2) =
+      | abs (t as (c as Const (@{const_name IHOL.eq}, _)) $ t1 $ t2) =
           abstract_sub t (abs t1 ##>> abs t2 #>> (fn (u1, u2) => c $ u1 $ u2))
       | abs (t as (c as Const (@{const_name ord_class.less}, _)) $ t1 $ t2) =
           abstract_sub t (abs t1 ##>> abs t2 #>> (fn (u1, u2) => c $ u1 $ u2))
@@ -382,7 +382,7 @@ fun not_or_elim ctxt [thm] t =
 
 local
 
-fun dest_all (Const (@{const_name HOL.All}, _) $ Abs (_, T, t)) nctxt =
+fun dest_all (Const (@{const_name IHOL.All}, _) $ Abs (_, T, t)) nctxt =
       let
         val (n, nctxt') = Name.variant "" nctxt
         val f = Free (n, T)
@@ -414,7 +414,7 @@ fun focus_eq f ctxt t =
 
 end
 
-fun abstract_eq f (Const (@{const_name HOL.eq}, _) $ t1 $ t2) =
+fun abstract_eq f (Const (@{const_name IHOL.eq}, _) $ t1 $ t2) =
       f t1 ##>> f t2 #>> HOLogic.mk_eq
   | abstract_eq _ t = abstract_term t
 
@@ -430,15 +430,15 @@ fun prove_arith_rewrite ctxt t =
   prove_abstract' ctxt t arith_rewrite_tac (
     abstract_eq (abstract_arith ctxt) (dest_prop t))
 
-val lift_ite_thm = @{thm HOL.if_distrib} RS @{thm eq_reflection}
+val lift_ite_thm = @{thm IHOL.if_distrib} RS @{thm eq_reflection}
 
 fun ternary_conv cv = Conv.combination_conv (Conv.binop_conv cv) cv
 
 fun if_context_conv ctxt ct =
   (case Thm.term_of ct of
-    Const (@{const_name HOL.If}, _) $ _ $ _ $ _ =>
+    Const (@{const_name IHOL.If}, _) $ _ $ _ $ _ =>
       ternary_conv (if_context_conv ctxt)
-  | _ $ (Const (@{const_name HOL.If}, _) $ _ $ _ $ _) =>
+  | _ $ (Const (@{const_name IHOL.If}, _) $ _ $ _ $ _) =>
       Conv.rewr_conv lift_ite_thm then_conv ternary_conv (if_context_conv ctxt)
   | _ => Conv.sub_conv (Conv.top_sweep_conv if_context_conv) ctxt) ct
 
@@ -506,10 +506,10 @@ fun norm_lemma thm =
   (thm COMP_INCR intro_hyp_rule1)
   handle THM _ => thm COMP_INCR intro_hyp_rule2
 
-fun negated_prop (@{const HOL.Not} $ t) = HOLogic.mk_Trueprop t
+fun negated_prop (@{const IHOL.Not} $ t) = HOLogic.mk_Trueprop t
   | negated_prop t = HOLogic.mk_Trueprop (HOLogic.mk_not t)
 
-fun intro_hyps tab (t as @{const HOL.disj} $ t1 $ t2) cx =
+fun intro_hyps tab (t as @{const IHOL.disj} $ t1 $ t2) cx =
       lookup_intro_hyps tab t (fold (intro_hyps tab) [t1, t2]) cx
   | intro_hyps tab t cx =
       lookup_intro_hyps tab t (fn _ => raise LEMMA ()) cx
@@ -535,10 +535,10 @@ fun lemma ctxt (thms as [thm]) t =
 
 (* unit resolution *)
 
-fun abstract_unit (t as (@{const HOL.Not} $ (@{const HOL.disj} $ t1 $ t2))) =
+fun abstract_unit (t as (@{const IHOL.Not} $ (@{const IHOL.disj} $ t1 $ t2))) =
       abstract_sub t (abstract_unit t1 ##>> abstract_unit t2 #>>
         HOLogic.mk_not o HOLogic.mk_disj)
-  | abstract_unit (t as (@{const HOL.disj} $ t1 $ t2)) =
+  | abstract_unit (t as (@{const IHOL.disj} $ t1 $ t2)) =
       abstract_sub t (abstract_unit t1 ##>> abstract_unit t2 #>>
         HOLogic.mk_disj)
   | abstract_unit t = abstract_lit t
@@ -575,7 +575,7 @@ fun comm ctxt _ t = match_instantiate ctxt t @{thm eq_commute}
 
 fun def_axiom_disj ctxt t =
   (case dest_prop t of
-    @{const HOL.disj} $ u1 $ u2 =>
+    @{const IHOL.disj} $ u1 $ u2 =>
       prove_abstract' ctxt t prop_tac (
         abstract_prop u2 ##>> abstract_prop u1 #>> HOLogic.mk_disj o swap)
   | u => prove_abstract' ctxt t prop_tac (abstract_prop u))

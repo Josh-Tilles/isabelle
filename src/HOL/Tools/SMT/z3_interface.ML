@@ -115,15 +115,15 @@ fun mk_builtin_num _ i @{typ int} = SOME (Numeral.mk_cnumber @{ctyp int} i)
 val mk_true = Thm.cterm_of @{theory} (@{const Not} $ @{const False})
 val mk_false = Thm.cterm_of @{theory} @{const False}
 val mk_not = Thm.apply (Thm.cterm_of @{theory} @{const Not})
-val mk_implies = Thm.mk_binop (Thm.cterm_of @{theory} @{const HOL.implies})
-val mk_iff = Thm.mk_binop (Thm.cterm_of @{theory} @{const HOL.eq (bool)})
-val conj = Thm.cterm_of @{theory} @{const HOL.conj}
-val disj = Thm.cterm_of @{theory} @{const HOL.disj}
+val mk_implies = Thm.mk_binop (Thm.cterm_of @{theory} @{const IHOL.implies})
+val mk_iff = Thm.mk_binop (Thm.cterm_of @{theory} @{const IHOL.eq (bool)})
+val conj = Thm.cterm_of @{theory} @{const IHOL.conj}
+val disj = Thm.cterm_of @{theory} @{const IHOL.disj}
 
 fun mk_nary _ cu [] = cu
   | mk_nary ct _ cts = uncurry (fold_rev (Thm.mk_binop ct)) (split_last cts)
 
-val eq = SMT_Util.mk_const_pat @{theory} @{const_name HOL.eq} SMT_Util.destT1
+val eq = SMT_Util.mk_const_pat @{theory} @{const_name IHOL.eq} SMT_Util.destT1
 fun mk_eq ct cu = Thm.mk_binop (SMT_Util.instT' ct eq) ct cu
 
 val if_term =
