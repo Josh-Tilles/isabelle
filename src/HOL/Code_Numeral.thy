@@ -76,27 +76,27 @@ qed (transfer, simp add: algebra_simps)+
 end
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_integer (of_nat :: nat \<Rightarrow> int) (of_nat :: nat \<Rightarrow> integer)"
+  "rel_fun IHOL.eq pcr_integer (of_nat :: nat \<Rightarrow> int) (of_nat :: nat \<Rightarrow> integer)"
   by (unfold of_nat_def [abs_def]) transfer_prover
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_integer (\<lambda>k :: int. k :: int) (of_int :: int \<Rightarrow> integer)"
+  "rel_fun IHOL.eq pcr_integer (\<lambda>k :: int. k :: int) (of_int :: int \<Rightarrow> integer)"
 proof -
-  have "rel_fun HOL.eq pcr_integer (of_int :: int \<Rightarrow> int) (of_int :: int \<Rightarrow> integer)"
+  have "rel_fun IHOL.eq pcr_integer (of_int :: int \<Rightarrow> int) (of_int :: int \<Rightarrow> integer)"
     by (unfold of_int_of_nat [abs_def]) transfer_prover
   then show ?thesis by (simp add: id_def)
 qed
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_integer (numeral :: num \<Rightarrow> int) (numeral :: num \<Rightarrow> integer)"
+  "rel_fun IHOL.eq pcr_integer (numeral :: num \<Rightarrow> int) (numeral :: num \<Rightarrow> integer)"
 proof -
-  have "rel_fun HOL.eq pcr_integer (numeral :: num \<Rightarrow> int) (\<lambda>n. of_int (numeral n))"
+  have "rel_fun IHOL.eq pcr_integer (numeral :: num \<Rightarrow> int) (\<lambda>n. of_int (numeral n))"
     by transfer_prover
   then show ?thesis by simp
 qed
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq (rel_fun HOL.eq pcr_integer) (Num.sub :: _ \<Rightarrow> _ \<Rightarrow> int) (Num.sub :: _ \<Rightarrow> _ \<Rightarrow> integer)"
+  "rel_fun IHOL.eq (rel_fun IHOL.eq pcr_integer) (Num.sub :: _ \<Rightarrow> _ \<Rightarrow> int) (Num.sub :: _ \<Rightarrow> _ \<Rightarrow> integer)"
   by (unfold Num.sub_def [abs_def]) transfer_prover
 
 lemma int_of_integer_of_nat [simp]:
@@ -183,7 +183,7 @@ lift_definition less_integer :: "integer \<Rightarrow> integer \<Rightarrow> boo
   .
 
 lift_definition equal_integer :: "integer \<Rightarrow> integer \<Rightarrow> bool"
-  is "HOL.equal :: int \<Rightarrow> int \<Rightarrow> bool"
+  is "IHOL.equal :: int \<Rightarrow> int \<Rightarrow> bool"
   .
 
 instance proof
@@ -249,7 +249,7 @@ where
   [simp, code_abbrev]: "Pos = numeral"
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_integer numeral Pos"
+  "rel_fun IHOL.eq pcr_integer numeral Pos"
   by simp transfer_prover
 
 definition Neg :: "num \<Rightarrow> integer"
@@ -257,7 +257,7 @@ where
   [simp, code_abbrev]: "Neg n = - Pos n"
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_integer (\<lambda>n. - numeral n) Neg"
+  "rel_fun IHOL.eq pcr_integer (\<lambda>n. - numeral n) Neg"
   by (simp add: Neg_def [abs_def]) transfer_prover
 
 code_datatype "0::integer" Pos Neg
@@ -397,19 +397,19 @@ lemma mod_integer_code [code]:
   by simp
 
 lemma equal_integer_code [code]:
-  "HOL.equal 0 (0::integer) \<longleftrightarrow> True"
-  "HOL.equal 0 (Pos l) \<longleftrightarrow> False"
-  "HOL.equal 0 (Neg l) \<longleftrightarrow> False"
-  "HOL.equal (Pos k) 0 \<longleftrightarrow> False"
-  "HOL.equal (Pos k) (Pos l) \<longleftrightarrow> HOL.equal k l"
-  "HOL.equal (Pos k) (Neg l) \<longleftrightarrow> False"
-  "HOL.equal (Neg k) 0 \<longleftrightarrow> False"
-  "HOL.equal (Neg k) (Pos l) \<longleftrightarrow> False"
-  "HOL.equal (Neg k) (Neg l) \<longleftrightarrow> HOL.equal k l"
+  "IHOL.equal 0 (0::integer) \<longleftrightarrow> True"
+  "IHOL.equal 0 (Pos l) \<longleftrightarrow> False"
+  "IHOL.equal 0 (Neg l) \<longleftrightarrow> False"
+  "IHOL.equal (Pos k) 0 \<longleftrightarrow> False"
+  "IHOL.equal (Pos k) (Pos l) \<longleftrightarrow> IHOL.equal k l"
+  "IHOL.equal (Pos k) (Neg l) \<longleftrightarrow> False"
+  "IHOL.equal (Neg k) 0 \<longleftrightarrow> False"
+  "IHOL.equal (Neg k) (Pos l) \<longleftrightarrow> False"
+  "IHOL.equal (Neg k) (Neg l) \<longleftrightarrow> IHOL.equal k l"
   by (simp_all add: equal)
 
 lemma equal_integer_refl [code nbe]:
-  "HOL.equal (k::integer) k \<longleftrightarrow> True"
+  "IHOL.equal (k::integer) k \<longleftrightarrow> True"
   by (fact equal_refl)
 
 lemma less_eq_integer_code [code]:
@@ -592,7 +592,7 @@ code_printing
     and (Haskell) "divMod/ (abs _)/ (abs _)"
     and (Scala) "!((k: BigInt) => (l: BigInt) =>/ if (l == 0)/ (BigInt(0), k) else/ (k.abs '/% l.abs))"
     and (Eval) "Integer.div'_mod/ (abs _)/ (abs _)"
-| constant "HOL.equal :: integer \<Rightarrow> _ \<Rightarrow> bool" \<rightharpoonup>
+| constant "IHOL.equal :: integer \<Rightarrow> _ \<Rightarrow> bool" \<rightharpoonup>
     (SML) "!((_ : IntInf.int) = _)"
     and (OCaml) "Big'_int.eq'_big'_int"
     and (Haskell) infix 4 "=="
@@ -677,17 +677,17 @@ qed (transfer, simp add: algebra_simps)+
 end
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_natural (\<lambda>n::nat. n) (of_nat :: nat \<Rightarrow> natural)"
+  "rel_fun IHOL.eq pcr_natural (\<lambda>n::nat. n) (of_nat :: nat \<Rightarrow> natural)"
 proof -
-  have "rel_fun HOL.eq pcr_natural (of_nat :: nat \<Rightarrow> nat) (of_nat :: nat \<Rightarrow> natural)"
+  have "rel_fun IHOL.eq pcr_natural (of_nat :: nat \<Rightarrow> nat) (of_nat :: nat \<Rightarrow> natural)"
     by (unfold of_nat_def [abs_def]) transfer_prover
   then show ?thesis by (simp add: id_def)
 qed
 
 lemma [transfer_rule]:
-  "rel_fun HOL.eq pcr_natural (numeral :: num \<Rightarrow> nat) (numeral :: num \<Rightarrow> natural)"
+  "rel_fun IHOL.eq pcr_natural (numeral :: num \<Rightarrow> nat) (numeral :: num \<Rightarrow> natural)"
 proof -
-  have "rel_fun HOL.eq pcr_natural (numeral :: num \<Rightarrow> nat) (\<lambda>n. of_nat (numeral n))"
+  have "rel_fun IHOL.eq pcr_natural (numeral :: num \<Rightarrow> nat) (\<lambda>n. of_nat (numeral n))"
     by transfer_prover
   then show ?thesis by simp
 qed
@@ -736,7 +736,7 @@ lift_definition less_natural :: "natural \<Rightarrow> natural \<Rightarrow> boo
 declare less_natural.rep_eq [termination_simp]
 
 lift_definition equal_natural :: "natural \<Rightarrow> natural \<Rightarrow> bool"
-  is "HOL.equal :: nat \<Rightarrow> nat \<Rightarrow> bool"
+  is "IHOL.equal :: nat \<Rightarrow> nat \<Rightarrow> bool"
   .
 
 instance proof
@@ -904,10 +904,10 @@ lemma [code abstract]:
   by transfer (simp add: zmod_int)
 
 lemma [code]:
-  "HOL.equal m n \<longleftrightarrow> HOL.equal (integer_of_natural m) (integer_of_natural n)"
+  "IHOL.equal m n \<longleftrightarrow> IHOL.equal (integer_of_natural m) (integer_of_natural n)"
   by transfer (simp add: equal)
 
-lemma [code nbe]: "HOL.equal n (n::natural) \<longleftrightarrow> True"
+lemma [code nbe]: "IHOL.equal n (n::natural) \<longleftrightarrow> True"
   by (rule equal_class.equal_refl)
 
 lemma [code]: "m \<le> n \<longleftrightarrow> integer_of_natural m \<le> integer_of_natural n"

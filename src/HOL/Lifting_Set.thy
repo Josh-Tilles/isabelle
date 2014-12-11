@@ -163,11 +163,11 @@ lemma bind_transfer [transfer_rule]:
   unfolding bind_UNION [abs_def] by transfer_prover
 
 lemma INF_parametric [transfer_rule]:
-  "(rel_set A ===> (A ===> HOL.eq) ===> HOL.eq) INFIMUM INFIMUM"
+  "(rel_set A ===> (A ===> IHOL.eq) ===> IHOL.eq) INFIMUM INFIMUM"
   unfolding INF_def [abs_def] by transfer_prover
 
 lemma SUP_parametric [transfer_rule]:
-  "(rel_set R ===> (R ===> HOL.eq) ===> HOL.eq) SUPREMUM SUPREMUM"
+  "(rel_set R ===> (R ===> IHOL.eq) ===> IHOL.eq) SUPREMUM SUPREMUM"
   unfolding SUP_def [abs_def] by transfer_prover
 
 
