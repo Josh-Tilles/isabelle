@@ -1033,13 +1033,13 @@ instantiation rat :: equal
 begin
 
 definition [code]:
-  "HOL.equal a b \<longleftrightarrow> quotient_of a = quotient_of b"
+  "IHOL.equal a b \<longleftrightarrow> quotient_of a = quotient_of b"
 
 instance proof
 qed (simp add: equal_rat_def quotient_of_inject_eq)
 
 lemma rat_eq_refl [code nbe]:
-  "HOL.equal (r::rat) r \<longleftrightarrow> True"
+  "IHOL.equal (r::rat) r \<longleftrightarrow> True"
   by (rule equal_refl)
 
 end
