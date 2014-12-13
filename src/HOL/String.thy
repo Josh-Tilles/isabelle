@@ -385,7 +385,7 @@ declare equal_literal.rep_eq[code]
 
 lemma [code nbe]:
   fixes s :: "String.literal"
-  shows "HOL.equal s s \<longleftrightarrow> True"
+  shows "IHOL.equal s s \<longleftrightarrow> True"
   by (simp add: equal)
 
 lemma STR_inject' [simp]:
@@ -417,7 +417,7 @@ setup {*
 code_printing
   class_instance literal :: equal \<rightharpoonup>
     (Haskell) -
-| constant "HOL.equal :: literal \<Rightarrow> literal \<Rightarrow> bool" \<rightharpoonup>
+| constant "IHOL.equal :: literal \<Rightarrow> literal \<Rightarrow> bool" \<rightharpoonup>
     (SML) "!((_ : string) = _)"
     and (OCaml) "!((_ : string) = _)"
     and (Haskell) infix 4 "=="
