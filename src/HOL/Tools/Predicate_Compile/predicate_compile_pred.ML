@@ -22,8 +22,8 @@ open Predicate_Compile_Aux
 fun is_compound ((Const (@{const_name Not}, _)) $ _) =
       error "is_compound: Negation should not occur; preprocessing is defect"
   | is_compound ((Const (@{const_name Ex}, _)) $ _) = true
-  | is_compound ((Const (@{const_name HOL.disj}, _)) $ _ $ _) = true
-  | is_compound ((Const (@{const_name HOL.conj}, _)) $ _ $ _) =
+  | is_compound ((Const (@{const_name IHOL.disj}, _)) $ _ $ _) = true
+  | is_compound ((Const (@{const_name IHOL.conj}, _)) $ _ $ _) =
       error "is_compound: Conjunction should not occur; preprocessing is defect"
   | is_compound _ = false
 

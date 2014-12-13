@@ -180,7 +180,7 @@ fun prove_sidecond ctxt t =
         preds
   in
     simp_tac (put_simpset HOL_basic_ss ctxt
-      addsimps (@{thms HOL.simp_thms eval_pred} @ defs)) 1
+      addsimps (@{thms IHOL.simp_thms eval_pred} @ defs)) 1
     (* need better control here! *)
   end
 

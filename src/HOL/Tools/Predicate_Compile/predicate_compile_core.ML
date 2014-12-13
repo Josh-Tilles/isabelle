@@ -655,7 +655,7 @@ fun compile_match compilation_modifiers additional_arguments ctxt param_modes
     lambda v (Case_Translation.make_case ctxt Case_Translation.Quiet Name.context v
       [(HOLogic.mk_tuple out_ts,
         if null eqs'' then success_t
-        else Const (@{const_name HOL.If}, HOLogic.boolT --> U --> U --> U) $
+        else Const (@{const_name IHOL.If}, HOLogic.boolT --> U --> U --> U) $
           foldr1 HOLogic.mk_conj eqs'' $ success_t $
             mk_empty compfuns U'),
        (v', mk_empty compfuns U')])
