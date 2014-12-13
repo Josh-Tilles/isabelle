@@ -42,11 +42,11 @@ lemma card_UNIV_length_enum:
   by (simp add: UNIV_enum distinct_card enum_distinct)
 
 lemma enum_all [simp]:
-  "enum_all = HOL.All"
+  "enum_all = IHOL.All"
   by (simp add: fun_eq_iff enum_all_UNIV)
 
 lemma enum_ex [simp]:
-  "enum_ex = HOL.Ex" 
+  "enum_ex = IHOL.Ex" 
   by (simp add: fun_eq_iff enum_ex_UNIV)
 
 end
@@ -128,7 +128,7 @@ instantiation "fun" :: (enum, equal) equal
 begin
 
 definition
-  "HOL.equal f g \<longleftrightarrow> (\<forall>x \<in> set enum. f x = g x)"
+  "IHOL.equal f g \<longleftrightarrow> (\<forall>x \<in> set enum. f x = g x)"
 
 instance proof
 qed (simp_all add: equal_fun_def fun_eq_iff enum_UNIV)
@@ -136,11 +136,11 @@ qed (simp_all add: equal_fun_def fun_eq_iff enum_UNIV)
 end
 
 lemma [code]:
-  "HOL.equal f g \<longleftrightarrow> enum_all (%x. f x = g x)"
+  "IHOL.equal f g \<longleftrightarrow> enum_all (%x. f x = g x)"
   by (auto simp add: equal fun_eq_iff)
 
 lemma [code nbe]:
-  "HOL.equal (f :: _ \<Rightarrow> _) f \<longleftrightarrow> True"
+  "IHOL.equal (f :: _ \<Rightarrow> _) f \<longleftrightarrow> True"
   by (fact equal_refl)
 
 lemma order_fun [code]:
