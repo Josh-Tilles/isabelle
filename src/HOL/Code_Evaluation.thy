@@ -113,7 +113,7 @@ instance ..
 
 end
 
-declare [[code drop: rec_term case_term "HOL.equal :: term \<Rightarrow> _"
+declare [[code drop: rec_term case_term "IHOL.equal :: term \<Rightarrow> _"
   "term_of :: typerep \<Rightarrow> _" "term_of :: term \<Rightarrow> _" "term_of :: String.literal \<Rightarrow> _"
   "term_of :: _ Predicate.pred \<Rightarrow> term" "term_of :: _ Predicate.seq \<Rightarrow> term"]]
 

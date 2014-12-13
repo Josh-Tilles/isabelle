@@ -220,9 +220,9 @@ fun dynamic_conv ctxt = certify_eval ctxt dynamic_value
 
 fun static_conv { ctxt, consts, Ts }  =
   let
-    val eqs = @{const_name Pure.eq} :: @{const_name HOL.eq} ::
+    val eqs = @{const_name Pure.eq} :: @{const_name IHOL.eq} ::
       map (fn T => Axclass.unoverload_const (Proof_Context.theory_of ctxt)
-        (@{const_name HOL.equal}, T)) Ts; (*assumes particular code equations for Pure.eq etc.*)
+        (@{const_name IHOL.equal}, T)) Ts; (*assumes particular code equations for Pure.eq etc.*)
     val value = static_value { ctxt = ctxt, consts = consts, Ts = Ts };
     val holds = Code_Runtime.static_holds_conv { ctxt = ctxt, consts = union (op =) eqs consts };
   in

@@ -95,7 +95,7 @@ fun mk_congeq ctxt fs th =
 fun rearrange congs =
   let
     fun P (_, th) =
-      let val @{term "Trueprop"} $ (Const (@{const_name HOL.eq}, _) $ l $ _) = concl_of th
+      let val @{term "Trueprop"} $ (Const (@{const_name IHOL.eq}, _) $ l $ _) = concl_of th
       in can dest_Var l end;
     val (yes, no) = List.partition P congs;
   in no @ yes end;
