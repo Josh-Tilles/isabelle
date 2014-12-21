@@ -181,8 +181,7 @@ axiomatization where
   impI: "(P ==> Q) ==> P-->Q" and
   mp: "[| P-->Q;  P |] ==> Q" and
 
-  iff: "(P-->Q) --> (Q-->P) --> (P=Q)" and
-  True_or_False: "(P=True) | (P=False)"
+  iff: "(P-->Q) --> (Q-->P) --> (P=Q)"
 
 defs
   True_def:     "True      == ((%x::bool. x) = (%x. x))"
@@ -482,42 +481,6 @@ by (iprover intro: minorP minorQ impI
                  major [unfolded or_def, THEN spec, THEN mp, THEN mp])
 
 
-subsubsection {*Classical logic*}
-
-lemma classical:
-  assumes prem: "~P ==> P"
-  shows "P"
-apply (rule True_or_False [THEN disjE, THEN eqTrueE])
-apply assumption
-apply (rule notI [THEN prem, THEN eqTrueI])
-apply (erule subst)
-apply assumption
-done
-
-lemmas ccontr = FalseE [THEN classical]
-
-(*notE with premises exchanged; it discharges ~R so that it can be used to
-  make elimination rules*)
-lemma rev_notE:
-  assumes premp: "P"
-      and premnot: "~R ==> ~P"
-  shows "R"
-apply (rule ccontr)
-apply (erule notE [OF premnot premp])
-done
-
-(*Double negation law*)
-lemma notnotD: "~~P ==> P"
-apply (rule classical)
-apply (erule notE)
-apply assumption
-done
-
-lemma contrapos_pp:
-  assumes p1: "Q"
-      and p2: "~P ==> ~Q"
-  shows "P"
-by (iprover intro: classical p1 p2 notE)
 
 
 subsubsection {*Unique existence*}
@@ -607,65 +570,7 @@ apply (erule sym)
 done
 
 
-subsubsection {*Classical intro rules for disjunction and existential quantifiers*}
 
-lemma disjCI:
-  assumes "~Q ==> P" shows "P|Q"
-apply (rule classical)
-apply (iprover intro: assms disjI1 disjI2 notI elim: notE)
-done
-
-lemma excluded_middle: "~P | P"
-by (iprover intro: disjCI)
-
-text {*
-  case distinction as a natural deduction rule.
-  Note that @{term "~P"} is the second case, not the first
-*}
-lemma case_split [case_names True False]:
-  assumes prem1: "P ==> Q"
-      and prem2: "~P ==> Q"
-  shows "Q"
-apply (rule excluded_middle [THEN disjE])
-apply (erule prem2)
-apply (erule prem1)
-done
-
-(*Classical implies (-->) elimination. *)
-lemma impCE:
-  assumes major: "P-->Q"
-      and minor: "~P ==> R" "Q ==> R"
-  shows "R"
-apply (rule excluded_middle [of P, THEN disjE])
-apply (iprover intro: minor major [THEN mp])+
-done
-
-(*This version of --> elimination works on Q before P.  It works best for
-  those cases in which P holds "almost everywhere".  Can't install as
-  default: would break old proofs.*)
-lemma impCE':
-  assumes major: "P-->Q"
-      and minor: "Q ==> R" "~P ==> R"
-  shows "R"
-apply (rule excluded_middle [of P, THEN disjE])
-apply (iprover intro: minor major [THEN mp])+
-done
-
-(*Classical <-> elimination. *)
-lemma iffCE:
-  assumes major: "P=Q"
-      and minor: "[| P; Q |] ==> R"  "[| ~P; ~Q |] ==> R"
-  shows "R"
-apply (rule major [THEN iffE])
-apply (iprover intro: minor elim: impCE notE)
-done
-
-lemma exCI:
-  assumes "ALL x. ~P(x) ==> P(a)"
-  shows "EX x. P(x)"
-apply (rule ccontr)
-apply (iprover intro: assms exI allI notI notE [of "\<exists>x. P x"])
-done
 
 
 subsubsection {* Intuitionistic Reasoning *}
@@ -787,6 +692,110 @@ lemma atomize_disjL[atomize_elim]: "((A ==> C) ==> (B ==> C) ==> C) == ((A | B =
 
 lemma atomize_elimL[atomize_elim]: "(!!B. (A ==> B) ==> B) == Trueprop A" ..
 
+locale classicalLocale =
+  assumes True_or_False: "(P=True) | (P=False)"
+begin
+subsubsection {*Classical logic*}
+
+lemma classical:
+  assumes prem: "~P ==> P"
+  shows "P"
+apply (rule True_or_False [THEN disjE, THEN eqTrueE])
+apply assumption
+apply (rule notI [THEN prem, THEN eqTrueI])
+apply (erule subst)
+apply assumption
+done
+
+lemmas ccontr = FalseE [THEN classical]
+
+(*notE with premises exchanged; it discharges ~R so that it can be used to
+  make elimination rules*)
+lemma rev_notE:
+  assumes premp: "P"
+      and premnot: "~R ==> ~P"
+  shows "R"
+apply (rule ccontr)
+apply (erule notE [OF premnot premp])
+done
+
+(*Double negation law*)
+lemma notnotD: "~~P ==> P"
+apply (rule classical)
+apply (erule notE)
+apply assumption
+done
+
+(*
+lemma contrapos_pp:
+  assumes p1: "Q"
+      and p2: "~P ==> ~Q"
+  shows "P"
+by (iprover intro: classical p1 p2 notE)
+*)
+lemmas contrapos_pp = rev_notE
+
+subsubsection {*Classical intro rules for disjunction and existential quantifiers*}
+
+lemma disjCI:
+  assumes "~Q ==> P" shows "P|Q"
+apply (rule classical)
+apply (iprover intro: assms disjI1 disjI2 notI elim: notE)
+done
+
+lemma excluded_middle: "~P | P"
+by (iprover intro: disjCI)
+
+text {*
+  case distinction as a natural deduction rule.
+  Note that @{term "~P"} is the second case, not the first
+*}
+lemma case_split [case_names True False]:
+  assumes prem1: "P ==> Q"
+      and prem2: "~P ==> Q"
+  shows "Q"
+apply (rule excluded_middle [THEN disjE])
+apply (erule prem2)
+apply (erule prem1)
+done
+
+(*Classical implies (-->) elimination. *)
+lemma impCE:
+  assumes major: "P-->Q"
+      and minor: "~P ==> R" "Q ==> R"
+  shows "R"
+apply (rule excluded_middle [of P, THEN disjE])
+apply (iprover intro: minor major [THEN mp])+
+done
+
+(*This version of --> elimination works on Q before P.  It works best for
+  those cases in which P holds "almost everywhere".  Can't install as
+  default: would break old proofs.*)
+lemma impCE':
+  assumes major: "P-->Q"
+      and minor: "Q ==> R" "~P ==> R"
+  shows "R"
+apply (rule excluded_middle [of P, THEN disjE])
+apply (iprover intro: minor major [THEN mp])+
+done
+
+(*Classical <-> elimination. *)
+lemma iffCE:
+  assumes major: "P=Q"
+      and minor: "[| P; Q |] ==> R"  "[| ~P; ~Q |] ==> R"
+  shows "R"
+apply (rule major [THEN iffE])
+apply (iprover intro: minor elim: impCE notE)
+done
+
+lemma exCI:
+  assumes "ALL x. ~P(x) ==> P(a)"
+  shows "EX x. P(x)"
+apply (rule ccontr)
+apply (iprover intro: assms exI allI notI notE [of "\<exists>x. P x"])
+done
+end
+
 
 subsection {* Package setup *}
 
@@ -805,13 +814,13 @@ named_theorems no_atp "theorems that should be filtered out by Sledgehammer"
 
 
 subsubsection {* Classical Reasoner setup *}
-
+context classicalLocale begin
 lemma imp_elim: "P --> Q ==> (~ R ==> P) ==> (Q ==> R) ==> R"
   by (rule classical) iprover
 
 lemma swap: "~ P ==> (~ R ==> P) ==> R"
   by (rule classical) iprover
-
+end
 lemma thin_refl:
   "\<And>X. \<lbrakk> x=x; PROP W \<rbrakk> \<Longrightarrow> PROP W" .
 
@@ -833,10 +842,10 @@ open Hypsubst;
 
 structure Classical = Classical
 (
-  val imp_elim = @{thm imp_elim}
+  val imp_elim = @{thm classicalLocale.imp_elim}
   val not_elim = @{thm notE}
-  val swap = @{thm swap}
-  val classical = @{thm classical}
+  val swap = @{thm classicalLocale.swap}
+  val classical = @{thm classicalLocale.classical}
   val sizef = Drule.size_of_thm
   val hyp_subst_tacs = [Hypsubst.hyp_subst_tac]
 );
@@ -863,16 +872,20 @@ setup {*
 declare iffI [intro!]
   and notI [intro!]
   and impI [intro!]
-  and disjCI [intro!]
   and conjI [intro!]
   and TrueI [intro!]
   and refl [intro!]
+context classicalLocale begin
+declare disjCI [intro!]
+end
 
-declare iffCE [elim!]
-  and FalseE [elim!]
-  and impCE [elim!]
+declare FalseE [elim!]
   and disjE [elim!]
   and conjE [elim!]
+context classicalLocale begin
+declare iffCE [elim!]
+  and impCE [elim!]
+end
 
 declare ex_ex1I [intro!]
   and allI [intro!]
